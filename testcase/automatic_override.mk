@@ -1,0 +1,4 @@
+@ := replaced
+
+test:
+	@echo "target=[$@]"

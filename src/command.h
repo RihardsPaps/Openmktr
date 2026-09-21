@@ -27,6 +27,8 @@ struct Command {
       : output(o), echo(true), ignore_error(false), force_no_subshell(false) {}
   Symbol output;
   std::string cmd;
+  std::string shell;
+  std::string shellflag;
   bool echo;
   bool ignore_error;
   bool force_no_subshell;
@@ -35,6 +37,7 @@ struct Command {
 class CommandEvaluator {
  public:
   explicit CommandEvaluator(Evaluator* ev);
+  ~CommandEvaluator();
   std::vector<Command> Eval(const DepNode& n);
   const DepNode* current_dep_node() const { return current_dep_node_; }
   Evaluator* evaluator() const { return ev_; }

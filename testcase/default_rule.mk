@@ -1,5 +1,4 @@
-abc:
-	echo PASS
+.DEFAULT:
+	@echo "default=$@"
 
-def:
-	echo FAIL
+all: missing

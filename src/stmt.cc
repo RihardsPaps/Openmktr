@@ -89,6 +89,18 @@ std::string CommandStmt::DebugString() const {
                       Value::DebugString(expr).c_str(), LOCF(loc()));
 }
 
+VpathStmt::~VpathStmt() {
+  delete expr;
+}
+
+void VpathStmt::EvalStatement(Evaluator* ev) const {
+  ev->EvalVpath(expr);
+}
+
+std::string VpathStmt::DebugString() const {
+  return StringPrintf("VpathStmt(%s)", Value::DebugString(expr).c_str());
+}
+
 std::string IfStmt::DebugString() const {
   const char* opstr = "???";
   switch (op) {
@@ -138,6 +150,18 @@ void RuleStmt::EvalStatement(Evaluator* ev) const {
 AssignStmt::~AssignStmt() {
   delete lhs;
   delete rhs;
+}
+
+UndefineStmt::~UndefineStmt() {
+  delete lhs;
+}
+
+void UndefineStmt::EvalStatement(Evaluator* ev) const {
+  ev->EvalUndefine(this);
+}
+
+std::string UndefineStmt::DebugString() const {
+  return StringPrintf("UndefineStmt(lhs=%s)", Value::DebugString(lhs).c_str());
 }
 
 void AssignStmt::EvalStatement(Evaluator* ev) const {

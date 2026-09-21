@@ -235,12 +235,36 @@ class Vars : public std::unordered_map<Symbol, Var*> {
 
   void Assign(Symbol name, Var* v, bool* readonly);
 
+  // Target-specific export state is scoped with the variables themselves.
+  // GNU make allows a target-specific assignment such as
+  //   target: export VAR = value
+  // and the export attribute must follow that target's inherited scope.
+  bool IsExported(Symbol name) const {
+    return exported_.exists(name) && !unexported_.exists(name);
+  }
+  void SetExported(Symbol name, bool exported) {
+    if (exported) {
+      exported_.insert(name);
+    } else {
+      unexported_.insert(name);
+    }
+  }
+  const SymbolSet& exported() const { return exported_; }
+  void MergeExportStateFrom(const Vars& other) {
+    for (Symbol name : other.exported_)
+      exported_.insert(name);
+    for (Symbol name : other.unexported_)
+      unexported_.insert(name);
+  }
+
   static void add_used_env_vars(Symbol v);
 
   static const SymbolSet used_env_vars() { return used_env_vars_; }
 
  private:
   static SymbolSet used_env_vars_;
+  SymbolSet exported_;
+  SymbolSet unexported_;
 };
 
 class ScopedVar {

@@ -215,6 +215,7 @@ struct hash<Symbol> {
 
 extern Symbol kEmptySym;
 extern Symbol kShellSym;
+extern Symbol kShellFlagsSym;
 extern Symbol kAllowRulesSym;
 extern Symbol kKatiReadonlySym;
 

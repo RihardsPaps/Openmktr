@@ -37,13 +37,22 @@ int RunCommand(const std::string& shell,
                const std::string& shellflag,
                const std::string& cmd,
                RedirectStderr redirect_stderr,
-               std::string* out);
+               std::string* out,
+               bool acquire_job_token = true);
+
+// Acquire and release one token from the optional inherited Kati jobserver.
+// A negative value means that no FIFO token was configured.
+int AcquireKatiJobToken();
+void ReleaseKatiJobToken(int fd);
 
 std::string GetExecutablePath();
 
 using GlobMap = std::unordered_map<std::string, std::vector<std::string>>;
 
-const GlobMap::mapped_type& Glob(const char* pat);
+// Expand one make wildcard pattern.  The view need not be NUL terminated;
+// callers commonly pass a token from WordScanner whose storage is followed by
+// more words in the same string.
+const GlobMap::mapped_type& Glob(std::string_view pat);
 
 const GlobMap& GetAllGlobCache();
 

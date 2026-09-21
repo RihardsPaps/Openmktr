@@ -40,6 +40,7 @@ static std::vector<SymbolData> g_symbol_data;
 
 Symbol kEmptySym;
 Symbol kShellSym;
+Symbol kShellFlagsSym;
 Symbol kAllowRulesSym;
 Symbol kKatiReadonlySym;
 Symbol kVariablesSym;
@@ -89,7 +90,10 @@ void Symbol::SetGlobalVar(Var* v, bool is_override, bool* readonly) const {
     return;
   }
   if (orig->Origin() == VarOrigin::AUTOMATIC) {
-    ERROR("overriding automatic variable is not implemented yet");
+    // Keep GNU make's behavior: an assignment to an automatic-variable name
+    // does not replace the automatic binding used while a recipe runs.
+    delete v;
+    return;
   }
   if (orig->IsDefined())
     delete orig;
@@ -129,6 +133,7 @@ class Symtab {
 
     kEmptySym = Intern("");
     kShellSym = Intern("SHELL");
+    kShellFlagsSym = Intern(".SHELLFLAGS");
     Symbol shellStatusSym = Intern(".SHELLSTATUS");
     shellStatusSym.SetGlobalVar(new ShellStatusVar(), false, nullptr);
     kAllowRulesSym = Intern(".KATI_ALLOW_RULES");

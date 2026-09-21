@@ -23,6 +23,8 @@
 #include "symtab.h"
 
 struct Flags {
+  enum class OutputSync { kTarget, kLine, kNone, kRecurse };
+
   bool detect_android_echo;
   bool detect_depfiles;
   bool dump_kati_stamp;
@@ -33,8 +35,14 @@ struct Flags {
   bool enable_stat_logs;
   bool gen_all_targets;
   bool generate_ninja;
+  bool ninja_stats;
   bool generate_empty_ninja;
+  bool no_print_directory;
   bool is_dry_run;
+  bool is_question;
+  bool keep_going;
+  bool is_touch;
+  OutputSync output_sync = OutputSync::kTarget;
   bool is_silent_mode;
   bool is_syntax_check_only;
   bool regen;
@@ -50,6 +58,7 @@ struct Flags {
   bool werror_find_emulator;
   bool werror_overriding_commands;
   bool warn_implicit_rules;
+  bool warn_undefined_variables;
   bool werror_implicit_rules;
   bool warn_suffix_rules;
   bool werror_suffix_rules;
@@ -74,7 +83,10 @@ struct Flags {
   int num_cpus;
   int num_jobs;
   int remote_num_jobs;
+  std::string executable_path;
   std::vector<const char*> subkati_args;
+  std::vector<std::string> old_files;
+  std::vector<std::string> what_if_files;
   std::vector<Symbol> targets;
   std::vector<std::string_view> cl_vars;
   std::vector<std::string> writable;

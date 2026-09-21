@@ -18,8 +18,10 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <algorithm>
 
@@ -34,6 +36,41 @@
 #include "strutil.h"
 #include "symtab.h"
 #include "var.h"
+
+namespace {
+
+bool SameMakefile(const std::string& lhs, const std::string& rhs) {
+  char lhs_path[PATH_MAX];
+  char rhs_path[PATH_MAX];
+  const char* lhs_real = realpath(lhs.c_str(), lhs_path);
+  const char* rhs_real = realpath(rhs.c_str(), rhs_path);
+  if (lhs_real != nullptr && rhs_real != nullptr)
+    return strcmp(lhs_real, rhs_real) == 0;
+  return lhs == rhs;
+}
+
+// Rule prerequisites are evaluated before they are tokenized.  Comments in
+// the rule's original text must therefore remain comments after expansion;
+// otherwise an '=' in an inline comment can be mistaken for a rule-specific
+// variable assignment (for example: "target: ## TESTS=<name>").
+std::string_view StripRuleComment(const std::string& text,
+                                  std::string* without_comment) {
+  bool escaped = false;
+  for (size_t i = 0; i < text.size(); ++i) {
+    char c = text[i];
+    if (c == '#' && !escaped) {
+      *without_comment = text.substr(0, i);
+      return *without_comment;
+    }
+    if (c == '\\')
+      escaped = !escaped;
+    else
+      escaped = false;
+  }
+  return text;
+}
+
+}  // namespace
 
 Frame::Frame(FrameType type, Frame* parent, Loc loc, const std::string& name)
     : type_(type), parent_(parent), name_(name), location_(loc) {
@@ -74,8 +111,14 @@ ScopedFrame::ScopedFrame(Evaluator* ev, Frame* frame) : ev_(ev), frame_(frame) {
   ev_->stack_.push_back(frame);
 }
 
+ScopedFrame::ScopedFrame(ScopedFrame&& other) noexcept
+    : ev_(other.ev_), frame_(other.frame_) {
+  other.ev_ = nullptr;
+  other.frame_ = nullptr;
+}
+
 ScopedFrame::~ScopedFrame() {
-  if (!ev_->trace_) {
+  if (ev_ == nullptr || !ev_->trace_) {
     return;
   }
 
@@ -158,6 +201,7 @@ Evaluator::Evaluator()
       current_scope_(NULL),
       avoid_io_(false),
       eval_depth_(0),
+      secondary_expansion_(false),
       posix_sym_(Intern(".POSIX")),
       is_posix_(false),
       export_error_(false) {
@@ -261,6 +305,20 @@ Var* Evaluator::EvalRHS(Symbol lhs,
   Var* prev = NULL;
   *needs_assign = true;
 
+  // A command-line variable has higher precedence than ordinary makefile
+  // assignments.  In particular, a later "VAR += value" must not mutate the
+  // command-line Var in place before Vars::Assign() gets a chance to reject
+  // the replacement.  The makefile can explicitly opt in with "override".
+  if (!is_bootstrap_ && !is_commandline_ && !is_override) {
+    Var* command_line_var = PeekVarInCurrentScope(lhs);
+    if (command_line_var->IsDefined() &&
+        command_line_var->Origin() == VarOrigin::COMMAND_LINE) {
+      command_line_var->Used(this, lhs);
+      *needs_assign = false;
+      return command_line_var;
+    }
+  }
+
   switch (op) {
     case AssignOp::COLON_EQ: {
       prev = PeekVarInCurrentScope(lhs);
@@ -308,6 +366,28 @@ Var* Evaluator::EvalRHS(Symbol lhs,
   return result;
 }
 
+void Evaluator::EvalUndefine(const UndefineStmt* stmt) {
+  loc_ = stmt->loc();
+  last_rule_ = NULL;
+
+  std::string name;
+  stmt->lhs->Eval(this, &name);
+
+  Symbol sym = Intern(TrimSpace(name));
+  if (sym.empty()) {
+    Error("*** empty variable name.");
+    return;
+  }
+
+  bool readonly = false;
+  sym.SetGlobalVar(Var::Undefined(), false, &readonly);
+
+  if (readonly) {
+    Error(StringPrintf("*** cannot undefine readonly variable: %s",
+                       sym.c_str()));
+  }
+}
+
 void Evaluator::EvalAssign(const AssignStmt* stmt) {
   loc_ = stmt->loc();
   last_rule_ = NULL;
@@ -333,10 +413,13 @@ void Evaluator::EvalAssign(const AssignStmt* stmt) {
   Var* var =
       EvalRHS(lhs, stmt->rhs, stmt->orig_rhs, stmt->op,
               stmt->directive == AssignDirective::OVERRIDE, &needs_assign);
+
   if (needs_assign) {
     bool readonly;
     lhs.SetGlobalVar(var, stmt->directive == AssignDirective::OVERRIDE,
                      &readonly);
+    if (lhs == Intern("VPATH"))
+      SetVpath("%", var->Eval(this));
     if (readonly) {
       Error(StringPrintf("*** cannot assign to readonly variable: %s",
                          lhs.c_str()));
@@ -364,17 +447,30 @@ static std::string_view ParseRuleTargets(const Loc& loc,
   std::string_view targets_string = before_term.substr(0, pos);
   size_t pattern_rule_count = 0;
   for (auto const& word : WordScanner(targets_string)) {
-    std::string_view target = TrimLeadingCurdir(word);
+    const std::string_view trimmed_word = TrimLeadingCurdir(word);
+    const bool current_directory = IsCurrentDirectoryPath(word);
+    std::string target(trimmed_word);
+    // Preserve parent-relative target spellings for the same reason that
+    // Rule::ParseInputs preserves them: GNU make matches the lexical target
+    // name used by an included makefile. Collapsing ../ here can select a
+    // different implicit rule (or the built-in .c.o fallback).
+    if (target.find("../") == std::string::npos && target != "..")
+      NormalizeMakePath(&target);
+    // NormalizePath uses an empty string for the current directory. In a
+    // rule target, however, a standalone '.' is meaningful: recursive build
+    // systems commonly attach work to that directory target.
+    if (target.empty() && current_directory)
+      target = ".";
     targets->push_back(Intern(target));
     if (Rule::IsPatternRule(target)) {
       ++pattern_rule_count;
     }
   }
-  // Check consistency: either all outputs are patterns or none.
-  if (pattern_rule_count && (pattern_rule_count != targets->size())) {
-    ERROR_LOC(loc, "*** mixed implicit and normal rules: deprecated syntax");
-  }
-  *is_pattern_rule = pattern_rule_count;
+  // A target-specific variable assignment may legally mix ordinary targets
+  // and pattern targets.  Only classify the rule as a pattern rule when all
+  // of its targets are patterns; mixed target lists remain explicit targets.
+  *is_pattern_rule = pattern_rule_count != 0 &&
+                     pattern_rule_count == targets->size();
   return before_term.substr(pos + 1);
 }
 
@@ -416,8 +512,30 @@ void Evaluator::EvalRuleSpecificAssign(const std::vector<Symbol>& targets,
   std::string_view var_name;
   std::string_view rhs_string;
   AssignOp assign_op;
-  ParseAssignStatement(after_targets, separator_pos, &var_name, &rhs_string,
+  std::string_view assign_text = after_targets;
+  bool is_override = HasPrefix(TrimLeftSpace(assign_text), "override ");
+
+  ParseAssignStatement(assign_text, separator_pos, &var_name, &rhs_string,
                        &assign_op);
+
+  // GNU make treats export/unexport (like private/override) as modifiers on
+  // target-specific assignments.  Keep the export state with the target
+  // scope instead of making it a global export, since the value is often
+  // intentionally visible only to a recursive command for this target.
+  bool is_export = false;
+  bool is_unexport = false;
+  for (;;) {
+    if (HasPrefix(var_name, "export ")) {
+      is_export = true;
+      var_name = TrimSpace(var_name.substr(7));
+    } else if (HasPrefix(var_name, "unexport ")) {
+      is_unexport = true;
+      var_name = TrimSpace(var_name.substr(9));
+    } else {
+      break;
+    }
+  }
+
   Symbol var_sym = Intern(var_name);
   bool is_final = (stmt->sep == RuleStmt::SEP_FINALEQ);
   for (Symbol target : targets) {
@@ -426,39 +544,93 @@ void Evaluator::EvalRuleSpecificAssign(const std::vector<Symbol>& targets,
       p.first->second = new Vars;
     }
 
-    Value* rhs;
-    if (rhs_string.empty()) {
-      rhs = stmt->rhs;
-    } else if (stmt->rhs) {
-      std::string_view sep(stmt->sep == RuleStmt::SEP_SEMICOLON ? " ; "
-                                                                : " = ");
-      rhs = Value::NewExpr(loc_, Value::NewLiteral(rhs_string),
-                           Value::NewLiteral(sep), stmt->rhs);
-    } else {
+    // ParseRule already stores the complete right-hand side in stmt->rhs.
+    // rhs_string is the same text as seen after the target-specific
+    // assignment operator; combining both duplicates the RHS and changes
+    // GNU make's target-specific assignment semantics.
+    Value* rhs = stmt->rhs;
+    if (!rhs)
       rhs = Value::NewLiteral(rhs_string);
-    }
 
-    current_scope_ = p.first->second;
+    Vars* target_scope = p.first->second;
+    Vars* enclosing_scope = current_scope_;
+    // Target-specific assignments are evaluated with the target scope
+    // active.  Vars lookup falls back to the global scope, while the target
+    // scope also retains preceding target-specific assignments.  This is
+    // required for immediate assignments such as:
+    //   target: CPPFLAGS += -DLOCAL
+    //   target: CPPFLAGS := -I$(dir) $(CPPFLAGS)
+    current_scope_ = target_scope;
+    // A target-specific "+=" must not append directly to an inherited
+    // global variable.  LookupVarInCurrentScope() deliberately falls back
+    // to the global scope, but EvalRHS() mutates the returned Var for +=.
+    // Materialize that inherited value in the target scope first, preserving
+    // its flavor so later target-specific assignments see the same value
+    // GNU make would expose through the target-specific scope.
+    if (assign_op == AssignOp::PLUS_EQ &&
+        target_scope->find(var_sym) == target_scope->end()) {
+      Var* inherited = LookupVarGlobal(var_sym);
+      if (inherited->IsDefined()) {
+        Var* local;
+        if (inherited->Flavor() == std::string("simple")) {
+          local = new SimpleVar(std::string(inherited->String()),
+                                is_override ? VarOrigin::OVERRIDE
+                                            : inherited->Origin(),
+                                stack_.back(),
+                                loc_);
+        } else {
+          // Recursive variables must retain their complete expression tree
+          // when an inherited value is materialized in a target-specific
+          // scope.  String() is only the original source spelling for a
+          // recursive variable; after one or more += assignments it omits
+          // the appended expression.  Copy the expression tree instead so
+          // both deferred references and appended values survive.
+          const RecursiveVar* recursive =
+              dynamic_cast<const RecursiveVar*>(inherited);
+          CHECK(recursive != nullptr);
+          local = new RecursiveVar(
+              recursive->v_,
+              is_override ? VarOrigin::OVERRIDE : inherited->Origin(),
+              stack_.back(), loc_, inherited->String());
+        }
+        bool readonly;
+        target_scope->Assign(var_sym, local, &readonly);
+        if (readonly)
+          Error(StringPrintf("*** cannot assign to readonly variable: %s",
+                             var_name));
+      }
+    }
+    if (assign_op == AssignOp::COLON_EQ) {
+      std::string expanded_rhs;
+      rhs->Eval(this, &expanded_rhs);
+      // Literal values retain a string_view, so intern the expanded text
+      // before storing it in the target-specific variable.
+      rhs = Value::NewLiteral(Intern(expanded_rhs).str());
+    }
     if (var_sym == kKatiReadonlySym) {
       MarkVarsReadonly(rhs);
     } else {
       bool needs_assign;
       Var* rhs_var = EvalRHS(var_sym, rhs, std::string_view("*TODO*"),
-                             assign_op, false, &needs_assign);
+                             assign_op,
+                             is_override,
+                             &needs_assign);
       if (needs_assign) {
         bool readonly;
         rhs_var->SetAssignOp(assign_op);
-        current_scope_->Assign(var_sym, rhs_var, &readonly);
+        target_scope->Assign(var_sym, rhs_var, &readonly);
         if (readonly) {
           Error(StringPrintf("*** cannot assign to readonly variable: %s",
                              var_name));
         }
       }
-      if (is_final) {
+    if (is_final) {
         rhs_var->SetReadOnly();
       }
     }
-    current_scope_ = NULL;
+    if (is_export || is_unexport)
+      target_scope->SetExported(var_sym, is_export && !is_unexport);
+    current_scope_ = enclosing_scope;
   }
 }
 
@@ -467,6 +639,7 @@ void Evaluator::EvalRule(const RuleStmt* stmt) {
   last_rule_ = NULL;
 
   const std::string&& before_term = stmt->lhs->Eval(this);
+
   // See semicolon.mk.
   if (before_term.find_first_not_of(" \t\n;") == std::string::npos) {
     if (stmt->sep == RuleStmt::SEP_SEMICOLON)
@@ -478,7 +651,16 @@ void Evaluator::EvalRule(const RuleStmt* stmt) {
   bool is_pattern_rule;
   std::string_view after_targets =
       ParseRuleTargets(loc_, before_term, &targets, &is_pattern_rule);
-  bool is_double_colon = (after_targets[0] == ':');
+
+  std::string expanded_after_targets(after_targets);
+  std::string rule_without_comment;
+  after_targets = StripRuleComment(expanded_after_targets,
+                                   &rule_without_comment);
+
+  // An empty prerequisite list is valid (for example, "target:"). Reading
+  // element zero before checking the view's length is undefined behavior and
+  // can crash while parsing a late recursive makefile.
+  bool is_double_colon = !after_targets.empty() && after_targets[0] == ':';
   if (is_double_colon) {
     after_targets = after_targets.substr(1);
   }
@@ -518,6 +700,20 @@ void Evaluator::EvalRule(const RuleStmt* stmt) {
     rule->output_patterns.swap(targets);
   } else {
     rule->outputs.swap(targets);
+  }
+  // .SECONDEXPANSION is a declaration, not a build target.  Its effect is
+  // lexical and applies to rules parsed after it, just like GNU make's
+  // declaration.  Do not leave a synthetic special target in the graph.
+  if (rule->outputs.size() == 1 &&
+      rule->outputs[0] == Intern(".SECONDEXPANSION") &&
+      after_targets.empty() && rule->cmds.empty()) {
+    secondary_expansion_ = true;
+    delete rule;
+    return;
+  }
+  if (secondary_expansion_ && !after_targets.empty()) {
+    rule->secondary_expansion = true;
+    rule->secondary_prerequisites = std::string(after_targets);
   }
   rule->ParsePrerequisites(after_targets, separator_pos, stmt);
 
@@ -589,6 +785,7 @@ void Evaluator::EvalIf(const IfStmt* stmt) {
     case CondOp::IFNEQ: {
       const std::string&& lhs = stmt->lhs->Eval(this);
       const std::string&& rhs = stmt->rhs->Eval(this);
+
       is_true = ((lhs == rhs) == (stmt->op == CondOp::IFEQ));
       break;
     }
@@ -638,17 +835,16 @@ void Evaluator::EvalInclude(const IncludeStmt* stmt) {
 
   const std::string&& pats = stmt->expr->Eval(this);
   for (std::string_view pat : WordScanner(pats)) {
-    ScopedTerminator st(pat);
-    const auto& files = Glob(pat.data());
+    const auto& files = Glob(pat);
 
-    if (stmt->should_exist) {
-      if (files.empty()) {
-        // TODO: Kati does not support building a missing include file.
-        Error(StringPrintf("%s: %s", pat.data(), strerror(errno)));
-      }
+    if (files.empty()) {
+      // GNU make attempts to remake missing makefiles for both include and
+      // -include.  The latter suppresses an error only when no rule can
+      // produce the file; it must not suppress the remake itself.  This is
+      // required for generated metadata such as FFmpeg's *.version files.
+      missing_includes_.push_back({std::string(pat), stmt->loc()});
+      continue;
     }
-
-    include_stack_.push_back(stmt->loc());
 
     for (const std::string& fname : files) {
       if (!stmt->should_exist && g_flags.ignore_optional_include_pattern &&
@@ -656,13 +852,122 @@ void Evaluator::EvalInclude(const IncludeStmt* stmt) {
         continue;
       }
 
+      if (std::find(included_makefiles_.begin(), included_makefiles_.end(),
+                    fname) == included_makefiles_.end()) {
+        included_makefiles_.push_back(fname);
+      }
+
+      // Check before adding fname to the active chain.  The chain contains
+      // files whose bodies are currently being evaluated; the current file
+      // must not be mistaken for a recursive include of itself.
+      bool recursive = false;
+      for (const std::string& include : active_include_files_) {
+        if (SameMakefile(include, fname)) {
+          recursive = true;
+          break;
+        }
+      }
+      if (recursive) {
+        WARN_LOC(loc_, "recursive include of %s ignored", fname.c_str());
+        continue;
+      }
+
+      include_stack_.push_back(stmt->loc());
+      active_include_files_.push_back(fname);
       {
         ScopedFrame frame(Enter(FrameType::PARSE, fname, stmt->loc()));
         DoInclude(fname);
       }
+      active_include_files_.pop_back();
+      include_stack_.pop_back();
     }
-    include_stack_.pop_back();
   }
+}
+
+void Evaluator::EvalVpath(const Value* expr) {
+  std::string value = expr->Eval(this);
+  std::vector<std::string_view> words;
+  for (std::string_view word : WordScanner(value))
+    words.push_back(word);
+
+  if (words.empty()) {
+    vpaths_.clear();
+    return;
+  }
+
+  std::string directories;
+  for (size_t i = 1; i < words.size(); i++) {
+    if (!directories.empty())
+      directories += ' ';
+    directories.append(words[i]);
+  }
+  SetVpath(words[0], directories, true, true);
+}
+
+void Evaluator::SetVpath(std::string_view pattern,
+                         std::string_view directories, bool append,
+                         bool from_vpath) {
+  if (!append) {
+    vpaths_.erase(
+        std::remove_if(vpaths_.begin(), vpaths_.end(),
+                       [&](const Vpath& v) { return v.pattern == pattern; }),
+        vpaths_.end());
+  }
+  if (directories.empty())
+    return;
+
+  Vpath vpath;
+  vpath.pattern = pattern;
+  vpath.from_vpath = from_vpath;
+  for (std::string_view word : WordScanner(directories)) {
+    std::string_view dirs = word;
+    while (!dirs.empty()) {
+      size_t colon = dirs.find(':');
+      std::string dir(dirs.substr(0, colon));
+      if (!dir.empty()) {
+        NormalizePath(&dir);
+        vpath.directories.push_back(dir);
+      }
+      if (colon == std::string_view::npos)
+        break;
+      dirs = dirs.substr(colon + 1);
+    }
+  }
+  if (!vpath.directories.empty()) {
+    if (append) {
+      for (Vpath& existing : vpaths_) {
+        if (existing.pattern == pattern &&
+            existing.from_vpath == from_vpath) {
+          existing.directories.insert(existing.directories.end(),
+                                      vpath.directories.begin(),
+                                      vpath.directories.end());
+          return;
+        }
+      }
+    }
+    vpaths_.push_back(std::move(vpath));
+  }
+}
+
+std::string Evaluator::ResolveVpath(Symbol target) const {
+  if (Exists(target.str()))
+    return target.str();
+
+  // GNU make searches matching vpath directives before the global VPATH,
+  // regardless of where the VPATH assignment appeared in the makefile.
+  for (int pass = 0; pass < 2; ++pass) {
+    for (const Vpath& vpath : vpaths_) {
+      if (vpath.from_vpath != (pass == 0) ||
+          !Pattern(vpath.pattern).Match(target.str()))
+        continue;
+      for (const std::string& directory : vpath.directories) {
+        std::string candidate = ConcatDir(directory, target.str());
+        if (Exists(candidate))
+          return candidate;
+      }
+    }
+  }
+  return std::string();
 }
 
 void Evaluator::EvalExport(const ExportStmt* stmt) {
@@ -687,7 +992,6 @@ void Evaluator::EvalExport(const ExportStmt* stmt) {
     }
     Symbol sym = Intern(lhs);
     exports_[sym] = stmt->is_export;
-
     if (export_message_) {
       const char* prefix = "";
       if (!stmt->is_export) {
@@ -709,7 +1013,11 @@ Var* Evaluator::LookupVarGlobal(Symbol name) {
   Var* v = name.GetGlobalVar();
   if (v->IsDefined())
     return v;
+  const bool first_use = !used_undefined_vars_.exists(name);
   used_undefined_vars_.insert(name);
+  if (first_use && g_flags.warn_undefined_variables) {
+    WARN_LOC(loc(), "warning: undefined variable '%s'", name.c_str());
+  }
   return v;
 }
 
@@ -865,7 +1173,9 @@ std::string Evaluator::GetShell() {
 }
 
 std::string Evaluator::GetShellFlag() {
-  // TODO: Handle $(.SHELLFLAGS)
+  Var* shell_flags = PeekVar(kShellFlagsSym);
+  if (shell_flags->IsDefined())
+    return shell_flags->Eval(this);
   return is_posix_ ? "-ec" : "-c";
 }
 

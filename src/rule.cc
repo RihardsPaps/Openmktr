@@ -17,24 +17,162 @@
 #include "rule.h"
 
 #include "expr.h"
+#include "eval.h"
+#include "fileutil.h"
 #include "log.h"
 #include "parser.h"
 #include "stringprintf.h"
 #include "strutil.h"
 #include "symtab.h"
 
-Rule::Rule() : is_double_colon(false), is_suffix_rule(false), cmd_lineno(0) {}
+Rule::Rule()
+    : is_double_colon(false),
+      is_suffix_rule(false),
+      secondary_expansion(false),
+      has_wait(false),
+      cmd_lineno(0) {}
+
+void Rule::ParseSecondaryInputs(
+    Evaluator* ev,
+    std::vector<Symbol>* inputs_out,
+    std::vector<Symbol>* order_only_inputs_out,
+    std::vector<std::vector<Symbol>>* wait_groups_out) const {
+  if (!secondary_expansion)
+    return;
+
+  // The first pass performed by EvalRule has already expanded ordinary
+  // references and converted escaped $$ references to literal '$' text.
+  // Parsing that result again is the second expansion pass.  Use a temporary
+  // Rule so path normalization, wildcard handling, and the order-only '|'
+  // separator remain identical to ordinary prerequisites.
+  Loc secondary_loc = loc;
+  std::string_view prerequisites = secondary_prerequisites;
+  const size_t static_pattern_colon = prerequisites.find(':');
+  if (static_pattern_colon != std::string_view::npos)
+    prerequisites = prerequisites.substr(static_pattern_colon + 1);
+  bool is_order_only = false;
+  bool saw_wait = false;
+  std::vector<Symbol> wait_group;
+  auto finish_group = [&]() {
+    if (wait_groups_out)
+      wait_groups_out->push_back(std::move(wait_group));
+    wait_group.clear();
+  };
+  for (std::string_view input : WordScanner(prerequisites)) {
+    if (input == "|") {
+      is_order_only = true;
+      continue;
+    }
+    // Ordinary prerequisites were already retained from the first pass.
+    // Only escaped expressions need the second pass; parsing every word here
+    // would duplicate ordinary prerequisites and corrupt $+/dependency order.
+    if (input == ".WAIT") {
+      saw_wait = true;
+      finish_group();
+      continue;
+    }
+    if (input.find('$') == std::string_view::npos) {
+      wait_group.push_back(Intern(std::string(input)));
+      continue;
+    }
+    std::string expanded;
+    const std::string expression(input);
+    auto cached = secondary_exprs.find(expression);
+    if (cached == secondary_exprs.end()) {
+      Value* parsed_expr = ParseExpr(&secondary_loc, input);
+      cached = secondary_exprs.emplace(expression, parsed_expr).first;
+    }
+    cached->second->Eval(ev, &expanded);
+    Rule parsed;
+    parsed.ParseInputs(expanded);
+    if (parsed.has_wait) {
+      saw_wait = true;
+      for (const std::vector<Symbol>& group : parsed.wait_groups) {
+        wait_group.insert(wait_group.end(), group.begin(), group.end());
+        finish_group();
+      }
+    } else {
+      wait_group.insert(wait_group.end(), parsed.inputs.begin(),
+                        parsed.inputs.end());
+      wait_group.insert(wait_group.end(), parsed.order_only_inputs.begin(),
+                        parsed.order_only_inputs.end());
+    }
+    if (is_order_only) {
+      order_only_inputs_out->insert(order_only_inputs_out->end(),
+                                    parsed.inputs.begin(), parsed.inputs.end());
+      order_only_inputs_out->insert(order_only_inputs_out->end(),
+                                    parsed.order_only_inputs.begin(),
+                                    parsed.order_only_inputs.end());
+    } else {
+      inputs_out->insert(inputs_out->end(), parsed.inputs.begin(),
+                         parsed.inputs.end());
+      order_only_inputs_out->insert(order_only_inputs_out->end(),
+                                    parsed.order_only_inputs.begin(),
+                                    parsed.order_only_inputs.end());
+    }
+  }
+  if (saw_wait)
+    finish_group();
+}
 
 void Rule::ParseInputs(const std::string_view& inputs_str) {
   bool is_order_only = false;
+  std::vector<Symbol> wait_group;
+  auto add_input = [&](Symbol input) {
+    (is_order_only ? order_only_inputs : inputs).push_back(input);
+    wait_group.push_back(input);
+  };
   for (auto const& input : WordScanner(inputs_str)) {
     if (input == "|") {
       is_order_only = true;
       continue;
     }
-    Symbol input_sym = Intern(TrimLeadingCurdir(input));
-    (is_order_only ? order_only_inputs : inputs).push_back(input_sym);
+    if (input == ".WAIT") {
+      has_wait = true;
+      wait_groups.push_back(std::move(wait_group));
+      wait_group.clear();
+      continue;
+    }
+
+    const std::string_view trimmed_input = TrimLeadingCurdir(input);
+    const bool current_directory = IsCurrentDirectoryPath(input);
+    std::string trimmed(trimmed_input);
+    // Keep parent-relative names intact.  GNU make uses the spelling of a
+    // prerequisite when matching it against pattern rules; collapsing
+    // "obj/../../../src/foo.o" to "src/foo.o" can change which rule applies.
+    // In particular, it would turn an output-relative prerequisite into a
+    // built-in .c.o fallback.  Ordinary paths are still canonicalized.
+    if (trimmed.find("../") == std::string::npos && trimmed != "..")
+      NormalizeMakePath(&trimmed);
+    // Keep a standalone current-directory prerequisite distinct from an
+    // empty prerequisite. Recursive makefiles may use '.' as the dependency
+    // that triggers the recursive build of the output directory.
+    if (trimmed.empty() && current_directory)
+      trimmed = ".";
+    const bool has_wildcard =
+        trimmed.find_first_of("*?[") != std::string::npos;
+
+    if (has_wildcard) {
+      const auto& files = Glob(trimmed);
+
+      if (!files.empty()) {
+        for (const std::string& file : files) {
+          std::string normalized_file(TrimLeadingCurdir(file));
+          if (normalized_file.find("../") == std::string::npos &&
+              normalized_file != "..")
+            NormalizePath(&normalized_file);
+          Symbol input_sym = Intern(normalized_file);
+          add_input(input_sym);
+        }
+        continue;
+      }
+    }
+
+    Symbol input_sym = Intern(trimmed);
+    add_input(input_sym);
   }
+  if (has_wait)
+    wait_groups.push_back(std::move(wait_group));
 }
 
 void Rule::ParsePrerequisites(const std::string_view& line,
@@ -77,14 +215,15 @@ void Rule::ParsePrerequisites(const std::string_view& line,
   std::string_view prereq_patterns = prereq_string.substr(separator_pos + 1);
 
   for (std::string_view target_pattern : WordScanner(target_prereq)) {
-    target_pattern = TrimLeadingCurdir(target_pattern);
+    std::string normalized_target_pattern(TrimLeadingCurdir(target_pattern));
+    NormalizePath(&normalized_target_pattern);
     for (Symbol target : outputs) {
-      if (!Pattern(target_pattern).Match(target.str())) {
+      if (!Pattern(normalized_target_pattern).Match(target.str())) {
         WARN_LOC(loc, "target `%s' doesn't match the target pattern",
                  target.c_str());
       }
     }
-    output_patterns.push_back(Intern(target_pattern));
+    output_patterns.push_back(Intern(normalized_target_pattern));
   }
 
   if (output_patterns.empty()) {

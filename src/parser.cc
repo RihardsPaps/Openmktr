@@ -28,6 +28,24 @@
 #include "stmt.h"
 #include "strutil.h"
 
+namespace {
+
+std::string StripRuleComment(std::string_view line) {
+  bool escaped = false;
+  for (size_t i = 0; i < line.size(); ++i) {
+    char c = line[i];
+    if (c == '#' && !escaped)
+      return std::string(line.substr(0, i));
+    if (c == '\\')
+      escaped = !escaped;
+    else
+      escaped = false;
+  }
+  return std::string(line);
+}
+
+}  // namespace
+
 class Parser {
   struct IfState {
     IfStmt* stmt;
@@ -63,6 +81,7 @@ class Parser {
       if (!fixed_lineno_)
         loc_.lineno++;
       std::string_view line(buf_.data() + l_, e - l_);
+
       if (!line.empty() && line.back() == '\r')
         line.remove_suffix(1);
       orig_line_with_directives_ = line;
@@ -174,10 +193,13 @@ class Parser {
     RuleStmt* rule_stmt = new RuleStmt();
     rule_stmt->set_loc(loc_);
 
-    size_t found = FindTwoOutsideParen(line.substr(sep + 1), '=', ';');
+    std::string rule_without_comment = StripRuleComment(line);
+    size_t found = FindTwoOutsideParen(
+        std::string_view(rule_without_comment).substr(sep + 1), '=', ';');
     Loc mutable_loc(loc_);
     if (found != std::string::npos) {
       found += sep + 1;
+
       rule_stmt->lhs =
           ParseExpr(&mutable_loc, TrimSpace(line.substr(0, found)));
       if (line[found] == ';') {
@@ -244,6 +266,36 @@ class Parser {
     Loc mutable_loc(loc_);
     stmt->expr = ParseExpr(&mutable_loc, line);
     stmt->should_exist = directive[0] == 'i';
+    out_stmts_->push_back(stmt);
+    after_rule_ = false;
+  }
+
+  void ParseLoad(std::string_view, std::string_view) {
+    // GNU Make's `load` directive executes a dynamically loaded make
+    // extension. Kati translates makefiles into a portable Ninja graph and
+    // deliberately does not embed or require GNU's extension ABI. Reject it
+    // explicitly rather than treating the line as a malformed rule and
+    // risking a silently incomplete graph.
+    Error("*** load: dynamic make extensions are unsupported by parallel Kati; "
+          "translate the extension's makefile effects into ordinary make "
+          "syntax");
+    after_rule_ = false;
+  }
+
+  void ParseVpath(std::string_view line, std::string_view) {
+    VpathStmt* stmt = new VpathStmt();
+    Loc mutable_loc(loc_);
+    stmt->set_loc(loc_);
+    stmt->expr = ParseExpr(&mutable_loc, line);
+    out_stmts_->push_back(stmt);
+    after_rule_ = false;
+  }
+
+  void ParseUndefine(std::string_view line, std::string_view) {
+    UndefineStmt* stmt = new UndefineStmt();
+    Loc mutable_loc(loc_);
+    stmt->set_loc(loc_);
+    stmt->lhs = ParseExpr(&mutable_loc, TrimSpace(line));
     out_stmts_->push_back(stmt);
     after_rule_ = false;
   }
@@ -546,6 +598,9 @@ void ParseNoStats(std::string_view buf,
 const Parser::DirectiveMap Parser::make_directives_ = {
     {"include", &Parser::ParseInclude},   {"-include", &Parser::ParseInclude},
     {"sinclude", &Parser::ParseInclude},  {"define", &Parser::ParseDefine},
+    {"load", &Parser::ParseLoad},
+    {"vpath", &Parser::ParseVpath},
+    {"undefine", &Parser::ParseUndefine},
     {"ifdef", &Parser::ParseIfdef},       {"ifndef", &Parser::ParseIfdef},
     {"ifeq", &Parser::ParseIfeq},         {"ifneq", &Parser::ParseIfeq},
     {"else", &Parser::ParseElse},         {"endif", &Parser::ParseEndif},
@@ -608,6 +663,22 @@ void ParseAssignStatement(std::string_view line,
       break;
   }
   *lhs = TrimSpace(line.substr(0, lhs_end));
+
+  // GNU Make allows modifiers on target-specific and pattern-specific
+  // assignments.  They are part of the rule syntax, not the variable name.
+  // Keep stripping them here so forms such as
+  //   target: override CXXFLAGS += -mavx
+  // store the assignment under CXXFLAGS.
+  for (;;) {
+    if (HasPrefix(*lhs, "private ")) {
+      *lhs = TrimSpace(lhs->substr(8));
+    } else if (HasPrefix(*lhs, "override ")) {
+      *lhs = TrimSpace(lhs->substr(9));
+    } else {
+      break;
+    }
+  }
+
   *rhs = TrimLeftSpace(line.substr(std::min(sep + 1, line.size())));
 }
 

@@ -18,6 +18,7 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "loc.h"
@@ -26,6 +27,7 @@
 #include "symtab.h"
 
 class Value;
+class Evaluator;
 
 class Rule {
  public:
@@ -36,6 +38,14 @@ class Rule {
   std::string DebugString() const;
 
   void ParseInputs(const std::string_view& inputs_string);
+
+  // Expand prerequisites that were escaped for .SECONDEXPANSION.  The
+  // result is parsed with the same word/path rules as ordinary prerequisites.
+  void ParseSecondaryInputs(Evaluator* ev,
+                            std::vector<Symbol>* inputs,
+                            std::vector<Symbol>* order_only_inputs,
+                            std::vector<std::vector<Symbol>>*
+                                wait_groups = nullptr) const;
 
   void ParsePrerequisites(const std::string_view& line,
                           size_t pos,
@@ -49,9 +59,16 @@ class Rule {
   std::vector<Symbol> inputs;
   std::vector<Symbol> order_only_inputs;
   std::vector<Symbol> output_patterns;
+  std::vector<std::vector<Symbol>> wait_groups;
   std::vector<Symbol> validations;
   bool is_double_colon;
   bool is_suffix_rule;
+  bool secondary_expansion;
+  bool has_wait;
+  std::string secondary_prerequisites;
+  // Parsed expression trees are immutable; evaluation remains per target
+  // because the variable scope and automatic variables differ per node.
+  mutable std::unordered_map<std::string, Value*> secondary_exprs;
   std::vector<Value*> cmds;
   Loc loc;
   int cmd_lineno;

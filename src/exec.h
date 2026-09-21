@@ -15,11 +15,23 @@
 #ifndef EXEC_H_
 #define EXEC_H_
 
+#include <string>
 #include <vector>
 
 #include "dep.h"
 class Evaluator;
 
-void Exec(const std::vector<NamedDepNode>& roots, Evaluator* ev);
+// True when a shell recipe invokes this Kati executable recursively.  Both
+// the direct executor and the Ninja emitter use the same boundary test so
+// recursive scheduling and recursive environment handling cannot drift apart.
+bool IsRecursiveKatiCommand(const std::string& command);
+
+struct ExecResult {
+  bool needs_build;
+  bool failed;
+};
+
+ExecResult Exec(const std::vector<NamedDepNode>& roots, Evaluator* ev,
+                bool parallel = true);
 
 #endif  // EXEC_H_

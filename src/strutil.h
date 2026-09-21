@@ -127,6 +127,11 @@ std::string_view Basename(std::string_view s);
 std::string_view GetExt(std::string_view s);
 std::string_view StripExt(std::string_view s);
 void NormalizePath(std::string* o);
+// Normalize a makefile pathname without conflating a directory spelling
+// such as "tools/" with the distinct target name "tools".  GNU make keeps
+// that trailing slash significant when matching explicit targets.
+void NormalizeMakePath(std::string* o);
+bool IsCurrentDirectoryPath(std::string_view s);
 void AbsPath(std::string_view s, std::string* o);
 
 size_t FindOutsideParen(std::string_view s, char c);

@@ -25,6 +25,8 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
+#include <cctype>
 #include <iterator>
 #include <memory>
 #include <sstream>
@@ -342,8 +344,7 @@ void WildcardFunc(const std::vector<Value*>& args,
   // do not need to check avoid_io here.
   WordWriter ww(s);
   for (std::string_view tok : WordScanner(pat)) {
-    ScopedTerminator st(tok);
-    const auto& files = Glob(tok.data());
+    const auto& files = Glob(tok);
     for (const std::string& file : files) {
       ww.Write(file);
     }
@@ -505,7 +506,6 @@ void EvalFunc(const std::vector<Value*>& args, Evaluator* ev, std::string*) {
   std::vector<Stmt*> stmts;
   Parse(*text, ev->loc(), &stmts);
   for (Stmt* stmt : stmts) {
-    LOG("%s", stmt->DebugString().c_str());
     stmt->Eval(ev);
     // delete stmt;
   }
@@ -597,11 +597,38 @@ bool ShouldStoreCommandResult(std::string_view cmd) {
 void ShellFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
   std::string cmd = args[0]->Eval(ev);
   if (ev->avoid_io() && !HasNoIoInShellScript(cmd)) {
-    if (ev->eval_depth() > 1) {
-      ERROR_LOC(ev->loc(),
-                "kati doesn't support passing results of $(shell) "
-                "to other make constructs: %s",
-                cmd.c_str());
+    if (TrimSpace(cmd) == "cat /dev/null") {
+      return;
+    }
+
+    if (ev->eval_depth() > 0) {
+      // A nested shell result is part of make-language evaluation.  It must
+      // be available before the surrounding function or variable reference
+      // can be expanded (for example, $(STAGE$(shell ...)_TFLAGS)).  A
+      // deferred shell substitution would only be valid as a recipe token
+      // and cannot determine the outer make construct.  Evaluate this class
+      // of shell command while generating the graph and retain its result so
+      // the normal Kati regeneration machinery can track it.
+      std::string out;
+      FindCommand* fc = NULL;
+      int returnCode = ShellFuncImpl(ev->GetShell(), ev->GetShellFlag(), cmd,
+                                     ev->loc(), &out, &fc);
+      if (ShouldStoreCommandResult(cmd)) {
+        CommandResult* cr = new CommandResult();
+        cr->op = (fc == NULL) ? CommandOp::SHELL : CommandOp::FIND;
+        cr->shell = ev->GetShell();
+        cr->shellflag = ev->GetShellFlag();
+        cr->cmd = cmd;
+        cr->find.reset(fc);
+        cr->result = out;
+        cr->loc = ev->loc();
+        g_command_results.push_back(cr);
+      } else {
+        delete fc;
+      }
+      *s += out;
+      ShellStatusVar::SetValue(returnCode);
+      return;
     }
     StripShellComment(&cmd);
     *s += "$(";
@@ -781,6 +808,80 @@ void ForeachFunc(const std::vector<Value*>& args,
   ev->IncrementEvalDepth();
 }
 
+void LetFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
+  // GNU make expands the variable list and the value list before binding
+  // anything.  The final text is deliberately evaluated afterwards, while
+  // the bindings are in scope.  Use the evaluator's current scope when one
+  // exists so target-specific variables remain lexically isolated; top-level
+  // evaluation falls back to the same global scope used by foreach.
+  const std::string&& names = args[0]->Eval(ev);
+  const std::string&& values = args[1]->Eval(ev);
+  std::vector<Symbol> symbols;
+  for (std::string_view name : WordScanner(names))
+    symbols.push_back(Intern(name));
+
+  std::vector<std::unique_ptr<SimpleVar>> vars;
+  std::vector<std::unique_ptr<ScopedVar>> scoped;
+  std::vector<std::unique_ptr<ScopedGlobalVar>> global;
+  WordScanner value_words(values);
+  auto value_it = value_words.begin();
+  auto value_end = value_words.end();
+  std::string remainder;
+  for (size_t i = 0; i < symbols.size(); ++i) {
+    std::string value;
+    if (value_it != value_end) {
+      if (i + 1 == symbols.size()) {
+        // The final let variable receives all remaining words.
+        value.assign(*value_it);
+        ++value_it;
+        while (value_it != value_end) {
+          value += ' ';
+          value += *value_it;
+          ++value_it;
+        }
+      } else {
+        value.assign(*value_it);
+        ++value_it;
+      }
+    }
+    vars.emplace_back(std::make_unique<SimpleVar>(
+        value, VarOrigin::AUTOMATIC, nullptr, Loc()));
+    if (ev->current_scope()) {
+      scoped.emplace_back(std::make_unique<ScopedVar>(
+          ev->current_scope(), symbols[i], vars.back().get()));
+    } else {
+      global.emplace_back(
+          std::make_unique<ScopedGlobalVar>(symbols[i], vars.back().get()));
+    }
+  }
+  args[2]->Eval(ev, s);
+}
+
+void IntcmpFunc(const std::vector<Value*>& args,
+                Evaluator* ev,
+                std::string* s) {
+  const std::string&& lhs_string = args[0]->Eval(ev);
+  const std::string&& rhs_string = args[1]->Eval(ev);
+  errno = 0;
+  char* lhs_end = nullptr;
+  char* rhs_end = nullptr;
+  const long long lhs = strtoll(lhs_string.c_str(), &lhs_end, 10);
+  const int lhs_errno = errno;
+  errno = 0;
+  const long long rhs = strtoll(rhs_string.c_str(), &rhs_end, 10);
+  const int rhs_errno = errno;
+  if (lhs_errno == ERANGE || rhs_errno == ERANGE ||
+      lhs_end == lhs_string.c_str() || *lhs_end != '\0' ||
+      rhs_end == rhs_string.c_str() || *rhs_end != '\0') {
+    ev->Error(StringPrintf("*** intcmp arguments must be integers: %s, %s",
+                           lhs_string.c_str(), rhs_string.c_str()));
+    return;
+  }
+  size_t branch = lhs < rhs ? 2 : lhs == rhs ? 3 : 4;
+  if (branch < args.size())
+    args[branch]->Eval(ev, s);
+}
+
 void ForeachWithSepFunc(const std::vector<Value*>& args,
                         Evaluator* ev,
                         std::string* s) {
@@ -930,10 +1031,6 @@ void FileFunc_(const std::vector<Value*>& args,
                Evaluator* ev,
                std::string* s,
                bool rerun) {
-  if (ev->avoid_io()) {
-    ev->Error("*** $(file ...) is not supported in rules.");
-  }
-
   std::string arg = args[0]->Eval(ev);
   std::string_view filename = TrimSpace(arg);
 
@@ -950,8 +1047,72 @@ void FileFunc_(const std::vector<Value*>& args,
       ev->Error("*** invalid argument");
     }
 
+    if (ev->avoid_io()) {
+      std::string filename_str(filename);
+
+      if (rerun && ShouldStoreCommandResult(filename_str)) {
+        CommandResult* cr = new CommandResult();
+        cr->op = Exists(filename_str) ? CommandOp::READ : CommandOp::READ_MISSING;
+        cr->cmd = filename_str;
+        cr->loc = ev->loc();
+        g_command_results.push_back(cr);
+      }
+
+      std::string executable = GetExecutablePath();
+      EscapeShell(&executable);
+      EscapeShell(&filename_str);
+
+      *s += "$(";
+      *s += executable;
+      *s += " --file-read ";
+      *s += filename_str;
+      *s += ")";
+      return;
+    }
+
     FileReadFunc_(ev, std::string(filename), s, rerun);
   } else if (filename[0] == '>') {
+    if (ev->avoid_io()) {
+      // A recipe-time $(file >name,text) must run when the Ninja edge runs,
+      // after automatic variables such as $@ and $^ have been expanded.
+      // Materialize it as a shell printf instead of writing during graph
+      // generation.
+      bool append = filename.size() > 1 && filename[1] == '>';
+      filename = filename.substr(append ? 2 : 1);
+      filename = TrimLeftSpace(filename);
+      if (filename.empty()) {
+        ev->Error("*** Missing filename");
+      }
+
+      std::string text;
+      if (args.size() > 1) {
+        text = args[1]->Eval(ev);
+        if (text.empty() || text.back() != '\n')
+          text.push_back('\n');
+      }
+
+      std::string escaped_filename(filename);
+      std::string escaped_text;
+      for (char c : text) {
+        if (c == '\\') {
+          escaped_text += "\\\\";
+        } else if (c == '\n') {
+          escaped_text += "\\n";
+        } else {
+          escaped_text += c;
+        }
+      }
+      EscapeShell(&escaped_filename);
+      EscapeShell(&escaped_text);
+      *s += "printf '%b' \"";
+      *s += escaped_text;
+      *s += "\" ";
+      *s += append ? ">> \"" : "> \"";
+      *s += escaped_filename;
+      *s += "\"";
+      return;
+    }
+
     bool append = false;
     if (filename[1] == '>') {
       append = true;
@@ -1138,6 +1299,176 @@ void ExtraFileDepsFunc(const std::vector<Value*>& args,
   }
 }
 
+// A dependency-free, deliberately pure subset of the GNU Make Guile
+// function. GNU Make substitutes the value of the last Guile expression;
+// implementing only expressions with no external runtime or side effects
+// keeps graph generation deterministic and does not embed Guile.
+struct GuileExpr {
+  bool list = false;
+  bool string = false;
+  std::string atom;
+  std::vector<GuileExpr> items;
+};
+
+class GuileReader {
+ public:
+  explicit GuileReader(std::string_view input) : input_(input) {}
+
+  GuileExpr Read(Evaluator* ev) {
+    SkipSpace();
+    if (pos_ == input_.size())
+      Fail(ev, "empty expression");
+    GuileExpr result = ReadExpr(ev);
+    SkipSpace();
+    if (pos_ != input_.size())
+      Fail(ev, "trailing expressions are not supported");
+    return result;
+  }
+
+ private:
+  [[noreturn]] void Fail(Evaluator* ev, std::string_view reason) {
+    ev->Error(StringPrintf(
+        "*** guile: unsupported or invalid pure expression (%s)",
+        std::string(reason).c_str()));
+    abort();
+  }
+
+  void SkipSpace() {
+    while (pos_ < input_.size() &&
+           isspace(static_cast<unsigned char>(input_[pos_])))
+      ++pos_;
+  }
+
+  GuileExpr ReadExpr(Evaluator* ev) {
+    SkipSpace();
+    if (pos_ == input_.size())
+      Fail(ev, "unexpected end of expression");
+    if (input_[pos_] == '(')
+      return ReadList(ev);
+    if (input_[pos_] == '"')
+      return ReadString(ev);
+
+    GuileExpr result;
+    result.atom = ReadAtom(ev);
+    return result;
+  }
+
+  GuileExpr ReadList(Evaluator* ev) {
+    GuileExpr result;
+    result.list = true;
+    ++pos_;
+    while (true) {
+      SkipSpace();
+      if (pos_ == input_.size())
+        Fail(ev, "missing closing parenthesis");
+      if (input_[pos_] == ')') {
+        ++pos_;
+        return result;
+      }
+      result.items.push_back(ReadExpr(ev));
+    }
+  }
+
+  GuileExpr ReadString(Evaluator* ev) {
+    GuileExpr result;
+    result.string = true;
+    ++pos_;
+    while (pos_ < input_.size()) {
+      char c = input_[pos_++];
+      if (c == '"')
+        return result;
+      if (c == '\\') {
+        if (pos_ == input_.size())
+          Fail(ev, "unterminated string escape");
+        char escaped = input_[pos_++];
+        switch (escaped) {
+          case 'n':
+            result.atom += '\n';
+            break;
+          case 'r':
+            result.atom += '\r';
+            break;
+          case 't':
+            result.atom += '\t';
+            break;
+          default:
+            result.atom += escaped;
+            break;
+        }
+      } else {
+        result.atom += c;
+      }
+    }
+    Fail(ev, "unterminated string");
+  }
+
+  std::string ReadAtom(Evaluator* ev) {
+    const size_t start = pos_;
+    while (pos_ < input_.size() &&
+           !isspace(static_cast<unsigned char>(input_[pos_])) &&
+           input_[pos_] != '(' && input_[pos_] != ')')
+      ++pos_;
+    if (start == pos_)
+      Fail(ev, "unexpected token");
+    return std::string(input_.substr(start, pos_ - start));
+  }
+
+  std::string_view input_;
+  size_t pos_ = 0;
+};
+
+static std::string EvalGuileExpr(const GuileExpr& expr, Evaluator* ev) {
+  if (!expr.list)
+    return expr.atom;
+
+  if (expr.items.empty())
+    ev->Error("*** guile: empty lists are not supported");
+  const std::string& function = expr.items[0].atom;
+
+  if (function == "quote") {
+    if (expr.items.size() != 2)
+      ev->Error("*** guile: quote expects one argument");
+    const GuileExpr& quoted = expr.items[1];
+    if (quoted.list)
+      ev->Error("*** guile: quoted lists are not supported");
+    return quoted.atom;
+  }
+
+  if (function == "begin") {
+    std::string result;
+    for (size_t i = 1; i < expr.items.size(); ++i)
+      result = EvalGuileExpr(expr.items[i], ev);
+    return result;
+  }
+
+  if (function == "string-append") {
+    std::string result;
+    for (size_t i = 1; i < expr.items.size(); ++i)
+      result += EvalGuileExpr(expr.items[i], ev);
+    return result;
+  }
+
+  if (function == "if") {
+    if (expr.items.size() != 3 && expr.items.size() != 4)
+      ev->Error("*** guile: if expects two or three arguments");
+    const std::string condition = EvalGuileExpr(expr.items[1], ev);
+    if (!condition.empty() && condition != "#f")
+      return EvalGuileExpr(expr.items[2], ev);
+    return expr.items.size() == 4 ? EvalGuileExpr(expr.items[3], ev) : "";
+  }
+
+  ev->Error(StringPrintf(
+      "*** guile: procedure `%s' is unsupported without Guile",
+      function.c_str()));
+  return "";
+}
+
+void GuileFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
+  const std::string body = args[0]->Eval(ev);
+  GuileReader reader(body);
+  *s = EvalGuileExpr(reader.Read(ev), ev);
+}
+
 #define ENTRY(name, args...) \
   {                          \
     name, {                  \
@@ -1180,6 +1511,9 @@ static const std::unordered_map<std::string_view, FuncInfo> g_func_info_map = {
     ENTRY("shell", &ShellFunc, 1, 1, false, false),
     ENTRY("call", &CallFunc, 0, 0, false, false),
     ENTRY("foreach", &ForeachFunc, 3, 3, false, false),
+    ENTRY("let", &LetFunc, 3, 3, false, false),
+    ENTRY("intcmp", &IntcmpFunc, 5, 2, false, false),
+    ENTRY("guile", &GuileFunc, 1, 1, false, false),
 
     ENTRY("origin", &OriginFunc, 1, 1, false, false),
     ENTRY("flavor", &FlavorFunc, 1, 1, false, false),

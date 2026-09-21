@@ -37,17 +37,32 @@ struct DepNode {
   std::string DebugString();
 
   Symbol output;
+  // The spelling used by make while expanding automatic variables and
+  // recursive recipes.  |output| is the canonical spelling used by Ninja
+  // edges and filesystem checks; these are distinct when a rule names a
+  // target through a parent-relative alias such as dir/../child.
+  Symbol lexical_output;
   std::vector<Value*> cmds;
   std::vector<NamedDepNode> deps;
   std::vector<NamedDepNode> order_onlys;
   std::vector<NamedDepNode> validations;
   bool has_rule;
   bool is_default_target;
+  bool is_notparallel;
   bool is_phony;
   bool is_restat;
+  bool delete_on_error;
+  bool precious;
+  bool intermediate;
+  bool oneshell;
+  bool ignore_errors;
+  bool silent;
+  bool export_all_variables;
   std::vector<Symbol> implicit_outputs;
   std::vector<Symbol> actual_inputs;
   std::vector<Symbol> actual_order_only_inputs;
+  std::vector<Symbol> low_resolution_inputs;
+  std::vector<std::vector<Symbol>> wait_groups;
   std::vector<Symbol> actual_validations;
   Vars* rule_vars;
   Var* depfile_var;

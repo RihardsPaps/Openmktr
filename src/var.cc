@@ -195,6 +195,7 @@ bool RecursiveVar::IsFunc(Evaluator* ev) const {
 
 void RecursiveVar::Eval(Evaluator* ev, std::string* s) const {
   ev->CheckStack();
+
   v_->Eval(ev, s);
 }
 
@@ -310,10 +311,11 @@ bool ShellStatusVar::IsFunc(Evaluator*) const {
   return false;
 }
 
-void ShellStatusVar::Eval(Evaluator* ev, std::string* s) const {
-  if (ev->IsEvaluatingCommand()) {
-    ev->Error("Kati does not support using .SHELLSTATUS inside of a rule");
-  }
+void ShellStatusVar::Eval(Evaluator*, std::string* s) const {
+  // Recipe-level $(shell ...) is evaluated while Kati expands the command
+  // emitted to Ninja. ShellFunc records the resulting status, so
+  // .SHELLSTATUS is available here just as it is during direct execution.
+  // Do not reject it merely because the command is being generated for Ninja.
 
   if (!is_set_) {
     return;
@@ -374,12 +376,24 @@ void Vars::Assign(Symbol name, Var* v, bool* readonly) {
       *readonly = true;
       return;
     }
-    if (orig->Origin() == VarOrigin::OVERRIDE ||
-        orig->Origin() == VarOrigin::ENVIRONMENT_OVERRIDE) {
+    if ((orig->Origin() == VarOrigin::OVERRIDE &&
+         v->Origin() != VarOrigin::OVERRIDE) ||
+        (orig->Origin() == VarOrigin::ENVIRONMENT_OVERRIDE &&
+         v->Origin() != VarOrigin::OVERRIDE &&
+         v->Origin() != VarOrigin::ENVIRONMENT_OVERRIDE)) {
+      return;
+    }
+    if (orig->Origin() == VarOrigin::COMMAND_LINE &&
+        v->Origin() != VarOrigin::COMMAND_LINE &&
+        v->Origin() != VarOrigin::OVERRIDE) {
       return;
     }
     if (orig->Origin() == VarOrigin::AUTOMATIC) {
-      ERROR("overriding automatic variable is not implemented yet");
+      // GNU make accepts assignments to automatic-variable names but keeps
+      // the automatically supplied value in effect for recipes.  Do not let
+      // a makefile replace the evaluator's per-rule binding.
+      delete v;
+      return;
     }
     if (orig->IsDefined())
       delete p.first->second;

@@ -14,6 +14,7 @@
 
 // +build ignore
 
+#include <fcntl.h>
 #include <limits.h>
 #include <signal.h>
 #include <stdio.h>
@@ -22,9 +23,9 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <string_view>
 
-#include "affinity.h"
 #include "eval.h"
 #include "exec.h"
 #include "file.h"
@@ -46,6 +47,8 @@
 #include "timeutil.h"
 #include "var.h"
 
+static char** g_argv;
+
 // We know that there are leaks in Kati. Turn off LeakSanitizer by default.
 extern "C" const char* __asan_default_options() {
   return "detect_leaks=0:allow_user_segv_handler=1";
@@ -61,8 +64,12 @@ static void ReadBootstrapMakefile(const std::vector<Symbol>& targets,
        "CXX?=g++\n"
 #endif
        "AR?=ar\n"
+       "ARFLAGS?=rv\n"
+       "RANLIB?=ranlib\n"
+       "RM?=rm -f\n"
        // Pretend to be GNU make 4.2.1, for compatibility.
        "MAKE_VERSION?=4.2.1\n"
+       ".FEATURES?=output-sync\n"
        "KATI?=ckati\n"
        // Overwrite $SHELL environment variable.
        "SHELL=/bin/sh\n"
@@ -81,15 +88,49 @@ static void ReadBootstrapMakefile(const std::vector<Symbol>& targets,
         // TODO: Add more builtin rules.
     );
   }
-  if (g_flags.generate_ninja) {
-    bootstrap += StringPrintf("MAKE?=make -j%d\n",
-                              g_flags.num_jobs <= 1 ? 1 : g_flags.num_jobs / 2);
-  } else {
-    bootstrap += StringPrintf("MAKE?=%s\n",
-                              JoinStrings(g_flags.subkati_args, " ").c_str());
+  // MAKE is a public GNU make variable and is commonly expanded both as
+  // ${MAKE} and as "${MAKE}". It must always be one executable pathname.
+  // Recursive options belong in MAKEFLAGS; putting them in MAKE makes the
+  // quoted form try to execute a pathname containing spaces, and makes
+  // deferred Kbuild recursion lose its environment. This applies equally to
+  // direct Kati execution and to generated Ninja recipes.
+  const std::string& make_command = g_flags.executable_path;
+
+  // MAKE is a public GNU make variable and is frequently expanded by a shell
+  // script as either ${MAKE} or "${MAKE}".  It must therefore contain one
+  // executable command, not an environment-assignment prefix: shell parameter
+  // expansion does not re-parse assignment words, and a multi-word value also
+  // fails when quoted.  Recursive Kati commands inherit KATI_JOBS and the
+  // shared jobserver from the invoking wrapper at run time.
+  //
+  // In Ninja mode recursive Kati invocations are executed later, outside the
+  // evaluator that is currently processing this makefile. Preserve the local
+  // compiler flags on the recursive command, as recursive make does.
+  // Keep MAKE exactly executable-shaped.  Appending MAKEOVERRIDES here not
+  // only mixed command-line arguments into a public command variable, it also
+  // left a trailing space when MAKEOVERRIDES was empty.  Both forms are
+  // observable with shell scripts: ${MAKE} is reparsed as words, while
+  // "${MAKE}" is one pathname and must name the executable exactly.
+  bootstrap += StringPrintf("MAKE = %s\n", make_command.c_str());
+
+  // GNU make propagates command-line variable assignments through
+  // MAKEOVERRIDES and MAKEFLAGS when invoking a recursive make.
+  //
+  // The command-line assignments have not been evaluated yet at this point,
+  // so the effective values cannot be constructed here.  They are installed
+  // after bootstrap evaluation below.
+
+  // GNU make normalizes leading "./" in command-line goals when exposing
+  // them through MAKECMDGOALS.
+  std::vector<Symbol> makecmdgoals;
+  makecmdgoals.reserve(targets.size());
+  for (Symbol target : targets) {
+    makecmdgoals.push_back(Intern(TrimLeadingCurdir(target.str())));
   }
+
   bootstrap +=
-      StringPrintf("MAKECMDGOALS?=%s\n", JoinSymbols(targets, " ").c_str());
+      StringPrintf("MAKECMDGOALS?=%s\n",
+                   JoinSymbols(makecmdgoals, " ").c_str());
 
   char cwd[PATH_MAX];
   if (!getcwd(cwd, PATH_MAX)) {
@@ -107,9 +148,236 @@ static void SetVar(std::string_view l,
   size_t found = l.find('=');
   CHECK(found != std::string::npos);
   Symbol lhs = Intern(l.substr(0, found));
-  std::string_view rhs = l.substr(found + 1);
-  lhs.SetGlobalVar(new RecursiveVar(Value::NewLiteral(rhs.data()), origin,
-                                    definition, loc, rhs.data()));
+  std::string_view rhs = Intern(l.substr(found + 1)).str();
+  lhs.SetGlobalVar(new RecursiveVar(Value::NewLiteral(rhs), origin,
+                                    definition, loc, rhs));
+}
+
+static std::string EscapeMakeOverrideValue(std::string_view value) {
+  std::string result;
+  result.reserve(value.size());
+
+  for (char c : value) {
+    if (c == '\\' || c == ' ' || c == '\t') {
+      result += '\\';
+    }
+    result += c;
+  }
+
+  return result;
+}
+
+static std::string BuildMakeOverrides(Evaluator* ev) {
+  std::vector<Symbol> names;
+  std::unordered_set<Symbol> seen;
+
+  for (std::string_view assignment : g_flags.cl_vars) {
+    size_t equal = assignment.find('=');
+    if (equal == std::string_view::npos || equal == 0)
+      continue;
+
+    std::string_view lhs = assignment.substr(0, equal);
+
+    // Strip the assignment operator from :=, +=, and ?=.
+    if (!lhs.empty() &&
+        (lhs.back() == ':' || lhs.back() == '+' || lhs.back() == '?')) {
+      lhs.remove_suffix(1);
+    }
+
+    lhs = TrimSpace(lhs);
+    if (lhs.empty())
+      continue;
+
+    // These two variables are the transport used to propagate command-line
+    // state.  They are not user overrides.  Treating them as overrides makes
+    // a recursive invocation serialize its already-expanded MAKEFLAGS back
+    // into MAKEFLAGS, so every recursion level accumulates compiler options
+    // and eventually re-tokenizes values such as -m64 as --64.
+    if (lhs == "MAKEFLAGS" || lhs == "MAKEOVERRIDES")
+      continue;
+
+    Symbol name = Intern(lhs);
+    if (seen.insert(name).second)
+      names.push_back(name);
+  }
+
+  std::string result;
+
+  for (Symbol name : names) {
+    // MAKEOVERRIDES carries the command-line override, not the variable's
+    // value after the makefile has modified it.  For example, a makefile may
+    // define FOO from another variable and then use "FOO += x". Serializing
+    // ev->LookupVar(FOO)->Eval() would include x in the recursive command
+    // line; the recursive makefile would append x again at every level.
+    // Preserve the original assignment text so command-line-origin
+    // semantics survive recursive Kati invocations.
+    for (std::string_view assignment : g_flags.cl_vars) {
+      size_t equal = assignment.find('=');
+      if (equal == std::string_view::npos || equal == 0)
+        continue;
+
+      std::string_view lhs = assignment.substr(0, equal);
+      if (!lhs.empty() &&
+          (lhs.back() == ':' || lhs.back() == '+' || lhs.back() == '?')) {
+        lhs.remove_suffix(1);
+      }
+      lhs = TrimSpace(lhs);
+      if (lhs != name.str())
+        continue;
+
+      Var* var = ev->LookupVar(name);
+      if (!var->IsDefined() || var->Origin() != VarOrigin::COMMAND_LINE)
+        break;
+
+      if (!result.empty())
+        result += ' ';
+
+      // Keep the assignment operator and escape only its value. This retains
+      // the semantics of += and ?= while still making whitespace safe in
+      // MAKEFLAGS.
+      result.append(assignment.substr(0, equal + 1));
+      result += EscapeMakeOverrideValue(assignment.substr(equal + 1));
+      break;
+    }
+  }
+
+  return result;
+}
+
+static void UpdateMakeFlags(Evaluator* ev) {
+  if (g_flags.cl_vars.empty() && !g_flags.no_print_directory) {
+    // MAKEOVERRIDES is an inherited transport variable.  If this recursive
+    // invocation has no effective command-line assignments, retaining the
+    // parent's value would promote stale assignments back to command-line
+    // precedence in the next child.
+    SetVar("MAKEOVERRIDES=", VarOrigin::COMMAND_LINE, nullptr,
+           Loc("*bootstrap*", 0));
+    setenv("MAKEOVERRIDES", "", 1);
+    return;
+  }
+
+  const std::string overrides = BuildMakeOverrides(ev);
+
+  if (!overrides.empty()) {
+    SetVar("MAKEOVERRIDES=" + overrides, VarOrigin::COMMAND_LINE, nullptr,
+           Loc("*bootstrap*", 0));
+    setenv("MAKEOVERRIDES", overrides.c_str(), 1);
+  } else {
+    SetVar("MAKEOVERRIDES=", VarOrigin::COMMAND_LINE, nullptr,
+           Loc("*bootstrap*", 0));
+    setenv("MAKEOVERRIDES", "", 1);
+  }
+
+  Var* makeflags = ev->LookupVar(Intern("MAKEFLAGS"));
+  std::string makeflags_value;
+  if (makeflags->IsDefined())
+    makeflags_value = makeflags->Eval(ev);
+
+  // GNU make uses "--" as the separator between options and command-line
+  // variable overrides.  A makefile may append options after an inherited
+  // separator (Kbuild appends -rR this way), but recursive invocations must
+  // see those options before the separator.
+  size_t separator = std::string::npos;
+  for (size_t candidate = makeflags_value.find("--");
+       candidate != std::string::npos;
+       candidate = makeflags_value.find("--", candidate + 2)) {
+    const bool at_start = candidate == 0 ||
+                          isspace(static_cast<unsigned char>(
+                              makeflags_value[candidate - 1]));
+    const size_t end = candidate + 2;
+    const bool at_end = end == makeflags_value.size() ||
+                        isspace(static_cast<unsigned char>(
+                            makeflags_value[end]));
+    if (at_start && at_end) {
+      separator = candidate;
+      break;
+    }
+  }
+  if (separator != std::string::npos) {
+    const std::string inherited_tail = makeflags_value.substr(separator + 2);
+    makeflags_value.erase(separator);
+
+    // MAKEFLAGS/MAKEOVERRIDES escape whitespace inside assignments.  Use the
+    // same escape-aware tokenization as Flags::Parse; WordScanner would split
+    // CFLAGS=-O2\ -m64 into a bogus top-level -m64 option on the second
+    // normalization pass.
+    std::string token;
+    bool escaped = false;
+    auto keep_option = [&makeflags_value](const std::string& value) {
+      if (!value.empty() && value[0] == '-') {
+        if (!makeflags_value.empty())
+          makeflags_value += ' ';
+        makeflags_value += value;
+      }
+    };
+    for (char c : inherited_tail) {
+      if (escaped) {
+        token += c;
+        escaped = false;
+      } else if (c == '\\') {
+        escaped = true;
+      } else if (isspace(static_cast<unsigned char>(c))) {
+        if (!token.empty()) {
+          keep_option(token);
+          token.clear();
+        }
+      } else {
+        token += c;
+      }
+    }
+    if (escaped)
+      token += '\\';
+    if (!token.empty())
+      keep_option(token);
+  }
+
+  while (!makeflags_value.empty() &&
+         (makeflags_value.back() == ' ' || makeflags_value.back() == '\n')) {
+    makeflags_value.pop_back();
+  }
+
+  // Recursive make invocations inherit execution modes through MAKEFLAGS.
+  // Keep these options in the normalized option section so a child Kati
+  // process observes the same dry-run, question, keep-going, touch, and
+  // silent behavior as GNU make.  Command-line assignments remain after the
+  // separator below and are handled independently.
+  auto append_option = [&makeflags_value](const char* option) {
+    for (std::string_view token : WordScanner(makeflags_value)) {
+      if (token == option)
+        return;
+    }
+    if (!makeflags_value.empty())
+      makeflags_value += ' ';
+    makeflags_value += option;
+  };
+  if (g_flags.is_dry_run)
+    append_option("-n");
+  if (g_flags.is_question)
+    append_option("-q");
+  if (g_flags.keep_going)
+    append_option("-k");
+  if (g_flags.is_touch)
+    append_option("-t");
+  if (g_flags.is_silent_mode)
+    append_option("-s");
+
+  if (g_flags.no_print_directory &&
+      makeflags_value.find("--no-print-directory") == std::string::npos) {
+    if (!makeflags_value.empty())
+      makeflags_value += ' ';
+    makeflags_value += "--no-print-directory";
+  }
+
+  if (!overrides.empty()) {
+    if (!makeflags_value.empty())
+      makeflags_value += ' ';
+    makeflags_value += "-- ";
+    makeflags_value += overrides;
+  }
+
+  SetVar("MAKEFLAGS=" + makeflags_value, VarOrigin::COMMAND_LINE, nullptr,
+         Loc("*bootstrap*", 0));
+  setenv("MAKEFLAGS", makeflags_value.c_str(), 1);
 }
 
 extern "C" char** environ;
@@ -208,6 +476,7 @@ SegfaultHandler::~SegfaultHandler() {
 static int Run(const std::vector<Symbol>& targets,
                const std::vector<std::string_view>& cl_vars,
                const std::string& orig_args) {
+
   double start_time = GetTime();
 
   if (g_flags.generate_ninja && (g_flags.regen || g_flags.dump_kati_stamp)) {
@@ -223,113 +492,298 @@ static int Run(const std::vector<Symbol>& targets,
     ClearGlobCache();
   }
 
-  SetAffinityForSingleThread();
-
-  Evaluator ev;
-  if (!ev.Start()) {
-    return 1;
-  }
-  Intern("MAKEFILE_LIST")
-      .SetGlobalVar(new SimpleVar(StringPrintf(" %s", g_flags.makefile),
-                                  VarOrigin::FILE, ev.CurrentFrame(),
-                                  ev.loc()));
-  for (char** p = environ; *p; p++) {
-    SetVar(*p, VarOrigin::ENVIRONMENT, nullptr, Loc());
-  }
-  SegfaultHandler segfault(&ev);
-
   std::vector<Stmt*> bootstrap_asts;
   ReadBootstrapMakefile(targets, &bootstrap_asts);
 
-  {
-    ScopedFrame frame(ev.Enter(FrameType::PHASE, "*bootstrap*", Loc()));
-    ev.in_bootstrap();
-    for (Stmt* stmt : bootstrap_asts) {
-      LOG("%s", stmt->DebugString().c_str());
-      stmt->Eval(&ev);
+  for (;;) {
+    Evaluator ev;
+    if (!ev.Start()) {
+      for (Stmt* stmt : bootstrap_asts)
+        delete stmt;
+      return 1;
     }
-  }
 
-  {
-    ScopedFrame frame(ev.Enter(FrameType::PHASE, "*command line*", Loc()));
-    ev.in_command_line();
-    for (std::string_view l : cl_vars) {
-      std::vector<Stmt*> asts;
-      Parse(Intern(l).str(), Loc("*bootstrap*", 0), &asts);
-      CHECK(asts.size() == 1);
-      asts[0]->Eval(&ev);
+    Intern("MAKEFILE_LIST")
+        .SetGlobalVar(new SimpleVar(StringPrintf(" %s", g_flags.makefile),
+                                    VarOrigin::FILE, ev.CurrentFrame(),
+                                    ev.loc()));
+
+    for (char** p = environ; *p; p++) {
+      SetVar(*p, VarOrigin::ENVIRONMENT, nullptr, Loc());
+      const char* equal = strchr(*p, '=');
+      if (equal != nullptr && strncmp(*p, "VPATH=", 6) == 0)
+        ev.SetVpath("%", equal + 1);
     }
-  }
-  ev.in_toplevel_makefile();
 
-  {
-    ScopedFrame eval_frame(ev.Enter(FrameType::PHASE, "*parse*", Loc()));
-    ScopedTimeReporter tr("eval time");
+    SegfaultHandler segfault(&ev);
 
-    ScopedFrame file_frame(ev.Enter(FrameType::PARSE, g_flags.makefile, Loc()));
-    const Makefile& mk =
-        MakefileCacheManager::Get().ReadMakefile(g_flags.makefile);
-    for (Stmt* stmt : mk.stmts()) {
-      LOG("%s", stmt->DebugString().c_str());
-      stmt->Eval(&ev);
+    {
+      ScopedFrame frame(ev.Enter(FrameType::PHASE, "*bootstrap*", Loc()));
+      ev.in_bootstrap();
+
+      for (Stmt* stmt : bootstrap_asts) {
+        LOG("%s", stmt->DebugString().c_str());
+        stmt->Eval(&ev);
+      }
     }
-  }
 
-  for (ParseErrorStmt* err : GetParseErrors()) {
-    WARN_LOC(err->loc(), "warning for parse error in an unevaluated line: %s",
-             err->msg.c_str());
-  }
+    {
+      ScopedFrame frame(ev.Enter(FrameType::PHASE, "*command line*", Loc()));
+      ev.in_command_line();
 
-  if (g_flags.dump_include_graph != nullptr) {
-    ev.DumpIncludeJSON(std::string(g_flags.dump_include_graph));
-  }
+      for (std::string_view l : cl_vars) {
+        std::vector<Stmt*> asts;
+        Parse(Intern(l).str(), Loc("*bootstrap*", 0), &asts);
+        CHECK(asts.size() == 1);
+        asts[0]->Eval(&ev);
+      }
 
-  std::vector<NamedDepNode> nodes;
-  {
-    ScopedFrame frame(
-        ev.Enter(FrameType::PHASE, "*dependency analysis*", Loc()));
-    ScopedTimeReporter tr("make dep time");
-    MakeDep(&ev, ev.rules(), ev.rule_vars(), targets, &nodes);
-  }
+    }
 
-  if (g_flags.is_syntax_check_only)
-    return 0;
+    // At this point command-line assignments have been evaluated, so
+    // reconstruct the propagation variables using their effective values.
+    //
+    // GNU make exposes command-line options such as --no-print-directory
+    // through MAKEFLAGS, and command-line variable overrides after "--".
+    // Keep the option section separate from the override section so recursive
+    // invocations do not accumulate duplicate assignments.
+    UpdateMakeFlags(&ev);
 
-  if (g_flags.generate_ninja) {
-    ScopedFrame frame(ev.Enter(FrameType::PHASE, "*ninja generation*", Loc()));
-    ScopedTimeReporter tr("generate ninja time");
-    GenerateNinja(nodes, &ev, orig_args, start_time);
+    ev.in_toplevel_makefile();
+
+    {
+      ScopedFrame eval_frame(ev.Enter(FrameType::PHASE, "*parse*", Loc()));
+      ScopedTimeReporter tr("eval time");
+
+      ScopedFrame file_frame(
+          ev.Enter(FrameType::PARSE, g_flags.makefile, Loc()));
+
+      const Makefile& mk =
+          MakefileCacheManager::Get().ReadMakefile(g_flags.makefile);
+
+      for (Stmt* stmt : mk.stmts()) {
+        LOG("%s", stmt->DebugString().c_str());
+        stmt->Eval(&ev);
+      }
+    }
+
+    // Makefiles may modify MAKEFLAGS while they are parsed. Rebuild the
+    // recursive propagation value after parsing so deferred Ninja recipes and
+    // normal Kati recipes receive the normalized final option/override split.
+    UpdateMakeFlags(&ev);
+
+    for (ParseErrorStmt* err : GetParseErrors()) {
+      WARN_LOC(err->loc(),
+               "warning for parse error in an unevaluated line: %s",
+               err->msg.c_str());
+    }
+
+    /*
+     * GNU make compatibility:
+     *
+     * If a required include file did not exist during parsing, GNU make
+     * tries to build it and then restarts the entire makefile evaluation.
+     */
+    if (!ev.missing_includes().empty() ||
+        !ev.included_makefiles().empty()) {
+      std::vector<Symbol> include_targets;
+
+      for (const auto& include : ev.missing_includes()) {
+        include_targets.push_back(Intern(include.filename));
+      }
+      for (const auto& include : ev.included_makefiles()) {
+        Symbol target = Intern(include);
+        if (std::find(include_targets.begin(), include_targets.end(), target) ==
+            include_targets.end()) {
+          include_targets.push_back(target);
+        }
+      }
+
+      std::vector<NamedDepNode> include_nodes;
+
+      {
+        ScopedFrame frame(
+            ev.Enter(FrameType::PHASE,
+                     "*remake included makefiles*",
+                     Loc()));
+
+        ScopedTimeReporter tr("remake included makefiles time");
+
+        MakeDep(&ev,
+                ev.rules(),
+                ev.rule_vars(),
+                include_targets,
+                &include_nodes);
+      }
+
+      // Optional includes without a producing rule are valid and must remain
+      // silent. Do not use has_rule alone as proof that an include was
+      // remade: a dependency cycle may leave a rule-backed target untouched.
+      // Restarting in that case re-enters the same missing-include path
+      // forever (U-Boot's generated config headers expose this readily).
+      std::vector<NamedDepNode> include_remake_nodes;
+      for (const auto& include : include_nodes) {
+        if (include.second->has_rule)
+          include_remake_nodes.push_back(include);
+      }
+
+      if (!include_remake_nodes.empty()) {
+        ExecResult include_result{false, false};
+        {
+          ScopedFrame frame(
+              ev.Enter(FrameType::PHASE,
+                       "*execute included makefiles*",
+                       Loc()));
+
+          ScopedTimeReporter tr("execute included makefiles time");
+
+          // Include remakes happen while the evaluator is being restarted.
+          // Keep that bootstrap phase serial; ordinary recipe execution uses
+          // the bounded executor parallelism.
+          include_result = Exec(include_remake_nodes, &ev, false);
+          if (include_result.failed && !g_flags.keep_going) {
+            ev.Finish();
+            return 1;
+          }
+        }
+
+        // GNU make restarts after an included makefile was actually rebuilt.
+        // Testing only for existence is insufficient for existing includes:
+        // it would restart forever when the include was already current.
+        if (!include_result.needs_build) {
+          ev.Finish();
+          goto includes_done;
+        }
+
+        ev.Finish();
+
+        /*
+         * The include may have been invisible to Glob() during the first
+         * evaluation. Its cached result must not survive the restart.
+         */
+        ClearGlobCache();
+
+        /*
+         * Start over in a fresh Kati process.  A process restart resets the
+         * makefile cache, glob cache, rule state, and evaluator together,
+         * which is the same semantic boundary GNU make uses after remaking
+         * an included makefile.
+         */
+        execvp(g_argv[0], g_argv);
+        ERROR("*** failed to restart Kati after remaking included makefiles: %s",
+              strerror(errno));
+        return 1;
+      }
+    }
+
+  includes_done:
+
+    if (g_flags.dump_include_graph != nullptr)
+      ev.DumpIncludeJSON(std::string(g_flags.dump_include_graph));
+
+    std::vector<NamedDepNode> nodes;
+
+    {
+      ScopedFrame frame(
+          ev.Enter(FrameType::PHASE, "*dependency analysis*", Loc()));
+
+      ScopedTimeReporter tr("make dep time");
+
+      MakeDep(&ev,
+              ev.rules(),
+              ev.rule_vars(),
+              targets,
+              &nodes);
+    }
+
+    if (g_flags.is_syntax_check_only) {
+      ev.Finish();
+
+      for (Stmt* stmt : bootstrap_asts)
+        delete stmt;
+
+      return 0;
+    }
+
+    if (g_flags.generate_ninja) {
+      ScopedFrame frame(
+          ev.Enter(FrameType::PHASE, "*ninja generation*", Loc()));
+
+      ScopedTimeReporter tr("generate ninja time");
+
+      // Recursive build recipes commonly establish this shell variable from
+      // the current output directory before expanding nested $(shell) calls.
+      // During graph generation those calls are evaluated by Kati instead of
+      // by the eventual recipe shell, so provide the same default when the
+      // caller did not already set it.
+      if (getenv("r") == nullptr) {
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof(cwd)) != nullptr)
+          setenv("r", cwd, 1);
+      }
+
+      GenerateNinja(nodes, &ev, orig_args, start_time);
+
+      ev.DumpStackStats();
+      ev.Finish();
+
+      for (Stmt* stmt : bootstrap_asts)
+        delete stmt;
+
+      return 0;
+    }
+
+    for (const auto& p : ev.exports()) {
+      const Symbol name = p.first;
+
+      if (p.second) {
+        // LookupVar can still expose the environment-origin object that was
+        // present before a makefile assignment replaced the effective value.
+        // EvalVar resolves the current scope, matching what recipes and the
+        // Ninja environment snapshot observe.
+        const std::string value = ev.EvalVar(name);
+        setenv(name.c_str(), value.c_str(), 1);
+      } else {
+        LOG("unsetenv(%s)", name.c_str());
+        unsetenv(name.c_str());
+      }
+    }
+
+    {
+      ScopedFrame frame(ev.Enter(FrameType::PHASE, "*execution*", Loc()));
+      ScopedTimeReporter tr("exec time");
+
+      const ExecResult execution = Exec(nodes, &ev);
+
+      if (g_flags.is_question) {
+        ev.DumpStackStats();
+        ev.Finish();
+
+        for (Stmt* stmt : bootstrap_asts)
+          delete stmt;
+
+        return execution.needs_build ? 1 : 0;
+      }
+
+      if (execution.failed) {
+        ev.DumpStackStats();
+        ev.Finish();
+
+        for (Stmt* stmt : bootstrap_asts)
+          delete stmt;
+
+        return 1;
+      }
+    }
+
     ev.DumpStackStats();
     ev.Finish();
+
+    for (Stmt* stmt : bootstrap_asts)
+      delete stmt;
+
     return 0;
   }
-
-  for (const auto& p : ev.exports()) {
-    const Symbol name = p.first;
-    if (p.second) {
-      Var* v = ev.LookupVar(name);
-      const std::string&& value = v->Eval(&ev);
-      LOG("setenv(%s, %s)", name.c_str(), value.c_str());
-      setenv(name.c_str(), value.c_str(), 1);
-    } else {
-      LOG("unsetenv(%s)", name.c_str());
-      unsetenv(name.c_str());
-    }
-  }
-
-  {
-    ScopedFrame frame(ev.Enter(FrameType::PHASE, "*execution*", Loc()));
-    ScopedTimeReporter tr("exec time");
-    Exec(nodes, &ev);
-  }
-
-  ev.DumpStackStats();
-  ev.Finish();
-
-  for (Stmt* stmt : bootstrap_asts)
-    delete stmt;
-
-  return 0;
 }
 
 static void FindFirstMakefie() {
@@ -354,11 +808,64 @@ static void HandleRealpath(int argc, char** argv) {
   }
 }
 
+
+static int HandleFileRead(int argc, char** argv) {
+  if (argc != 1)
+    return 1;
+
+  int fd = open(argv[0], O_RDONLY);
+  if (fd < 0) {
+    if (errno == ENOENT)
+      return 0;
+    return 1;
+  }
+
+  std::string out;
+  char buf[8192];
+
+  while (true) {
+    ssize_t n = HANDLE_EINTR(read(fd, buf, sizeof(buf)));
+    if (n < 0) {
+      close(fd);
+      return 1;
+    }
+    if (n == 0)
+      break;
+    out.append(buf, n);
+  }
+
+  if (close(fd) != 0)
+    return 1;
+
+  // GNU make's $(file <...) removes one trailing newline.
+  if (!out.empty() && out.back() == '\n')
+    out.pop_back();
+
+  if (!out.empty() &&
+      fwrite(out.data(), 1, out.size(), stdout) != out.size())
+    return 1;
+
+  return 0;
+}
+
 int main(int argc, char* argv[]) {
+  g_argv = argv;
+  // Recursive invocations isolate ckati from a target project's runtime
+  // libraries while it is being loaded. Restore that runtime environment
+  // after the loader has started this process; recipes executed by this child
+  // still need the target library path.
+  if (const char* saved_ld_library_path =
+          getenv("KATI_SAVED_LD_LIBRARY_PATH")) {
+    setenv("LD_LIBRARY_PATH", saved_ld_library_path, 1);
+    unsetenv("KATI_SAVED_LD_LIBRARY_PATH");
+  }
+
   if (argc >= 2) {
     if (!strcmp(argv[1], "--realpath")) {
       HandleRealpath(argc - 2, argv + 2);
       return 0;
+    } else if (!strcmp(argv[1], "--file-read")) {
+      return HandleFileRead(argc - 2, argv + 2);
     } else if (!strcmp(argv[1], "--dump_stamp_tool")) {
       // Unfortunately, this can easily be confused with --dump_kati_stamp,
       // which prints debug info about the stamp while executing a normal kati
@@ -382,6 +889,7 @@ int main(int argc, char* argv[]) {
   FindFirstMakefie();
   if (g_flags.makefile == NULL)
     ERROR("*** No targets specified and no makefile found.");
+
   // This depends on command line flags.
   if (g_flags.use_find_emulator)
     InitFindEmulator();

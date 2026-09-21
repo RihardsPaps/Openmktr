@@ -106,6 +106,16 @@ struct AssignStmt : public Stmt {
   mutable Symbol lhs_sym_cache_;
 };
 
+struct UndefineStmt : public Stmt {
+  Value* lhs;
+
+  virtual ~UndefineStmt();
+
+  virtual void EvalStatement(Evaluator* ev) const;
+
+  virtual std::string DebugString() const;
+};
+
 struct CommandStmt : public Stmt {
   Value* expr;
   std::string_view orig;
@@ -136,6 +146,16 @@ struct IncludeStmt : public Stmt {
   bool should_exist;
 
   virtual ~IncludeStmt();
+
+  virtual void EvalStatement(Evaluator* ev) const;
+
+  virtual std::string DebugString() const;
+};
+
+struct VpathStmt : public Stmt {
+  Value* expr;
+
+  virtual ~VpathStmt();
 
   virtual void EvalStatement(Evaluator* ev) const;
 

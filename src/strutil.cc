@@ -337,6 +337,29 @@ void NormalizePath(std::string* o) {
   o->resize(j);
 }
 
+void NormalizeMakePath(std::string* o) {
+  const bool trailing_slash = o->size() > 1 && o->back() == '/';
+  NormalizePath(o);
+  if (trailing_slash && !o->empty() && o->back() != '/')
+    o->push_back('/');
+}
+
+bool IsCurrentDirectoryPath(std::string_view s) {
+  if (s.empty())
+    return false;
+  for (size_t i = 0; i < s.size();) {
+    if (s[i] != '.')
+      return false;
+    ++i;
+    if (i == s.size())
+      return true;
+    if (s[i] != '/')
+      return false;
+    ++i;
+  }
+  return true;
+}
+
 void AbsPath(std::string_view s, std::string* o) {
   if (!s.empty() && s.front() == '/') {
     o->clear();

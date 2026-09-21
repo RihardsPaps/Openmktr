@@ -109,6 +109,11 @@ static std::string NormalizePath(std::string s) {
   return s;
 }
 
+static std::string NormalizeMakePath(std::string s) {
+  ::NormalizeMakePath(&s);
+  return s;
+}
+
 void TestNormalizePath() {
   ASSERT_EQ(NormalizePath(""), "");
   ASSERT_EQ(NormalizePath("."), "");
@@ -130,6 +135,13 @@ void TestNormalizePath() {
   ASSERT_EQ(NormalizePath("../../../a/b"), "../../../a/b");
   ASSERT_EQ(NormalizePath(".././../a/b"), "../../a/b");
   ASSERT_EQ(NormalizePath("./../../a/b"), "../../a/b");
+  ASSERT_EQ(NormalizeMakePath("tools/"), "tools/");
+  ASSERT_EQ(NormalizeMakePath("./tools//"), "tools/");
+  ASSERT_EQ(NormalizeMakePath("tools"), "tools");
+  ASSERT_EQ(IsCurrentDirectoryPath("."), true);
+  ASSERT_EQ(IsCurrentDirectoryPath("./"), true);
+  ASSERT_EQ(IsCurrentDirectoryPath("././"), true);
+  ASSERT_EQ(IsCurrentDirectoryPath("./tools/"), false);
 }
 
 std::string EscapeShell(std::string s) {

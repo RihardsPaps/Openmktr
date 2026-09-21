@@ -26,6 +26,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
 #endif
@@ -63,11 +64,67 @@ double GetTimestamp(std::string_view filename) {
   return GetTimestampFromStat(st);
 }
 
+namespace {
+
+thread_local int kati_jobserver_fd = -1;
+thread_local std::string kati_jobserver_path;
+
+}  // namespace
+
+int AcquireKatiJobToken() {
+  const char* fifo = getenv("KATI_JOBSERVER_FIFO");
+  if (fifo == nullptr || *fifo == '\0')
+    return -1;
+
+  if (kati_jobserver_fd >= 0 && kati_jobserver_path != fifo) {
+    close(kati_jobserver_fd);
+    kati_jobserver_fd = -1;
+    kati_jobserver_path.clear();
+  }
+
+  if (kati_jobserver_fd < 0) {
+    kati_jobserver_fd = open(fifo, O_RDWR | O_CLOEXEC);
+    if (kati_jobserver_fd < 0) {
+      LOG("jobserver unavailable: %s", fifo);
+      return -1;
+    }
+    kati_jobserver_path = fifo;
+  }
+
+  char token;
+  while (true) {
+    ssize_t n = HANDLE_EINTR(read(kati_jobserver_fd, &token, 1));
+    if (n == 1)
+      return kati_jobserver_fd;
+    if (n == 0)
+      break;
+    if (n < 0)
+      break;
+  }
+
+  close(kati_jobserver_fd);
+  kati_jobserver_fd = -1;
+  kati_jobserver_path.clear();
+  return -1;
+}
+
+void ReleaseKatiJobToken(int fd) {
+  if (fd < 0)
+    return;
+
+  const char token = 'x';
+  if (HANDLE_EINTR(write(fd, &token, 1)) != 1) {
+    LOG("failed to return jobserver token");
+  }
+}
+
 int RunCommand(const std::string& shell,
                const std::string& shellflag,
                const std::string& cmd,
                RedirectStderr redirect_stderr,
-               std::string* s) {
+               std::string* s,
+               bool acquire_job_token) {
+  const int job_token = acquire_job_token ? AcquireKatiJobToken() : -1;
   const char* argv[] = {NULL, NULL, NULL, NULL};
   std::string cmd_with_shell;
   if (shell[0] != '/' || shell.find_first_of(" $") != std::string::npos) {
@@ -175,6 +232,7 @@ int RunCommand(const std::string& shell,
   }
   close(pipefd[0]);
 
+  ReleaseKatiJobToken(job_token);
   return status;
 }
 
@@ -205,20 +263,29 @@ namespace {
 class GlobCache {
  public:
   ~GlobCache() { Clear(); }
-  const GlobMap::mapped_type& Get(const char* pat) {
-    auto [it, inserted] = cache_.try_emplace(pat);
+  const GlobMap::mapped_type& Get(std::string_view pat) {
+    // WordScanner returns views into a larger expansion buffer.  Materialize
+    // the cache key before calling any C API: pat.data() is not required to
+    // point at a NUL-terminated string.
+    std::string key(pat);
+    auto [it, inserted] = cache_.try_emplace(key);
     auto& files = it->second;
     if (inserted) {
-      if (strcspn(pat, "?*[\\") != strlen(pat)) {
-        glob_t gl;
-        glob(pat, 0, NULL, &gl);
-        for (size_t i = 0; i < gl.gl_pathc; i++) {
-          files.push_back(gl.gl_pathv[i]);
+      if (strcspn(key.c_str(), "?*[\\") != key.size()) {
+        glob_t gl = {};
+        int result = glob(key.c_str(), 0, NULL, &gl);
+        // glob() may fail with GLOB_NOMATCH, GLOB_ABORTED, or GLOB_NOSPACE.
+        // Its output is not valid on failure, so never inspect gl_pathc or
+        // gl_pathv unless the call succeeded.  A failed wildcard expands to
+        // no files, matching the behavior expected by make wildcard users.
+        if (result == 0) {
+          for (size_t i = 0; i < gl.gl_pathc; i++)
+            files.push_back(gl.gl_pathv[i]);
         }
         globfree(&gl);
       } else {
-        if (Exists(pat))
-          files.push_back(pat);
+        if (Exists(key))
+          files.push_back(key);
       }
     }
     return files;
@@ -236,7 +303,7 @@ static GlobCache g_gc;
 
 }  // namespace
 
-const GlobMap::mapped_type& Glob(const char* pat) {
+const GlobMap::mapped_type& Glob(std::string_view pat) {
   return g_gc.Get(pat);
 }
 

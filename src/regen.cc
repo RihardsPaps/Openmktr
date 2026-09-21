@@ -24,7 +24,6 @@
 #include <mutex>
 #include <vector>
 
-#include "affinity.h"
 #include "fileutil.h"
 #include "find.h"
 #include "func.h"
@@ -282,7 +281,7 @@ class StampChecker {
 
   bool CheckGlobResult(const GlobResult* gr, std::string* err) {
     COLLECT_STATS("glob time (regen)");
-    const auto& files = Glob(gr->pat.c_str());
+    const auto& files = Glob(gr->pat);
     bool needs_regen = files.size() != gr->result.size();
     for (size_t i = 0; i < gr->result.size(); i++) {
       if (!needs_regen) {
@@ -434,7 +433,6 @@ class StampChecker {
     auto glob_future = std::async([this]() {
       std::string err;
       // TODO: Make glob cache thread safe and create a task for each glob.
-      SetAffinityForSingleThread();
       for (GlobResult* gr : globs_) {
         if (CheckGlobResult(gr, &err)) {
           std::unique_lock<std::mutex> lock(mu_);
@@ -448,7 +446,6 @@ class StampChecker {
     });
 
     auto shell_future = std::async([this]() {
-      SetAffinityForSingleThread();
       for (ShellResult* sr : commands_) {
         std::string err;
         if (CheckShellResult(sr, &err)) {

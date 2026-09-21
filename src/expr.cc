@@ -175,8 +175,19 @@ class VarRef : public Value {
     ev->DecrementEvalDepth();
     Symbol sym = Intern(name);
     Var* v = ev->LookupVarForEval(sym);
-    v->Used(ev, sym);
-    v->Eval(ev, s);
+
+    if (name.rfind("shell", 0) == 0) {
+      std::string result;
+
+      v->Used(ev, sym);
+      v->Eval(ev, &result);
+
+      *s += result;
+    } else {
+      v->Used(ev, sym);
+      v->Eval(ev, s);
+    }
+
     v->CheckCurrentReferencingFile(ev->loc(), name.c_str());
     ev->VarEvalComplete(sym);
   }
@@ -416,12 +427,15 @@ Value* ParseDollar(Loc* loc, std::string_view s, size_t* index_out) {
     return new SymRef(start_loc, Intern(s.substr(1, 1)));
   }
 
-  char terms[] = {cp, ':', ' ', 0};
+  char terms[] = {cp, ':', ' ', '\t', 0};
   for (size_t i = 2;;) {
     size_t n;
     Value* vname =
         ParseExprImpl(loc, s.substr(i), terms, ParseExprOpt::NORMAL, &n);
     i += n;
+    if (i >= s.size()) {
+      ERROR_LOC(start_loc, "*** unterminated variable reference.");
+    }
     if (s[i] == cp) {
       *index_out = i + 1;
       if (vname->IsLiteral()) {
@@ -442,7 +456,7 @@ Value* ParseDollar(Loc* loc, std::string_view s, size_t* index_out) {
       return new VarRef(start_loc, vname);
     }
 
-    if (s[i] == ' ' || s[i] == '\\') {
+    if (s[i] == ' ' || s[i] == '\t' || s[i] == '\\') {
       // ${func ...}
       if (vname->IsLiteral()) {
         Literal* lit = static_cast<Literal*>(vname);
@@ -474,6 +488,9 @@ Value* ParseDollar(Loc* loc, std::string_view s, size_t* index_out) {
       Value* pat =
           ParseExprImpl(loc, s.substr(i + 1), terms, ParseExprOpt::NORMAL, &n);
       i += 1 + n;
+      if (i >= s.size()) {
+        ERROR_LOC(start_loc, "*** unterminated variable reference.");
+      }
       if (s[i] == cp) {
         *index_out = i + 1;
         return new VarRef(
@@ -592,7 +609,11 @@ Value* ParseExprImpl(Loc* loc,
         i++;
         continue;
       }
-      if (n == '#' && ShouldHandleComments(opt)) {
+      // Keep the escape when parsing a function argument.  The argument may
+      // later be expanded as a recipe (for example through $(if) inside a
+      // filechk define); removing it here would turn a shell-safe \# into an
+      // unquoted # and make the shell discard the rest of the command.
+      if (n == '#' && ShouldHandleComments(opt) && opt != ParseExprOpt::FUNC) {
         list.push_back(new Literal(s.substr(b, i - b)));
         i++;
         b = i;
