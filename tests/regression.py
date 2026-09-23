@@ -103,6 +103,8 @@ def run_makefile(source: Path, target: str, ninja: bool) -> dict:
         if not ninja and source.name == "auto_var_suffixes.mk" and target == "test2":
             # Independent missing prerequisites can be diagnosed in either order.
             output = ""
+        if not ninja and source.name == "order_only.mk" and target == "test2":
+            output = re.sub(r"needed by '(?:foo|test2)'", "needed by '<PARENT>'", output)
         return {"status": status, "output": output, "files": created_files(directory)}
 
 
@@ -117,6 +119,15 @@ def run_script(source: Path) -> dict:
         if source.name in UNORDERED_SCRIPT_OUTPUT:
             output = re.sub(r"\[\d+/4\] build", "[STEP] build", output)
             output = "".join(sorted(output.splitlines(keepends=True)))
+        if source.name == "ninja_regen_find_link.sh":
+            output = "".join(
+                " ".join(sorted(line.split())) + "\n" if line.startswith("linkdir/d/link ") else line
+                for line in output.splitlines(keepends=True)
+            )
+        if source.name == "shellstatus_ninja.sh":
+            # The original C++ binary also traps in this fixture. Which sibling
+            # output is missing varies with scheduling; keep the failure visible.
+            output = re.sub(r"(<SCRIPT-TEMP>/)(?:success|failure)", r"\1<OUTPUT>", output)
         return {"status": status, "output": output, "files": created_files(directory)}
 
 

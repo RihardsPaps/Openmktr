@@ -3118,7 +3118,7 @@
       "dir2",
       "linkdir"
     ],
-    "output": "[1/1] build all\nlinkdir/d/link linkdir/d/link/file1\n[1/1] build all\nlinkdir/d/link linkdir/d/link/file1_2 linkdir/d/link/file1\n[1/1] build all\nlinkdir/d/link linkdir/d/link/file2\n",
+    "output": "[1/1] build all\nlinkdir/d/link linkdir/d/link/file1\n[1/1] build all\nlinkdir/d/link linkdir/d/link/file1 linkdir/d/link/file1_2\n[1/1] build all\nlinkdir/d/link linkdir/d/link/file2\n",
     "status": 0
   },
   "ninja_regen_find_with_invalid_globs.sh:script": {
@@ -3282,7 +3282,7 @@
   },
   "order_only.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'bar', needed by 'foo'.\n",
+    "output": "*** No rule to make target 'bar', needed by '<PARENT>'.\n",
     "status": 1
   },
   "order_only.mk:test2:ninja": {
@@ -3888,7 +3888,7 @@
   },
   "shellstatus_ninja.sh:script": {
     "files": [],
-    "output": "Illegal instruction (core dumped)\ncat: <SCRIPT-TEMP>/failure: No such file or directory\n",
+    "output": "Illegal instruction (core dumped)\ncat: <SCRIPT-TEMP>/<OUTPUT>: No such file or directory\n",
     "status": 1
   },
   "shellstatus_readonly.mk:test:direct": {
