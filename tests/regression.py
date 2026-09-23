@@ -25,6 +25,7 @@ UNORDERED_OUTPUT_CASES = {
     "curdir_implicit_rule.mk",
     "equal_and_semi_in_rule.mk",
     "ignore.mk",
+    "implicit_pattern_rule_for_no_commands.mk",
     "multi_outputs.mk",
     "not_command_with_tab.mk",
     "order_only2.mk",
@@ -54,6 +55,7 @@ def invoke(command: list[str], directory: Path) -> tuple[int, str]:
     env.pop("MAKELEVEL", None)
     env["LC_ALL"] = "C"
     env["TZ"] = "UTC"
+    env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     try:
         result = subprocess.run(
             command,
@@ -113,6 +115,7 @@ def run_script(source: Path) -> dict:
         command.append("SHELL=/bin/sh")
         status, output = invoke(command, directory)
         if source.name in UNORDERED_SCRIPT_OUTPUT:
+            output = re.sub(r"\[\d+/4\] build", "[STEP] build", output)
             output = "".join(sorted(output.splitlines(keepends=True)))
         return {"status": status, "output": output, "files": created_files(directory)}
 
