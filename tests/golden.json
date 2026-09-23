@@ -4000,7 +4000,7 @@
       "a",
       "c"
     ],
-    "output": "b\na\nc\n",
+    "output": "a\nb\nc\n",
     "status": 0
   },
   "stem_middle.mk:test:ninja": {

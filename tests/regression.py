@@ -33,6 +33,7 @@ UNORDERED_OUTPUT_CASES = {
     "preserve_single_dot.mk",
     "semi_in_var.mk",
     "stem.mk",
+    "stem_middle.mk",
     "target_specific_var_append.mk",
     "target_specific_var_with_pattern.mk",
 }
