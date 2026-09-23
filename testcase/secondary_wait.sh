@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # A .WAIT token produced during secondary expansion must become a graph
 # barrier, not merely a text prerequisite.

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Recipe-level $(shell ...) and .SHELLSTATUS must remain usable when Kati
 # emits a Ninja graph. The shell function is evaluated once during graph

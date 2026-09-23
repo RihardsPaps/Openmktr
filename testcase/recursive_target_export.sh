@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Target-specific exported variables must reach a recursive child in both
 # direct execution and generated-Ninja execution.
@@ -22,7 +22,7 @@ EOF
 cat >"$tmp/child/Makefile" <<'EOF'
 .PHONY: all
 all:
-	@printf '%s' "$CHILD_VALUE" > child.out
+	@printf '%s' "$$CHILD_VALUE" > child.out
 EOF
 
 (cd "$tmp" && "$mk" -f Makefile all >/dev/null)

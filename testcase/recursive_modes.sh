@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Recursive execution modes must propagate through $(MAKE). In particular,
 # GNU make's dry-run enters the child so its planned recipes are printed, but

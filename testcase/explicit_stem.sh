@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # GNU make supplies $* for an explicit target with a recognized suffix.
 set -u

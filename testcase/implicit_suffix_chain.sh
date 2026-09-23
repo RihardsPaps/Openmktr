@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Suffix rules must be chainable: GNU make can derive foo.o through
 # .c.o after deriving foo.c through .l.c.

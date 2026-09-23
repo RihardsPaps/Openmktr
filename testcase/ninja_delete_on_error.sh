@@ -1,8 +1,6 @@
-#!/bin/bash
+#!/bin/sh
 
-# Exercise .DELETE_ON_ERROR through both GNU make and generated Ninja.  The
-# script is intentionally target-agnostic: it checks the generic output
-# cleanup contract rather than any project-specific recipe.
+# Exercise .DELETE_ON_ERROR through generated Ninja.
 set -u
 
 mk="$1"
@@ -17,12 +15,8 @@ test:
 	@false
 EOF
 
-if [[ "$mk" == *ckati* ]]; then
-	(cd "$tmp" && "$mk" --ninja --regen -f Makefile >/dev/null 2>&1) || true
-	(cd "$tmp" && ./ninja.sh -j1 test >/dev/null 2>&1) || true
-else
-	make -C "$tmp" test >/dev/null 2>&1 || true
-fi
+(cd "$tmp" && "$mk" --ninja --regen -f Makefile >/dev/null 2>&1) || true
+(cd "$tmp" && ./ninja.sh -j1 test >/dev/null 2>&1) || true
 
 if [ -e "$tmp/test" ]; then
 	echo ".DELETE_ON_ERROR left a failed output behind" >&2

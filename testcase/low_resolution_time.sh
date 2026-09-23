@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # .LOW_RESOLUTION_TIME compares listed prerequisites at whole-second
 # precision, while ordinary prerequisites retain normal timestamp behavior.
@@ -6,11 +6,10 @@ set -u
 
 mk=$(realpath "$1")
 
-run_case() {
-	local mode=$1
-	local tmp
+run_case() (
+	mode=$1
 	tmp=$(mktemp -d)
-	trap 'rm -rf "$tmp"' RETURN
+	trap 'rm -rf "$tmp"' EXIT
 	cat >"$tmp/Makefile" <<'EOF'
 .LOW_RESOLUTION_TIME: input
 
@@ -27,10 +26,9 @@ EOF
 		(cd "$tmp" && ./ninja.sh -j2 all >/dev/null)
 	fi
 
-	local first second sec
 	first=$(cat "$tmp/count")
-	sec=$(stat -c %Y "$tmp/all")
-	touch -d "@$sec" "$tmp/input"
+	sec=$(python -c 'import os,sys; print(int(os.stat(sys.argv[1]).st_mtime))' "$tmp/all")
+	python -c 'import os,sys; os.utime(sys.argv[1], (int(sys.argv[2]), int(sys.argv[2])))' "$tmp/input" "$sec"
 	if [ "$mode" = direct ]; then
 		(cd "$tmp" && "$mk" -f Makefile all >/dev/null)
 	else
@@ -42,7 +40,7 @@ EOF
 		return 1
 	fi
 
-	touch -d "@$((sec + 2))" "$tmp/input"
+	python -c 'import os,sys; os.utime(sys.argv[1], (int(sys.argv[2]), int(sys.argv[2])))' "$tmp/input" "$((sec + 2))"
 	if [ "$mode" = direct ]; then
 		(cd "$tmp" && "$mk" -f Makefile all >/dev/null)
 	else
@@ -52,7 +50,7 @@ EOF
 		echo ".LOW_RESOLUTION_TIME ignored a full-second change ($mode)" >&2
 		return 1
 	fi
-}
+)
 
 run_case direct
 run_case ninja

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Final cross-feature conformance case: VPATH resolution, secondary
 # expansion, a .WAIT barrier, and target-specific shell selection must remain
@@ -19,10 +19,10 @@ SOURCE_NAME = input.txt
 .PHONY: all
 all: build/result
 
-build/result: SHELL := /bin/bash
+build/result: SHELL := /bin/sh
 build/result: .SHELLFLAGS := -ec
 build/result: $$(SOURCE_NAME) .WAIT generated
-	[[ -f "$<" ]] && [[ -f generated ]] && cat "$<" > "$@"
+	[ -f "$<" ] && [ -f generated ] && cat "$<" > "$@"
 
 generated:
 	@sleep 1; : > $@

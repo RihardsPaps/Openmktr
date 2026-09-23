@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # GNU make old-file mode suppresses the named target's recipe while retaining
 # its real timestamp for dependent comparisons.

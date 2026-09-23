@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # GNU make removes files created only as links in an implicit-rule chain.
 # Verify that direct Kati and generated Ninja preserve that generic behavior,
@@ -7,12 +7,11 @@ set -u
 
 mk=$(realpath "$1")
 
-run_case() {
-  local mode=$1
-  local secondary=$2
-  local tmp
+run_case() (
+  mode=$1
+  secondary=$2
   tmp=$(mktemp -d)
-  trap 'rm -rf "$tmp"' RETURN
+  trap 'rm -rf "$tmp"' EXIT
 
   cat >"$tmp/Makefile" <<EOF
 $secondary
@@ -51,7 +50,7 @@ EOF
       return 1
     }
   fi
-}
+)
 
 run_case direct ''
 run_case direct '.SECONDARY: input.mid'

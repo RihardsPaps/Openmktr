@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # GNU make's dry-run spellings must plan and print recipes without executing
 # them. This is a command-line compatibility feature, not a build-system

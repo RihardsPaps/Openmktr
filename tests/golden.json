@@ -1,0 +1,4982 @@
+{
+  "abspath.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n<TESTDIR-SUBST>/foo <TESTDIR-SUBST>/foo <TESTDIR-SUBST>/foo / /usr\n  BUILD   test\n/tmp <TESTDIR-SUBST> <TESTDIR-SUBST> / <TESTDIR-SUBST>/a\n",
+    "status": 0
+  },
+  "abspath.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n<TESTDIR-SUBST>/foo <TESTDIR-SUBST>/foo <TESTDIR-SUBST>/foo / /usr\n/tmp <TESTDIR-SUBST> <TESTDIR-SUBST> / <TESTDIR-SUBST>/a\n",
+    "status": 0
+  },
+  "addprefix.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nsrc/foo src/bar\n",
+    "status": 0
+  },
+  "addprefix.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nsrc/foo src/bar\n",
+    "status": 0
+  },
+  "addsuffix.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nfoo.c bar.c\n",
+    "status": 0
+  },
+  "addsuffix.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nfoo.c bar.c\n",
+    "status": 0
+  },
+  "allow_rules.sh:script": {
+    "files": [],
+    "output": "Makefile:10: warning: Rule not allowed here for target: b\nMakefile:13: warning: Rule not allowed here for target: A B C\nMakefile:28: *** Rule not allowed here for target: c\n",
+    "status": 1
+  },
+  "and.mk:test:direct": {
+    "files": [],
+    "output": "PASS_1\nPASS\nx \t \n  \ty\n  BUILD   test\nOK\n",
+    "status": 0
+  },
+  "and.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "PASS_1\nPASS\nx \t \n  \ty\n[1/1] build test\nOK\n",
+    "status": 0
+  },
+  "append_self_reference.mk:default:direct": {
+    "files": [],
+    "output": "one two one\n*** No targets.\n",
+    "status": 1
+  },
+  "append_self_reference.mk:default:ninja": {
+    "files": [],
+    "output": "one two one\n*** No targets.\n",
+    "status": 1
+  },
+  "assign_after_tab.mk:default:direct": {
+    "files": [],
+    "output": "  BUILD   test\n",
+    "status": 0
+  },
+  "assign_after_tab.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n",
+    "status": 0
+  },
+  "assign_in_parens.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "assign_in_parens.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "assign_types.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\naa a b b c\n",
+    "status": 0
+  },
+  "assign_types.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\naa a b b c\n",
+    "status": 0
+  },
+  "assign_with_trailing_space.mk:default:direct": {
+    "files": [],
+    "output": "XY Z\nXY Z\nXY\tZ\nXY Z\nX YZ\n*** No targets.\n",
+    "status": 1
+  },
+  "assign_with_trailing_space.mk:default:ninja": {
+    "files": [],
+    "output": "XY Z\nXY Z\nXY\tZ\nXY Z\nX YZ\n*** No targets.\n",
+    "status": 1
+  },
+  "auto_percent_pipe.mk:default:direct": {
+    "files": [],
+    "output": "percent=[member.o] pipe=[order-only]\n",
+    "status": 0
+  },
+  "auto_percent_pipe.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/2] build order-only\n[2/2] build 'archive(member.o)'\npercent=[member.o] pipe=[order-only]\n",
+    "status": 0
+  },
+  "auto_var_suffixes.mk:test1:direct": {
+    "files": [
+      "adir",
+      "afile",
+      "bdir",
+      "bfile"
+    ],
+    "output": "  BUILD   test1\n  BUILD   test1\n",
+    "status": 0
+  },
+  "auto_var_suffixes.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "adir",
+      "afile",
+      "bdir",
+      "bfile"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "auto_var_suffixes.mk:test2:direct": {
+    "files": [],
+    "output": "",
+    "status": 1
+  },
+  "auto_var_suffixes.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'adir/afile', needed by 'tdir/tfile', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "auto_vars.mk:test1:direct": {
+    "files": [],
+    "output": "\n  BUILD   bar\n  BUILD   foo\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\nbaz\nfoo\nfoo bar\nfoo bar foo\ntest1\n",
+    "status": 0
+  },
+  "auto_vars.mk:test1:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/3] build foo\nbaz\n[2/3] build bar\n\n[3/3] build test1\nfoo\ntest1\nfoo bar\nfoo bar foo\n",
+    "status": 0
+  },
+  "auto_vars.mk:test2:direct": {
+    "files": [],
+    "output": "\n  BUILD   bar\n  BUILD   foo\n  BUILD   test2\n  BUILD   test2\nbaz\nfoo bar\nfoo bar foo\n",
+    "status": 0
+  },
+  "auto_vars.mk:test2:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/3] build foo\nbaz\n[2/3] build bar\n\n[3/3] build test2\nfoo bar\nfoo bar foo\n",
+    "status": 0
+  },
+  "automatic_override.mk:test:direct": {
+    "files": [],
+    "output": "target=[test]\n",
+    "status": 0
+  },
+  "automatic_override.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\ntarget=[test]\n",
+    "status": 0
+  },
+  "autovar_assign.mk:default:direct": {
+    "files": [],
+    "output": "FAIL\nrecursive\nfile\nPASS\nrecursive\nfile\n*** No targets.\n",
+    "status": 1
+  },
+  "autovar_assign.mk:default:ninja": {
+    "files": [],
+    "output": "FAIL\nrecursive\nfile\nPASS\nrecursive\nfile\n*** No targets.\n",
+    "status": 1
+  },
+  "backslash_before_empty_line.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "backslash_before_empty_line.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "backslash_before_special_character.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n\t #\n",
+    "status": 0
+  },
+  "backslash_before_special_character.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n\t #\n",
+    "status": 0
+  },
+  "backslash_in_rule_command.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nfoobar\n",
+    "status": 0
+  },
+  "backslash_in_rule_command.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nfoobar\n",
+    "status": 0
+  },
+  "basename.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nsrc/foo src-1.0/bar hacks\n",
+    "status": 0
+  },
+  "basename.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nsrc/foo src-1.0/bar hacks\n",
+    "status": 0
+  },
+  "basic_dep.mk:test1:direct": {
+    "files": [
+      "foo"
+    ],
+    "output": "  BUILD   foo\n  BUILD   test1\ntest1\n",
+    "status": 0
+  },
+  "basic_dep.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo"
+    ],
+    "output": "[1/2] build foo\n[2/2] build test1\ntest1\n",
+    "status": 0
+  },
+  "basic_dep.mk:test2:direct": {
+    "files": [
+      "foo"
+    ],
+    "output": "  BUILD   foo\n  BUILD   test2\ntest2\n",
+    "status": 0
+  },
+  "basic_dep.mk:test2:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo"
+    ],
+    "output": "[1/2] build foo\n[2/2] build test2\ntest2\n",
+    "status": 0
+  },
+  "basic_rule.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   foo\nfoo\n",
+    "status": 0
+  },
+  "basic_rule.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build foo\nfoo\n",
+    "status": 0
+  },
+  "basic_var.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nvar\n",
+    "status": 0
+  },
+  "basic_var.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nvar\n",
+    "status": 0
+  },
+  "blank_line_before_command.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n/bin/sh: include: not found\n*** [test] Error 127\n    command: include foo\n",
+    "status": 1
+  },
+  "blank_line_before_command.mk:test:ninja": {
+    "files": [],
+    "output": "[1/1] build test\nFAILED: [code=127] test \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; include foo ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''test'\\'' ] && [ ! -d '\\''test'\\'' ] && [ '\\''test'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''test'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\n/bin/sh: include: not found\nninja: build stopped: subcommand failed.\n",
+    "status": 127
+  },
+  "build_once.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   proto.o\ncompile proto.o from proto.c\n  BUILD   protoc\nlink protoc from proto.o\n  BUILD   foo.c\nprotoc foo.c from foo.proto\n  BUILD   foo.o\ncompile foo.o from foo.c\n  BUILD   xbar.c\nprotoc xbar.c from xbar.proto\n  BUILD   xbar.o\ncompile xbar.o from xbar.c\n  BUILD   foo\nlink foo from foo.o\n",
+    "status": 0
+  },
+  "build_once.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/7] build proto.o\ncompile proto.o from proto.c\n[2/7] build protoc\nlink protoc from proto.o\n[3/7] build foo.c\nprotoc foo.c from foo.proto\n[4/7] build xbar.c\nprotoc xbar.c from xbar.proto\n[5/7] build foo.o\ncompile foo.o from foo.c\n[6/7] build xbar.o\ncompile xbar.o from xbar.c\n[7/7] build foo\nlink foo from foo.o\n",
+    "status": 0
+  },
+  "builtin_rules.mk:test1:direct": {
+    "files": [
+      "bar.cc",
+      "foo.c"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "builtin_rules.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "bar.cc",
+      "foo.c"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "builtin_rules.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'bar.o', needed by 'test2'.\n",
+    "status": 1
+  },
+  "builtin_rules.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'foo.o', needed by 'test2', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "builtin_vars.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\ncc\n  BUILD   test\nc++\n  BUILD   test\n/bin/sh\n",
+    "status": 0
+  },
+  "builtin_vars.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\ncc\nc++\n/bin/sh\n",
+    "status": 0
+  },
+  "call.mk:test:direct": {
+    "files": [
+      "foo",
+      "foo bar"
+    ],
+    "output": "  BUILD   foo\n  BUILD   test\nfoo/\n  BUILD   test\nfoo bar/\n  BUILD   test\n./\n",
+    "status": 0
+  },
+  "call.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo",
+      "foo bar"
+    ],
+    "output": "[1/2] build foo\n[2/2] build test\nfoo/\nfoo bar/\n./\n",
+    "status": 0
+  },
+  "call_with_many_args.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "call_with_many_args.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "call_with_whitespace.mk:test:direct": {
+    "files": [],
+    "output": "called with 'func'\ncalled with ' func'\ncalled with 'func '\ncalled with ' func '\nkati: Nothing to be done for `test'.\n",
+    "status": 0
+  },
+  "call_with_whitespace.mk:test:ninja": {
+    "files": [],
+    "output": "called with 'func'\ncalled with ' func'\ncalled with 'func '\ncalled with ' func '\nninja: no work to do.\n",
+    "status": 0
+  },
+  "canned_recipes.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\ntest\n",
+    "status": 0
+  },
+  "canned_recipes.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\ntest\n",
+    "status": 0
+  },
+  "circular_dep.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   loop\n  BUILD   loop1\n  BUILD   loop2\n  BUILD   self\n  BUILD   test\nCircular loop2 <- loop dependency dropped.\nCircular self <- self dependency dropped.\nPASS\nloop\nloop1\nloop2\nself\n",
+    "status": 0
+  },
+  "circular_dep.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/5] build loop2\nloop2\n[2/5] build loop1\nloop1\n[3/5] build self\nself\n[4/5] build loop\nloop\n[5/5] build test\nPASS\n",
+    "status": 0
+  },
+  "close_paren_without_open.mk:test:direct": {
+    "files": [],
+    "output": "}#\n  BUILD   test\nOK\n",
+    "status": 0
+  },
+  "close_paren_without_open.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "}#\n[1/1] build test\nOK\n",
+    "status": 0
+  },
+  "cmdline_var.sh:script": {
+    "files": [],
+    "output": "PASS\n",
+    "status": 0
+  },
+  "cmdline_var_makeflags.sh:script": {
+    "files": [],
+    "output": "PASS environment\nPASS command line\nPASS command line\nPASS file\n",
+    "status": 0
+  },
+  "cmdline_var_modify.sh:script": {
+    "files": [],
+    "output": "P A SS\n",
+    "status": 0
+  },
+  "cmdline_var_override.sh:script": {
+    "files": [],
+    "output": "PASS\n",
+    "status": 0
+  },
+  "colon_ws_in_file.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:3: target `test' doesn't match the target pattern\nMakefile:3: target `test' doesn't match the target pattern\nMakefile:3: target `test' doesn't match the target pattern\nMakefile:3: *** multiple target patterns.\n",
+    "status": 1
+  },
+  "colon_ws_in_file.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:3: target `test' doesn't match the target pattern\nMakefile:3: target `test' doesn't match the target pattern\nMakefile:3: target `test' doesn't match the target pattern\nMakefile:3: *** multiple target patterns.\n",
+    "status": 1
+  },
+  "colon_ws_in_target.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:6: target `b' doesn't match the target pattern\nMakefile:6: *** target pattern contains no '%'.\n",
+    "status": 1
+  },
+  "colon_ws_in_target.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:6: target `b' doesn't match the target pattern\nMakefile:6: *** target pattern contains no '%'.\n",
+    "status": 1
+  },
+  "command_hash.mk:default:direct": {
+    "files": [],
+    "output": "/bin/sh: Syntax error: \";\" unexpected (expecting word)\n*** [out] Error 2\n    command: { echo \\#include <generated>; } > out\n",
+    "status": 1
+  },
+  "command_hash.mk:default:ninja": {
+    "files": [],
+    "output": "[1/1] build out\nFAILED: [code=2] out \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; { echo \\#include <generated>; } > out ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''out'\\'' ] && [ ! -d '\\''out'\\'' ] && [ '\\''out'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''out'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
+    "status": 2
+  },
+  "command_line_last_assignment.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "command_vars.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   foo\nfoo\n  BUILD   foo\nbar\n  BUILD   foo\nbar baz\n",
+    "status": 0
+  },
+  "command_vars.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build foo\nfoo\nbar\nbar baz\n",
+    "status": 0
+  },
+  "comment.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nOK\n",
+    "status": 0
+  },
+  "comment.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nOK\n",
+    "status": 0
+  },
+  "comment_in_command.mk:test1:direct": {
+    "files": [],
+    "output": "  BUILD   test1\n  BUILD   test1\nPASS\n",
+    "status": 0
+  },
+  "comment_in_command.mk:test1:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test1\nPASS\n",
+    "status": 0
+  },
+  "comment_in_command.mk:test2:direct": {
+    "files": [],
+    "output": "  BUILD   make4\nPASS\n",
+    "status": 0
+  },
+  "comment_in_command.mk:test2:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build make4\nPASS\n",
+    "status": 0
+  },
+  "comment_in_command.mk:test3:direct": {
+    "files": [],
+    "output": "  BUILD   foo\nOK\n",
+    "status": 0
+  },
+  "comment_in_command.mk:test3:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build foo\nOK\n",
+    "status": 0
+  },
+  "comment_in_command.mk:test4:direct": {
+    "files": [],
+    "output": "  BUILD   test4\nOK\n",
+    "status": 0
+  },
+  "comment_in_command.mk:test4:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test4\nOK\n",
+    "status": 0
+  },
+  "comment_in_command.mk:test5:direct": {
+    "files": [],
+    "output": "  BUILD   test5\nPASS\n",
+    "status": 0
+  },
+  "comment_in_command.mk:test5:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test5\nPASS\n",
+    "status": 0
+  },
+  "comment_in_define.mk:default:direct": {
+    "files": [],
+    "output": "  BUILD   foo\n  BUILD   foo\n\n",
+    "status": 0
+  },
+  "comment_in_define.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build foo\n\n",
+    "status": 0
+  },
+  "cond_syntax.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS\n",
+    "status": 0
+  },
+  "cond_syntax.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS\n",
+    "status": 0
+  },
+  "conformance_edges.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "crlf.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS PASS\n",
+    "status": 0
+  },
+  "crlf.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS PASS\n",
+    "status": 0
+  },
+  "crlf_after_directive.mk:default:direct": {
+    "files": [],
+    "output": "PASS\n*** No targets.\n",
+    "status": 1
+  },
+  "crlf_after_directive.mk:default:ninja": {
+    "files": [],
+    "output": "PASS\n*** No targets.\n",
+    "status": 1
+  },
+  "curdir.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   bar.c\n  BUILD   bar.o\n  BUILD   foo.c\n  BUILD   foo.o\n  BUILD   test\ncompiling bar.o from bar.c\ncompiling foo.o from foo.c\nlinking test from foo.o\nsource bar.c\nsource foo.c\n",
+    "status": 0
+  },
+  "curdir.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/5] build foo.c\nsource foo.c\n[2/5] build bar.c\nsource bar.c\n[3/5] build foo.o\ncompiling foo.o from foo.c\n[4/5] build bar.o\ncompiling bar.o from bar.c\n[5/5] build test\nlinking test from foo.o\n",
+    "status": 0
+  },
+  "curdir_implicit_rule.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   foo.c\n  BUILD   foo.o\n  BUILD   test\n  BUILD   xbar.c\n  BUILD   xbar.o\ncompiling foo.o from foo.c\ncompiling xbar.o from xbar.c\nlinking test from foo.o\nsource foo.c\nsource xbar.c\n",
+    "status": 0
+  },
+  "curdir_implicit_rule.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/5] build foo.c\nsource foo.c\n[2/5] build xbar.c\nsource xbar.c\n[3/5] build foo.o\ncompiling foo.o from foo.c\n[4/5] build xbar.o\ncompiling xbar.o from xbar.c\n[5/5] build test\nlinking test from foo.o\n",
+    "status": 0
+  },
+  "curdir_var.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n  BUILD   test\n/tmp/\n",
+    "status": 0
+  },
+  "curdir_var.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n/tmp/\n",
+    "status": 0
+  },
+  "default_rule.mk:default:direct": {
+    "files": [],
+    "output": "default=missing\n",
+    "status": 0
+  },
+  "default_rule.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build missing\ndefault=missing\n",
+    "status": 0
+  },
+  "define.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nBEGIN echo foo\n  BUILD   test\nxxx END\n",
+    "status": 0
+  },
+  "define.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nBEGIN echo foo\nxxx END\n",
+    "status": 0
+  },
+  "define_newline.mk:test:direct": {
+    "files": [],
+    "output": "This should have\ntwo lines\n  BUILD   test\nOK\n",
+    "status": 0
+  },
+  "define_newline.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "This should have\ntwo lines\n[1/1] build test\nOK\n",
+    "status": 0
+  },
+  "define_verbatim.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nfor i in 1 2 3 PASS; do echo ; done\n  BUILD   test\n1\n2\n3\nPASS\n",
+    "status": 0
+  },
+  "define_verbatim.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nfor i in 1 2 3 PASS; do echo ; done\n1\n2\n3\nPASS\n",
+    "status": 0
+  },
+  "define_with_comments.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:12: extraneous text after `endef' directive\nMakefile:15: extraneous text after `endef' directive\n  BUILD   test\nPASS1\n  BUILD   test\nPASS2\n  BUILD   test\nPASS3\n  BUILD   test\nPASS4\n  BUILD   test\nPASS5\n  BUILD   test\nendefPASS\n  BUILD   test\nPASS6\n",
+    "status": 0
+  },
+  "define_with_comments.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "Makefile:12: extraneous text after `endef' directive\nMakefile:15: extraneous text after `endef' directive\n[1/1] build test\nPASS1\nPASS2\nPASS3\nPASS4\nPASS5\nendefPASS\nPASS6\n",
+    "status": 0
+  },
+  "delete_on_error.mk:test:direct": {
+    "files": [
+      "file"
+    ],
+    "output": "  BUILD   file\n  BUILD   file\n*** [file] Error 1\n    command: false\n",
+    "status": 1
+  },
+  "delete_on_error.mk:test:ninja": {
+    "files": [],
+    "output": "[1/1] build file\nFAILED: [code=1] file \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; (touch file ) && (false ) ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && false && [ '\\''file'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ -e '\\''file'\\'' ]; then rm -f '\\''file'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\nninja: build stopped: subcommand failed.\n",
+    "status": 1
+  },
+  "deprecated_export.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:7: C: export has been deprecated. Message.\nMakefile:8: B: unexport has been deprecated. Message.\n  BUILD   test\n/bin/sh: A: not found\n\n  BUILD   test\n/bin/sh: B: not found\n\n  BUILD   test\n/bin/sh: C: not found\n\n  BUILD   test\nDone\n",
+    "status": 0
+  },
+  "deprecated_export.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "Makefile:7: C: export has been deprecated. Message.\nMakefile:8: B: unexport has been deprecated. Message.\n[1/1] build test\n/bin/sh: A: not found\n\n/bin/sh: B: not found\n\n/bin/sh: C: not found\n\nDone\n",
+    "status": 0
+  },
+  "deprecated_var.mk:test:direct": {
+    "files": [],
+    "output": "Writing to an undefined deprecated variable\nMakefile:5: B has been deprecated.\nReading from deprecated variables - set before/after/never the deprecation func\nWriting to an undefined deprecated variable\nMakefile:12: A has been deprecated.\nMakefile:12: B has been deprecated.\nMakefile:12: C has been deprecated.\nMakefile:12: D has been deprecated.\nWriting to a reset deprecated variable\nMakefile:21: D has been deprecated.\nUsing a custom message\nMakefile:28: E has been deprecated. Use X instead.\nExpanding a recursive variable with an embedded deprecated variable\nMakefile:34: E has been deprecated. Use X instead.\nMakefile:34: C has been deprecated.\nAll of the previous variable references have been basic SymRefs, now check VarRefs\nMakefile:42: E has been deprecated. Use X instead.\nMakefile:42: C has been deprecated.\nAnd check VarSubst\nMakefile:49: C has been deprecated.\nDeprecated variable used in a rule-specific variable\nMakefile:55: E has been deprecated. Use X instead.\nMakefile:55: C has been deprecated.\nDeprecated variable used as a macro\nMakefile:63: B has been deprecated.\nMakefile:63: A has been deprecated.\nDeprecated variable used in an ifdef\nMakefile:70: C has been deprecated.\nDeprecated variable used in a rule\nMakefile:78: C has been deprecated.\n  BUILD   test\nDone\n",
+    "status": 0
+  },
+  "deprecated_var.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "Writing to an undefined deprecated variable\nMakefile:5: B has been deprecated.\nReading from deprecated variables - set before/after/never the deprecation func\nWriting to an undefined deprecated variable\nMakefile:12: A has been deprecated.\nMakefile:12: B has been deprecated.\nMakefile:12: C has been deprecated.\nMakefile:12: D has been deprecated.\nWriting to a reset deprecated variable\nMakefile:21: D has been deprecated.\nUsing a custom message\nMakefile:28: E has been deprecated. Use X instead.\nExpanding a recursive variable with an embedded deprecated variable\nMakefile:34: E has been deprecated. Use X instead.\nMakefile:34: C has been deprecated.\nAll of the previous variable references have been basic SymRefs, now check VarRefs\nMakefile:42: E has been deprecated. Use X instead.\nMakefile:42: C has been deprecated.\nAnd check VarSubst\nMakefile:49: C has been deprecated.\nDeprecated variable used in a rule-specific variable\nMakefile:55: E has been deprecated. Use X instead.\nMakefile:55: C has been deprecated.\nDeprecated variable used as a macro\nMakefile:63: B has been deprecated.\nMakefile:63: A has been deprecated.\nDeprecated variable used in an ifdef\nMakefile:70: C has been deprecated.\nDeprecated variable used in a rule\nMakefile:78: C has been deprecated.\n[1/1] build test\nDone\n",
+    "status": 0
+  },
+  "dir.mk:test:direct": {
+    "files": [
+      "bar",
+      "foo"
+    ],
+    "output": "  BUILD   foo\n  BUILD   test\n./\n  BUILD   test\n./\n  BUILD   test\n./\n  BUILD   test\n\n  BUILD   test\nsrc/ ./\n  BUILD   test\n./ src/\n  BUILD   test\n/\n  BUILD   test\n/\n",
+    "status": 0
+  },
+  "dir.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "bar",
+      "foo"
+    ],
+    "output": "[1/2] build foo\n[2/2] build test\n./\n./\n./\n\nsrc/ ./\n./ src/\n/\n/\n",
+    "status": 0
+  },
+  "directive_after_tab.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "directive_after_tab.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "dollar_in_file.mk:test:direct": {
+    "files": [
+      "$testfile"
+    ],
+    "output": "  BUILD   $testfile\n  BUILD   test\n$testfile\n",
+    "status": 0
+  },
+  "dollar_in_file.mk:test:ninja": {
+    "files": [
+      "$testfile",
+      ".ninja_log"
+    ],
+    "output": "[1/2] build '$testfile'\n[2/2] build test\n$testfile\n",
+    "status": 0
+  },
+  "dot_rule.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "dot_rule.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "dotted_archive_target.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "dotted_empty_target.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "double_colon_rule.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nFOO\n  BUILD   test\nBAR\n",
+    "status": 0
+  },
+  "double_colon_rule.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nFOO\nBAR\n",
+    "status": 0
+  },
+  "dry_run_options.sh:script": {
+    "files": [],
+    "output": "trap: bad signal RETURN\ntrap: bad signal RETURN\ntrap: bad signal RETURN\n",
+    "status": 0
+  },
+  "else_if.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "else_if.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "emit_sandbox_disabled.sh:script": {
+    "files": [],
+    "output": "Default: sandbox_disabled NOT found\nWith flag: sandbox_disabled found\n",
+    "status": 0
+  },
+  "empty_line_in_define.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nfoo\n  BUILD   test\nfoo\n  BUILD   test\nbar\n  BUILD   test\nbar\n  BUILD   test\nbaz\n  BUILD   test\nbaz echo baz\n  BUILD   test\nbaz\n",
+    "status": 0
+  },
+  "empty_line_in_define.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nfoo\nfoo\nbar\nbar\nbaz\nbaz echo baz\nbaz\n",
+    "status": 0
+  },
+  "empty_ninja_file.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "empty_output.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "empty_output.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "empty_static_pattern.sh:script": {
+    "files": [],
+    "output": "PASS\n",
+    "status": 0
+  },
+  "empty_target_specific_var.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:1: *** empty variable name.\n",
+    "status": 1
+  },
+  "empty_target_specific_var.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** empty variable name.\n",
+    "status": 1
+  },
+  "empty_target_specific_var2.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:5: *** empty variable name.\n",
+    "status": 1
+  },
+  "empty_target_specific_var2.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:5: *** empty variable name.\n",
+    "status": 1
+  },
+  "empty_var_cmd.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "empty_var_cmd.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "envvar.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n/bin/sh: Syntax error: \"(\" unexpected\n*** [test] Error 2\n    command: echo /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell:/mnt/host/c/Users/Harry/.codex/tmp/arg0/codex-arg0JyAUtT:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/libheif/libheif/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/jxrlib/jxrlib/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/poppler/Library/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/mnt/host/c/WINDOWS/system32:/mnt/host/c/WINDOWS:/mnt/host/c/WINDOWS/System32/Wbem:/mnt/host/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/host/c/WINDOWS/System32/OpenSSH/:/mnt/host/c/Program Files/NVIDIA Corporation/NVIDIA App/NvDLISR:/mnt/host/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/host/c/Program Files/dotnet/:/mnt/host/c/Program Files/Docker/Docker/resources/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell:/mnt/host/c/Users/Harry/AppData/Local/Microsoft/WindowsApps:/mnt/host/c/Users/Harry/AppData/Local/DockerSandboxes/bin/:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/git/cmd:/mnt/host/c/Users/Harry/AppData/Local/OpenAI/Codex/bin/d5b459afd5dcd195:/mnt/host/c/Users/Harry/AppData/Local/OpenAI/Codex/bin/80f78947ad880e6e\n",
+    "status": 1
+  },
+  "envvar.mk:test:ninja": {
+    "files": [],
+    "output": "[1/1] build test\nFAILED: [code=2] test \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; echo /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell:/mnt/host/c/Users/Harry/.codex/tmp/arg0/codex-arg0JyAUtT:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/libheif/libheif/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/jxrlib/jxrlib/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/poppler/Library/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/mnt/host/c/WINDOWS/system32:/mnt/host/c/WINDOWS:/mnt/host/c/WINDOWS/System32/Wbem:/mnt/host/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/host/c/WINDOWS/System32/OpenSSH/:/mnt/host/c/Program Files/NVIDIA Corporation/NVIDIA App/NvDLISR:/mnt/host/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/host/c/Program Files/dotnet/:/mnt/host/c/Program Files/Docker/Docker/resources/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell:/mnt/host/c/Users/Harry/AppData/Local/Microsoft/WindowsApps:/mnt/host/c/Users/Harry/AppData/Local/DockerSandboxes/bin/:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/git/cmd:/mnt/host/c/Users/Harry/AppData/Local/OpenAI/Codex/bin/d5b459afd5dcd195:/mnt/host/c/Users/Harry/AppData/Local/OpenAI/Codex/bin/80f78947ad880e6e ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''test'\\'' ] && [ ! -d '\\''test'\\'' ] && [ '\\''test'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''test'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\n/bin/sh: Syntax error: \"(\" unexpected (expecting \")\")\nninja: build stopped: subcommand failed.\n",
+    "status": 2
+  },
+  "equal_and_semi_in_rule.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   bar\n  BUILD   foo\nPASS\nPASS=PASS\necho\n",
+    "status": 0
+  },
+  "equal_and_semi_in_rule.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/2] build foo\necho\nPASS\n[2/2] build bar\nPASS=PASS\n",
+    "status": 0
+  },
+  "equal_in_target.mk:test:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'test'.\n",
+    "status": 1
+  },
+  "equal_in_target.mk:test:ninja": {
+    "files": [],
+    "output": "ninja: error: ./build.ninja:9: unknown target 'test'\ndefault test\n            ^ near here\n",
+    "status": 1
+  },
+  "err_both_colon.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:3: *** target file `test' has both : and :: entries.\n",
+    "status": 1
+  },
+  "err_both_colon.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:3: *** target file `test' has both : and :: entries.\n",
+    "status": 1
+  },
+  "err_deprecated_var_already_deprecated.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:2: *** Cannot call KATI_deprecated_var on already deprecated variable: A.\n",
+    "status": 1
+  },
+  "err_deprecated_var_already_deprecated.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** Cannot call KATI_deprecated_var on already deprecated variable: A.\n",
+    "status": 1
+  },
+  "err_deprecated_var_already_obsolete.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:2: *** Cannot call KATI_deprecated_var on already obsolete variable: A.\n",
+    "status": 1
+  },
+  "err_deprecated_var_already_obsolete.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** Cannot call KATI_deprecated_var on already obsolete variable: A.\n",
+    "status": 1
+  },
+  "err_empty_output.mk:default:direct": {
+    "files": [],
+    "output": "*** No targets.\n",
+    "status": 1
+  },
+  "err_empty_output.mk:default:ninja": {
+    "files": [],
+    "output": "*** No targets.\n",
+    "status": 1
+  },
+  "err_empty_var_name.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:1: *** empty variable name.\n",
+    "status": 1
+  },
+  "err_empty_var_name.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** empty variable name.\n",
+    "status": 1
+  },
+  "err_error.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:2: *** foo.\n",
+    "status": 1
+  },
+  "err_error.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** foo.\n",
+    "status": 1
+  },
+  "err_error_in_recipe.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:2: *** foo.\n",
+    "status": 1
+  },
+  "err_error_in_recipe.mk:test:ninja": {
+    "files": [],
+    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; echo -e \"Makefile:2: *** foo.\" 2>&1 && false ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''test'\\'' ] && [ ! -d '\\''test'\\'' ] && [ '\\''test'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''test'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\nMakefile:2: *** foo.\nninja: build stopped: subcommand failed.\n",
+    "status": 1
+  },
+  "err_export_override.mk:default:direct": {
+    "files": [],
+    "output": "*** No targets.\n",
+    "status": 1
+  },
+  "err_export_override.mk:default:ninja": {
+    "files": [],
+    "output": "*** No targets.\n",
+    "status": 1
+  },
+  "err_extra_else.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:1: *** extraneous `else'.\n",
+    "status": 1
+  },
+  "err_extra_else.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** extraneous `else'.\n",
+    "status": 1
+  },
+  "err_extra_endif.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:1: *** extraneous `endif'.\n",
+    "status": 1
+  },
+  "err_extra_endif.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** extraneous `endif'.\n",
+    "status": 1
+  },
+  "err_ifdef_two_args.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:1: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_ifdef_two_args.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_ifdef_two_args2.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:2: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_ifdef_two_args2.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_ifdef_with_leading_space.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:2: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_ifdef_with_leading_space.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_include.mk:default:direct": {
+    "files": [],
+    "output": "*** No targets.\n",
+    "status": 1
+  },
+  "err_include.mk:default:ninja": {
+    "files": [],
+    "output": "*** No targets.\n",
+    "status": 1
+  },
+  "err_invalid_else.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:2: extraneous text after `else' directive\n*** No targets.\n",
+    "status": 1
+  },
+  "err_invalid_else.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:2: extraneous text after `else' directive\n*** No targets.\n",
+    "status": 1
+  },
+  "err_invalid_ifeq.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:1: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_invalid_ifeq.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_invalid_ifeq2.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:1: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_invalid_ifeq2.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_invalid_ifeq3.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:1: extraneous text after `ifeq' directive\nkati: Nothing to be done for `test'.\n",
+    "status": 0
+  },
+  "err_invalid_ifeq3.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:1: extraneous text after `ifeq' directive\nninja: no work to do.\n",
+    "status": 0
+  },
+  "err_invalid_ifeq4.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:1: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_invalid_ifeq4.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_invalid_ifeq5.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:2: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_invalid_ifeq5.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_keyword_in_rule.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:1: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_keyword_in_rule.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "err_missing_endef.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:3: *** missing `endef', unterminated `define'.\n",
+    "status": 1
+  },
+  "err_missing_endef.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:3: *** missing `endef', unterminated `define'.\n",
+    "status": 1
+  },
+  "err_missing_endif.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:4: *** missing `endif'.\n",
+    "status": 1
+  },
+  "err_missing_endif.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:4: *** missing `endif'.\n",
+    "status": 1
+  },
+  "err_missing_sep.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:3: *** missing separator.\n",
+    "status": 1
+  },
+  "err_missing_sep.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:3: *** missing separator.\n",
+    "status": 1
+  },
+  "err_no_rule.mk:test:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'missing', needed by 'test'.\n",
+    "status": 1
+  },
+  "err_no_rule.mk:test:ninja": {
+    "files": [],
+    "output": "ninja: error: 'missing', needed by 'test', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "err_no_target_commands.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:1: *** commands commence before first target.\n",
+    "status": 1
+  },
+  "err_no_target_commands.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** commands commence before first target.\n",
+    "status": 1
+  },
+  "err_no_target_commands2.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:2: *** commands commence before first target.\n",
+    "status": 1
+  },
+  "err_no_target_commands2.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** commands commence before first target.\n",
+    "status": 1
+  },
+  "err_obsolete_export.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:5: *** B: export is obsolete. Message.\n",
+    "status": 1
+  },
+  "err_obsolete_export.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:5: *** B: export is obsolete. Message.\n",
+    "status": 1
+  },
+  "err_obsolete_var.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:4: *** A is obsolete.\n",
+    "status": 1
+  },
+  "err_obsolete_var.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:4: *** A is obsolete.\n",
+    "status": 1
+  },
+  "err_obsolete_var_already_deprecated.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:2: *** Cannot call KATI_obsolete_var on already deprecated variable: A.\n",
+    "status": 1
+  },
+  "err_obsolete_var_already_deprecated.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** Cannot call KATI_obsolete_var on already deprecated variable: A.\n",
+    "status": 1
+  },
+  "err_obsolete_var_already_obsolete.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:2: *** Cannot call KATI_obsolete_var on already obsolete variable: A.\n",
+    "status": 1
+  },
+  "err_obsolete_var_already_obsolete.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** Cannot call KATI_obsolete_var on already obsolete variable: A.\n",
+    "status": 1
+  },
+  "err_obsolete_var_assign.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:2: *** A is obsolete.\n",
+    "status": 1
+  },
+  "err_obsolete_var_assign.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** A is obsolete.\n",
+    "status": 1
+  },
+  "err_obsolete_var_msg.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:2: *** A is obsolete. Use Y instead.\n",
+    "status": 1
+  },
+  "err_obsolete_var_msg.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** A is obsolete. Use Y instead.\n",
+    "status": 1
+  },
+  "err_obsolete_var_varref.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:3: *** A is obsolete.\n",
+    "status": 1
+  },
+  "err_obsolete_var_varref.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:3: *** A is obsolete.\n",
+    "status": 1
+  },
+  "err_obsolete_var_varsubst.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:2: *** A is obsolete.\n",
+    "status": 1
+  },
+  "err_obsolete_var_varsubst.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** A is obsolete.\n",
+    "status": 1
+  },
+  "err_override.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:7: warning: overriding commands for target `foo'\nMakefile:4: warning: ignoring old commands for target `foo'\n  BUILD   foo\nPASS\n",
+    "status": 0
+  },
+  "err_override.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "Makefile:7: warning: overriding commands for target `foo'\nMakefile:4: warning: ignoring old commands for target `foo'\n[1/1] build foo\nPASS\n",
+    "status": 0
+  },
+  "err_override_export.mk:default:direct": {
+    "files": [],
+    "output": "*** No targets.\n",
+    "status": 1
+  },
+  "err_override_export.mk:default:ninja": {
+    "files": [],
+    "output": "*** No targets.\n",
+    "status": 1
+  },
+  "err_pattern_rule_only.mk:default:direct": {
+    "files": [],
+    "output": "*** No targets.\n",
+    "status": 1
+  },
+  "err_pattern_rule_only.mk:default:ninja": {
+    "files": [],
+    "output": "*** No targets.\n",
+    "status": 1
+  },
+  "err_semicolon.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:2: *** missing rule before commands.\n",
+    "status": 1
+  },
+  "err_semicolon.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** missing rule before commands.\n",
+    "status": 1
+  },
+  "err_semicolon2.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:1: *** missing separator.\n",
+    "status": 1
+  },
+  "err_semicolon2.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** missing separator.\n",
+    "status": 1
+  },
+  "err_semicolon3.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:2: *** missing rule before commands.\n",
+    "status": 1
+  },
+  "err_semicolon3.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** missing rule before commands.\n",
+    "status": 1
+  },
+  "err_semicolon4.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:1: *** missing rule before commands.\n",
+    "status": 1
+  },
+  "err_semicolon4.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** missing rule before commands.\n",
+    "status": 1
+  },
+  "err_semicolon_in_output.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:1: *** missing separator.\n",
+    "status": 1
+  },
+  "err_semicolon_in_output.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** missing separator.\n",
+    "status": 1
+  },
+  "err_suffixes.mk:test1:direct": {
+    "files": [
+      "a.src"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "err_suffixes.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "a.src"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "err_suffixes.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'a.out', needed by 'test2'.\n",
+    "status": 1
+  },
+  "err_suffixes.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'a.out', needed by 'test2', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "err_suffixes2.mk:test1:direct": {
+    "files": [
+      "a.c"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "err_suffixes2.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "a.c"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "err_suffixes2.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'a.o', needed by 'test2'.\n",
+    "status": 1
+  },
+  "err_suffixes2.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'a.o', needed by 'test2', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "err_two_else.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:3: *** only one `else' per conditional.\n",
+    "status": 1
+  },
+  "err_two_else.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:3: *** only one `else' per conditional.\n",
+    "status": 1
+  },
+  "err_unmatched_endef.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:1: *** missing `endef', unterminated `define'.\n",
+    "status": 1
+  },
+  "err_unmatched_endef.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** missing `endef', unterminated `define'.\n",
+    "status": 1
+  },
+  "err_unterminated_func.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:1: *** unterminated call to function 'info': missing ')'.\n",
+    "status": 1
+  },
+  "err_unterminated_func.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** unterminated call to function 'info': missing ')'.\n",
+    "status": 1
+  },
+  "err_unterminated_var.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:1: *** unterminated variable reference.\n",
+    "status": 1
+  },
+  "err_unterminated_var.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:1: *** unterminated variable reference.\n",
+    "status": 1
+  },
+  "err_word_non_numeric.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:2: *** non-numeric first argument to `word' function: '-1'.\n",
+    "status": 1
+  },
+  "err_word_non_numeric.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** non-numeric first argument to `word' function: '-1'.\n",
+    "status": 1
+  },
+  "err_word_zero.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:2: *** first argument to `word' function must be greater than 0.\n",
+    "status": 1
+  },
+  "err_word_zero.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:2: *** first argument to `word' function must be greater than 0.\n",
+    "status": 1
+  },
+  "escape_for_shell_in_recipe.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n # \n  BUILD   test\n\" # \"\n",
+    "status": 0
+  },
+  "escape_for_shell_in_recipe.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n # \n\" # \"\n",
+    "status": 0
+  },
+  "escaped_backslash.mk:test:direct": {
+    "files": [],
+    "output": "echo \\\\\necho \\\\ foo\necho \\\\\necho \\\\ foo\n  BUILD   test\n\\\n  BUILD   test\n\\ foo\n  BUILD   test\n\\\n  BUILD   test\n\\ foo\n",
+    "status": 0
+  },
+  "escaped_backslash.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\necho \\\\\necho \\\\ foo\necho \\\\\necho \\\\ foo\n\\\n\\ foo\n\\\n\\ foo\n",
+    "status": 0
+  },
+  "escaped_comment.mk:test1:direct": {
+    "files": [],
+    "output": "  BUILD   test1\n\n",
+    "status": 0
+  },
+  "escaped_comment.mk:test1:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test1\n\n",
+    "status": 0
+  },
+  "escaped_comment.mk:test2:direct": {
+    "files": [],
+    "output": "  BUILD   test2\n#\n",
+    "status": 0
+  },
+  "escaped_comment.mk:test2:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test2\n#\n",
+    "status": 0
+  },
+  "escaped_comment.mk:test3:direct": {
+    "files": [],
+    "output": "  BUILD   test3\n#PASS\n",
+    "status": 0
+  },
+  "escaped_comment.mk:test3:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test3\n#PASS\n",
+    "status": 0
+  },
+  "escaped_wildcard.mk:test1:direct": {
+    "files": [
+      "foo"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "escaped_wildcard.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "escaped_wildcard.mk:test2:direct": {
+    "files": [],
+    "output": "  BUILD   test2\n\n",
+    "status": 0
+  },
+  "escaped_wildcard.mk:test2:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test2\n\n",
+    "status": 0
+  },
+  "eval.mk:test1:direct": {
+    "files": [
+      "client.c",
+      "client_api.c",
+      "client_mem.c",
+      "server.c",
+      "server_access.c",
+      "server_priv.c"
+    ],
+    "output": "  BUILD   test1\n  BUILD   test1\n",
+    "status": 0
+  },
+  "eval.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "client.c",
+      "client_api.c",
+      "client_mem.c",
+      "server.c",
+      "server_access.c",
+      "server_priv.c"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "eval.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'server.o', needed by 'server'.\n",
+    "status": 1
+  },
+  "eval.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'server.o', needed by 'server', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "eval_assign.mk:test:direct": {
+    "files": [],
+    "output": "X Y Z\n  BUILD   test\nPASS\n  BUILD   test\nPASS\n  BUILD   test\nPASS\n  BUILD   test\nPASS\n  BUILD   test\nPASS\n  BUILD   test\n_PASS_\n",
+    "status": 0
+  },
+  "eval_assign.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "X Y Z\n[1/1] build test\nPASS\nPASS\nPASS\nPASS\nPASS\n_PASS_\n",
+    "status": 0
+  },
+  "eval_starts_with_comment.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "eval_starts_with_comment.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "excl_in_shell.mk:test:direct": {
+    "files": [],
+    "output": "PASS\n",
+    "status": 0
+  },
+  "excl_in_shell.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "expanded_nl.mk:default:direct": {
+    "files": [],
+    "output": "*** No targets.\n",
+    "status": 1
+  },
+  "expanded_nl.mk:default:ninja": {
+    "files": [],
+    "output": "*** No targets.\n",
+    "status": 1
+  },
+  "explicit_pattern_rule.mk:test1:direct": {
+    "files": [
+      "foo.c"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "explicit_pattern_rule.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.c"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "explicit_pattern_rule.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'foo.c', needed by 'foo.o'.\n",
+    "status": 1
+  },
+  "explicit_pattern_rule.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'foo.c', needed by 'foo.o', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "explicit_stem.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "export.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS_FOO\n  BUILD   test\nPASS_FOO2\n  BUILD   test\nPASS_BAR\n  BUILD   test\n\n  BUILD   test\nPASS_X\n  BUILD   test\nPASS_Y\n  BUILD   test\nPASS_Z\n  BUILD   test\nPASS_VAR1\n  BUILD   test\nPASS_VAR2\n  BUILD   test\n\n",
+    "status": 0
+  },
+  "export.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS_FOO\nPASS_FOO2\nPASS_BAR\n\nPASS_X\nPASS_Y\nPASS_Z\nPASS_VAR1\nPASS_VAR2\n\n",
+    "status": 0
+  },
+  "export_all_variables.mk:default:direct": {
+    "files": [],
+    "output": "export-all=exported-value\n",
+    "status": 0
+  },
+  "export_all_variables.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build all\nexport-all=exported-value\n",
+    "status": 0
+  },
+  "export_export.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n\n",
+    "status": 0
+  },
+  "export_export.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n\n",
+    "status": 0
+  },
+  "extra_prereqs.mk:default:direct": {
+    "files": [
+      "extra-prerequisite",
+      "ordinary-prerequisite"
+    ],
+    "output": "extra-prereqs=ordinary-prerequisite\n",
+    "status": 0
+  },
+  "extra_prereqs.mk:default:ninja": {
+    "files": [
+      ".ninja_log",
+      "extra-prerequisite",
+      "ordinary-prerequisite"
+    ],
+    "output": "[1/3] build extra-prerequisite\n[2/3] build ordinary-prerequisite\n[3/3] build all\nextra-prereqs=ordinary-prerequisite\n",
+    "status": 0
+  },
+  "fail_ignore_error.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n*** [test] Error 1\n    command: false\n",
+    "status": 1
+  },
+  "fail_ignore_error.mk:test:ninja": {
+    "files": [],
+    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; (false ) && (false ; true ) && (echo FAIL ) ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''test'\\'' ] && [ ! -d '\\''test'\\'' ] && [ '\\''test'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''test'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\nninja: build stopped: subcommand failed.\n",
+    "status": 1
+  },
+  "fail_subshell_in_recipe.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n*** [test] Error 1\n    command: false\n",
+    "status": 1
+  },
+  "fail_subshell_in_recipe.mk:test:ninja": {
+    "files": [],
+    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; (false ) && ((true) ; echo FAIL ) ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''test'\\'' ] && [ ! -d '\\''test'\\'' ] && [ '\\''test'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''test'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\nninja: build stopped: subcommand failed.\n",
+    "status": 1
+  },
+  "file_func.sh:script": {
+    "files": [
+      "testfile",
+      "testwrite"
+    ],
+    "output": "Read not found: PASS\nRead: PASS\nRead back: PASS\nkati: Nothing to be done for `all'.\n",
+    "status": 0
+  },
+  "filter-out.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nfoo.o bar.o\n",
+    "status": 0
+  },
+  "filter-out.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nfoo.o bar.o\n",
+    "status": 0
+  },
+  "filter.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\ncc foo.c bar.c baz.s -o foo\n",
+    "status": 0
+  },
+  "filter.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\ncc foo.c bar.c baz.s -o foo\n",
+    "status": 0
+  },
+  "final_global.sh:script": {
+    "files": [],
+    "output": "Testcase: = =\nMakefile:2: *** cannot assign to readonly variable: FOO\nTestcase: = :=\nMakefile:2: *** cannot assign to readonly variable: FOO\nTestcase: = +=\nMakefile:2: *** cannot assign to readonly variable: FOO\nTestcase: := :=\nMakefile:2: *** cannot assign to readonly variable: FOO\nTestcase: := +=\nMakefile:2: *** cannot assign to readonly variable: FOO\nTestcase: := =\nMakefile:2: *** cannot assign to readonly variable: FOO\nTestcase: += :=\nMakefile:2: *** cannot assign to readonly variable: FOO\nTestcase: += +=\nMakefile:2: *** cannot assign to readonly variable: FOO\nTestcase: += =\nMakefile:2: *** cannot assign to readonly variable: FOO\n",
+    "status": 1
+  },
+  "final_rule.sh:script": {
+    "files": [],
+    "output": "Makefile:3: *** cannot assign to readonly variable: FOO\n",
+    "status": 1
+  },
+  "final_rule2.sh:script": {
+    "files": [],
+    "output": "Makefile:3: *** cannot assign to readonly variable: FOO\n",
+    "status": 1
+  },
+  "find_command.mk:test1:direct": {
+    "files": [
+      "build",
+      "testdir"
+    ],
+    "output": "  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\ncp: ../../../testcase/tools/findleaves.py: No such file or directory\n*** [test1] Error 1\n    command: cp ../../../testcase/tools/findleaves.py build/tools\n",
+    "status": 1
+  },
+  "find_command.mk:test1:ninja": {
+    "files": [
+      "build",
+      "testdir"
+    ],
+    "output": "[1/1] build test1\nFAILED: [code=1] test1 \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; (mkdir testdir ) && (touch testdir/file1 ) && (touch testdir/file2 ) && (mkdir testdir/dir1 ) && (touch testdir/dir1/file1 ) && (touch testdir/dir1/file2 ) && (touch testdir/dir1/file3 ) && (mkdir testdir/dir2 ) && (touch testdir/dir2/file1 ) && (touch testdir/dir2/file2 ) && (touch testdir/dir2/file3 ) && (ln -s ../dir1/file1 testdir/dir2/link1 ) && (ln -s ../../testdir/dir1 testdir/dir2/link2 ) && (ln -s broken testdir/dir2/link3 ) && (mkdir -p build/tools ) && (cp ../../../testcase/tools/findleaves.py build/tools ) && (mkdir -p testdir3/b/c/d ) && (ln -s b testdir3/a ) && (touch testdir3/b/c/d/e ) && (mkdir -p testdir4/a/b ) && (ln -s self testdir4/self ) && (ln -s .. testdir4/a/b/c ) && (ln -s b testdir4/a/l ) && (mkdir -p testdir5 ) && (ln -s a testdir5/a ) && (ln -s b testdir5/c ) && (ln -s c testdir5/b ) ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''test1'\\'' ] && [ ! -d '\\''test1'\\'' ] && [ '\\''test1'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''test1'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\ncp: ../../../testcase/tools/findleaves.py: No such file or directory\nninja: build stopped: subcommand failed.\n",
+    "status": 1
+  },
+  "find_command.mk:test2:direct": {
+    "files": [],
+    "output": "Makefile:51: FindEmulator: find: `testdir': No such file or directory\nMakefile:60: FindEmulator: find: `testdir': No such file or directory\nMakefile:62: FindEmulator: find: `testdir': No such file or directory\nMakefile:64: FindEmulator: find: `testdir': No such file or directory\nMakefile:65: FindEmulator: find: `testdir': No such file or directory\nMakefile:66: FindEmulator: find: `testdir': No such file or directory\nMakefile:67: FindEmulator: find: `testdir': No such file or directory\nMakefile:68: FindEmulator: find: `testdir': No such file or directory\nMakefile:69: FindEmulator: find: `testdir': No such file or directory\nMakefile:70: FindEmulator: find: `testdir': No such file or directory\nMakefile:71: FindEmulator: find: `testdir': No such file or directory\nMakefile:72: FindEmulator: find: `testdir': No such file or directory\nMakefile:73: FindEmulator: find: `testdir': No such file or directory\nMakefile:74: FindEmulator: find: `testdir': No such file or directory\nMakefile:75: FindEmulator: find: `testdir': No such file or directory\nMakefile:76: FindEmulator: find: `testdir': No such file or directory\nMakefile:77: FindEmulator: find: `testdir': No such file or directory\nMakefile:78: FindEmulator: find: `testdir': No such file or directory\nMakefile:79: FindEmulator: find: `testdir': No such file or directory\nMakefile:81: FindEmulator: cd: testdir: No such file or directory\nMakefile:82: FindEmulator: cd: testdir: No such file or directory\nMakefile:83: FindEmulator: cd: testdir/dir1: No such file or directory\nMakefile:84: FindEmulator: cd: testdir: No such file or directory\nMakefile:93: FindEmulator: find: `testdir': No such file or directory\nMakefile:95: FindEmulator: find: `testdir': No such file or directory\nMakefile:95: FindEmulator: find: `testdir': No such file or directory\nMakefile:97: FindEmulator: find: `testdir': No such file or directory\nMakefile:98: FindEmulator: find: `testdir': No such file or directory\nMakefile:99: FindEmulator: find: `testdir': No such file or directory\nMakefile:100: FindEmulator: cd: testdir: No such file or directory\nMakefile:101: FindEmulator: cd: testdir: No such file or directory\nMakefile:102: FindEmulator: cd: testdir: No such file or directory\nMakefile:104: FindEmulator: find: `testdir': No such file or directory\nMakefile:105: FindEmulator: find: `testdir': No such file or directory\nMakefile:106: FindEmulator: find: `testdir': No such file or directory\nfind: -maxdepth: hoge: illegal numeric value\n",
+    "status": -4
+  },
+  "find_command.mk:test2:ninja": {
+    "files": [],
+    "output": "Makefile:51: FindEmulator: find: `testdir': No such file or directory\nMakefile:60: FindEmulator: find: `testdir': No such file or directory\nMakefile:62: FindEmulator: find: `testdir': No such file or directory\nMakefile:64: FindEmulator: find: `testdir': No such file or directory\nMakefile:65: FindEmulator: find: `testdir': No such file or directory\nMakefile:66: FindEmulator: find: `testdir': No such file or directory\nMakefile:67: FindEmulator: find: `testdir': No such file or directory\nMakefile:68: FindEmulator: find: `testdir': No such file or directory\nMakefile:69: FindEmulator: find: `testdir': No such file or directory\nMakefile:70: FindEmulator: find: `testdir': No such file or directory\nMakefile:71: FindEmulator: find: `testdir': No such file or directory\nMakefile:72: FindEmulator: find: `testdir': No such file or directory\nMakefile:73: FindEmulator: find: `testdir': No such file or directory\nMakefile:74: FindEmulator: find: `testdir': No such file or directory\nMakefile:75: FindEmulator: find: `testdir': No such file or directory\nMakefile:76: FindEmulator: find: `testdir': No such file or directory\nMakefile:77: FindEmulator: find: `testdir': No such file or directory\nMakefile:78: FindEmulator: find: `testdir': No such file or directory\nMakefile:79: FindEmulator: find: `testdir': No such file or directory\nMakefile:81: FindEmulator: cd: testdir: No such file or directory\nMakefile:82: FindEmulator: cd: testdir: No such file or directory\nMakefile:83: FindEmulator: cd: testdir/dir1: No such file or directory\nMakefile:84: FindEmulator: cd: testdir: No such file or directory\nMakefile:93: FindEmulator: find: `testdir': No such file or directory\nMakefile:95: FindEmulator: find: `testdir': No such file or directory\nMakefile:95: FindEmulator: find: `testdir': No such file or directory\nMakefile:97: FindEmulator: find: `testdir': No such file or directory\nMakefile:98: FindEmulator: find: `testdir': No such file or directory\nMakefile:99: FindEmulator: find: `testdir': No such file or directory\nMakefile:100: FindEmulator: cd: testdir: No such file or directory\nMakefile:101: FindEmulator: cd: testdir: No such file or directory\nMakefile:102: FindEmulator: cd: testdir: No such file or directory\nMakefile:104: FindEmulator: find: `testdir': No such file or directory\nMakefile:105: FindEmulator: find: `testdir': No such file or directory\nMakefile:106: FindEmulator: find: `testdir': No such file or directory\nfind: -maxdepth: hoge: illegal numeric value\n",
+    "status": -4
+  },
+  "find_command.mk:test3:direct": {
+    "files": [],
+    "output": "Makefile:126: FindEmulator: find: `testdir3/a/c': No such file or directory\nMakefile:128: FindEmulator: cd: testdir3/a/c: No such file or directory\nMakefile:129: FindEmulator: find: `testdir3': No such file or directory\n$ find testdir3/a/c\n\n$ if [ -d testdir3/a/c ]; then find testdir3/a/c; fi\n\n$ cd testdir3/a/c && find .\n\n$ build/tools/findleaves.py testdir3 e\n\n",
+    "status": 0
+  },
+  "find_command.mk:test3:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "Makefile:126: FindEmulator: find: `testdir3/a/c': No such file or directory\nMakefile:128: FindEmulator: cd: testdir3/a/c: No such file or directory\nMakefile:129: FindEmulator: find: `testdir3': No such file or directory\n[1/1] build test3\n$ find testdir3/a/c\n\n$ if [ -d testdir3/a/c ]; then find testdir3/a/c; fi\n\n$ cd testdir3/a/c && find .\n\n$ build/tools/findleaves.py testdir3 e\n\n",
+    "status": 0
+  },
+  "find_command.mk:test4:direct": {
+    "files": [],
+    "output": "Makefile:132: FindEmulator: find: `testdir4': No such file or directory\n$ find -L testdir4\n\n",
+    "status": 0
+  },
+  "find_command.mk:test4:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "Makefile:132: FindEmulator: find: `testdir4': No such file or directory\n[1/1] build test4\n$ find -L testdir4\n\n",
+    "status": 0
+  },
+  "find_command.mk:test5:direct": {
+    "files": [],
+    "output": "Makefile:135: FindEmulator: find: `testdir5': No such file or directory\nMakefile:136: FindEmulator: find: `testdir5': No such file or directory\n$ find -L testdir5\n\n$ build/tools/findleaves.py testdir5 x\n\n",
+    "status": 0
+  },
+  "find_command.mk:test5:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "Makefile:135: FindEmulator: find: `testdir5': No such file or directory\nMakefile:136: FindEmulator: find: `testdir5': No such file or directory\n[1/1] build test5\n$ find -L testdir5\n\n$ build/tools/findleaves.py testdir5 x\n\n",
+    "status": 0
+  },
+  "find_command_sorted.mk:test1:direct": {
+    "files": [],
+    "output": "$ find .\n. ./Makefile ./submake\n",
+    "status": 0
+  },
+  "find_command_sorted.mk:test1:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test1\n$ find .\n. ./Makefile ./submake\n",
+    "status": 0
+  },
+  "findstring.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\na\n  BUILD   test\nb\n  BUILD   test\nb c\n  BUILD   test\n\n  BUILD   test\na\n",
+    "status": 0
+  },
+  "findstring.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\na\nb\nb c\n\na\n",
+    "status": 0
+  },
+  "first_rule.mk:default:direct": {
+    "files": [],
+    "output": "  BUILD   a\na\n",
+    "status": 0
+  },
+  "first_rule.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build a\na\n",
+    "status": 0
+  },
+  "firstword.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nfoo\n  BUILD   test\n\n",
+    "status": 0
+  },
+  "firstword.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nfoo\n\n",
+    "status": 0
+  },
+  "flavor.mk:default:direct": {
+    "files": [],
+    "output": "  BUILD   all\nrecursive simple recursive recursive undefined\n  BUILD   all\nrecursive\n  BUILD   all\nsimple\n  BUILD   all\nrecursive\n  BUILD   all\nrecursive\n",
+    "status": 0
+  },
+  "flavor.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build all\nrecursive simple recursive recursive undefined\nrecursive\nsimple\nrecursive\nrecursive\n",
+    "status": 0
+  },
+  "foreach.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\na/a/base a/b/base a/c/base a/d/base b/a/base b/b/base b/c/base b/d/base c/a/base c/b/base c/c/base c/d/base d/a/base d/b/base d/c/base d/d/base\n  BUILD   test\na, b, c, d\n",
+    "status": 0
+  },
+  "foreach.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\na/a/base a/b/base a/c/base a/d/base b/a/base b/b/base b/c/base b/d/base c/a/base c/b/base c/c/base c/d/base d/a/base d/b/base d/c/base d/d/base\na, b, c, d\n",
+    "status": 0
+  },
+  "func_backslash.mk:test:direct": {
+    "files": [],
+    "output": "PASS\nkati: Nothing to be done for `test'.\n",
+    "status": 0
+  },
+  "func_backslash.mk:test:ninja": {
+    "files": [],
+    "output": "PASS\nninja: no work to do.\n",
+    "status": 0
+  },
+  "func_nop.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "func_nop.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "func_with_backslash.mk:test:direct": {
+    "files": [],
+    "output": "PASS\n  BUILD   test\nOK\n",
+    "status": 0
+  },
+  "func_with_backslash.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "PASS\n[1/1] build test\nOK\n",
+    "status": 0
+  },
+  "function_command_hash.mk:default:direct": {
+    "files": [],
+    "output": "  BUILD   out\n/bin/sh: Syntax error: redirection unexpected (expecting word)\n*** [out] Error 2\n    command: echo \\#include <generated> > out\n",
+    "status": 1
+  },
+  "function_command_hash.mk:default:ninja": {
+    "files": [],
+    "output": "[1/1] build out\nFAILED: [code=2] out \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; echo \\#include <generated> > out ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''out'\\'' ] && [ ! -d '\\''out'\\'' ] && [ '\\''out'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''out'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\n/bin/sh: Syntax error: redirection unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
+    "status": 2
+  },
+  "generated_include_restart.sh:script": {
+    "files": [],
+    "output": "  BUILD   generated.mk\nkati: Nothing to be done for `generated.mk'.\n",
+    "status": 0
+  },
+  "guile_pure.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "hash_in_var.mk:test1:direct": {
+    "files": [
+      "tmp"
+    ],
+    "output": "",
+    "status": -4
+  },
+  "hash_in_var.mk:test1:ninja": {
+    "files": [
+      "tmp"
+    ],
+    "output": "",
+    "status": -4
+  },
+  "if.mk:test:direct": {
+    "files": [],
+    "output": "PASS1\nPASS2\nPASS3\n PASS4\n PASS5, PASS6\n PASS7\n  BUILD   test\nOK\n",
+    "status": 0
+  },
+  "if.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "PASS1\nPASS2\nPASS3\n PASS4\n PASS5, PASS6\n PASS7\n[1/1] build test\nOK\n",
+    "status": 0
+  },
+  "if_function_command_hash.mk:default:direct": {
+    "files": [],
+    "output": "  BUILD   out\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\n*** [out] Error 2\n    command: echo \"/* header */\"; echo \\#define CFG; echo \\#include <configs/sandbox.h> ;\n",
+    "status": 1
+  },
+  "if_function_command_hash.mk:default:ninja": {
+    "files": [],
+    "output": "[1/1] build out\nFAILED: [code=2] out \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; echo \"/* header */\"; echo \\#define CFG; echo \\#include <configs/sandbox.h> ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''out'\\'' ] && [ ! -d '\\''out'\\'' ] && [ '\\''out'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''out'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\n/bin/sh: Syntax error: \")\" unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
+    "status": 2
+  },
+  "if_recipe.mk:test1:direct": {
+    "files": [],
+    "output": "  BUILD   test1\nTEST\n  BUILD   test1\nPASS\n  BUILD   test1\nDONE\n",
+    "status": 0
+  },
+  "if_recipe.mk:test1:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test1\nTEST\nPASS\nDONE\n",
+    "status": 0
+  },
+  "if_recipe.mk:test2:direct": {
+    "files": [],
+    "output": "  BUILD   test2\nPASS\n  BUILD   test2\nDONE\n",
+    "status": 0
+  },
+  "if_recipe.mk:test2:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test2\nPASS\nDONE\n",
+    "status": 0
+  },
+  "if_recipe.mk:test3:direct": {
+    "files": [],
+    "output": "  BUILD   test3\nPASS\n  BUILD   test3\nDONE\n",
+    "status": 0
+  },
+  "if_recipe.mk:test3:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test3\nPASS\nDONE\n",
+    "status": 0
+  },
+  "ifdef_rec_var.mk:default:direct": {
+    "files": [],
+    "output": "PASS\n*** No targets.\n",
+    "status": 1
+  },
+  "ifdef_rec_var.mk:default:ninja": {
+    "files": [],
+    "output": "PASS\n*** No targets.\n",
+    "status": 1
+  },
+  "ifdef_ret_in_arg.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:6: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "ifdef_ret_in_arg.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:6: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "ifdef_with_comments.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS1\n  BUILD   test\nPASS2\n  BUILD   test\nPASS3\n  BUILD   test\nPASS4\n  BUILD   test\nPASS5\n",
+    "status": 0
+  },
+  "ifdef_with_comments.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS1\nPASS2\nPASS3\nPASS4\nPASS5\n",
+    "status": 0
+  },
+  "ifdef_with_trailing_space.mk:default:direct": {
+    "files": [],
+    "output": "PASS\nPASS\nPASS\n*** No targets.\n",
+    "status": 1
+  },
+  "ifdef_with_trailing_space.mk:default:ninja": {
+    "files": [],
+    "output": "PASS\nPASS\nPASS\n*** No targets.\n",
+    "status": 1
+  },
+  "ifeq_without_parens.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS PASS PASS PASS PASS PASS PASS\n",
+    "status": 0
+  },
+  "ifeq_without_parens.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS PASS PASS PASS PASS PASS PASS\n",
+    "status": 0
+  },
+  "ignore.mk:default:direct": {
+    "files": [],
+    "output": "[first] Error 1 (ignored)\nfirst-end\nfirst-start\nsecond\n",
+    "status": 0
+  },
+  "ignore.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/2] build first\nfirst-start\nfirst-end\n[2/2] build second\nsecond\n",
+    "status": 0
+  },
+  "ignore_error.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n[test] Error 1 (ignored)\n",
+    "status": 0
+  },
+  "ignore_error.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n",
+    "status": 0
+  },
+  "implicit_chain.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "implicit_intermediate_cleanup.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "implicit_pattern_rule.mk:test1:direct": {
+    "files": [
+      "foo.c"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "implicit_pattern_rule.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.c"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "implicit_pattern_rule.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'foo.o', needed by 'test2'.\n",
+    "status": 1
+  },
+  "implicit_pattern_rule.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'foo.o', needed by 'test2', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "implicit_pattern_rule_chain.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   foo.c\ngenerate foo.c\n  BUILD   foo.o\ncompile from foo.c to foo.o\n  BUILD   foo\nlink foo\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_chain.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/3] build foo.c\ngenerate foo.c\n[2/3] build foo.o\ncompile from foo.c to foo.o\n[3/3] build foo\nlink foo\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_chain2.mk:test1:direct": {
+    "files": [
+      "foo.x"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_chain2.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.x"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_chain2.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'foo.z', needed by 'test2'.\n",
+    "status": 1
+  },
+  "implicit_pattern_rule_chain2.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'foo.z', needed by 'test2', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "implicit_pattern_rule_for_no_commands.mk:test2:direct": {
+    "files": [
+      "foo.c",
+      "foo.h"
+    ],
+    "output": "  BUILD   foo.c\n  BUILD   foo.h\n  BUILD   foo.o\ncc -g -o foo.o -c foo.c\n  BUILD   foo\ncc -O -o foo foo.o\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_for_no_commands.mk:test2:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.c",
+      "foo.h"
+    ],
+    "output": "[1/4] build foo.c\n[2/4] build foo.h\n[3/4] build foo.o\ncc -g -o foo.o -c foo.c\n[4/4] build foo\ncc -O -o foo foo.o\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_for_no_commands.mk:test:direct": {
+    "files": [
+      "foo.c",
+      "foo.h"
+    ],
+    "output": "  BUILD   foo.h\n  BUILD   foo.c\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_for_no_commands.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.c",
+      "foo.h"
+    ],
+    "output": "[1/2] build foo.c\n[2/2] build foo.h\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_phony.mk:test2:direct": {
+    "files": [
+      "foo.x"
+    ],
+    "output": "  BUILD   foo.x\n  BUILD   foo.y\nfoo.y from foo.x\n  BUILD   all\nall from foo.y\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_phony.mk:test2:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.x"
+    ],
+    "output": "[1/3] build foo.x\n[2/3] build foo.y\nfoo.y from foo.x\n[3/3] build all\nall from foo.y\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_phony.mk:test:direct": {
+    "files": [
+      "foo.x"
+    ],
+    "output": "  BUILD   foo.x\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_phony.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.x"
+    ],
+    "output": "[1/1] build foo.x\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_prefix.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   abcd\nPASS\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_prefix.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build abcd\nPASS\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_warn.sh:script": {
+    "files": [],
+    "output": "Makefile:6: warning: implicit rules are deprecated: %.foo\nPASS\nMakefile:6: *** implicit rules are obsolete: %.foo\n",
+    "status": 1
+  },
+  "implicit_suffix_chain.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "include.mk:test1:direct": {
+    "files": [
+      "foo.d"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "include.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.d"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "include.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'foo', needed by 'test2'.\n",
+    "status": 1
+  },
+  "include.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'foo', needed by 'test2', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "include_glob.mk:test1:direct": {
+    "files": [
+      "foo.d"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "include_glob.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.d"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "include_glob.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'foo', needed by 'test2'.\n",
+    "status": 1
+  },
+  "include_glob.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'foo', needed by 'test2', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "include_glob_order.mk:test1:direct": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "include_glob_order.mk:test1:ninja": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "include_glob_order.mk:test2:direct": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "include_glob_order.mk:test2:ninja": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "include_var.mk:test1:direct": {
+    "files": [
+      "foo.d"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "include_var.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.d"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "include_var.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'foo', needed by 'test2'.\n",
+    "status": 1
+  },
+  "include_var.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'foo', needed by 'test2', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "info.mk:test:direct": {
+    "files": [],
+    "output": "\"%s:%s\" foo bar\nbaz\n  BUILD   test\nxxx\n",
+    "status": 0
+  },
+  "info.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n\"%s:%s\" foo bar\nbaz\nxxx\n",
+    "status": 0
+  },
+  "intcmp.mk:test:direct": {
+    "files": [],
+    "output": "less\nequal\ngreater\nlessgreater\n",
+    "status": 0
+  },
+  "intcmp.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nless\nequal\ngreater\nlessgreater\n",
+    "status": 0
+  },
+  "intermediate_cleanup.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "join.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\na.c b.o\n  BUILD   test\na0 b1 c\n  BUILD   test\na0 b1 2\n",
+    "status": 0
+  },
+  "join.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\na.c b.o\na0 b1 c\na0 b1 2\n",
+    "status": 0
+  },
+  "kati_cache.sh:script": {
+    "files": [],
+    "output": "  BUILD   foo\nfoo\n  BUILD   foo\nfoo\n  BUILD   foo\nfoo\n  BUILD   foo\nbar\n",
+    "status": 0
+  },
+  "keep_going.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "last_resort.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   foo\nPASS_foo\n  BUILD   test\nPASS_test\n",
+    "status": 0
+  },
+  "last_resort.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/3] build foo\nPASS_foo\n[2/3] build test\nPASS_test\n[3/3] /bin/sh -c 'rm -f -- '\\''foo'\\'' && touch \".kati_intermediate_cleanup\"'\n",
+    "status": 0
+  },
+  "lastword.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nbaz\n  BUILD   test\n\n",
+    "status": 0
+  },
+  "lastword.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nbaz\n\n",
+    "status": 0
+  },
+  "let.mk:test:direct": {
+    "files": [],
+    "output": "one|two three|keep\nkeep|shadow|keep\n[a][b][]\n",
+    "status": 0
+  },
+  "let.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\none|two three|keep\nkeep|shadow|keep\n[a][b][]\n",
+    "status": 0
+  },
+  "lineno_in_call.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:7: foo\n  BUILD   test\nFOO\n",
+    "status": 0
+  },
+  "lineno_in_call.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "Makefile:7: foo\n[1/1] build test\nFOO\n",
+    "status": 0
+  },
+  "load_unsupported.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "low_resolution_time.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "makecmdgoals.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\ntest\n",
+    "status": 0
+  },
+  "makecmdgoals.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\ntest\n",
+    "status": 0
+  },
+  "makefile_list.mk:test1:direct": {
+    "files": [
+      "foo.mk"
+    ],
+    "output": "  BUILD   test1\nMakefile\n  BUILD   test1\n",
+    "status": 0
+  },
+  "makefile_list.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.mk"
+    ],
+    "output": "[1/1] build test1\nMakefile\n",
+    "status": 0
+  },
+  "makefile_list.mk:test2:direct": {
+    "files": [
+      "bar.mk"
+    ],
+    "output": "  BUILD   test2\nMakefile\n  BUILD   test2\n",
+    "status": 0
+  },
+  "makefile_list.mk:test2:ninja": {
+    "files": [
+      ".ninja_log",
+      "bar.mk"
+    ],
+    "output": "[1/1] build test2\nMakefile\n",
+    "status": 0
+  },
+  "makefile_list.mk:test3:direct": {
+    "files": [],
+    "output": "  BUILD   test3\nMakefile\n",
+    "status": 0
+  },
+  "makefile_list.mk:test3:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test3\nMakefile\n",
+    "status": 0
+  },
+  "makefile_list.mk:test4:direct": {
+    "files": [],
+    "output": "  BUILD   test4\nPASS\n",
+    "status": 0
+  },
+  "makefile_list.mk:test4:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test4\nPASS\n",
+    "status": 0
+  },
+  "merge_inputs.mk:test1:direct": {
+    "files": [
+      "bar",
+      "baz"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "merge_inputs.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "bar",
+      "baz"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "merge_inputs.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'bar', needed by 'foo'.\n",
+    "status": 1
+  },
+  "merge_inputs.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'bar', needed by 'foo', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "merge_output_pattern.mk:test:direct": {
+    "files": [
+      "foo.c",
+      "foo.h",
+      "foo.o"
+    ],
+    "output": "  BUILD   foo.h\n  BUILD   foo.c\n  BUILD   foo.o\nfoo.h foo.c\n  BUILD   foo.o\n",
+    "status": 0
+  },
+  "merge_output_pattern.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.c",
+      "foo.h",
+      "foo.o"
+    ],
+    "output": "[1/3] build foo.h\n[2/3] build foo.c\n[3/3] build foo.o\nfoo.h foo.c\n",
+    "status": 0
+  },
+  "merge_target_specific_vars.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   foo\nPASS\n",
+    "status": 0
+  },
+  "merge_target_specific_vars.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build foo\nPASS\n",
+    "status": 0
+  },
+  "multi_explicit_output_patterns.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   azz\nazz\n  BUILD   zza\nzza\n  BUILD   zzz\nzzz\n",
+    "status": 0
+  },
+  "multi_explicit_output_patterns.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/3] build azz\nazz\n[2/3] build zza\nzza\n[3/3] build zzz\nzzz\n",
+    "status": 0
+  },
+  "multi_explicit_output_patterns_double_colon.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   xya\n3 xya\n  BUILD   ayz\n3 ayz\n  BUILD   xyz\n1 yz\n  BUILD   xyz\n2 yz\n",
+    "status": 0
+  },
+  "multi_explicit_output_patterns_double_colon.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/3] build xya\n3 xya\n[2/3] build ayz\n3 ayz\n[3/3] build xyz\n1 yz\n2 yz\n",
+    "status": 0
+  },
+  "multi_implicit_output_patterns.mk:default:direct": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "multi_implicit_output_patterns.mk:default:ninja": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "multi_outputs.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   bar\n  BUILD   foo\nPASS_bar\nPASS_foo\n",
+    "status": 0
+  },
+  "multi_outputs.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/2] build foo\nPASS_foo\n[2/2] build bar\nPASS_bar\n",
+    "status": 0
+  },
+  "multi_pattern_rule.mk:test1:direct": {
+    "files": [
+      "exist",
+      "foo.c"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "multi_pattern_rule.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "exist",
+      "foo.c"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "multi_pattern_rule.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'foo.o', needed by 'test2'.\n",
+    "status": 1
+  },
+  "multi_pattern_rule.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'foo.o', needed by 'test2', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "multi_rule.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   foo.c\ngenerating foo.c\n",
+    "status": 0
+  },
+  "multi_rule.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build foo.c\ngenerating foo.c\n",
+    "status": 0
+  },
+  "multi_rule_order_only.mk:test2:direct": {
+    "files": [
+      "foo.c"
+    ],
+    "output": "  BUILD   bar.a\narchive bar.a\n  BUILD   foo.c\n  BUILD   foo.o\ncompile foo.o from foo.c\n  BUILD   foo.a\narchive foo.a\n",
+    "status": 0
+  },
+  "multi_rule_order_only.mk:test2:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.c"
+    ],
+    "output": "[1/4] build foo.c\n[2/4] build bar.a\narchive bar.a\n[3/4] build foo.o\ncompile foo.o from foo.c\n[4/4] build foo.a\narchive foo.a\n",
+    "status": 0
+  },
+  "multi_rule_order_only.mk:test:direct": {
+    "files": [
+      "foo.c"
+    ],
+    "output": "  BUILD   foo.c\n",
+    "status": 0
+  },
+  "multi_rule_order_only.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.c"
+    ],
+    "output": "[1/1] build foo.c\n",
+    "status": 0
+  },
+  "multi_suffix_rule.mk:test1:direct": {
+    "files": [
+      "foo.c"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "multi_suffix_rule.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.c"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "multi_suffix_rule.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'foo.o', needed by 'test2'.\n",
+    "status": 1
+  },
+  "multi_suffix_rule.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'foo.o', needed by 'test2', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "multiline_and_leading_space.mk:test:direct": {
+    "files": [],
+    "output": "foo bar\n  BUILD   test\nPASS foo bar foo bar\n",
+    "status": 0
+  },
+  "multiline_and_leading_space.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "foo bar\n[1/1] build test\nPASS foo bar foo bar\n",
+    "status": 0
+  },
+  "multiline_and_lineno.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:1: foo\nMakefile:3: bar\n  BUILD   test\nfoo\n",
+    "status": 0
+  },
+  "multiline_and_lineno.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "Makefile:1: foo\nMakefile:3: bar\n[1/1] build test\nfoo\n",
+    "status": 0
+  },
+  "multiline_arg.mk:test:direct": {
+    "files": [],
+    "output": "INFO:  foo\nINFO2: \necho  foo\nINFO:  foo\nINFO:  \\\n  BUILD   test\nfoo\n  BUILD   test\n\\\n",
+    "status": 0
+  },
+  "multiline_arg.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "INFO:  foo\nINFO2: \necho  foo\n[1/1] build test\nINFO:  foo\nINFO:  \\\nfoo\n\n",
+    "status": 0
+  },
+  "multiline_define.mk:test:direct": {
+    "files": [],
+    "output": "A \nB\nA \nB\nA B\n  BUILD   test\nPASS_or1\n  BUILD   test\nPASS_or2\n  BUILD   test\nPASS_or3\n",
+    "status": 0
+  },
+  "multiline_define.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nA \nB\nA \nB\nA B\nPASS_or1\nPASS_or2\nPASS_or3\n",
+    "status": 0
+  },
+  "multiline_recipe.mk:test1:direct": {
+    "files": [],
+    "output": "nospace\none space\none space\n",
+    "status": 0
+  },
+  "multiline_recipe.mk:test1:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test1\nnospace\none space\none space\n",
+    "status": 0
+  },
+  "multiline_recipe.mk:test2:direct": {
+    "files": [],
+    "output": "foo\nbar\n",
+    "status": 0
+  },
+  "multiline_recipe.mk:test2:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test2\nfoo\nbar\n",
+    "status": 0
+  },
+  "multiline_recipe.mk:test3:direct": {
+    "files": [],
+    "output": "  BUILD   test3\nfoo\n  BUILD   test3\nbar\n",
+    "status": 0
+  },
+  "multiline_recipe.mk:test3:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test3\nfoo\nbar\n",
+    "status": 0
+  },
+  "multiline_recipe.mk:test4:direct": {
+    "files": [],
+    "output": "  BUILD   test4\nfoo\nbar\n",
+    "status": 0
+  },
+  "multiline_recipe.mk:test4:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test4\nfoo\nbar\n",
+    "status": 0
+  },
+  "multiline_recipe.mk:test5:direct": {
+    "files": [],
+    "output": "foo bar\n",
+    "status": 0
+  },
+  "multiline_recipe.mk:test5:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test5\nfoo bar\n",
+    "status": 0
+  },
+  "multiline_recipe.mk:test6:direct": {
+    "files": [],
+    "output": "  BUILD   test6\nfoo bar\n",
+    "status": 0
+  },
+  "multiline_recipe.mk:test6:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test6\nfoo bar\n",
+    "status": 0
+  },
+  "multiline_recipe.mk:test7:direct": {
+    "files": [],
+    "output": "first\nsecond third\n",
+    "status": 0
+  },
+  "multiline_recipe.mk:test7:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test7\nfirst\nsecond third\n",
+    "status": 0
+  },
+  "multiple_output_patterns.mk:test:direct": {
+    "files": [
+      "bar.o",
+      "foo.c",
+      "foo.h",
+      "foo.o"
+    ],
+    "output": "  BUILD   foo.h\n  BUILD   foo.c\n  BUILD   bar.o\n  BUILD   foo.o\n",
+    "status": 0
+  },
+  "multiple_output_patterns.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "bar.o",
+      "foo.c",
+      "foo.h",
+      "foo.o"
+    ],
+    "output": "[1/4] build foo.h\n[2/4] build foo.c\n[3/4] build bar.o\n[4/4] build foo.o\n",
+    "status": 0
+  },
+  "nested_call.mk:test:direct": {
+    "files": [],
+    "output": "{test1|automatic,global|file} {test2|automatic,global|file} {test3|automatic,|automatic} {test4|automatic,macro|automatic} {|automatic,global|file}\n{|automatic,global|file} {test2|automatic,global|file} {test3|automatic,|automatic} {test4|automatic,macro|automatic} {|undefined,global|file}\n",
+    "status": 0
+  },
+  "nested_call.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n{test1|automatic,global|file} {test2|automatic,global|file} {test3|automatic,|automatic} {test4|automatic,macro|automatic} {|automatic,global|file}\n{|automatic,global|file} {test2|automatic,global|file} {test3|automatic,|automatic} {test4|automatic,macro|automatic} {|undefined,global|file}\n",
+    "status": 0
+  },
+  "nested_define.mk:default:direct": {
+    "files": [],
+    "output": "  BUILD   foo\n\n  BUILD   foo\nPASS\n",
+    "status": 0
+  },
+  "nested_define.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build foo\n\nPASS\n",
+    "status": 0
+  },
+  "nested_function_command_hash.mk:default:direct": {
+    "files": [],
+    "output": "  BUILD   out\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\n*** [out] Error 2\n    command: { \techo \"/* header */\"; echo \\#include <generated>; } > out\n",
+    "status": 1
+  },
+  "nested_function_command_hash.mk:default:ninja": {
+    "files": [],
+    "output": "[1/1] build out\nFAILED: [code=2] out \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; { \techo \"/* header */\"; echo \\#include <generated>; } > out ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''out'\\'' ] && [ ! -d '\\''out'\\'' ] && [ '\\''out'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''out'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
+    "status": 2
+  },
+  "ninja_delete_on_error.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "ninja_file_no_rerun_func.sh:script": {
+    "files": [
+      ".ninja_log",
+      "stderr_log",
+      "testfile",
+      "testwrite"
+    ],
+    "output": "[1/1] build all\nPASS\n[1/1] build all\nPASS\n",
+    "status": 0
+  },
+  "ninja_implicit_dependent.sh:script": {
+    "files": [],
+    "output": "./build.ninja is missing, regenerating...\nninja: warning: deprecated warning 'dupbuild'\nninja: error: ./build.ninja:17: secondary is defined as an output multiple times\n\n",
+    "status": 1
+  },
+  "ninja_implicit_output_var.sh:script": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "./build.ninja is missing, regenerating...\nninja: warning: deprecated warning 'dupbuild'\n[1/1] build a\nOK\n",
+    "status": 0
+  },
+  "ninja_implicit_outputs.sh:script": {
+    "files": [],
+    "output": "./build.ninja is missing, regenerating...\nninja: warning: deprecated warning 'dupbuild'\nninja: error: ./build.ninja:21: d is defined as an output multiple times\n\n",
+    "status": 1
+  },
+  "ninja_mkdir.sh:script": {
+    "files": [
+      ".ninja_log",
+      "a",
+      "stderr_log"
+    ],
+    "output": "[1/1] build a/b\n",
+    "status": 0
+  },
+  "ninja_normalized_path.mk:test1:direct": {
+    "files": [
+      "a",
+      "b"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "ninja_normalized_path.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "a",
+      "b"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "ninja_normalized_path.mk:test2:direct": {
+    "files": [],
+    "output": "  BUILD   a/b\ntouch: a/../a/b: No such file or directory\n*** [a/b] Error 1\n    command: touch a/../a/b\n",
+    "status": 1
+  },
+  "ninja_normalized_path.mk:test2:ninja": {
+    "files": [
+      ".ninja_log",
+      "a",
+      "b"
+    ],
+    "output": "[1/2] build a/b\n[2/2] build b/a\nb/a\n",
+    "status": 0
+  },
+  "ninja_phony_targets.sh:script": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "===\n./build.ninja is missing, regenerating...\n[1/1] build b\nb\n---\n./build.ninja is missing, regenerating...\n[1/1] build a\na\n---\n./build.ninja is missing, regenerating...\n[1/1] build b\nb\n===\n",
+    "status": 0
+  },
+  "ninja_pool.sh:script": {
+    "files": [
+      ".ninja_log",
+      "kati.ninja",
+      "stderr_log"
+    ],
+    "output": "PASS\nPASS\nPASS\nPASS\nPASS\nPASS\nPASS\nPASS\n[1/4] build test_pool\n[1/4] build test_pool\n[2/4] build test_none\n[2/4] build test_none\n[3/4] build test_default\n[3/4] build test_default\n[4/4] build test_blank\n[4/4] build test_blank\n",
+    "status": 0
+  },
+  "ninja_question.sh:script": {
+    "files": [
+      ".ninja_log",
+      "a",
+      "b",
+      "c",
+      "d"
+    ],
+    "output": "./build.ninja is missing, regenerating...\n[1/4] build a\n[2/4] build b\n[3/4] build c\n[4/4] build d\na b c kati_missing_output\n[1/1] build d\nb kati_missing_output\n",
+    "status": 0
+  },
+  "ninja_regen.sh:script": {
+    "files": [
+      ".ninja_log",
+      "PASS.mk",
+      "XXX",
+      "stderr_log"
+    ],
+    "output": "[1/1] build all\nfoo\n[1/1] build all\nbar\nVAR=hoge\nVAR2=\nVAR3=unused\nwildcard=\n[1/1] build all\nbar\nVAR=fuga\nVAR2=\nVAR3=unused\nwildcard=\n[1/1] build all\nbar\nVAR=fuga\nVAR2=OK\nVAR3=unused\nwildcard=\n[1/1] build all\nbar\nVAR=fuga\nVAR2=OK\nVAR3=unused\nwildcard=\n[1/1] build all\nbar\nVAR=fuga\nVAR2=OK\nVAR3=unused\nwildcard=\n[1/1] build all\nbar\nVAR=fuga\nVAR2=OK\nVAR3=unused\nwildcard=\n[1/1] build all\nbar\nVAR=fuga\nVAR2=OK\nVAR3=unused\nwildcard=\n[1/1] build all\nbar\nVAR=fuga\nVAR2=OK\nVAR3=unused\nwildcard=\n[1/1] build all\nbar\nVAR=fuga\nVAR2=OK\nVAR3=unused\nwildcard=PASS.mk\n[1/1] build all\nbar\nVAR=fuga\nVAR2=OK\nVAR3=unused\nwildcard=PASS.mk\n[1/1] build other\nfoo\n",
+    "status": 0
+  },
+  "ninja_regen_extra_file_deps.sh:script": {
+    "files": [
+      ".ninja_log",
+      "b.txt",
+      "stderr_log"
+    ],
+    "output": "[1/1] build all\nfoo\n[1/1] build all\nfoo\n[1/1] build all\nfoo\n[1/1] build all\nfoo\n",
+    "status": 0
+  },
+  "ninja_regen_extra_file_deps_error_on_missing_file.sh:script": {
+    "files": [
+      "stderr_log"
+    ],
+    "output": "foo\n",
+    "status": 0
+  },
+  "ninja_regen_filefunc_read.sh:script": {
+    "files": [
+      ".ninja_log",
+      "file_a",
+      "stderr_log"
+    ],
+    "output": "[1/1] build all\nfoo\n[1/1] build all\nfoo\n[1/1] build all\nfoo\n[1/1] build all\nfoo\n[1/1] build all\nfoo\n",
+    "status": 0
+  },
+  "ninja_regen_filefunc_write.sh:script": {
+    "files": [
+      ".ninja_log",
+      "file_a",
+      "stderr_log"
+    ],
+    "output": "[1/1] build all\nfoo\n[1/1] build all\nfoo\n",
+    "status": 0
+  },
+  "ninja_regen_find_link.sh:script": {
+    "files": [
+      ".ninja_log",
+      "dir1",
+      "dir2",
+      "linkdir"
+    ],
+    "output": "[1/1] build all\nlinkdir/d/link linkdir/d/link/file1\n[1/1] build all\nlinkdir/d/link linkdir/d/link/file1_2 linkdir/d/link/file1\n[1/1] build all\nlinkdir/d/link linkdir/d/link/file2\n",
+    "status": 0
+  },
+  "ninja_regen_find_with_invalid_globs.sh:script": {
+    "files": [
+      ".cursorignore",
+      ".gemini",
+      ".ninja_log",
+      ".repo",
+      "bootable",
+      "stderr_log",
+      "stderr_log2"
+    ],
+    "output": "[1/1] build all\nHello, world!\n[1/1] build all\nHello, world!\n",
+    "status": 0
+  },
+  "ninja_regen_glob.sh:script": {
+    "files": [
+      ".ninja_log",
+      "stderr_log",
+      "xa.mk",
+      "xd.mk",
+      "xe.mk",
+      "yb.mk",
+      "yc.mk"
+    ],
+    "output": "[1/1] build all\nfoo\n[1/1] build all\nfoo\n",
+    "status": 0
+  },
+  "ninja_shell_no_rerun.sh:script": {
+    "files": [
+      ".ninja_log",
+      "a.txt",
+      "stderr_log"
+    ],
+    "output": "[1/1] build all\nfoo\n[1/1] build all\nfoo\n",
+    "status": 0
+  },
+  "ninja_shell_no_rerun_error_in_rule.sh:script": {
+    "files": [
+      "a.txt",
+      "stderr_log"
+    ],
+    "output": "foo\n",
+    "status": 0
+  },
+  "ninja_validations.sh:script": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "./build.ninja is missing, regenerating...\nninja: warning: deprecated warning 'dupbuild'\n[1/4] build a\na\n[2/4] build b\nb\n[3/4] build c\nc\n[4/4] build d\nd\n",
+    "status": 0
+  },
+  "no_last_newline.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "no_last_newline.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "not_command_with_tab.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   bar\n  BUILD   foo\nPASS_A with_space\nPASS_Bwithout_space\n",
+    "status": 0
+  },
+  "not_command_with_tab.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/2] build foo\nPASS_A with_space\n[2/2] build bar\nPASS_Bwithout_space\n",
+    "status": 0
+  },
+  "notdir.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nfoo\n  BUILD   test\nfoo,bar\n  BUILD   test\nfoo bar\n  BUILD   test\n.\n  BUILD   test\n\n  BUILD   test\n\n  BUILD   test\nfoo.c hacks\n  BUILD   test\nhacks foo.c\n  BUILD   test\nhacks foo.c\n",
+    "status": 0
+  },
+  "notdir.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nfoo\nfoo,bar\nfoo bar\n.\n\n\nfoo.c hacks\nhacks foo.c\nhacks foo.c\n",
+    "status": 0
+  },
+  "nothing_to_do.mk:default:direct": {
+    "files": [],
+    "output": "kati: Nothing to be done for `Makefile'.\n",
+    "status": 0
+  },
+  "nothing_to_do.mk:default:ninja": {
+    "files": [],
+    "output": "src/ninja.cc:<LINE>: default_target_\n",
+    "status": 1
+  },
+  "notparallel_target.mk:default:direct": {
+    "files": [
+      "first",
+      "second"
+    ],
+    "output": "  BUILD   .kati_wait_all_0\nnotparallel-target=ok\n",
+    "status": 0
+  },
+  "notparallel_target.mk:default:ninja": {
+    "files": [
+      ".ninja_log",
+      "first",
+      "second"
+    ],
+    "output": "[1/4] build first\n[2/4] build .kati_wait_all_0\n[3/4] build second\n[4/4] build all\nnotparallel-target=ok\n",
+    "status": 0
+  },
+  "old_file.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "oneshell.mk:test:direct": {
+    "files": [],
+    "output": "one-two\n",
+    "status": 0
+  },
+  "oneshell.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\none-two\n",
+    "status": 0
+  },
+  "or.mk:test:direct": {
+    "files": [],
+    "output": "PASS_1\nfoo\nPASS\nx \t \n  \ty\nPASS\n  BUILD   test\nOK\n",
+    "status": 0
+  },
+  "or.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "PASS_1\nfoo\nPASS\nx \t \n  \ty\nPASS\n[1/1] build test\nOK\n",
+    "status": 0
+  },
+  "order_only.mk:test1:direct": {
+    "files": [
+      "bar",
+      "foo"
+    ],
+    "output": "  BUILD   test1\n  BUILD   test1\n",
+    "status": 0
+  },
+  "order_only.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "bar",
+      "foo"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "order_only.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'bar', needed by 'foo'.\n",
+    "status": 1
+  },
+  "order_only.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'bar', needed by 'foo', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "order_only2.mk:test1:direct": {
+    "files": [
+      "new",
+      "old1",
+      "old2"
+    ],
+    "output": "  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n",
+    "status": 0
+  },
+  "order_only2.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "new",
+      "old1",
+      "old2"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "order_only2.mk:test2:direct": {
+    "files": [],
+    "output": "  BUILD   new\n  BUILD   old1\n  BUILD   old2\n  BUILD   test2\nDONE\nFAIL\nFAIL_new\nPASS\n",
+    "status": 0
+  },
+  "order_only2.mk:test2:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/4] build new\nFAIL_new\n[2/4] build old1\nFAIL\n[3/4] build old2\nPASS\n[4/4] build test2\nDONE\n",
+    "status": 0
+  },
+  "origin.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nfile\n  BUILD   test\nundefined\n  BUILD   test\nundefined\n  BUILD   test\nundefined\n  BUILD   test\nenvironment\n  BUILD   test\nfile\n  BUILD   test\ndefault\n  BUILD   test\nfile\n",
+    "status": 0
+  },
+  "origin.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nfile\nundefined\nundefined\nundefined\nenvironment\nfile\ndefault\nfile\n",
+    "status": 0
+  },
+  "output_sync.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "override.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   bar\n  BUILD   foo\n  BUILD   test\nMakefile:11: warning: overriding commands for target `foo'\nMakefile:2: warning: ignoring old commands for target `test'\nMakefile:5: warning: overriding commands for target `test'\nMakefile:8: warning: ignoring old commands for target `foo'\nPASS_bar\nPASS_foo\nPASS_test\n",
+    "status": 0
+  },
+  "override.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "Makefile:5: warning: overriding commands for target `test'\nMakefile:2: warning: ignoring old commands for target `test'\nMakefile:11: warning: overriding commands for target `foo'\nMakefile:8: warning: ignoring old commands for target `foo'\n[1/3] build bar\nPASS_bar\n[2/3] build foo\nPASS_foo\n[3/3] build test\nPASS_test\n",
+    "status": 0
+  },
+  "override_define.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nCC=gcc simple\n  BUILD   test\nAS=as recursive\n  BUILD   test\ntwo BEGIN echo foo\n  BUILD   test\nxxx END recursive\n  BUILD   test\nthree BEGIN echo 1\n  BUILD   test\n2\n  BUILD   test\n3 END recursive\n  BUILD   test\nfour BEGIN echo I\n  BUILD   test\nII\n  BUILD   test\nIII\n  BUILD   test\nIV END recursive\n",
+    "status": 0
+  },
+  "override_define.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nCC=gcc simple\nAS=as recursive\ntwo BEGIN echo foo\nxxx END recursive\nthree BEGIN echo 1\n2\n3 END recursive\nfour BEGIN echo I\nII\nIII\nIV END recursive\n",
+    "status": 0
+  },
+  "override_export.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nmake_A\n  BUILD   test\nmake_B\n  BUILD   test\n\n  BUILD   test\n\n  BUILD   test\n*** [test] Error 1\n    command: env | grep 'override B'\n",
+    "status": 1
+  },
+  "override_export.mk:test:ninja": {
+    "files": [],
+    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; (echo $A ) && (echo $B ) && (echo ) && (echo ) && (env | grep '\\''override B'\\'' ) ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''test'\\'' ] && [ ! -d '\\''test'\\'' ] && [ '\\''test'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''test'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\nmake_A\nmake_B\n\n\nninja: build stopped: subcommand failed.\n",
+    "status": 1
+  },
+  "override_override.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS_A\n  BUILD   test\noverride\n  BUILD   test\nPASS_B\n  BUILD   test\noverride\n  BUILD   test\nPASS_C\n  BUILD   test\noverride\n",
+    "status": 0
+  },
+  "override_override.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS_A\noverride\nPASS_B\noverride\nPASS_C\noverride\n",
+    "status": 0
+  },
+  "override_rule.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   override\nPASS\n",
+    "status": 0
+  },
+  "override_rule.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build override\nPASS\n",
+    "status": 0
+  },
+  "parallel:direct": {
+    "completed": 4,
+    "output": "",
+    "status": 0
+  },
+  "param.mk:test:direct": {
+    "files": [],
+    "output": "foo is foo\ncall param param1-1=baz param2-1=baz\n1=foo\n",
+    "status": 0
+  },
+  "param.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "foo is foo\n[1/1] build test\ncall param param1-1=baz param2-1=baz\n1=foo\n",
+    "status": 0
+  },
+  "patsubst.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nx.c.o bar.o\n",
+    "status": 0
+  },
+  "patsubst.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nx.c.o bar.o\n",
+    "status": 0
+  },
+  "pattern_rules_priority.mk:test1:direct": {
+    "files": [
+      "bar.c",
+      "baz.cc",
+      "foo.c"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "pattern_rules_priority.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "bar.c",
+      "baz.cc",
+      "foo.c"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "pattern_rules_priority.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'bar.o', needed by 'test2'.\n",
+    "status": 1
+  },
+  "pattern_rules_priority.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'foo.c', needed by 'foo.o', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "phony.mk:test1:direct": {
+    "files": [],
+    "output": "  BUILD   baz\nbaz\n  BUILD   test1\nPASS test1 from foo bar baz\n",
+    "status": 0
+  },
+  "phony.mk:test1:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/2] build baz\nbaz\n[2/2] build test1\nPASS test1 from foo bar baz\n",
+    "status": 0
+  },
+  "phony.mk:test3:direct": {
+    "files": [
+      "test4"
+    ],
+    "output": "  BUILD   test3\n",
+    "status": 0
+  },
+  "phony.mk:test3:ninja": {
+    "files": [
+      ".ninja_log",
+      "test4"
+    ],
+    "output": "[1/1] build test3\n",
+    "status": 0
+  },
+  "phony.mk:test4:direct": {
+    "files": [],
+    "output": "  BUILD   test4\nPASS test4\n",
+    "status": 0
+  },
+  "phony.mk:test4:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test4\nPASS test4\n",
+    "status": 0
+  },
+  "phony.mk:test5:direct": {
+    "files": [],
+    "output": "  BUILD   foo2\nfoo2\n  BUILD   baz2\nbaz2\n  BUILD   test5\nPASS test5 from foo bar baz\n",
+    "status": 0
+  },
+  "phony.mk:test5:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/3] build foo2\nfoo2\n[2/3] build baz2\nbaz2\n[3/3] build test5\nPASS test5 from foo bar baz\n",
+    "status": 0
+  },
+  "phony_looks_real.sh:script": {
+    "files": [],
+    "output": "Makefile:4: warning: PHONY target \"foo/bar\" looks like a real file (contains a \"/\")\nMakefile:4: warning: PHONY target \"foo/baz\" looks like a real file (contains a \"/\")\nEND\nMakefile:4: *** PHONY target \"foo/bar\" looks like a real file (contains a \"/\")\n",
+    "status": 1
+  },
+  "phony_targets.sh:script": {
+    "files": [],
+    "output": "===\n  BUILD   b\nb\n---\n  BUILD   a\na\n---\n  BUILD   b\nb\n===\n",
+    "status": 0
+  },
+  "posix_var.mk:test:direct": {
+    "files": [],
+    "output": "foo\n-c echo bar\n-ec echo baz\n  BUILD   test\n-ec foobar\n",
+    "status": 0
+  },
+  "posix_var.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "foo\n-c echo bar\n-ec echo baz\n[1/1] build test\n-ec kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; foobar ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e 'test' ] && [ ! -d 'test' ] && [ 'test' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo 'kati: output updated by a failed regeneration recipe; continuing with the generated graph' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f 'test'; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status\n",
+    "status": 0
+  },
+  "preserve_single_dot.mk:test:direct": {
+    "files": [
+      "a"
+    ],
+    "output": "  BUILD   a/b\n  BUILD   a/b\n  BUILD   x\na/b\nx\n",
+    "status": 0
+  },
+  "preserve_single_dot.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "a"
+    ],
+    "output": "[1/2] build a/b\na/b\n[2/2] build x\nx\n",
+    "status": 0
+  },
+  "question.sh:script": {
+    "files": [
+      "a",
+      "b",
+      "c",
+      "d"
+    ],
+    "output": "  BUILD   a\n  BUILD   b\n  BUILD   c\n  BUILD   d\na b c\n  BUILD   d\nb\n",
+    "status": 0
+  },
+  "question_mode.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "quine.mk:default:direct": {
+    "files": [],
+    "output": "define q\n$$(info define q)\n$$(info $$(subst $$$$,$$$$$$$$,$$q))\n$$(info endef)\n$$(info $$$$(eval $$$$q))\nendef\n$(eval $q)\n*** No targets.\n",
+    "status": 1
+  },
+  "quine.mk:default:ninja": {
+    "files": [],
+    "output": "define q\n$$(info define q)\n$$(info $$(subst $$$$,$$$$$$$$,$$q))\n$$(info endef)\n$$(info $$$$(eval $$$$q))\nendef\n$(eval $q)\n*** No targets.\n",
+    "status": 1
+  },
+  "readonly_global.sh:script": {
+    "files": [],
+    "output": "Testcase: = = =\nMakefile:3: *** cannot assign to readonly variable: FOO\nTestcase: = += =\nMakefile:3: *** cannot assign to readonly variable: FOO\nTestcase: = := =\nMakefile:3: *** cannot assign to readonly variable: FOO\nTestcase: = := :=\nMakefile:3: *** cannot assign to readonly variable: FOO\nTestcase: = := +=\nMakefile:3: *** cannot assign to readonly variable: FOO\nTestcase: := := :=\nMakefile:3: *** cannot assign to readonly variable: FOO\nTestcase: := := +=\nMakefile:3: *** cannot assign to readonly variable: FOO\nTestcase: := := =\nMakefile:3: *** cannot assign to readonly variable: FOO\n",
+    "status": 1
+  },
+  "readonly_global_missing.sh:script": {
+    "files": [],
+    "output": "Makefile:2: *** unknown variable: FOO\n",
+    "status": 1
+  },
+  "readonly_rule.sh:script": {
+    "files": [],
+    "output": "Testcase: := := +=\nMakefile:4: *** cannot assign to readonly variable: FOO\n",
+    "status": 1
+  },
+  "readonly_rule_missing.sh:script": {
+    "files": [],
+    "output": "Makefile:2: *** unknown variable: FOO\n",
+    "status": 1
+  },
+  "real_no_cmds.sh:script": {
+    "files": [
+      "out"
+    ],
+    "output": "Makefile:9: warning: target \"out/bad.baz\" has no commands. Should \"out/bad.bar\" be using .KATI_IMPLICIT_OUTPUTS?\nEND\nMakefile:9: *** target \"out/bad.baz\" has no commands. Should \"out/bad.bar\" be using .KATI_IMPLICIT_OUTPUTS?\n",
+    "status": 1
+  },
+  "real_no_cmds_or_deps.sh:script": {
+    "files": [
+      "out"
+    ],
+    "output": "Makefile:5: warning: target \"out/bad\" has no commands or deps that could create it\nEND\nMakefile:5: *** target \"out/bad\" has no commands or deps that could create it\n",
+    "status": 1
+  },
+  "real_to_phony.sh:script": {
+    "files": [],
+    "output": "Makefile:3: warning: real file \"foo\" depends on PHONY target \"bar\"\nEND\nMakefile:3: *** real file \"foo\" depends on PHONY target \"bar\"\n",
+    "status": 1
+  },
+  "realpath.mk:test:direct": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "realpath.mk:test:ninja": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "recipe_continuation.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "recipe_in_rule.mk:default:direct": {
+    "files": [],
+    "output": "  BUILD   all\nPASS1\n  BUILD   all\nPASS2\n",
+    "status": 0
+  },
+  "recipe_in_rule.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build all\nPASS1\nPASS2\n",
+    "status": 0
+  },
+  "recipe_var.mk:default:direct": {
+    "files": [],
+    "output": "  BUILD   $\n$\n",
+    "status": 0
+  },
+  "recipe_var.mk:default:ninja": {
+    "files": [],
+    "output": "ninja: error: ./build.ninja:10: bad $-escape (literal $ must be written as $$)\n\n",
+    "status": 1
+  },
+  "recursive_command_expansion.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n\n",
+    "status": 0
+  },
+  "recursive_command_expansion.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n\n",
+    "status": 0
+  },
+  "recursive_directory_failure.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "recursive_make.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "recursive_make_serial.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "recursive_makefile_export.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "recursive_marker.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "recursive_marker.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "recursive_modes.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 1
+  },
+  "recursive_self_reference.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:3: *** Recursive variable \"A\" references itself (eventually).\n",
+    "status": 1
+  },
+  "recursive_self_reference.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:3: *** Recursive variable \"A\" references itself (eventually).\n",
+    "status": 1
+  },
+  "recursive_self_reference_call.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:7: *** missing separator.\n",
+    "status": 1
+  },
+  "recursive_self_reference_call.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:7: *** missing separator.\n",
+    "status": 1
+  },
+  "recursive_target_export.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "rule_in_var.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   foo\nOK\n",
+    "status": 0
+  },
+  "rule_in_var.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build foo\nOK\n",
+    "status": 0
+  },
+  "rule_with_extra_ws.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   bar\n  BUILD   foo\nPASS_foo\nPASS_foo\n",
+    "status": 0
+  },
+  "rule_with_extra_ws.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/2] build foo\nPASS_foo\n[2/2] build bar\nPASS_foo\n",
+    "status": 0
+  },
+  "secondary_expansion.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "secondary_wait.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "segfault_stack_overflow.sh:script": {
+    "files": [],
+    "output": "Makefile:1: *** Recursive variable \"a\" references itself (eventually).\n",
+    "status": 1
+  },
+  "semi_in_var.mk:default:direct": {
+    "files": [],
+    "output": "_1\nbar_2\nbaz_2\nfoo_1\nfoo_2\n",
+    "status": 0
+  },
+  "semi_in_var.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/3] build foo\nfoo_1\nfoo_2\n[2/3] build bar\nbar_2\n[3/3] build baz\n_1\nbaz_2\n",
+    "status": 0
+  },
+  "semicolon.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "semicolon.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "shell.mk:test:direct": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "shell.mk:test:ninja": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "shell_arith_in_recipe.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n0\n",
+    "status": 0
+  },
+  "shell_arith_in_recipe.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n0\n",
+    "status": 0
+  },
+  "shell_stderr.mk:test:direct": {
+    "files": [],
+    "output": "SHOULD_NOT_BE_AFTER_ECHO\n",
+    "status": -4
+  },
+  "shell_stderr.mk:test:ninja": {
+    "files": [],
+    "output": "SHOULD_NOT_BE_AFTER_ECHO\n",
+    "status": -4
+  },
+  "shell_var.mk:test:direct": {
+    "files": [],
+    "output": "/bin/sh\n-c foo\n-c bar\n  BUILD   test\n-c baz\n",
+    "status": 0
+  },
+  "shell_var.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "/bin/sh\n-c foo\n-c bar\n[1/1] build test\n-c kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; baz ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e 'test' ] && [ ! -d 'test' ] && [ 'test' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo 'kati: output updated by a failed regeneration recipe; continuing with the generated graph' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f 'test'; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status\n",
+    "status": 0
+  },
+  "shell_var_with_args.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\ntest skipped\n",
+    "status": 0
+  },
+  "shell_var_with_args.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\ntest skipped\n",
+    "status": 0
+  },
+  "shellflags.mk:test:direct": {
+    "files": [],
+    "output": "flags=-ec\n*** [test] Error 1\n    command: false\n",
+    "status": 1
+  },
+  "shellflags.mk:test:ninja": {
+    "files": [],
+    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -ec 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; (echo \"flags=-ec\" ) && (false ) ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''test'\\'' ] && [ ! -d '\\''test'\\'' ] && [ '\\''test'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''test'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\nflags=-ec\nninja: build stopped: subcommand failed.\n",
+    "status": 1
+  },
+  "shellstatus.mk:test:direct": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "shellstatus.mk:test:ninja": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "shellstatus_direct.mk:default:direct": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "shellstatus_direct.mk:default:ninja": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "shellstatus_in_rule.mk:test:direct": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "shellstatus_in_rule.mk:test:ninja": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "shellstatus_in_rule_in_eval.mk:test:direct": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "shellstatus_in_rule_in_eval.mk:test:ninja": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "shellstatus_ninja.sh:script": {
+    "files": [],
+    "output": "Illegal instruction (core dumped)\ncat: <SCRIPT-TEMP>/failure: No such file or directory\n",
+    "status": 1
+  },
+  "shellstatus_readonly.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:4: *** cannot assign to readonly variable: .SHELLSTATUS\n",
+    "status": 1
+  },
+  "shellstatus_readonly.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:4: *** cannot assign to readonly variable: .SHELLSTATUS\n",
+    "status": 1
+  },
+  "silent.mk:test:direct": {
+    "files": [],
+    "output": "foo\n",
+    "status": 0
+  },
+  "silent.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nfoo\n",
+    "status": 0
+  },
+  "silent_ignore_error.mk:test:direct": {
+    "files": [],
+    "output": "[test] Error 1 (ignored)\n[test] Error 1 (ignored)\n",
+    "status": 0
+  },
+  "silent_ignore_error.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n",
+    "status": 0
+  },
+  "silent_multiline.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nfoo\n  BUILD   test\nbar\nfoo\nbar\n  BUILD   test\nbaz\nfoo\n  BUILD   test\nbar\nbaz\nfoo\nbar\n",
+    "status": 0
+  },
+  "silent_multiline.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nfoo\nbar\nfoo\nbar\nbaz\nfoo\nbar\nbaz\nfoo\nbar\n",
+    "status": 0
+  },
+  "silent_special.mk:test:direct": {
+    "files": [],
+    "output": "silent-output\n",
+    "status": 0
+  },
+  "silent_special.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nsilent-output\n",
+    "status": 0
+  },
+  "simple_subst.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nb\n",
+    "status": 0
+  },
+  "simple_subst.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nb\n",
+    "status": 0
+  },
+  "sort.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nbar foo lose\n  BUILD   test\naaaa bar foo\n  BUILD   test\nbar foo lose\n  BUILD   test\nbar baz\n  BUILD   test\nsingle\n  BUILD   test\nfoo\n  BUILD   test\n\n  BUILD   test\ndevice/asus/deb/AndroidProducts.mk device/asus/flo/AndroidProducts.mk device/asus/fugu/AndroidProducts.mk device/generic/arm64/AndroidProducts.mk device/generic/armv7-a-neon/AndroidProducts.mk device/generic/mini-emulator-arm64/AndroidProducts.mk device/generic/mini-emulator-armv7-a-neon/AndroidProducts.mk device/generic/mini-emulator-mips/AndroidProducts.mk device/generic/mini-emulator-x86/AndroidProducts.mk device/generic/mini-emulator-x86_64/AndroidProducts.mk device/generic/mips/AndroidProducts.mk device/generic/qemu/AndroidProducts.mk device/generic/x86/AndroidProducts.mk device/generic/x86_64/AndroidProducts.mk device/htc/flounder/AndroidProducts.mk device/huawei/angler/AndroidProducts.mk device/lge/bullhead/AndroidProducts.mk device/lge/hammerhead/AndroidProducts.mk device/moto/shamu/AndroidProducts.mk device/sample/products/AndroidProducts.mk\n  BUILD   test\ncpplint-art-phony libart libartd libgabi++ libopenjdkjvm libopenjdkjvmd\n",
+    "status": 0
+  },
+  "sort.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nbar foo lose\naaaa bar foo\nbar foo lose\nbar baz\nsingle\nfoo\n\ndevice/asus/deb/AndroidProducts.mk device/asus/flo/AndroidProducts.mk device/asus/fugu/AndroidProducts.mk device/generic/arm64/AndroidProducts.mk device/generic/armv7-a-neon/AndroidProducts.mk device/generic/mini-emulator-arm64/AndroidProducts.mk device/generic/mini-emulator-armv7-a-neon/AndroidProducts.mk device/generic/mini-emulator-mips/AndroidProducts.mk device/generic/mini-emulator-x86/AndroidProducts.mk device/generic/mini-emulator-x86_64/AndroidProducts.mk device/generic/mips/AndroidProducts.mk device/generic/qemu/AndroidProducts.mk device/generic/x86/AndroidProducts.mk device/generic/x86_64/AndroidProducts.mk device/htc/flounder/AndroidProducts.mk device/huawei/angler/AndroidProducts.mk device/lge/bullhead/AndroidProducts.mk device/lge/hammerhead/AndroidProducts.mk device/moto/shamu/AndroidProducts.mk device/sample/products/AndroidProducts.mk\ncpplint-art-phony libart libartd libgabi++ libopenjdkjvm libopenjdkjvmd\n",
+    "status": 0
+  },
+  "static_pattern.mk:test:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'a.cc', needed by 'a.o'.\n",
+    "status": 1
+  },
+  "static_pattern.mk:test:ninja": {
+    "files": [],
+    "output": "ninja: error: 'a.cc', needed by 'a.o', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "stem.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   FAIL3.FAIL4\n  BUILD   PASS2_FAIL2\n  BUILD   PASS_FAIL\nPASS\nPASS2\nPASS3\n",
+    "status": 0
+  },
+  "stem.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/3] build PASS_FAIL\nPASS\n[2/3] build PASS2_FAIL2\nPASS2\n[3/3] build FAIL3.FAIL4\nPASS3\n",
+    "status": 0
+  },
+  "stem_middle.mk:test:direct": {
+    "files": [
+      "a",
+      "c"
+    ],
+    "output": "b\na\nc\n",
+    "status": 0
+  },
+  "stem_middle.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "a",
+      "c"
+    ],
+    "output": "[1/3] build a/a.a\na\n[2/3] build b.b\nb\n[3/3] build c/c\nc\n",
+    "status": 0
+  },
+  "strip.mk:test2:direct": {
+    "files": [],
+    "output": "  BUILD   test2\nx , y\n",
+    "status": 0
+  },
+  "strip.mk:test2:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test2\nx , y\n",
+    "status": 0
+  },
+  "strip.mk:test:direct": {
+    "files": [],
+    "output": "foo bar\n  BUILD   test\nx\n  BUILD   test\ny\n  BUILD   test\nx\n  BUILD   test\ny\n  BUILD   test\ny,x\n  BUILD   test\nx y\n",
+    "status": 0
+  },
+  "strip.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nfoo bar\nx\ny\nx\ny\ny,x\nx y\n",
+    "status": 0
+  },
+  "strip_and_shell.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n/tmp\n",
+    "status": 0
+  },
+  "strip_and_shell.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n/tmp\n",
+    "status": 0
+  },
+  "submake_basic.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n  BUILD   all\nPASS\n",
+    "status": 0
+  },
+  "submake_basic.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n  BUILD   all\nPASS\n",
+    "status": 0
+  },
+  "subshell_in_recipe.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "subshell_in_recipe.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "subst.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\na,b,c\n  BUILD   test\nstrrepl\n",
+    "status": 0
+  },
+  "subst.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\na,b,c\nstrrepl\n",
+    "status": 0
+  },
+  "subst2.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n,a\n",
+    "status": 0
+  },
+  "subst2.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n,a\n",
+    "status": 0
+  },
+  "suffix.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n.c .c\n",
+    "status": 0
+  },
+  "suffix.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n.c .c\n",
+    "status": 0
+  },
+  "suffix_rule.mk:test1:direct": {
+    "files": [
+      "foo.c"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "suffix_rule.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.c"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "suffix_rule.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'foo.o', needed by 'test2'.\n",
+    "status": 1
+  },
+  "suffix_rule.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'foo.o', needed by 'test2', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "suffix_rule_warn.sh:script": {
+    "files": [],
+    "output": "Makefile:3: warning: suffix rules are deprecated: .c.o\nPASS\nMakefile:3: *** suffix rules are obsolete: .c.o\n",
+    "status": 1
+  },
+  "suffix_subst.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nhoge.o mgoe.o\n",
+    "status": 0
+  },
+  "suffix_subst.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nhoge.o mgoe.o\n",
+    "status": 0
+  },
+  "suffix_subst_pat.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nhoge.o mgoe.o\n",
+    "status": 0
+  },
+  "suffix_subst_pat.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nhoge.o mgoe.o\n",
+    "status": 0
+  },
+  "tab_comment.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "tab_comment.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "tab_only_line.mk:test:direct": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "tab_only_line.mk:test:ninja": {
+    "files": [],
+    "output": "",
+    "status": -4
+  },
+  "target_shell.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "target_specific_export.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "target_specific_inherited_append.mk:default:direct": {
+    "files": [],
+    "output": "-Itarget/include -Iglobal/include -DGLOBAL\n",
+    "status": 0
+  },
+  "target_specific_inherited_append.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build target\n-Itarget/include -Iglobal/include -DGLOBAL\n",
+    "status": 0
+  },
+  "target_specific_recursive_append.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "target_specific_var.mk:test:direct": {
+    "files": [
+      "prog.c"
+    ],
+    "output": "  BUILD   prog.c\n  BUILD   prog.o\ncc -g -o prog.o -c prog.c\n  BUILD   prog\nprog -g\n",
+    "status": 0
+  },
+  "target_specific_var.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "prog.c"
+    ],
+    "output": "[1/3] build prog.c\n[2/3] build prog.o\ncc -g -o prog.o -c prog.c\n[3/3] build prog\nprog -g\n",
+    "status": 0
+  },
+  "target_specific_var_append.mk:default:direct": {
+    "files": [],
+    "output": "  BUILD   a\n  BUILD   b\n  BUILD   c\n  BUILD   d\n  BUILD   e\n  BUILD   f\n  BUILD   g\n  BUILD   h\nA=PASS_A A\nB=FAIL_B OK\nC=PASS_C\nD=PASS_D\nE= PASS\nF= PASS\nG=X FAIL\nH=X PASS\n",
+    "status": 0
+  },
+  "target_specific_var_append.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/8] build a\nA=PASS_A A\n[2/8] build b\nB=FAIL_B OK\n[3/8] build c\nC=PASS_C\n[4/8] build d\nD=PASS_D\n[5/8] build e\nE= PASS\n[6/8] build f\nF= PASS\n[7/8] build g\nG=X FAIL\n[8/8] build h\nH=X PASS\n",
+    "status": 0
+  },
+  "target_specific_var_in_var.mk:default:direct": {
+    "files": [],
+    "output": "  BUILD   x\necho baz\n",
+    "status": 0
+  },
+  "target_specific_var_in_var.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build x\necho baz\n",
+    "status": 0
+  },
+  "target_specific_var_ref.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   bar\n  BUILD   foo\nPASS\nPASS\n",
+    "status": 0
+  },
+  "target_specific_var_ref.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/2] build foo\nPASS\n[2/2] build bar\nPASS\n",
+    "status": 0
+  },
+  "target_specific_var_simple.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "target_specific_var_simple.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "target_specific_var_timing.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   foo\nPASS PASS\n",
+    "status": 0
+  },
+  "target_specific_var_timing.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build foo\nPASS PASS\n",
+    "status": 0
+  },
+  "target_specific_var_var_name.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n\n",
+    "status": 0
+  },
+  "target_specific_var_var_name.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n\n",
+    "status": 0
+  },
+  "target_specific_var_with_pattern.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   bar.z\n  BUILD   foo.x\nPASS\nX=PASS Y=PASS Z=PASS\n",
+    "status": 0
+  },
+  "target_specific_var_with_pattern.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/2] build foo.x\nX=PASS Y=PASS Z=PASS\n[2/2] build bar.z\nPASS\n",
+    "status": 0
+  },
+  "target_specific_var_with_semi.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nfoo ; bar\n",
+    "status": 0
+  },
+  "target_specific_var_with_semi.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nfoo ; bar\n",
+    "status": 0
+  },
+  "terms_in_parens.mk:default:direct": {
+    "files": [],
+    "output": "(PA,SS)\n{PA,SS}\n*** No targets.\n",
+    "status": 1
+  },
+  "terms_in_parens.mk:default:ninja": {
+    "files": [],
+    "output": "(PA,SS)\n{PA,SS}\n*** No targets.\n",
+    "status": 1
+  },
+  "test_version.mk:default:direct": {
+    "files": [],
+    "output": "4.2.1\n*** No targets.\n",
+    "status": 1
+  },
+  "test_version.mk:default:ninja": {
+    "files": [],
+    "output": "4.2.1\n*** No targets.\n",
+    "status": 1
+  },
+  "top_level_phony.sh:script": {
+    "files": [
+      "bar"
+    ],
+    "output": "Makefile:4: warning: real file \"out/foo\" depends on PHONY target \"bar\"\nEND\nMakefile:4: *** real file \"out/foo\" depends on PHONY target \"bar\"\n",
+    "status": 1
+  },
+  "touch_mode.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "trim_leading_curdir.mk:default:direct": {
+    "files": [
+      "foo.bar",
+      "foo.baz"
+    ],
+    "output": "  BUILD   foo.baz\n  BUILD   foo.bar\n",
+    "status": 0
+  },
+  "trim_leading_curdir.mk:default:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.bar",
+      "foo.baz"
+    ],
+    "output": "[1/2] build foo.baz\n[2/2] build foo.bar\n",
+    "status": 0
+  },
+  "unmatched_paren.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nOK\n  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "unmatched_paren.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nOK\nPASS\n",
+    "status": 0
+  },
+  "unmatched_paren2.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:6: *** unterminated variable reference.\n",
+    "status": 1
+  },
+  "unmatched_paren2.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:6: *** unterminated variable reference.\n",
+    "status": 1
+  },
+  "value.mk:test:direct": {
+    "files": [],
+    "output": "$(X)\n  BUILD   test\nATH\n  BUILD   test\n/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell:/mnt/host/c/Users/Harry/.codex/tmp/arg0/codex-arg0JyAUtT:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/libheif/libheif/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/jxrlib/jxrlib/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/poppler/Library/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/mnt/host/c/WINDOWS/system32:/mnt/host/c/WINDOWS:/mnt/host/c/WINDOWS/System32/Wbem:/mnt/host/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/host/c/WINDOWS/System32/OpenSSH/:/mnt/host/c/Program Files/NVIDIA Corporation/NVIDIA App/NvDLISR:/mnt/host/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/host/c/Program Files/dotnet/:/mnt/host/c/Program Files/Docker/Docker/resources/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell:/mnt/host/c/Users/Harry/AppData/Local/Microsoft/WindowsApps:/mnt/host/c/Users/Harry/AppData/Local/DockerSandboxes/bin/:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/git/cmd:/mnt/host/c/Users/Harry/AppData/Local/OpenAI/Codex/bin/d5b459afd5dcd195:/mnt/host/c/Users/Harry/AppData/Local/OpenAI/Codex/bin/80f78947ad880e6e\n  BUILD   test\n\n  BUILD   test\n\n  BUILD   test\n/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell:/mnt/host/c/Users/Harry/.codex/tmp/arg0/codex-arg0JyAUtT:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/libheif/libheif/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/jxrlib/jxrlib/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/poppler/Library/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/mnt/host/c/WINDOWS/system32:/mnt/host/c/WINDOWS:/mnt/host/c/WINDOWS/System32/Wbem:/mnt/host/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/host/c/WINDOWS/System32/OpenSSH/:/mnt/host/c/Program Files/NVIDIA Corporation/NVIDIA App/NvDLISR:/mnt/host/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/host/c/Program Files/dotnet/:/mnt/host/c/Program Files/Docker/Docker/resources/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell:/mnt/host/c/Users/Harry/AppData/Local/Microsoft/WindowsApps:/mnt/host/c/Users/Harry/AppData/Local/DockerSandboxes/bin/:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/git/cmd:/mnt/host/c/Users/Harry/AppData/Local/OpenAI/Codex/bin/d5b459afd5dcd195:/mnt/host/c/Users/Harry/AppData/Local/OpenAI/Codex/bin/80f78947ad880e6e\n",
+    "status": 0
+  },
+  "value.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "$(X)\n[1/1] build test\nATH\n/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell:/mnt/host/c/Users/Harry/.codex/tmp/arg0/codex-arg0JyAUtT:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/libheif/libheif/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/jxrlib/jxrlib/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/poppler/Library/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/mnt/host/c/WINDOWS/system32:/mnt/host/c/WINDOWS:/mnt/host/c/WINDOWS/System32/Wbem:/mnt/host/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/host/c/WINDOWS/System32/OpenSSH/:/mnt/host/c/Program Files/NVIDIA Corporation/NVIDIA App/NvDLISR:/mnt/host/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/host/c/Program Files/dotnet/:/mnt/host/c/Program Files/Docker/Docker/resources/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell:/mnt/host/c/Users/Harry/AppData/Local/Microsoft/WindowsApps:/mnt/host/c/Users/Harry/AppData/Local/DockerSandboxes/bin/:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/git/cmd:/mnt/host/c/Users/Harry/AppData/Local/OpenAI/Codex/bin/d5b459afd5dcd195:/mnt/host/c/Users/Harry/AppData/Local/OpenAI/Codex/bin/80f78947ad880e6e\n\n\n/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell:/mnt/host/c/Users/Harry/.codex/tmp/arg0/codex-arg0JyAUtT:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/libheif/libheif/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/jxrlib/jxrlib/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/poppler/Library/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/mnt/host/c/WINDOWS/system32:/mnt/host/c/WINDOWS:/mnt/host/c/WINDOWS/System32/Wbem:/mnt/host/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/host/c/WINDOWS/System32/OpenSSH/:/mnt/host/c/Program Files/NVIDIA Corporation/NVIDIA App/NvDLISR:/mnt/host/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/host/c/Program Files/dotnet/:/mnt/host/c/Program Files/Docker/Docker/resources/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell:/mnt/host/c/Users/Harry/AppData/Local/Microsoft/WindowsApps:/mnt/host/c/Users/Harry/AppData/Local/DockerSandboxes/bin/:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:/mnt/host/c/Users/Harry/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/git/cmd:/mnt/host/c/Users/Harry/AppData/Local/OpenAI/Codex/bin/d5b459afd5dcd195:/mnt/host/c/Users/Harry/AppData/Local/OpenAI/Codex/bin/80f78947ad880e6e\n",
+    "status": 0
+  },
+  "value_at.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n\n  BUILD   test\n\n  BUILD   test\n\n",
+    "status": 0
+  },
+  "value_at.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n\n\n\n",
+    "status": 0
+  },
+  "value_automatic.mk:test:direct": {
+    "files": [],
+    "output": "at=[] atd=[]\n",
+    "status": 0
+  },
+  "value_automatic.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nat=[] atd=[]\n",
+    "status": 0
+  },
+  "var_append.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nsimple FOO \n  BUILD   test\nrecursive FOO BAR\n  BUILD   test\n FOO \n  BUILD   test\n FOO BAR\n  BUILD   test\nFOO BAR\n  BUILD   test\nsimple\n  BUILD   test\nrecursive\n  BUILD   test\nsimple\n  BUILD   test\nrecursive\n  BUILD   test\nrecursive\n",
+    "status": 0
+  },
+  "var_append.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nsimple FOO \nrecursive FOO BAR\n FOO \n FOO BAR\nFOO BAR\nsimple\nrecursive\nsimple\nrecursive\nrecursive\n",
+    "status": 0
+  },
+  "var_cond_assign.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nFOO BAR\n",
+    "status": 0
+  },
+  "var_cond_assign.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nFOO BAR\n",
+    "status": 0
+  },
+  "var_eval.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nfoo\n  BUILD   test\n$(bar)\n  BUILD   test\n\n  BUILD   test\n$(bar)\n  BUILD   test\n$(bar)\n",
+    "status": 0
+  },
+  "var_eval.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nfoo\n$(bar)\n\n$(bar)\n$(bar)\n",
+    "status": 0
+  },
+  "var_target.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nBAZ\n",
+    "status": 0
+  },
+  "var_target.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nBAZ\n",
+    "status": 0
+  },
+  "var_visibility_prefix_conflict.mk:test:direct": {
+    "files": [],
+    "output": "Visibility prefix conflict on variable: BAR\n",
+    "status": 1
+  },
+  "var_visibility_prefix_conflict.mk:test:ninja": {
+    "files": [],
+    "output": "Visibility prefix conflict on variable: BAR\n",
+    "status": 1
+  },
+  "var_visibility_prefix_implicit_define.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n\n",
+    "status": 0
+  },
+  "var_visibility_prefix_implicit_define.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n\n",
+    "status": 0
+  },
+  "var_visibility_prefix_invalid_file_four.mk:test:direct": {
+    "files": [],
+    "output": "Makefile is not a valid file to reference variable BAR. Line #3.\nValid file prefixes:\nbar\n",
+    "status": 1
+  },
+  "var_visibility_prefix_invalid_file_four.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile is not a valid file to reference variable BAR. Line #3.\nValid file prefixes:\nbar\n",
+    "status": 1
+  },
+  "var_visibility_prefix_invalid_file_one.mk:test:direct": {
+    "files": [],
+    "output": "Makefile is not a valid file to reference variable BAZ. Line #10.\nValid file prefixes:\nbaz\n",
+    "status": 1
+  },
+  "var_visibility_prefix_invalid_file_one.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile is not a valid file to reference variable BAZ. Line #10.\nValid file prefixes:\nbaz\n",
+    "status": 1
+  },
+  "var_visibility_prefix_invalid_file_two.mk:test:direct": {
+    "files": [],
+    "output": "Makefile is not a valid file to reference variable BAR. Line #3.\nValid file prefixes:\nbar\n",
+    "status": 1
+  },
+  "var_visibility_prefix_invalid_file_two.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile is not a valid file to reference variable BAR. Line #3.\nValid file prefixes:\nbar\n",
+    "status": 1
+  },
+  "var_visibility_prefix_invalid_prefix_four.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:1: Visibility prefix foo/ is not normalized. Normalized prefix: foo\n",
+    "status": 1
+  },
+  "var_visibility_prefix_invalid_prefix_four.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:1: Visibility prefix foo/ is not normalized. Normalized prefix: foo\n",
+    "status": 1
+  },
+  "var_visibility_prefix_invalid_prefix_one.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:1: Visibility prefix should not start with /\n",
+    "status": 1
+  },
+  "var_visibility_prefix_invalid_prefix_one.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:1: Visibility prefix should not start with /\n",
+    "status": 1
+  },
+  "var_visibility_prefix_invalid_prefix_three.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:2: Visibility prefix bar is the prefix of another visibility prefix bar/baz\n",
+    "status": 1
+  },
+  "var_visibility_prefix_invalid_prefix_three.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:2: Visibility prefix bar is the prefix of another visibility prefix bar/baz\n",
+    "status": 1
+  },
+  "var_visibility_prefix_invalid_prefix_two.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:1: Visibility prefix should not start with ../\n",
+    "status": 1
+  },
+  "var_visibility_prefix_invalid_prefix_two.mk:test:ninja": {
+    "files": [],
+    "output": "Makefile:1: Visibility prefix should not start with ../\n",
+    "status": 1
+  },
+  "var_with_space.mk:default:direct": {
+    "files": [],
+    "output": "  BUILD   all\nPASS\n",
+    "status": 0
+  },
+  "var_with_space.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build all\nPASS\n",
+    "status": 0
+  },
+  "vardef_in_call.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "vardef_in_call.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "variable_location.mk:default:direct": {
+    "files": [],
+    "output": "KATI_variable_location: <unknown>:0\nKATI_variable_location: Makefile:1\nKATI_variable_location: Makefile:2\nKATI_variable_location: Makefile:6\nKATI_variable_location: Makefile:9\nKATI_variable_location: Makefile:10\nKATI_variable_location: Makefile:11\nKATI_variable_location: Makefile:13\nKATI_variable_location: Makefile:15\nKATI_variable_location: Makefile:16\nKATI_variable_location: Makefile:17\nKATI_variable_location: Makefile:18 Makefile:19\n*** No targets.\n",
+    "status": 1
+  },
+  "variable_location.mk:default:ninja": {
+    "files": [],
+    "output": "KATI_variable_location: <unknown>:0\nKATI_variable_location: Makefile:1\nKATI_variable_location: Makefile:2\nKATI_variable_location: Makefile:6\nKATI_variable_location: Makefile:9\nKATI_variable_location: Makefile:10\nKATI_variable_location: Makefile:11\nKATI_variable_location: Makefile:13\nKATI_variable_location: Makefile:15\nKATI_variable_location: Makefile:16\nKATI_variable_location: Makefile:17\nKATI_variable_location: Makefile:18 Makefile:19\n*** No targets.\n",
+    "status": 1
+  },
+  "variables.mk:default:direct": {
+    "files": [],
+    "output": ".VARIABLES (from make): BEFORE EVALUABLE LOOKS_LIKE_A_FUNCTION_1 LOOKS_LIKE_A_FUNCTION_2 NOT_A_FUNCTION_1 NOT_A_FUNCTION_2 ONE THE_EDGE_CASE_1 THE_EDGE_CASE_2 THE_EDGE_CASE_3 THE_EDGE_CASE_4 THE_EDGE_CASE_5\n.VARIABLES (hard coded): BEFORE EVALUABLE LOOKS_LIKE_A_FUNCTION_1 LOOKS_LIKE_A_FUNCTION_2 NOT_A_FUNCTION_1 NOT_A_FUNCTION_2 ONE THE_EDGE_CASE_1 THE_EDGE_CASE_2 THE_EDGE_CASE_3 THE_EDGE_CASE_4 THE_EDGE_CASE_5\n.KATI_SYMBOLS: BEFORE EVALUABLE NOT_A_FUNCTION_1 NOT_A_FUNCTION_2 ONE\n*** No targets.\n",
+    "status": 1
+  },
+  "variables.mk:default:ninja": {
+    "files": [],
+    "output": ".VARIABLES (from make): BEFORE EVALUABLE LOOKS_LIKE_A_FUNCTION_1 LOOKS_LIKE_A_FUNCTION_2 NOT_A_FUNCTION_1 NOT_A_FUNCTION_2 ONE THE_EDGE_CASE_1 THE_EDGE_CASE_2 THE_EDGE_CASE_3 THE_EDGE_CASE_4 THE_EDGE_CASE_5\n.VARIABLES (hard coded): BEFORE EVALUABLE LOOKS_LIKE_A_FUNCTION_1 LOOKS_LIKE_A_FUNCTION_2 NOT_A_FUNCTION_1 NOT_A_FUNCTION_2 ONE THE_EDGE_CASE_1 THE_EDGE_CASE_2 THE_EDGE_CASE_3 THE_EDGE_CASE_4 THE_EDGE_CASE_5\n.KATI_SYMBOLS: BEFORE EVALUABLE NOT_A_FUNCTION_1 NOT_A_FUNCTION_2 ONE\n*** No targets.\n",
+    "status": 1
+  },
+  "vpath.mk:test1:direct": {
+    "files": [
+      "dir"
+    ],
+    "output": "  BUILD   test1\n  BUILD   test1\n",
+    "status": 0
+  },
+  "vpath.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "dir"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "vpath.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'foo', needed by 'bar'.\n",
+    "status": 1
+  },
+  "vpath.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'foo', needed by 'bar', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "vpath.mk:test:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'foo', needed by 'bar'.\n",
+    "status": 1
+  },
+  "vpath.mk:test:ninja": {
+    "files": [],
+    "output": "ninja: error: 'foo', needed by 'bar', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "vpath.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "vpath_directive.mk:test1:direct": {
+    "files": [
+      "dir"
+    ],
+    "output": "  BUILD   test1\n  BUILD   test1\n",
+    "status": 0
+  },
+  "vpath_directive.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "dir"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "vpath_directive.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'foo.c', needed by 'bar'.\n",
+    "status": 1
+  },
+  "vpath_directive.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: 'foo.c', needed by 'bar', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "vpath_directive.mk:test:direct": {
+    "files": [],
+    "output": "*** No rule to make target 'foo.c', needed by 'bar'.\n",
+    "status": 1
+  },
+  "vpath_directive.mk:test:ninja": {
+    "files": [],
+    "output": "ninja: error: 'foo.c', needed by 'bar', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "wait.mk:default:direct": {
+    "files": [
+      "first",
+      "fourth",
+      "second",
+      "third"
+    ],
+    "output": "  BUILD   .kati_wait_all_0\nwait=ok\n",
+    "status": 0
+  },
+  "wait.mk:default:ninja": {
+    "files": [
+      ".ninja_log",
+      "first",
+      "fourth",
+      "second",
+      "third"
+    ],
+    "output": "[1/6] build first\n[2/6] build second\n[3/6] build .kati_wait_all_0\n[4/6] build third\n[5/6] build fourth\n[6/6] build all\nwait=ok\n",
+    "status": 0
+  },
+  "wait_order_only.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "wait_pattern.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "warn_extra_trailings.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:4: extraneous text after `else' directive\nMakefile:6: *** missing `endif'.\n",
+    "status": 1
+  },
+  "warn_extra_trailings.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:4: extraneous text after `else' directive\nMakefile:6: *** missing `endif'.\n",
+    "status": 1
+  },
+  "warn_output_pattern_mismatch.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:4: target `foo' doesn't match the target pattern\nfoo\n  BUILD   foo\nPASS\n",
+    "status": 0
+  },
+  "warn_output_pattern_mismatch.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "Makefile:4: target `foo' doesn't match the target pattern\nfoo\n[1/1] build foo\nPASS\n",
+    "status": 0
+  },
+  "warn_undefined_variables.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
+  "warning.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:1: foo\nMakefile:10: bar'\"\"'\nMakefile:11: b\na\nz\n  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "warning.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "Makefile:1: foo\n[1/1] build test\nMakefile:10: bar'\"\"'\nMakefile:11: b\na\nz\nPASS\n",
+    "status": 0
+  },
+  "warning_in_eval.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:3: foo\nMakefile:4: foo\nMakefile:5: bar\n  BUILD   test\ndone\n",
+    "status": 0
+  },
+  "warning_in_eval.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "Makefile:3: foo\nMakefile:4: foo\nMakefile:5: bar\n[1/1] build test\ndone\n",
+    "status": 0
+  },
+  "werror_find_emulator.sh:script": {
+    "files": [],
+    "output": "Makefile:1: FindEmulator: find: `does/not/exist': No such file or directory\nkati: Nothing to be done for `all'.\nClean exit\nMakefile:1: FindEmulator: find: `does/not/exist': No such file or directory\n",
+    "status": 1
+  },
+  "werror_overriding_commands.sh:script": {
+    "files": [],
+    "output": "Makefile:5: warning: overriding commands for target `foo'\nMakefile:3: warning: ignoring old commands for target `foo'\nPASS\nClean exit\nMakefile:5: *** overriding commands for target `foo', previously defined at Makefile:3\n",
+    "status": 1
+  },
+  "what_if.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 1
+  },
+  "whitespace_in_cmd.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nfoo\n  BUILD   test\nbar\n",
+    "status": 0
+  },
+  "whitespace_in_cmd.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nfoo\nbar\n",
+    "status": 0
+  },
+  "wildcard.mk:test1:direct": {
+    "files": [
+      "tmp"
+    ],
+    "output": "",
+    "status": -4
+  },
+  "wildcard.mk:test1:ninja": {
+    "files": [
+      "tmp"
+    ],
+    "output": "",
+    "status": -4
+  },
+  "wildcard.mk:test2:direct": {
+    "files": [
+      "tmp"
+    ],
+    "output": "",
+    "status": -4
+  },
+  "wildcard.mk:test2:ninja": {
+    "files": [
+      "tmp"
+    ],
+    "output": "",
+    "status": -4
+  },
+  "wildcard_cache.mk:test:direct": {
+    "files": [
+      "dir"
+    ],
+    "output": "",
+    "status": -4
+  },
+  "wildcard_cache.mk:test:ninja": {
+    "files": [
+      "dir"
+    ],
+    "output": "",
+    "status": -4
+  },
+  "wildcard_multi.mk:test1:direct": {
+    "files": [
+      "PASS"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "wildcard_multi.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "PASS"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "wildcard_multi.mk:test2:direct": {
+    "files": [],
+    "output": "  BUILD   test2\nMakefile\n",
+    "status": 0
+  },
+  "wildcard_multi.mk:test2:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test2\nMakefile\n",
+    "status": 0
+  },
+  "wildcard_target.mk:test1:direct": {
+    "files": [
+      "foo.x"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "wildcard_target.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo.x"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "wildcard_target.mk:test2:direct": {
+    "files": [],
+    "output": "*** No rule to make target '*.x', needed by 'test2'.\n",
+    "status": 1
+  },
+  "wildcard_target.mk:test2:ninja": {
+    "files": [],
+    "output": "ninja: error: '*.x', needed by 'test2', missing and no known rule to make it\n",
+    "status": 1
+  },
+  "wildcard_with_commas.mk:test2:direct": {
+    "files": [
+      "foo,bar"
+    ],
+    "output": "  BUILD   foo,bar\n  BUILD   test2\nfoo,bar\n",
+    "status": 0
+  },
+  "wildcard_with_commas.mk:test2:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo,bar"
+    ],
+    "output": "[1/2] build 'foo,bar'\n[2/2] build test2\n\n",
+    "status": 0
+  },
+  "wildcard_with_commas.mk:test:direct": {
+    "files": [
+      "foo,bar"
+    ],
+    "output": "  BUILD   test\n\n  BUILD   test\n",
+    "status": 0
+  },
+  "wildcard_with_commas.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "foo,bar"
+    ],
+    "output": "[1/1] build test\n\n",
+    "status": 0
+  },
+  "wildcard_with_var.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nMakefile\n",
+    "status": 0
+  },
+  "wildcard_with_var.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nMakefile\n",
+    "status": 0
+  },
+  "word.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nbar\n  BUILD   test\n\n  BUILD   test\n\n  BUILD   test\nfoo,bar\n  BUILD   test\nbaz\n  BUILD   test\nbar\n",
+    "status": 0
+  },
+  "word.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nbar\n\n\nfoo,bar\nbaz\nbar\n",
+    "status": 0
+  },
+  "wordlist.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nbar baz\n  BUILD   test\nbar baz\n  BUILD   test\n\n  BUILD   test\n\n  BUILD   test\n\n",
+    "status": 0
+  },
+  "wordlist.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nbar baz\nbar baz\n\n\n\n",
+    "status": 0
+  },
+  "words.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n3\n  BUILD   test\n0\n",
+    "status": 0
+  },
+  "words.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n3\n0\n",
+    "status": 0
+  },
+  "working_dir.sh:script": {
+    "files": [
+      "subdir"
+    ],
+    "output": "123\n",
+    "status": 0
+  },
+  "writable.sh:script": {
+    "files": [],
+    "output": "Makefile:6: warning: writing to readonly directory: \"foo.c\"\nMakefile:7: warning: writing to readonly directory: \"foo.h\"\nEND\nMakefile:6: *** writing to readonly directory: \"foo.c\"\n",
+    "status": 1
+  }
+}

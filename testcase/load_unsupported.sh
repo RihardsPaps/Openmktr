@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # A binary GNU Make extension cannot be translated without embedding a
 # foreign extension ABI. Kati must reject it clearly rather than generating a

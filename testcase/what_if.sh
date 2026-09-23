@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # GNU make what-if mode makes named normal prerequisites appear newer without
 # creating or modifying those files. Order-only prerequisites remain excluded

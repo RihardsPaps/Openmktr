@@ -23,6 +23,7 @@
 #endif
 #include <string.h>
 
+#include <deque>
 #include <unordered_map>
 
 #include "log.h"
@@ -148,8 +149,6 @@ class Symtab {
 
   ~Symtab() {
     LOG_STAT("%zu symbols", symbols_.size());
-    for (std::string* s : symbols_)
-      delete s;
   }
 
   Symbol InternImpl(std::string_view s) {
@@ -157,7 +156,10 @@ class Symtab {
     if (found != symtab_.end()) {
       return found->second;
     }
-    symbols_.push_back(new std::string(s.data(), s.size()));
+    // deque keeps string addresses stable while allocating in blocks rather
+    // than once for every symbol. The public symbol index still uses pointers.
+    storage_.emplace_back(s.data(), s.size());
+    symbols_.push_back(&storage_.back());
     Symbol sym = Symbol(symtab_.size());
     bool ok = symtab_.emplace(*symbols_.back(), sym).second;
     CHECK(ok);
@@ -195,6 +197,7 @@ class Symtab {
 
  private:
   std::unordered_map<std::string_view, Symbol> symtab_;
+  std::deque<std::string> storage_;
   std::vector<std::string*> symbols_;
 #ifdef ENABLE_TID_CHECK
   pthread_t tid_;

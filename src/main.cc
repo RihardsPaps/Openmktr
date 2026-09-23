@@ -61,7 +61,7 @@ static void ReadBootstrapMakefile(const std::vector<Symbol>& targets,
 #if defined(__APPLE__)
        "CXX?=c++\n"
 #else
-       "CXX?=g++\n"
+       "CXX?=c++\n"
 #endif
        "AR?=ar\n"
        "ARFLAGS?=rv\n"

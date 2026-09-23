@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # .PRECIOUS must prevent .DELETE_ON_ERROR from removing a failed output.
 set -u

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Exports assigned by the makefile must reach recursive children in a
 # generated Ninja graph.  The graph's env.sh is only a process-environment
@@ -24,7 +24,7 @@ EOF
 cat >"$tmp/child/Makefile" <<'EOF'
 .PHONY: all
 all:
-	@printf '%s' "$CHILD_VALUE" > child.out
+	@printf '%s' "$$CHILD_VALUE" > child.out
 EOF
 
 (cd "$tmp" && "$mk" --ninja --regen -f Makefile >/dev/null 2>&1)

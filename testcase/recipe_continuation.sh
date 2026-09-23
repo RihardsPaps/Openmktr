@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # A backslash-newline in a recipe is one shell command and must survive graph
 # generation as one valid recipe in Ninja.

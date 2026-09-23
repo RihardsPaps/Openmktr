@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # GNU make touch mode updates existing outputs without executing recipes, but
 # still builds a missing output.
@@ -22,10 +22,10 @@ EOF
 (cd "$tmp" && "$mk" -f Makefile all >/dev/null)
 [ "$(cat "$tmp/output")" = original ] || exit 1
 rm -f "$tmp/phony.ran"
-before=$(stat -c %Y "$tmp/output")
+before=$(python -c 'import os,sys; print(int(os.stat(sys.argv[1]).st_mtime))' "$tmp/output")
 sleep 1
 (cd "$tmp" && "$mk" -t -f Makefile all >/dev/null)
-after=$(stat -c %Y "$tmp/output")
+after=$(python -c 'import os,sys; print(int(os.stat(sys.argv[1]).st_mtime))' "$tmp/output")
 [ "$after" -gt "$before" ] || {
   echo "touch mode did not update an existing output" >&2
   exit 1
