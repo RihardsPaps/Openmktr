@@ -108,6 +108,111 @@ class BuildCorrectness(unittest.TestCase):
         self.run_command("sh", "./ninja.sh", "-j1")
         self.assertEqual((self.directory / "leaf").read_text().strip(), "hi")
 
+    def test_included_makefile_with_directory_prerequisite(self):
+        self.makefile(
+            "include build/version.mk\n"
+            "all: result\n"
+            "result:\n\t@printf '%s\\n' '$(version)' > $@\n"
+            "build/version.mk: | build\n"
+            "\t@printf 'version := ready\\n' > $@\n"
+            "build:\n\t@mkdir -p $@\n"
+        )
+        self.direct("--ninja", "--regen")
+        self.assertTrue((self.directory / "build.ninja").exists())
+        self.assertEqual(
+            (self.directory / "build/version.mk").read_text().strip(),
+            "version := ready",
+        )
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "result").read_text().strip(), "ready")
+        self.direct("--ninja", "--regen")
+
+    def test_suffix_reset_keeps_first_makefile_goal_as_default(self):
+        self.makefile(
+            ".SUFFIXES:\n"
+            "all: result\n"
+            "result:\n\t@printf 'ready\\n' > $@\n"
+        )
+        self.direct("--ninja")
+        self.assertIn("default all\n", (self.directory / "build.ninja").read_text())
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "result").read_text().strip(), "ready")
+
+    def test_ninja_directory_targets_create_outputs(self):
+        self.makefile(
+            "all: new/result existing/result\n"
+            "new/result existing/result: %/result: | %/\n"
+            "\t@printf 'ready\\n' > $@\n"
+            "new/ existing/: \n\t@mkdir -p $@\n"
+        )
+        (self.directory / "existing").mkdir()
+        self.direct("--ninja")
+        self.run_command("sh", "./ninja.sh", "-j2")
+        for name in ("new", "existing"):
+            self.assertEqual(
+                (self.directory / name / "result").read_text().strip(),
+                "ready",
+            )
+
+    def test_existing_source_from_implicit_rule_is_not_cleaned(self):
+        self.makefile(
+            ".SUFFIXES:\n"
+            "all: source.o\n"
+            "%.o: %.c %.h\n\t@cp $< $@\n"
+            "%.h:\n\t@:\n"
+        )
+        (self.directory / "source.c").write_text("source")
+        (self.directory / "source.h").write_text("keep this header")
+        self.direct("--ninja")
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "source.o").read_text(), "source")
+        self.assertEqual(
+            (self.directory / "source.h").read_text(), "keep this header"
+        )
+
+    def test_ninja_respects_current_output_before_first_build_log_entry(self):
+        self.makefile(
+            "all: generated\n"
+            "generated: source\n\t@printf 'rebuilt' > $@\n"
+        )
+        (self.directory / "source").write_text("input")
+        (self.directory / "generated").write_text("current")
+        os.utime(self.directory / "source", (100, 100))
+        os.utime(self.directory / "generated", (200, 200))
+        self.direct("--ninja")
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "generated").read_text(), "current")
+        os.utime(self.directory / "source", (300, 300))
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "generated").read_text(), "rebuilt")
+
+    def test_existing_file_with_rule_has_one_ninja_output_for_path_aliases(self):
+        self.makefile(
+            "all: result\n"
+            "result: one/../source.h two/../source.h\n"
+            "\t@cp source.h $@\n"
+            "source.h:\n\t@:\n"
+        )
+        (self.directory / "one").mkdir()
+        (self.directory / "two").mkdir()
+        (self.directory / "source.h").write_text("keep this header")
+        self.direct("--ninja")
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "result").read_text(), "keep this header")
+        self.assertEqual(
+            (self.directory / "source.h").read_text(), "keep this header"
+        )
+
+    def test_ninja_executes_large_recipe_from_response_file(self):
+        payload = "x" * 110_000
+        self.makefile(
+            "all: out\n"
+            "out:\n\t@printf '%s' '" + payload + "' > $@\n"
+        )
+        self.direct("--ninja")
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "out").read_text(), payload)
+
     def test_regen_detects_missing_support_and_read_inputs(self):
         self.makefile("V := $(file <input)\nall:\n\t@echo $(V)\n")
         (self.directory / "input").write_text("hello")

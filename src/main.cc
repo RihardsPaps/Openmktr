@@ -128,9 +128,8 @@ static void ReadBootstrapMakefile(const std::vector<Symbol>& targets,
     makecmdgoals.push_back(Intern(TrimLeadingCurdir(target.str())));
   }
 
-  bootstrap +=
-      StringPrintf("MAKECMDGOALS?=%s\n",
-                   JoinSymbols(makecmdgoals, " ").c_str());
+  bootstrap += StringPrintf("MAKECMDGOALS?=%s\n",
+                            JoinSymbols(makecmdgoals, " ").c_str());
 
   char cwd[PATH_MAX];
   if (!getcwd(cwd, PATH_MAX)) {
@@ -149,8 +148,8 @@ static void SetVar(std::string_view l,
   CHECK(found != std::string::npos);
   Symbol lhs = Intern(l.substr(0, found));
   std::string_view rhs = Intern(l.substr(found + 1)).str();
-  lhs.SetGlobalVar(new RecursiveVar(Value::NewLiteral(rhs), origin,
-                                    definition, loc, rhs));
+  lhs.SetGlobalVar(
+      new RecursiveVar(Value::NewLiteral(rhs), origin, definition, loc, rhs));
 }
 
 static std::string EscapeMakeOverrideValue(std::string_view value) {
@@ -281,13 +280,13 @@ static void UpdateMakeFlags(Evaluator* ev) {
   for (size_t candidate = makeflags_value.find("--");
        candidate != std::string::npos;
        candidate = makeflags_value.find("--", candidate + 2)) {
-    const bool at_start = candidate == 0 ||
-                          isspace(static_cast<unsigned char>(
-                              makeflags_value[candidate - 1]));
+    const bool at_start =
+        candidate == 0 ||
+        isspace(static_cast<unsigned char>(makeflags_value[candidate - 1]));
     const size_t end = candidate + 2;
-    const bool at_end = end == makeflags_value.size() ||
-                        isspace(static_cast<unsigned char>(
-                            makeflags_value[end]));
+    const bool at_end =
+        end == makeflags_value.size() ||
+        isspace(static_cast<unsigned char>(makeflags_value[end]));
     if (at_start && at_end) {
       separator = candidate;
       break;
@@ -476,7 +475,6 @@ SegfaultHandler::~SegfaultHandler() {
 static int Run(const std::vector<Symbol>& targets,
                const std::vector<std::string_view>& cl_vars,
                const std::string& orig_args) {
-
   double start_time = GetTime();
 
   if (g_flags.generate_ninja && (g_flags.regen || g_flags.dump_kati_stamp)) {
@@ -537,7 +535,6 @@ static int Run(const std::vector<Symbol>& targets,
         CHECK(asts.size() == 1);
         asts[0]->Eval(&ev);
       }
-
     }
 
     // At this point command-line assignments have been evaluated, so
@@ -573,8 +570,7 @@ static int Run(const std::vector<Symbol>& targets,
     UpdateMakeFlags(&ev);
 
     for (ParseErrorStmt* err : GetParseErrors()) {
-      WARN_LOC(err->loc(),
-               "warning for parse error in an unevaluated line: %s",
+      WARN_LOC(err->loc(), "warning for parse error in an unevaluated line: %s",
                err->msg.c_str());
     }
 
@@ -584,8 +580,7 @@ static int Run(const std::vector<Symbol>& targets,
      * If a required include file did not exist during parsing, GNU make
      * tries to build it and then restarts the entire makefile evaluation.
      */
-    if (!ev.missing_includes().empty() ||
-        !ev.included_makefiles().empty()) {
+    if (!ev.missing_includes().empty() || !ev.included_makefiles().empty()) {
       std::vector<Symbol> include_targets;
 
       for (const auto& include : ev.missing_includes()) {
@@ -603,16 +598,11 @@ static int Run(const std::vector<Symbol>& targets,
 
       {
         ScopedFrame frame(
-            ev.Enter(FrameType::PHASE,
-                     "*remake included makefiles*",
-                     Loc()));
+            ev.Enter(FrameType::PHASE, "*remake included makefiles*", Loc()));
 
         ScopedTimeReporter tr("remake included makefiles time");
 
-        MakeDep(&ev,
-                ev.rules(),
-                ev.rule_vars(),
-                include_targets,
+        MakeDep(&ev, ev.rules(), ev.rule_vars(), include_targets,
                 &include_nodes);
       }
 
@@ -628,12 +618,10 @@ static int Run(const std::vector<Symbol>& targets,
       }
 
       if (!include_remake_nodes.empty()) {
-        ExecResult include_result{false, false};
+        ExecResult include_result{false, false, false};
         {
-          ScopedFrame frame(
-              ev.Enter(FrameType::PHASE,
-                       "*execute included makefiles*",
-                       Loc()));
+          ScopedFrame frame(ev.Enter(FrameType::PHASE,
+                                     "*execute included makefiles*", Loc()));
 
           ScopedTimeReporter tr("execute included makefiles time");
 
@@ -648,9 +636,10 @@ static int Run(const std::vector<Symbol>& targets,
         }
 
         // GNU make restarts after an included makefile was actually rebuilt.
-        // Testing only for existence is insufficient for existing includes:
-        // it would restart forever when the include was already current.
-        if (!include_result.needs_build) {
+        // A prerequisite may run without rebuilding the included makefile.
+        // Directory prerequisites in particular may run on every pass, so
+        // restarting for any recipe in the include graph would loop forever.
+        if (!include_result.roots_built) {
           ev.Finish();
           goto includes_done;
         }
@@ -670,8 +659,9 @@ static int Run(const std::vector<Symbol>& targets,
          * an included makefile.
          */
         execvp(g_argv[0], g_argv);
-        ERROR("*** failed to restart Kati after remaking included makefiles: %s",
-              strerror(errno));
+        ERROR(
+            "*** failed to restart Kati after remaking included makefiles: %s",
+            strerror(errno));
         return 1;
       }
     }
@@ -689,11 +679,7 @@ static int Run(const std::vector<Symbol>& targets,
 
       ScopedTimeReporter tr("make dep time");
 
-      MakeDep(&ev,
-              ev.rules(),
-              ev.rule_vars(),
-              targets,
-              &nodes);
+      MakeDep(&ev, ev.rules(), ev.rule_vars(), targets, &nodes);
     }
 
     if (g_flags.is_syntax_check_only) {
@@ -808,7 +794,6 @@ static void HandleRealpath(int argc, char** argv) {
   }
 }
 
-
 static int HandleFileRead(int argc, char** argv) {
   if (argc != 1)
     return 1;
@@ -841,8 +826,7 @@ static int HandleFileRead(int argc, char** argv) {
   if (!out.empty() && out.back() == '\n')
     out.pop_back();
 
-  if (!out.empty() &&
-      fwrite(out.data(), 1, out.size(), stdout) != out.size())
+  if (!out.empty() && fwrite(out.data(), 1, out.size(), stdout) != out.size())
     return 1;
 
   return 0;
