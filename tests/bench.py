@@ -52,6 +52,40 @@ def measure(binary: Path, repeats: int) -> dict:
             "median_seconds": statistics.median(value[0] for value in execution),
             "peak_rss_kib": max(value[1] for value in execution),
         }
+
+        nested = ["all: " + " ".join(f"group{i}" for i in range(4)) + "\n"]
+        for group in range(4):
+            nested.append(
+                f"group{group}: " +
+                " ".join(f"nested{group}-{job}" for job in range(4)) + "\n"
+            )
+        nested += [
+            f"nested{group}-{job}:\n\t@sleep 0.05; touch $@\n"
+            for group in range(4) for job in range(4)
+        ]
+        (cwd / "Makefile").write_text("".join(nested), encoding="utf-8")
+        nested_samples = []
+        for _ in range(repeats + 2):
+            for output in cwd.glob("nested[0-9]*"):
+                output.unlink()
+            nested_samples.append(run([str(binary), "-j4", "all"], cwd))
+        nested_samples = nested_samples[2:]
+        results["nested_parallel_exec"] = {
+            "median_seconds": statistics.median(value[0] for value in nested_samples),
+            "peak_rss_kib": max(value[1] for value in nested_samples),
+        }
+
+        chain = ["all: link99\n"]
+        chain += ["link0:\n\t@touch $@\n"]
+        chain += [f"link{i}: link{i - 1}\n\t@touch $@\n" for i in range(1, 100)]
+        (cwd / "Makefile").write_text("".join(chain), encoding="utf-8")
+        run([str(binary), "-j4", "all"], cwd)
+        no_op = [run([str(binary), "-j4", "all"], cwd)
+                 for _ in range(repeats + 2)][2:]
+        results["incremental_noop"] = {
+            "median_seconds": statistics.median(value[0] for value in no_op),
+            "peak_rss_kib": max(value[1] for value in no_op),
+        }
         results["binary_bytes"] = binary.stat().st_size
         return results
 

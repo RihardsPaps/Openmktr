@@ -32,6 +32,7 @@ void GenerateNinja(const std::vector<NamedDepNode>& nodes,
 
 std::string GetNinjaFilename();
 std::string GetNinjaShellScriptFilename();
+std::string GetEnvScriptFilename();
 std::string GetNinjaStampFilename();
 
 // Exposed only for test.

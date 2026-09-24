@@ -306,12 +306,12 @@
   },
   "blank_line_before_command.mk:test:ninja": {
     "files": [],
-    "output": "[1/1] build test\nFAILED: [code=127] test \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; include foo ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''test'\\'' ] && [ ! -d '\\''test'\\'' ] && [ '\\''test'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''test'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\n/bin/sh: include: not found\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build test\nFAILED: [code=127] test \n/bin/sh -c 'cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''test'\\'' ]; then :; else include foo; fi'\n/bin/sh: include: not found\nninja: build stopped: subcommand failed.\n",
     "status": 127
   },
   "build_once.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   proto.o\ncompile proto.o from proto.c\n  BUILD   protoc\nlink protoc from proto.o\n  BUILD   foo.c\nprotoc foo.c from foo.proto\n  BUILD   foo.o\ncompile foo.o from foo.c\n  BUILD   xbar.c\nprotoc xbar.c from xbar.proto\n  BUILD   xbar.o\ncompile xbar.o from xbar.c\n  BUILD   foo\nlink foo from foo.o\n",
+    "output": "  BUILD   foo\n  BUILD   foo.c\n  BUILD   foo.o\n  BUILD   proto.o\n  BUILD   protoc\n  BUILD   xbar.c\n  BUILD   xbar.o\ncompile foo.o from foo.c\ncompile proto.o from proto.c\ncompile xbar.o from xbar.c\nlink foo from foo.o\nlink protoc from proto.o\nprotoc foo.c from foo.proto\nprotoc xbar.c from xbar.proto\n",
     "status": 0
   },
   "build_once.mk:test:ninja": {
@@ -340,7 +340,7 @@
   },
   "builtin_rules.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'bar.o', needed by 'test2'.\n",
+    "output": "*** No rule to make target 'foo.o', needed by 'test2'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "builtin_rules.mk:test2:ninja": {
@@ -482,7 +482,7 @@
   },
   "command_hash.mk:default:ninja": {
     "files": [],
-    "output": "[1/1] build out\nFAILED: [code=2] out \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; { echo \\#include <generated>; } > out ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''out'\\'' ] && [ ! -d '\\''out'\\'' ] && [ '\\''out'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''out'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build out\nFAILED: [code=2] out \n/bin/sh -c 'cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''out'\\'' ]; then :; else { echo \\#include <generated>; } > out; fi'\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
     "status": 2
   },
   "command_line_last_assignment.sh:script": {
@@ -722,15 +722,13 @@
     "status": 0
   },
   "delete_on_error.mk:test:direct": {
-    "files": [
-      "file"
-    ],
+    "files": [],
     "output": "  BUILD   file\n  BUILD   file\n*** [file] Error 1\n    command: false\n",
     "status": 1
   },
   "delete_on_error.mk:test:ninja": {
     "files": [],
-    "output": "[1/1] build file\nFAILED: [code=1] file \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; (touch file ) && (false ) ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && false && [ '\\''file'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ -e '\\''file'\\'' ]; then rm -f '\\''file'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build file\nFAILED: [code=1] file \n/bin/sh -c '( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''file'\\'' ]; then :; else (touch file ) && (false ); fi ); kati_status=$?; if [ $kati_status -ne 0 ] && [ -e '\\''file'\\'' ] && [ ! -d '\\''file'\\'' ]; then rm -f '\\''file'\\''; fi; exit $kati_status'\nninja: build stopped: subcommand failed.\n",
     "status": 1
   },
   "deprecated_export.mk:test:direct": {
@@ -949,7 +947,7 @@
   },
   "equal_in_target.mk:test:direct": {
     "files": [],
-    "output": "*** No rule to make target 'test'.\n",
+    "output": "*** No rule to make target 'test'.\nkati: Nothing to be done for `test'.\n",
     "status": 1
   },
   "equal_in_target.mk:test:ninja": {
@@ -1024,7 +1022,7 @@
   },
   "err_error_in_recipe.mk:test:ninja": {
     "files": [],
-    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; echo -e \"Makefile:2: *** foo.\" 2>&1 && false ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''test'\\'' ] && [ ! -d '\\''test'\\'' ] && [ '\\''test'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''test'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\nMakefile:2: *** foo.\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -c 'cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''test'\\'' ]; then :; else echo -e \"Makefile:2: *** foo.\" 2>&1 && false; fi'\nMakefile:2: *** foo.\nninja: build stopped: subcommand failed.\n",
     "status": 1
   },
   "err_export_override.mk:default:direct": {
@@ -1199,7 +1197,7 @@
   },
   "err_no_rule.mk:test:direct": {
     "files": [],
-    "output": "*** No rule to make target 'missing', needed by 'test'.\n",
+    "output": "*** No rule to make target 'missing', needed by 'test'.\nkati: Nothing to be done for `test'.\n",
     "status": 1
   },
   "err_no_rule.mk:test:ninja": {
@@ -1406,7 +1404,7 @@
   },
   "err_suffixes.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'a.out', needed by 'test2'.\n",
+    "output": "*** No rule to make target 'a.out', needed by 'test2'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "err_suffixes.mk:test2:ninja": {
@@ -1431,7 +1429,7 @@
   },
   "err_suffixes2.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'a.o', needed by 'test2'.\n",
+    "output": "*** No rule to make target 'a.o', needed by 'test2'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "err_suffixes2.mk:test2:ninja": {
@@ -1613,7 +1611,7 @@
   },
   "eval.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'server.o', needed by 'server'.\n",
+    "output": "*** No rule to make target 'server.o', needed by 'server'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "eval.mk:test2:ninja": {
@@ -1684,7 +1682,7 @@
   },
   "explicit_pattern_rule.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'foo.c', needed by 'foo.o'.\n",
+    "output": "*** No rule to make target 'foo.c', needed by 'foo.o'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "explicit_pattern_rule.mk:test2:ninja": {
@@ -1757,7 +1755,7 @@
   },
   "fail_ignore_error.mk:test:ninja": {
     "files": [],
-    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; (false ) && (false ; true ) && (echo FAIL ) ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''test'\\'' ] && [ ! -d '\\''test'\\'' ] && [ '\\''test'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''test'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -c 'cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''test'\\'' ]; then :; else (false ) && (false ; true ) && (echo FAIL ); fi'\nninja: build stopped: subcommand failed.\n",
     "status": 1
   },
   "fail_subshell_in_recipe.mk:test:direct": {
@@ -1767,7 +1765,7 @@
   },
   "fail_subshell_in_recipe.mk:test:ninja": {
     "files": [],
-    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; (false ) && ((true) ; echo FAIL ) ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''test'\\'' ] && [ ! -d '\\''test'\\'' ] && [ '\\''test'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''test'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -c 'cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''test'\\'' ]; then :; else (false ) && ((true) ; echo FAIL ); fi'\nninja: build stopped: subcommand failed.\n",
     "status": 1
   },
   "file_func.sh:script": {
@@ -1830,18 +1828,8 @@
       "build",
       "testdir"
     ],
-    "output": "[1/1] build test1\nFAILED: [code=1] test1 \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; (mkdir testdir ) && (touch testdir/file1 ) && (touch testdir/file2 ) && (mkdir testdir/dir1 ) && (touch testdir/dir1/file1 ) && (touch testdir/dir1/file2 ) && (touch testdir/dir1/file3 ) && (mkdir testdir/dir2 ) && (touch testdir/dir2/file1 ) && (touch testdir/dir2/file2 ) && (touch testdir/dir2/file3 ) && (ln -s ../dir1/file1 testdir/dir2/link1 ) && (ln -s ../../testdir/dir1 testdir/dir2/link2 ) && (ln -s broken testdir/dir2/link3 ) && (mkdir -p build/tools ) && (cp ../../../testcase/tools/findleaves.py build/tools ) && (mkdir -p testdir3/b/c/d ) && (ln -s b testdir3/a ) && (touch testdir3/b/c/d/e ) && (mkdir -p testdir4/a/b ) && (ln -s self testdir4/self ) && (ln -s .. testdir4/a/b/c ) && (ln -s b testdir4/a/l ) && (mkdir -p testdir5 ) && (ln -s a testdir5/a ) && (ln -s b testdir5/c ) && (ln -s c testdir5/b ) ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''test1'\\'' ] && [ ! -d '\\''test1'\\'' ] && [ '\\''test1'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''test1'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\ncp: ../../../testcase/tools/findleaves.py: No such file or directory\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build test1\nFAILED: [code=1] test1 \n/bin/sh -c 'cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''test1'\\'' ]; then :; else (mkdir testdir ) && (touch testdir/file1 ) && (touch testdir/file2 ) && (mkdir testdir/dir1 ) && (touch testdir/dir1/file1 ) && (touch testdir/dir1/file2 ) && (touch testdir/dir1/file3 ) && (mkdir testdir/dir2 ) && (touch testdir/dir2/file1 ) && (touch testdir/dir2/file2 ) && (touch testdir/dir2/file3 ) && (ln -s ../dir1/file1 testdir/dir2/link1 ) && (ln -s ../../testdir/dir1 testdir/dir2/link2 ) && (ln -s broken testdir/dir2/link3 ) && (mkdir -p build/tools ) && (cp ../../../testcase/tools/findleaves.py build/tools ) && (mkdir -p testdir3/b/c/d ) && (ln -s b testdir3/a ) && (touch testdir3/b/c/d/e ) && (mkdir -p testdir4/a/b ) && (ln -s self testdir4/self ) && (ln -s .. testdir4/a/b/c ) && (ln -s b testdir4/a/l ) && (mkdir -p testdir5 ) && (ln -s a testdir5/a ) && (ln -s b testdir5/c ) && (ln -s c testdir5/b ); fi'\ncp: ../../../testcase/tools/findleaves.py: No such file or directory\nninja: build stopped: subcommand failed.\n",
     "status": 1
-  },
-  "find_command.mk:test2:direct": {
-    "files": [],
-    "output": "Makefile:51: FindEmulator: find: `testdir': No such file or directory\nMakefile:60: FindEmulator: find: `testdir': No such file or directory\nMakefile:62: FindEmulator: find: `testdir': No such file or directory\nMakefile:64: FindEmulator: find: `testdir': No such file or directory\nMakefile:65: FindEmulator: find: `testdir': No such file or directory\nMakefile:66: FindEmulator: find: `testdir': No such file or directory\nMakefile:67: FindEmulator: find: `testdir': No such file or directory\nMakefile:68: FindEmulator: find: `testdir': No such file or directory\nMakefile:69: FindEmulator: find: `testdir': No such file or directory\nMakefile:70: FindEmulator: find: `testdir': No such file or directory\nMakefile:71: FindEmulator: find: `testdir': No such file or directory\nMakefile:72: FindEmulator: find: `testdir': No such file or directory\nMakefile:73: FindEmulator: find: `testdir': No such file or directory\nMakefile:74: FindEmulator: find: `testdir': No such file or directory\nMakefile:75: FindEmulator: find: `testdir': No such file or directory\nMakefile:76: FindEmulator: find: `testdir': No such file or directory\nMakefile:77: FindEmulator: find: `testdir': No such file or directory\nMakefile:78: FindEmulator: find: `testdir': No such file or directory\nMakefile:79: FindEmulator: find: `testdir': No such file or directory\nMakefile:81: FindEmulator: cd: testdir: No such file or directory\nMakefile:82: FindEmulator: cd: testdir: No such file or directory\nMakefile:83: FindEmulator: cd: testdir/dir1: No such file or directory\nMakefile:84: FindEmulator: cd: testdir: No such file or directory\nMakefile:93: FindEmulator: find: `testdir': No such file or directory\nMakefile:95: FindEmulator: find: `testdir': No such file or directory\nMakefile:95: FindEmulator: find: `testdir': No such file or directory\nMakefile:97: FindEmulator: find: `testdir': No such file or directory\nMakefile:98: FindEmulator: find: `testdir': No such file or directory\nMakefile:99: FindEmulator: find: `testdir': No such file or directory\nMakefile:100: FindEmulator: cd: testdir: No such file or directory\nMakefile:101: FindEmulator: cd: testdir: No such file or directory\nMakefile:102: FindEmulator: cd: testdir: No such file or directory\nMakefile:104: FindEmulator: find: `testdir': No such file or directory\nMakefile:105: FindEmulator: find: `testdir': No such file or directory\nMakefile:106: FindEmulator: find: `testdir': No such file or directory\nfind: -maxdepth: hoge: illegal numeric value\n",
-    "status": -4
-  },
-  "find_command.mk:test2:ninja": {
-    "files": [],
-    "output": "Makefile:51: FindEmulator: find: `testdir': No such file or directory\nMakefile:60: FindEmulator: find: `testdir': No such file or directory\nMakefile:62: FindEmulator: find: `testdir': No such file or directory\nMakefile:64: FindEmulator: find: `testdir': No such file or directory\nMakefile:65: FindEmulator: find: `testdir': No such file or directory\nMakefile:66: FindEmulator: find: `testdir': No such file or directory\nMakefile:67: FindEmulator: find: `testdir': No such file or directory\nMakefile:68: FindEmulator: find: `testdir': No such file or directory\nMakefile:69: FindEmulator: find: `testdir': No such file or directory\nMakefile:70: FindEmulator: find: `testdir': No such file or directory\nMakefile:71: FindEmulator: find: `testdir': No such file or directory\nMakefile:72: FindEmulator: find: `testdir': No such file or directory\nMakefile:73: FindEmulator: find: `testdir': No such file or directory\nMakefile:74: FindEmulator: find: `testdir': No such file or directory\nMakefile:75: FindEmulator: find: `testdir': No such file or directory\nMakefile:76: FindEmulator: find: `testdir': No such file or directory\nMakefile:77: FindEmulator: find: `testdir': No such file or directory\nMakefile:78: FindEmulator: find: `testdir': No such file or directory\nMakefile:79: FindEmulator: find: `testdir': No such file or directory\nMakefile:81: FindEmulator: cd: testdir: No such file or directory\nMakefile:82: FindEmulator: cd: testdir: No such file or directory\nMakefile:83: FindEmulator: cd: testdir/dir1: No such file or directory\nMakefile:84: FindEmulator: cd: testdir: No such file or directory\nMakefile:93: FindEmulator: find: `testdir': No such file or directory\nMakefile:95: FindEmulator: find: `testdir': No such file or directory\nMakefile:95: FindEmulator: find: `testdir': No such file or directory\nMakefile:97: FindEmulator: find: `testdir': No such file or directory\nMakefile:98: FindEmulator: find: `testdir': No such file or directory\nMakefile:99: FindEmulator: find: `testdir': No such file or directory\nMakefile:100: FindEmulator: cd: testdir: No such file or directory\nMakefile:101: FindEmulator: cd: testdir: No such file or directory\nMakefile:102: FindEmulator: cd: testdir: No such file or directory\nMakefile:104: FindEmulator: find: `testdir': No such file or directory\nMakefile:105: FindEmulator: find: `testdir': No such file or directory\nMakefile:106: FindEmulator: find: `testdir': No such file or directory\nfind: -maxdepth: hoge: illegal numeric value\n",
-    "status": -4
   },
   "find_command.mk:test3:direct": {
     "files": [],
@@ -1992,7 +1980,7 @@
   },
   "function_command_hash.mk:default:ninja": {
     "files": [],
-    "output": "[1/1] build out\nFAILED: [code=2] out \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; echo \\#include <generated> > out ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''out'\\'' ] && [ ! -d '\\''out'\\'' ] && [ '\\''out'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''out'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\n/bin/sh: Syntax error: redirection unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build out\nFAILED: [code=2] out \n/bin/sh -c 'cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''out'\\'' ]; then :; else echo \\#include <generated> > out; fi'\n/bin/sh: Syntax error: redirection unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
     "status": 2
   },
   "generated_include_restart.sh:script": {
@@ -2004,20 +1992,6 @@
     "files": [],
     "output": "",
     "status": 0
-  },
-  "hash_in_var.mk:test1:direct": {
-    "files": [
-      "tmp"
-    ],
-    "output": "",
-    "status": -4
-  },
-  "hash_in_var.mk:test1:ninja": {
-    "files": [
-      "tmp"
-    ],
-    "output": "",
-    "status": -4
   },
   "if.mk:test:direct": {
     "files": [],
@@ -2038,7 +2012,7 @@
   },
   "if_function_command_hash.mk:default:ninja": {
     "files": [],
-    "output": "[1/1] build out\nFAILED: [code=2] out \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; echo \"/* header */\"; echo \\#define CFG; echo \\#include <configs/sandbox.h> ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''out'\\'' ] && [ ! -d '\\''out'\\'' ] && [ '\\''out'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''out'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\n/bin/sh: Syntax error: \")\" unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build out\nFAILED: [code=2] out \n/bin/sh -c 'cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''out'\\'' ]; then :; else echo \"/* header */\"; echo \\#define CFG; echo \\#include <configs/sandbox.h>; fi'\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
     "status": 2
   },
   "if_recipe.mk:test1:direct": {
@@ -2182,7 +2156,7 @@
   },
   "implicit_pattern_rule.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'foo.o', needed by 'test2'.\n",
+    "output": "*** No rule to make target 'foo.o', needed by 'test2'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "implicit_pattern_rule.mk:test2:ninja": {
@@ -2219,7 +2193,7 @@
   },
   "implicit_pattern_rule_chain2.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'foo.z', needed by 'test2'.\n",
+    "output": "*** No rule to make target 'foo.z', needed by 'test2'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "implicit_pattern_rule_chain2.mk:test2:ninja": {
@@ -2330,7 +2304,7 @@
   },
   "include.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'foo', needed by 'test2'.\n",
+    "output": "*** No rule to make target 'foo', needed by 'test2'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "include.mk:test2:ninja": {
@@ -2355,33 +2329,13 @@
   },
   "include_glob.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'foo', needed by 'test2'.\n",
+    "output": "*** No rule to make target 'foo', needed by 'test2'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "include_glob.mk:test2:ninja": {
     "files": [],
     "output": "ninja: error: 'foo', needed by 'test2', missing and no known rule to make it\n",
     "status": 1
-  },
-  "include_glob_order.mk:test1:direct": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
-  "include_glob_order.mk:test1:ninja": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
-  "include_glob_order.mk:test2:direct": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
-  "include_glob_order.mk:test2:ninja": {
-    "files": [],
-    "output": "",
-    "status": -4
   },
   "include_var.mk:test1:direct": {
     "files": [
@@ -2400,7 +2354,7 @@
   },
   "include_var.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'foo', needed by 'test2'.\n",
+    "output": "*** No rule to make target 'foo', needed by 'test2'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "include_var.mk:test2:ninja": {
@@ -2602,7 +2556,7 @@
   },
   "merge_inputs.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'bar', needed by 'foo'.\n",
+    "output": "*** No rule to make target 'bar', needed by 'foo'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "merge_inputs.mk:test2:ninja": {
@@ -2643,7 +2597,7 @@
   },
   "multi_explicit_output_patterns.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   azz\nazz\n  BUILD   zza\nzza\n  BUILD   zzz\nzzz\n",
+    "output": "  BUILD   azz\n  BUILD   zza\nazz\nzza\n  BUILD   zzz\nzzz\n",
     "status": 0
   },
   "multi_explicit_output_patterns.mk:test:ninja": {
@@ -2655,7 +2609,7 @@
   },
   "multi_explicit_output_patterns_double_colon.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   xya\n3 xya\n  BUILD   ayz\n3 ayz\n  BUILD   xyz\n1 yz\n  BUILD   xyz\n2 yz\n",
+    "output": "  BUILD   xya\n  BUILD   ayz\n3 xya\n3 ayz\n  BUILD   xyz\n1 yz\n  BUILD   xyz\n2 yz\n",
     "status": 0
   },
   "multi_explicit_output_patterns_double_colon.mk:test:ninja": {
@@ -2664,16 +2618,6 @@
     ],
     "output": "[1/3] build xya\n3 xya\n[2/3] build ayz\n3 ayz\n[3/3] build xyz\n1 yz\n2 yz\n",
     "status": 0
-  },
-  "multi_implicit_output_patterns.mk:default:direct": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
-  "multi_implicit_output_patterns.mk:default:ninja": {
-    "files": [],
-    "output": "",
-    "status": -4
   },
   "multi_outputs.mk:test:direct": {
     "files": [],
@@ -2706,7 +2650,7 @@
   },
   "multi_pattern_rule.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'foo.o', needed by 'test2'.\n",
+    "output": "*** No rule to make target 'foo.o', needed by 'test2'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "multi_pattern_rule.mk:test2:ninja": {
@@ -2730,7 +2674,7 @@
     "files": [
       "foo.c"
     ],
-    "output": "  BUILD   bar.a\narchive bar.a\n  BUILD   foo.c\n  BUILD   foo.o\ncompile foo.o from foo.c\n  BUILD   foo.a\narchive foo.a\n",
+    "output": "  BUILD   bar.a\n  BUILD   foo.c\narchive bar.a\n  BUILD   foo.o\ncompile foo.o from foo.c\n  BUILD   foo.a\narchive foo.a\n",
     "status": 0
   },
   "multi_rule_order_only.mk:test2:ninja": {
@@ -2773,7 +2717,7 @@
   },
   "multi_suffix_rule.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'foo.o', needed by 'test2'.\n",
+    "output": "*** No rule to make target 'foo.o', needed by 'test2'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "multi_suffix_rule.mk:test2:ninja": {
@@ -2965,7 +2909,7 @@
   },
   "nested_function_command_hash.mk:default:ninja": {
     "files": [],
-    "output": "[1/1] build out\nFAILED: [code=2] out \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; { \techo \"/* header */\"; echo \\#include <generated>; } > out ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''out'\\'' ] && [ ! -d '\\''out'\\'' ] && [ '\\''out'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''out'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build out\nFAILED: [code=2] out \n/bin/sh -c 'cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''out'\\'' ]; then :; else { \techo \"/* header */\"; echo \\#include <generated>; } > out; fi'\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
     "status": 2
   },
   "ninja_delete_on_error.sh:script": {
@@ -3036,7 +2980,7 @@
   },
   "ninja_normalized_path.mk:test2:direct": {
     "files": [],
-    "output": "  BUILD   a/b\ntouch: a/../a/b: No such file or directory\n*** [a/b] Error 1\n    command: touch a/../a/b\n",
+    "output": "  BUILD   a/b\ntouch: a/b: No such file or directory\n*** [a/b] Error 1\n    command: touch a/b\n",
     "status": 1
   },
   "ninja_normalized_path.mk:test2:ninja": {
@@ -3222,8 +3166,8 @@
   },
   "nothing_to_do.mk:default:ninja": {
     "files": [],
-    "output": "src/ninja.cc:<LINE>: default_target_\n",
-    "status": 1
+    "output": "ninja: no work to do.\n",
+    "status": 0
   },
   "notparallel_target.mk:default:direct": {
     "files": [
@@ -3290,7 +3234,7 @@
   },
   "order_only.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'bar', needed by '<PARENT>'.\n",
+    "output": "*** No rule to make target 'bar', needed by '<PARENT>'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "order_only.mk:test2:ninja": {
@@ -3343,8 +3287,8 @@
   },
   "output_sync.sh:script": {
     "files": [],
-    "output": "",
-    "status": 0
+    "output": "output-sync=none lost recipe output\n",
+    "status": 1
   },
   "override.mk:test:direct": {
     "files": [],
@@ -3377,7 +3321,7 @@
   },
   "override_export.mk:test:ninja": {
     "files": [],
-    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -c 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; (echo $A ) && (echo $B ) && (echo ) && (echo ) && (env | grep '\\''override B'\\'' ) ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''test'\\'' ] && [ ! -d '\\''test'\\'' ] && [ '\\''test'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''test'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\nmake_A\nmake_B\n\n\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -c 'cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''test'\\'' ]; then :; else (echo $A ) && (echo $B ) && (echo ) && (echo ) && (env | grep '\\''override B'\\'' ); fi'\nmake_A\nmake_B\n\n\nninja: build stopped: subcommand failed.\n",
     "status": 1
   },
   "override_override.mk:test:direct": {
@@ -3454,7 +3398,7 @@
   },
   "pattern_rules_priority.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'bar.o', needed by 'test2'.\n",
+    "output": "*** No rule to make target 'foo.c', needed by 'foo.o'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "pattern_rules_priority.mk:test2:ninja": {
@@ -3532,7 +3476,7 @@
     "files": [
       ".ninja_log"
     ],
-    "output": "foo\n-c echo bar\n-ec echo baz\n[1/1] build test\n-ec kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; foobar ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e 'test' ] && [ ! -d 'test' ] && [ 'test' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo 'kati: output updated by a failed regeneration recipe; continuing with the generated graph' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f 'test'; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status\n",
+    "output": "foo\n-c echo bar\n-ec echo baz\n[1/1] build test\n-ec cd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else foobar; fi\n",
     "status": 0
   },
   "preserve_single_dot.mk:test:direct": {
@@ -3557,7 +3501,7 @@
       "c",
       "d"
     ],
-    "output": "  BUILD   a\n  BUILD   b\n  BUILD   c\n  BUILD   d\na b c\n  BUILD   d\nb\n",
+    "output": "  BUILD   a\n  BUILD   b\n  BUILD   c\n  BUILD   d\n  BUILD   d\na b c\nb\n",
     "status": 0
   },
   "question_mode.sh:script": {
@@ -3613,16 +3557,6 @@
     "files": [],
     "output": "Makefile:3: warning: real file \"foo\" depends on PHONY target \"bar\"\nEND\nMakefile:3: *** real file \"foo\" depends on PHONY target \"bar\"\n",
     "status": 1
-  },
-  "realpath.mk:test:direct": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
-  "realpath.mk:test:ninja": {
-    "files": [],
-    "output": "",
-    "status": -4
   },
   "recipe_continuation.sh:script": {
     "files": [],
@@ -3739,7 +3673,7 @@
   },
   "rule_with_extra_ws.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   bar\n  BUILD   foo\nPASS_foo\nPASS_foo\n",
+    "output": "  BUILD   foo\n  BUILD   bar\nPASS_foo\nPASS_foo\n",
     "status": 0
   },
   "rule_with_extra_ws.mk:test:ninja": {
@@ -3788,16 +3722,6 @@
     "output": "[1/1] build test\nPASS\n",
     "status": 0
   },
-  "shell.mk:test:direct": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
-  "shell.mk:test:ninja": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
   "shell_arith_in_recipe.mk:test:direct": {
     "files": [],
     "output": "  BUILD   test\n0\n",
@@ -3810,16 +3734,6 @@
     "output": "[1/1] build test\n0\n",
     "status": 0
   },
-  "shell_stderr.mk:test:direct": {
-    "files": [],
-    "output": "SHOULD_NOT_BE_AFTER_ECHO\n",
-    "status": -4
-  },
-  "shell_stderr.mk:test:ninja": {
-    "files": [],
-    "output": "SHOULD_NOT_BE_AFTER_ECHO\n",
-    "status": -4
-  },
   "shell_var.mk:test:direct": {
     "files": [],
     "output": "/bin/sh\n-c foo\n-c bar\n  BUILD   test\n-c baz\n",
@@ -3829,7 +3743,7 @@
     "files": [
       ".ninja_log"
     ],
-    "output": "/bin/sh\n-c foo\n-c bar\n[1/1] build test\n-c kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; baz ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e 'test' ] && [ ! -d 'test' ] && [ 'test' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo 'kati: output updated by a failed regeneration recipe; continuing with the generated graph' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f 'test'; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status\n",
+    "output": "/bin/sh\n-c foo\n-c bar\n[1/1] build test\n-c cd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else baz; fi\n",
     "status": 0
   },
   "shell_var_with_args.mk:test:direct": {
@@ -3851,52 +3765,7 @@
   },
   "shellflags.mk:test:ninja": {
     "files": [],
-    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -ec 'kati_restart_stamp=${TMPDIR:-/tmp}/kati-restart-$$; touch \"$kati_restart_stamp\"; ( cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; (echo \"flags=-ec\" ) && (false ) ); kati_restart_status=$?; if [ $kati_restart_status -ne 0 ] && [ -e '\\''test'\\'' ] && [ ! -d '\\''test'\\'' ] && [ '\\''test'\\'' -nt \"$kati_restart_stamp\" ]; then rm -f \"$kati_restart_stamp\"; echo '\\''kati: output updated by a failed regeneration recipe; continuing with the generated graph'\\'' >&2; exit 0; fi; if [ $kati_restart_status -ne 0 ] && [ false ]; then rm -f '\\''test'\\''; fi; rm -f \"$kati_restart_stamp\"; exit $kati_restart_status'\nflags=-ec\nninja: build stopped: subcommand failed.\n",
-    "status": 1
-  },
-  "shellstatus.mk:test:direct": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
-  "shellstatus.mk:test:ninja": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
-  "shellstatus_direct.mk:default:direct": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
-  "shellstatus_direct.mk:default:ninja": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
-  "shellstatus_in_rule.mk:test:direct": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
-  "shellstatus_in_rule.mk:test:ninja": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
-  "shellstatus_in_rule_in_eval.mk:test:direct": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
-  "shellstatus_in_rule_in_eval.mk:test:ninja": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
-  "shellstatus_ninja.sh:script": {
-    "files": [],
-    "output": "Illegal instruction (core dumped)\ncat: <SCRIPT-TEMP>/<OUTPUT>: No such file or directory\n",
+    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -ec 'cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''test'\\'' ]; then :; else (echo \"flags=-ec\" ) && (false ); fi'\nflags=-ec\nninja: build stopped: subcommand failed.\n",
     "status": 1
   },
   "shellstatus_readonly.mk:test:direct": {
@@ -3983,7 +3852,7 @@
   },
   "static_pattern.mk:test:direct": {
     "files": [],
-    "output": "*** No rule to make target 'a.cc', needed by 'a.o'.\n",
+    "output": "*** No rule to make target 'a.cc', needed by 'a.o'.\nkati: Nothing to be done for `test'.\n",
     "status": 1
   },
   "static_pattern.mk:test:ninja": {
@@ -4133,7 +4002,7 @@
   },
   "suffix_rule.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'foo.o', needed by 'test2'.\n",
+    "output": "*** No rule to make target 'foo.o', needed by 'test2'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "suffix_rule.mk:test2:ninja": {
@@ -4181,16 +4050,6 @@
     ],
     "output": "[1/1] build test\nPASS\n",
     "status": 0
-  },
-  "tab_only_line.mk:test:direct": {
-    "files": [],
-    "output": "",
-    "status": -4
-  },
-  "tab_only_line.mk:test:ninja": {
-    "files": [],
-    "output": "",
-    "status": -4
   },
   "target_shell.sh:script": {
     "files": [],
@@ -4260,7 +4119,7 @@
   },
   "target_specific_var_ref.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   bar\n  BUILD   foo\nPASS\nPASS\n",
+    "output": "  BUILD   foo\n  BUILD   bar\nPASS\nPASS\n",
     "status": 0
   },
   "target_specific_var_ref.mk:test:ninja": {
@@ -4638,7 +4497,7 @@
   },
   "vpath.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'foo', needed by 'bar'.\n",
+    "output": "*** No rule to make target 'foo', needed by 'bar'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "vpath.mk:test2:ninja": {
@@ -4648,7 +4507,7 @@
   },
   "vpath.mk:test:direct": {
     "files": [],
-    "output": "*** No rule to make target 'foo', needed by 'bar'.\n",
+    "output": "*** No rule to make target 'foo', needed by 'bar'.\nkati: Nothing to be done for `test'.\n",
     "status": 1
   },
   "vpath.mk:test:ninja": {
@@ -4678,7 +4537,7 @@
   },
   "vpath_directive.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'foo.c', needed by 'bar'.\n",
+    "output": "*** No rule to make target 'foo.c', needed by 'bar'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "vpath_directive.mk:test2:ninja": {
@@ -4688,7 +4547,7 @@
   },
   "vpath_directive.mk:test:direct": {
     "files": [],
-    "output": "*** No rule to make target 'foo.c', needed by 'bar'.\n",
+    "output": "*** No rule to make target 'foo.c', needed by 'bar'.\nkati: Nothing to be done for `test'.\n",
     "status": 1
   },
   "vpath_directive.mk:test:ninja": {
@@ -4805,48 +4664,6 @@
     "output": "[1/1] build test\nfoo\nbar\n",
     "status": 0
   },
-  "wildcard.mk:test1:direct": {
-    "files": [
-      "tmp"
-    ],
-    "output": "",
-    "status": -4
-  },
-  "wildcard.mk:test1:ninja": {
-    "files": [
-      "tmp"
-    ],
-    "output": "",
-    "status": -4
-  },
-  "wildcard.mk:test2:direct": {
-    "files": [
-      "tmp"
-    ],
-    "output": "",
-    "status": -4
-  },
-  "wildcard.mk:test2:ninja": {
-    "files": [
-      "tmp"
-    ],
-    "output": "",
-    "status": -4
-  },
-  "wildcard_cache.mk:test:direct": {
-    "files": [
-      "dir"
-    ],
-    "output": "",
-    "status": -4
-  },
-  "wildcard_cache.mk:test:ninja": {
-    "files": [
-      "dir"
-    ],
-    "output": "",
-    "status": -4
-  },
   "wildcard_multi.mk:test1:direct": {
     "files": [
       "PASS"
@@ -4891,7 +4708,7 @@
   },
   "wildcard_target.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target '*.x', needed by 'test2'.\n",
+    "output": "*** No rule to make target '*.x', needed by 'test2'.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "wildcard_target.mk:test2:ninja": {

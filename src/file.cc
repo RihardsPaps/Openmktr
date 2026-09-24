@@ -49,6 +49,8 @@ Makefile::Makefile(const std::string& filename)
     if (r == -1) {
       PERROR("read failed for %s", filename.c_str());
     }
+    if (r == 0)
+      ERROR("short read for %s", filename.c_str());
     remaining -= r;
   }
 

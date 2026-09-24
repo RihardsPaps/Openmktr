@@ -13,6 +13,11 @@ rule cxx
   deps = gcc
   description = CXX $out
 
+rule version
+  command = python3 tools/gen_version.py $out
+  description = VERSION $out
+  restat = 1
+
 rule link
   command = $cxx $ldflags $in -o $out
   description = LINK $out
@@ -45,15 +50,16 @@ build out/strutil.o: cxx src/strutil.cc || out
 build out/symtab.o: cxx src/symtab.cc || out
 build out/timeutil.o: cxx src/timeutil.cc || out
 build out/var.o: cxx src/var.cc || out
-build out/version_unknown.o: cxx src/version_unknown.cc || out
+build out/version_generated.cc: version tools/gen_version.py || out
+build out/version_generated.o: cxx out/version_generated.cc || out
 build out/main.o: cxx src/main.cc || out
 build out/find_test.o: cxx src/find_test.cc || out
 build out/ninja_test.o: cxx src/ninja_test.cc || out
 build out/strutil_test.o: cxx src/strutil_test.cc || out
 
-build ckati: link out/main.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_unknown.o
-build out/find_test: link out/find_test.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_unknown.o
-build out/ninja_test: link out/ninja_test.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_unknown.o
-build out/strutil_test: link out/strutil_test.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_unknown.o
+build ckati: link out/main.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
+build out/find_test: link out/find_test.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
+build out/ninja_test: link out/ninja_test.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
+build out/strutil_test: link out/strutil_test.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
 build tests: phony out/find_test out/ninja_test out/strutil_test
 default ckati

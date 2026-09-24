@@ -34,6 +34,8 @@ std::vector<std::string> LoadVecString(FILE* fp) {
   if (count < 0) {
     ERROR("Incomplete stamp file");
   }
+  if (count > 1000000)
+    ERROR("Invalid stamp file");
   std::vector<std::string> ret(count);
   for (int i = 0; i < count; i++) {
     if (!LoadString(fp, &ret[i])) {
@@ -89,6 +91,10 @@ int stamp_dump_main(int argc, char* argv[]) {
   size_t r = fread(&gen_time, sizeof(gen_time), 1, fp);
   if (r != 1)
     ERROR("Incomplete stamp file");
+  char magic[4];
+  if (fread(magic, 1, sizeof(magic), fp) != sizeof(magic) ||
+      memcmp(magic, "KAT2", sizeof(magic)) != 0)
+    ERROR("Unsupported stamp file");
 
   //
   // See regen.cc CheckStep1 for how this is read normally

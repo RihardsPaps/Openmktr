@@ -16,9 +16,9 @@
 
 #include "command.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cmath>
-#include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -125,10 +125,8 @@ static bool IsRecursiveTransportVariable(std::string_view name) {
 // Recursive commands executed directly by Kati do not pass through the
 // Ninja emitter.  Export the effective values at this command boundary so a
 // child sees directory-local modifications just as it would under make.
-static void ExportRecursiveEnvironment(std::string* command,
-                                        Evaluator* ev) {
-  if (!IsRecursiveKatiCommand(*command))
-    return;
+static void ExportRecursiveEnvironment(std::string* command, Evaluator* ev) {
+  const bool recursive = IsRecursiveKatiCommand(*command);
 
   std::string exports;
   std::unordered_set<std::string> emitted;
@@ -142,9 +140,18 @@ static void ExportRecursiveEnvironment(std::string* command,
         !emitted.insert(name_string).second)
       return;
     const std::string value = ev->EvalVar(name);
-    exports += "export " + name_string + "=" +
-               ShellQuoteCommand(value) + "; ";
+    exports += "export " + name_string + "=" + ShellQuoteCommand(value) + "; ";
   };
+
+  if (!recursive) {
+    if (ev->current_scope() != nullptr) {
+      for (Symbol name : ev->current_scope()->exported())
+        if (ev->current_scope()->IsExported(name))
+          emit(name);
+    }
+    command->insert(0, exports);
+    return;
+  }
 
   for (const auto& [name, is_exported] : ev->exports()) {
     if (is_exported)
@@ -180,8 +187,7 @@ static void ExportRecursiveEnvironment(std::string* command,
   // CC=clang must remain command-line overrides in the child.
   Var* makeflags = ev->LookupVar(Intern("MAKEFLAGS"));
   if (makeflags != nullptr && makeflags->IsDefined()) {
-    exports = "export MAKEFLAGS=" +
-              ShellQuoteCommand(makeflags->Eval(ev)) +
+    exports = "export MAKEFLAGS=" + ShellQuoteCommand(makeflags->Eval(ev)) +
               "; unset MAKEOVERRIDES; " + exports;
   } else {
     exports = "unset MAKEFLAGS MAKEOVERRIDES; " + exports;
@@ -196,9 +202,8 @@ static void ExportRecursiveEnvironment(std::string* command,
 static void ExportAllVariables(std::string* command, Evaluator* ev) {
   std::string exports;
   std::unordered_set<std::string> emitted;
-  for (std::string_view name_view : GetSymbolNames([](Var* var) {
-         return var->IsDefined() && !var->Obsolete();
-       })) {
+  for (std::string_view name_view : GetSymbolNames(
+           [](Var* var) { return var->IsDefined() && !var->Obsolete(); })) {
     if (!IsShellIdentifierCommand(name_view) ||
         !emitted.insert(std::string(name_view)).second)
       continue;
@@ -383,8 +388,8 @@ void AutoQuestionVar::Eval(Evaluator* ev, std::string* s) const {
     for (Symbol ai : n->actual_inputs) {
       double input_age = GetTimestamp(ai.str());
       if (std::find(n->low_resolution_inputs.begin(),
-                    n->low_resolution_inputs.end(), ai) !=
-          n->low_resolution_inputs.end())
+                    n->low_resolution_inputs.end(),
+                    ai) != n->low_resolution_inputs.end())
         input_age = std::floor(input_age);
       if (seen.insert(ai.str()).second && input_age > target_age) {
         ww.Write(ai.str());
@@ -475,8 +480,8 @@ CommandEvaluator::~CommandEvaluator() {
   // but their implementations point back to this evaluator.  Clear those
   // bindings before a restarted makefile evaluation can observe a stale
   // command evaluator through $@, $^, $<, and friends.
-  static const char* kAutomaticSymbols[] = {
-      "@", "<", "^", "+", "*", "?", "%", "|"};
+  static const char* kAutomaticSymbols[] = {"@", "<", "^", "+",
+                                            "*", "?", "%", "|"};
   for (const char* sym : kAutomaticSymbols) {
     Intern(sym).SetGlobalVar(Var::Undefined());
     Intern(StringPrintf("%sD", sym)).SetGlobalVar(Var::Undefined());
@@ -497,7 +502,15 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n) {
       ev_->set_loc(v->Location());
       if (!script.empty())
         script += '\n';
-      script += ExpandDeferredAssignments(v->Eval(ev_), ev_);
+      std::string line = ExpandDeferredAssignments(v->Eval(ev_), ev_);
+      if (!script.empty()) {
+        std::string_view remaining = line;
+        bool ignored_echo = true;
+        bool ignored_error = false;
+        ParseCommandPrefixes(&remaining, &ignored_echo, &ignored_error);
+        line = std::string(remaining);
+      }
+      script += line;
     }
     std::string_view cmds = script;
     bool echo = !g_flags.is_silent_mode;
@@ -520,42 +533,42 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n) {
     }
   } else {
     for (Value* v : n.cmds) {
-    ev_->set_loc(v->Location());
-    const std::string cmds_buf = ExpandDeferredAssignments(v->Eval(ev_), ev_);
-    std::string_view cmds = cmds_buf;
-    bool global_echo = !g_flags.is_silent_mode;
-    bool global_ignore_error = false;
-    ParseCommandPrefixes(&cmds, &global_echo, &global_ignore_error);
-    if (cmds == "")
-      continue;
-    while (true) {
-      size_t lf_cnt;
-      size_t index = FindEndOfLine(cmds, 0, &lf_cnt);
-      if (index == cmds.size())
-        index = std::string::npos;
-      std::string_view cmd = TrimLeftSpace(cmds.substr(0, index));
-      cmds = cmds.substr(index + 1);
+      ev_->set_loc(v->Location());
+      const std::string cmds_buf = ExpandDeferredAssignments(v->Eval(ev_), ev_);
+      std::string_view cmds = cmds_buf;
+      bool global_echo = !g_flags.is_silent_mode;
+      bool global_ignore_error = false;
+      ParseCommandPrefixes(&cmds, &global_echo, &global_ignore_error);
+      if (cmds == "")
+        continue;
+      while (true) {
+        size_t lf_cnt;
+        size_t index = FindEndOfLine(cmds, 0, &lf_cnt);
+        if (index == cmds.size())
+          index = std::string::npos;
+        std::string_view cmd = TrimLeftSpace(cmds.substr(0, index));
+        cmds = cmds.substr(index + 1);
 
-      bool echo = global_echo;
-      bool ignore_error = global_ignore_error;
-      ParseCommandPrefixes(&cmd, &echo, &ignore_error);
+        bool echo = global_echo;
+        bool ignore_error = global_ignore_error;
+        ParseCommandPrefixes(&cmd, &echo, &ignore_error);
 
-      if (!cmd.empty()) {
-        Command& command = result.emplace_back(n.output);
-        command.cmd = std::string(cmd);
-        // See the oneshell case above: recursive commands need the current
-        // makefile export state even when Ninja defers their execution.
-        ExportRecursiveEnvironment(&command.cmd, ev_);
-        if (n.export_all_variables)
-          ExportAllVariables(&command.cmd, ev_);
-        command.echo = echo && !n.silent;
-        command.ignore_error = ignore_error || n.ignore_errors;
+        if (!cmd.empty()) {
+          Command& command = result.emplace_back(n.output);
+          command.cmd = std::string(cmd);
+          // See the oneshell case above: recursive commands need the current
+          // makefile export state even when Ninja defers their execution.
+          ExportRecursiveEnvironment(&command.cmd, ev_);
+          if (n.export_all_variables)
+            ExportAllVariables(&command.cmd, ev_);
+          command.echo = echo && !n.silent;
+          command.ignore_error = ignore_error || n.ignore_errors;
+        }
+        if (index == std::string::npos)
+          break;
       }
-      if (index == std::string::npos)
-        break;
+      continue;
     }
-    continue;
-  }
   }
 
   // SHELL and .SHELLFLAGS may be target-specific. Capture their effective

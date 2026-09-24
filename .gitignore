@@ -6,6 +6,7 @@ out/
 __pycache__/
 *.pyc
 build.*.ninja
+ckati-sanitized
 env.*.sh
 ninja.*.sh
 ckati.before-current-rebuild

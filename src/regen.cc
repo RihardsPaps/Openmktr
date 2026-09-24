@@ -114,6 +114,11 @@ class StampChecker {
               GetNinjaShellScriptFilename().c_str());
       return true;
     }
+    if (!Exists(GetEnvScriptFilename())) {
+      fprintf(stderr, "%s is missing, regenerating...\n",
+              GetEnvScriptFilename().c_str());
+      return true;
+    }
     return false;
   }
 
@@ -121,7 +126,7 @@ class StampChecker {
 #define LOAD_INT(fp)                                               \
   ({                                                               \
     int v = LoadInt(fp);                                           \
-    if (v < 0) {                                                   \
+    if (v < 0 || v > 1000000) {                                    \
       fprintf(stderr, "incomplete kati_stamp, regenerating...\n"); \
       RETURN_TRUE;                                                 \
     }                                                              \
@@ -150,6 +155,12 @@ class StampChecker {
     gen_time_ = gen_time;
     if (r != 1) {
       fprintf(stderr, "incomplete kati_stamp, regenerating...\n");
+      RETURN_TRUE;
+    }
+    char magic[4];
+    if (fread(magic, 1, sizeof(magic), fp) != sizeof(magic) ||
+        memcmp(magic, "KAT2", sizeof(magic)) != 0) {
+      fprintf(stderr, "obsolete kati_stamp, regenerating...\n");
       RETURN_TRUE;
     }
     if (g_flags.regen_debug)
@@ -334,7 +345,7 @@ class StampChecker {
         return true;
       }
       double ts = GetTimestampFromStat(st);
-      if (gen_time_ < ts) {
+      if (ts < 0 || gen_time_ < ts) {
         return true;
       }
       if (S_ISLNK(st.st_mode)) {
@@ -363,7 +374,7 @@ class StampChecker {
 
     if (sr->op == CommandOp::READ) {
       double ts = GetTimestamp(sr->cmd);
-      if (gen_time_ < ts) {
+      if (ts < 0 || gen_time_ < ts) {
         if (g_flags.dump_kati_stamp)
           printf("file %s: dirty\n", sr->cmd.c_str());
         else
@@ -383,7 +394,8 @@ class StampChecker {
         PERROR("fopen");
       }
 
-      if (fwrite(&sr->result[0], sr->result.size(), 1, f) != 1) {
+      if (!sr->result.empty() && fwrite(sr->result.data(), 1, sr->result.size(),
+                                        f) != sr->result.size()) {
         PERROR("fwrite");
       }
 
