@@ -2609,7 +2609,7 @@
   },
   "multi_explicit_output_patterns_double_colon.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   xya\n  BUILD   ayz\n3 xya\n3 ayz\n  BUILD   xyz\n1 yz\n  BUILD   xyz\n2 yz\n",
+    "output": "  BUILD   ayz\n  BUILD   xya\n3 ayz\n3 xya\n  BUILD   xyz\n1 yz\n  BUILD   xyz\n2 yz\n",
     "status": 0
   },
   "multi_explicit_output_patterns_double_colon.mk:test:ninja": {
