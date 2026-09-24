@@ -37,6 +37,7 @@ UNORDERED_OUTPUT_CASES = {
     "stem.mk",
     "stem_middle.mk",
     "target_specific_var_append.mk",
+    "target_specific_var_ref.mk",
     "target_specific_var_with_pattern.mk",
 }
 UNORDERED_SCRIPT_OUTPUT = {"ninja_pool.sh", "question.sh"}

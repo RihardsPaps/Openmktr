@@ -4119,7 +4119,7 @@
   },
   "target_specific_var_ref.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   foo\n  BUILD   bar\nPASS\nPASS\n",
+    "output": "  BUILD   bar\n  BUILD   foo\nPASS\nPASS\n",
     "status": 0
   },
   "target_specific_var_ref.mk:test:ninja": {
