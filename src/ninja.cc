@@ -661,8 +661,9 @@ class NinjaGenerator {
       const bool has_phony_input = std::any_of(
           node->deps.begin(), node->deps.end(),
           [](const NamedDepNode& dep) { return dep.second->is_phony; });
-      if (!node->is_phony && node->deps.empty() && node->order_onlys.empty() &&
-          node->validations.empty()) {
+      // Order-only prerequisites may run, but they do not make an existing
+      // output stale. Ninja has no prior build-log entry for such an output.
+      if (!node->is_phony && node->deps.empty() && node->validations.empty()) {
         cmd_buf = "if [ -e " + ShellQuote(node->output.str()) +
                   " ]; then :; else " + cmd_buf + "; fi";
       } else if (!node->is_phony && !node->deps.empty() && !has_phony_input &&
