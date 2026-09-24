@@ -108,6 +108,22 @@ class BuildCorrectness(unittest.TestCase):
         self.run_command("sh", "./ninja.sh", "-j1")
         self.assertEqual((self.directory / "leaf").read_text().strip(), "hi")
 
+    def test_existing_output_with_order_only_prerequisite_stays_current(self):
+        self.makefile(
+            "all: output\n"
+            "output: | prepare\n\t@printf 'rebuilt' > output\n"
+            ".PHONY: prepare\n"
+            "prepare:\n\t@printf 'ready' > marker\n"
+        )
+        (self.directory / "output").write_text("current")
+        self.direct("--ninja")
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "marker").read_text(), "ready")
+        self.assertEqual((self.directory / "output").read_text(), "current")
+        (self.directory / "output").unlink()
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "output").read_text(), "rebuilt")
+
     def test_included_makefile_with_directory_prerequisite(self):
         self.makefile(
             "include build/version.mk\n"
