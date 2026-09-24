@@ -45,6 +45,9 @@ UNORDERED_SCRIPT_OUTPUT = {"ninja_pool.sh", "question.sh"}
 # cancellation reaches the other worker.
 RACING_MISSING_PREREQUISITES = {
     ("merge_inputs.mk", "test2"): {("bar", "foo"), ("baz", "foo")},
+    ("pattern_rules_priority.mk", "test2"): {
+        ("foo.c", "foo.o"), ("bar.o", "test2"), ("baz.o", "test2"),
+    },
     ("static_pattern.mk", "test"): {("a.cc", "a.o"), ("b.cc", "b.o")},
 }
 # The historical .PRECIOUS script depends on timestamp granularity in Ninja's
@@ -110,6 +113,13 @@ def run_makefile(source: Path, target: str, ninja: bool) -> dict:
             output += ninja_output
         if not ninja and source.name in UNORDERED_OUTPUT_CASES:
             output = "".join(sorted(output.splitlines(keepends=True)))
+        if not ninja and source.name == "multi_rule_order_only.mk" and target == "test2":
+            # Independent prerequisites can print their BUILD notices while
+            # another worker prints its recipe. Keep recipe order intact.
+            lines = output.splitlines(keepends=True)
+            notices = sorted(line for line in lines if line.startswith("  BUILD   "))
+            output = "".join(notices + [line for line in lines
+                                        if not line.startswith("  BUILD   ")])
         if not ninja and source.name == "auto_var_suffixes.mk" and target == "test2":
             # Independent missing prerequisites can be diagnosed in either order.
             output = ""
