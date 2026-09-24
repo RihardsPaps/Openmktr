@@ -42,8 +42,8 @@ int RunCommand(const std::string& shell,
                bool acquire_job_token = true,
                const std::function<void(std::string_view)>& on_output = {});
 
-// Acquire and release one token from the optional inherited Kati jobserver.
-// A negative value means that no FIFO token was configured.
+// Acquire and release one slot from the optional inherited Kati jobserver.
+// -1 means no slot; -2 is the inherited slot reserved by a parent recipe.
 int AcquireKatiJobToken();
 void ReleaseKatiJobToken(int fd);
 
