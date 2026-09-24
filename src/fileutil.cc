@@ -23,9 +23,12 @@
 #include <signal.h>
 #include <spawn.h>
 #include <sys/stat.h>
+
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <atomic>
+#include <vector>
 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
@@ -68,10 +71,25 @@ namespace {
 
 thread_local int kati_jobserver_fd = -1;
 thread_local std::string kati_jobserver_path;
+constexpr int kReservedKatiJobToken = -2;
+std::atomic<bool> reserved_kati_job_in_use{false};
+
+int TryAcquireReservedKatiJobToken() {
+  const char* reserved = getenv("KATI_JOBSERVER_RESERVED");
+  bool expected = false;
+  if (reserved != nullptr && strcmp(reserved, "1") == 0 &&
+      reserved_kati_job_in_use.compare_exchange_strong(expected, true))
+    return kReservedKatiJobToken;
+  return -1;
+}
 
 }  // namespace
 
 int AcquireKatiJobToken() {
+  const int reserved = TryAcquireReservedKatiJobToken();
+  if (reserved == kReservedKatiJobToken)
+    return reserved;
+
   const char* fifo = getenv("KATI_JOBSERVER_FIFO");
   if (fifo == nullptr || *fifo == '\0')
     return -1;
@@ -109,6 +127,10 @@ int AcquireKatiJobToken() {
 }
 
 void ReleaseKatiJobToken(int fd) {
+  if (fd == kReservedKatiJobToken) {
+    reserved_kati_job_in_use.store(false);
+    return;
+  }
   if (fd < 0)
     return;
 
@@ -125,7 +147,28 @@ int RunCommand(const std::string& shell,
                std::string* s,
                bool acquire_job_token,
                const std::function<void(std::string_view)>& on_output) {
-  const int job_token = acquire_job_token ? AcquireKatiJobToken() : -1;
+  // A recipe owns one jobserver slot while its shell runs. Pass that slot to
+  // nested Kati processes started indirectly by scripts or configure tests.
+  // An explicitly recursive boundary can pass along an inherited reservation
+  // without taking an additional FIFO token.
+  const int job_token = acquire_job_token ? AcquireKatiJobToken()
+                                          : TryAcquireReservedKatiJobToken();
+  const char* fifo = getenv("KATI_JOBSERVER_FIFO");
+  const bool forward_slot = (fifo != nullptr && *fifo != '\0') ||
+                            getenv("KATI_JOBSERVER_RESERVED") != nullptr;
+  const std::string reserved_env =
+      forward_slot ? std::string("KATI_JOBSERVER_RESERVED=") +
+                         (job_token == -1 ? "0" : "1")
+                   : "";
+  std::vector<char*> child_env;
+  if (forward_slot) {
+    for (char** entry = environ; *entry != nullptr; ++entry) {
+      if (strncmp(*entry, "KATI_JOBSERVER_RESERVED=", 24) != 0)
+        child_env.push_back(*entry);
+    }
+    child_env.push_back(const_cast<char*>(reserved_env.c_str()));
+    child_env.push_back(nullptr);
+  }
   const char* argv[] = {NULL, NULL, NULL, NULL};
   std::string cmd_with_shell;
   if (shell[0] != '/' || shell.find_first_of(" $") != std::string::npos) {
@@ -199,7 +242,7 @@ int RunCommand(const std::string& shell,
 
   pid_t pid;
   err = posix_spawn(&pid, argv[0], &action, &attr, const_cast<char**>(argv),
-                    environ);
+                    forward_slot ? child_env.data() : environ);
   if (err != 0) {
     ERROR("posix_spawn: %s", strerror(err));
   }

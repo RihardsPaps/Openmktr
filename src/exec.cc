@@ -548,12 +548,10 @@ class Executor {
           // the same time.  Normal compile/link recipes remain parallel, and
           // the child make keeps its own parallel executor.
           recursive_lock = std::unique_lock<std::mutex>(recursive_command_mu_);
-          // Recursive children share the wrapper's FIFO.  The parent does
-          // not acquire a token for this opaque boundary (see RunCommand
-          // below), so the child can safely consume tokens for its own
-          // visible work without multiplying the requested job budget.
-          // Use an explicit export rather than placing assignments before
-          // the recipe: the recipe may start with a shell compound command.
+          // Recursive children share the wrapper's FIFO. RunCommand passes
+          // an inherited reserved slot to the child when one is available;
+          // otherwise this boundary takes no FIFO token and the child takes
+          // tokens for its own visible work.
           // Normal Kati execution has already installed the evaluator's
           // current exported variables in its process environment.  Do not
           // reload a sibling Ninja env.sh here: that file is the deferred
@@ -562,7 +560,6 @@ class Executor {
           // srcroot in recursive Kbuild).  Ninja recipes source env.sh at
           // their own process boundary; recursive Kati must inherit this
           // process environment unchanged.
-          command_text = "export KATI_JOBSERVER_RESERVED=0; " + command_text;
         }
         const std::string& command_shell =
             command.shell.empty() ? shell_ : command.shell;

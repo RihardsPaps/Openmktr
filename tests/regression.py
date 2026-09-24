@@ -120,6 +120,14 @@ def run_makefile(source: Path, target: str, ninja: bool) -> dict:
             notices = sorted(line for line in lines if line.startswith("  BUILD   "))
             output = "".join(notices + [line for line in lines
                                         if not line.startswith("  BUILD   ")])
+        if (not ninja and source.name == "multi_explicit_output_patterns_double_colon.mk"
+                and target == "test"):
+            # xya and ayz are independent. Keep both double-colon xyz recipes
+            # in their original order after their prerequisites complete.
+            first_xyz = "  BUILD   xyz\n"
+            before, marker, after = output.partition(first_xyz)
+            if marker:
+                output = "".join(sorted(before.splitlines(keepends=True))) + marker + after
         if not ninja and source.name == "auto_var_suffixes.mk" and target == "test2":
             # Independent missing prerequisites can be diagnosed in either order.
             output = ""

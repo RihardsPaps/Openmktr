@@ -299,6 +299,39 @@ class BuildCorrectness(unittest.TestCase):
         self.assertTrue((self.directory / "a").exists())
         self.assertTrue((self.directory / "b").exists())
 
+    def test_nested_kati_in_recipe_uses_reserved_jobserver_slot(self):
+        self.makefile("all:\n\t@python3 nested.py\n")
+        (self.directory / "child.mk").write_text(
+            '.PHONY: all\nall:\n\t@"$(MAKE)" -f grandchild.mk -j1 all\n',
+            encoding="utf-8",
+        )
+        (self.directory / "grandchild.mk").write_text(
+            ".PHONY: all\nall:\n\t@printf x >> done\n",
+            encoding="utf-8",
+        )
+        (self.directory / "nested.py").write_text(
+            "import subprocess\n"
+            f"for _ in range(2):\n    subprocess.run([{str(KATI)!r}, "
+            "'-f', 'child.mk', '-j1', 'all'], check=True)\n",
+            encoding="utf-8",
+        )
+        fifo = self.directory / "jobserver"
+        os.mkfifo(fifo)
+        fd = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+        self.addCleanup(os.close, fd)
+        os.write(fd, b"x")
+        env = os.environ.copy()
+        env["KATI_JOBSERVER_FIFO"] = str(fifo)
+        env["KATI_JOBS"] = "1"
+        env.pop("KATI_JOBSERVER_RESERVED", None)
+        result = subprocess.run(
+            [str(KATI), "-j1", "all"], cwd=self.directory, env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            timeout=5, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout.decode())
+        self.assertEqual((self.directory / "done").read_text(), "xx")
+
     def test_one_job_never_overlaps_recipes(self):
         self.makefile("all: a b\na b:\n\t@python3 worker.py $@\n")
         (self.directory / "worker.py").write_text(
