@@ -607,6 +607,24 @@ class NinjaGenerator {
     const DepNode* node = nn.node;
     const std::vector<Command>& commands = nn.commands;
 
+    // Make distinguishes "doc" from "doc/", but Ninja normalizes both to
+    // the same path.  If the directory already exists and "doc" is another
+    // target, the directory recipe is unnecessary and would emit a duplicate
+    // Ninja output.  Its prerequisite edges are omitted for the same reason.
+    if (IsExistingDirectoryAlias(node->output))
+      return;
+
+    // An existing source file may match a silent dummy rule such as FFmpeg's
+    // "%.h:; @:". It is an input, not a generated output: declaring it as an
+    // output would make "ninja -t clean" delete the source file.
+    struct stat existing_output;
+    if (!node->is_phony && node->deps.empty() && node->order_onlys.empty() &&
+        node->validations.empty() && commands.size() == 1 &&
+        !commands.front().echo && commands.front().cmd == ":" &&
+        stat(node->output.c_str(), &existing_output) == 0 &&
+        S_ISREG(existing_output.st_mode))
+      return;
+
     std::string rule_name = "phony";
     // Ninja owns the build-time job budget. Do not impose a second fixed
     // pool from Kati's graph-generation -j value; ninja.sh exports the

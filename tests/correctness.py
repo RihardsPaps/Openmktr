@@ -154,6 +154,18 @@ class BuildCorrectness(unittest.TestCase):
                 "ready",
             )
 
+    def test_existing_directory_alias_does_not_duplicate_ninja_output(self):
+        self.makefile(
+            "all: doc doc/result\n"
+            "doc:\n\t@:\n"
+            "doc/result: | doc/\n\t@printf 'ready\\n' > $@\n"
+            "doc/: \n\t@mkdir -p $@\n"
+        )
+        (self.directory / "doc").mkdir()
+        self.direct("--ninja")
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "doc/result").read_text().strip(), "ready")
+
     def test_existing_source_from_implicit_rule_is_not_cleaned(self):
         self.makefile(
             ".SUFFIXES:\n"
@@ -169,6 +181,12 @@ class BuildCorrectness(unittest.TestCase):
         self.assertEqual(
             (self.directory / "source.h").read_text(), "keep this header"
         )
+        self.run_command("sh", "./ninja.sh", "-t", "clean")
+        self.assertEqual(
+            (self.directory / "source.h").read_text(), "keep this header"
+        )
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "source.o").read_text(), "source")
 
     def test_ninja_respects_current_output_before_first_build_log_entry(self):
         self.makefile(

@@ -2674,7 +2674,7 @@
     "files": [
       "foo.c"
     ],
-    "output": "  BUILD   bar.a\n  BUILD   foo.c\narchive bar.a\n  BUILD   foo.o\ncompile foo.o from foo.c\n  BUILD   foo.a\narchive foo.a\n",
+    "output": "  BUILD   bar.a\n  BUILD   foo.a\n  BUILD   foo.c\n  BUILD   foo.o\narchive bar.a\ncompile foo.o from foo.c\narchive foo.a\n",
     "status": 0
   },
   "multi_rule_order_only.mk:test2:ninja": {
@@ -3398,7 +3398,7 @@
   },
   "pattern_rules_priority.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'foo.c', needed by 'foo.o'.\nkati: Nothing to be done for `test2'.\n",
+    "output": "*** Missing prerequisite.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "pattern_rules_priority.mk:test2:ninja": {
