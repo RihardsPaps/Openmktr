@@ -899,6 +899,22 @@ class NinjaGenerator {
 
   std::string EscapeBuildTarget(Symbol s) const { return EscapeNinja(s.str()); }
 
+  bool IsExistingDirectoryAlias(Symbol dependency) const {
+    std::string_view path = dependency.str();
+    if (path.empty() || path.back() != '/')
+      return false;
+
+    // Ninja canonicalizes a trailing slash, so an existing directory such
+    // as "doc/" would resolve to the unrelated make target "doc".  Make
+    // keeps those names distinct.  The directory already exists, so this
+    // edge cannot create it and must not point at the other make target.
+    while (!path.empty() && path.back() == '/')
+      path.remove_suffix(1);
+    struct stat st;
+    return !path.empty() && done_.exists(Intern(path)) &&
+           stat(dependency.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+  }
+
   void EmitBuild(const NinjaNode& nn,
                  const std::string& rule_name,
                  bool use_local_pool,
@@ -930,25 +946,30 @@ class NinjaGenerator {
       out << " _kati_always_build_";
     }
     for (auto const& d : node->deps) {
-      if (IsCycleEdge(node->output, d.first))
+      if (IsCycleEdge(node->output, d.first) ||
+          IsExistingDirectoryAlias(d.first))
         continue;
       out << " " << EscapeBuildTarget(d.first).c_str();
     }
-    if (!node->order_onlys.empty()) {
-      out << " ||";
-      for (auto const& d : node->order_onlys) {
-        if (IsCycleEdge(node->output, d.first))
-          continue;
-        out << " " << EscapeBuildTarget(d.first).c_str();
-      }
+    bool has_order_only = false;
+    for (auto const& d : node->order_onlys) {
+      if (IsCycleEdge(node->output, d.first) ||
+          IsExistingDirectoryAlias(d.first))
+        continue;
+      if (!has_order_only)
+        out << " ||";
+      has_order_only = true;
+      out << " " << EscapeBuildTarget(d.first).c_str();
     }
-    if (!node->validations.empty()) {
-      out << " |@";
-      for (auto const& d : node->validations) {
-        if (IsCycleEdge(node->output, d.first))
-          continue;
-        out << " " << EscapeBuildTarget(d.first).c_str();
-      }
+    bool has_validation = false;
+    for (auto const& d : node->validations) {
+      if (IsCycleEdge(node->output, d.first) ||
+          IsExistingDirectoryAlias(d.first))
+        continue;
+      if (!has_validation)
+        out << " |@";
+      has_validation = true;
+      out << " " << EscapeBuildTarget(d.first).c_str();
     }
 
     out << "\n";

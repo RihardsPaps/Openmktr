@@ -2973,6 +2973,14 @@
     "output": "",
     "status": 0
   },
+  "ninja_directory_alias.sh:script": {
+    "files": [
+      ".ninja_log",
+      "doc"
+    ],
+    "output": "./build.ninja is missing, regenerating...\nok\n",
+    "status": 0
+  },
   "ninja_file_no_rerun_func.sh:script": {
     "files": [
       ".ninja_log",
