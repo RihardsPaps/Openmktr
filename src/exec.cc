@@ -836,5 +836,12 @@ ExecResult Exec(const std::vector<NamedDepNode>& roots,
       printf("kati: Nothing to be done for `%s'.\n", root.first.c_str());
     }
   }
-  return ExecResult{executor.NeedsBuild(), executor.Failed()};
+  bool roots_built = false;
+  for (const auto& root : roots) {
+    if (executor.WasBuilt(root.second->output)) {
+      roots_built = true;
+      break;
+    }
+  }
+  return ExecResult{executor.NeedsBuild(), executor.Failed(), roots_built};
 }

@@ -16,12 +16,12 @@
 
 #include "dep.h"
 
+#include <sys/stat.h>
 #include <algorithm>
 #include <cstring>
 #include <iterator>
 #include <map>
 #include <memory>
-#include <sys/stat.h>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -218,7 +218,6 @@ struct RuleMerger {
     if (r->output_patterns.size() >= 1) {
       CHECK(r->output_patterns.size() == 1);
       n->output_pattern = r->output_patterns[0];
-
     }
     if (r->has_wait) {
       n->wait_groups.clear();
@@ -468,18 +467,17 @@ class DepBuilder {
     // must not be discarded as a suffix rule merely because it contains two
     // dots.
     static constexpr const char* kDefaultSuffixes[] = {
-        "out", "a", "ln", "o", "c", "cc", "C", "cpp", "p", "f",
-        "F",   "m", "r",  "y", "l", "ym", "lm", "s", "S", "mod",
-        "sym", "def", "h", "info", "dvi", "tex", "texinfo", "texi",
-        "txinfo", "w", "ch", "web", "sh", "elc", "el"};
+        "out",  "a",      "ln",  "o",   "c",   "cc",   "C",   "cpp", "p",
+        "f",    "F",      "m",   "r",   "y",   "l",    "ym",  "lm",  "s",
+        "S",    "mod",    "sym", "def", "h",   "info", "dvi", "tex", "texinfo",
+        "texi", "txinfo", "w",   "ch",  "web", "sh",   "elc", "el"};
     auto is_default_suffix = [&](const std::string& suffix) {
       for (const char* candidate : kDefaultSuffixes)
         if (suffix == candidate)
           return true;
       return false;
     };
-    return is_default_suffix(input_suffix) &&
-           is_default_suffix(output_suffix);
+    return is_default_suffix(input_suffix) && is_default_suffix(output_suffix);
   }
 
   void HandleSpecialTargets() {
@@ -576,8 +574,7 @@ class DepBuilder {
     // Treat the cleanup-control targets as recognized no-ops instead of
     // emitting a warning for every recursive makefile that uses them.
     // .DELETE_ON_ERROR is likewise intentionally ignored in --ninja mode.
-    static const char* kUnsupportedBuiltinTargets[] = {".NOTPARALLEL",
-                                                       NULL};
+    static const char* kUnsupportedBuiltinTargets[] = {".NOTPARALLEL", NULL};
     for (const char** p = kUnsupportedBuiltinTargets; *p; p++) {
       if (std::string_view(*p) == ".NOTPARALLEL" &&
           (notparallel_ || notparallel_targets_.size() != 0))
@@ -752,7 +749,13 @@ class DepBuilder {
 
   void PopulateExplicitRule(const Rule* rule) {
     for (Symbol output : rule->outputs) {
-      if (!first_rule_.IsValid() && !IsSpecialTarget(output) &&
+      // Built-in suffix rules precede the user's makefile, but must never
+      // become its default goal.  An empty .SUFFIXES declaration can make
+      // IsActiveSuffixRule false for .c.o, so exclude bootstrap rules here.
+      const bool builtin_rule =
+          rule->loc.filename != nullptr &&
+          std::string_view(rule->loc.filename) == "*bootstrap*";
+      if (!first_rule_.IsValid() && !builtin_rule && !IsSpecialTarget(output) &&
           !IsActiveSuffixRule(output)) {
         first_rule_ = output;
       }
@@ -848,38 +851,38 @@ class DepBuilder {
         continue;
 
       Symbol matched;
-    for (Symbol output_pattern : rule->output_patterns) {
-      Pattern pat(output_pattern.str());
-      if (pat.Match(output.str())) {
-        matched = output_pattern;
-        break;
+      for (Symbol output_pattern : rule->output_patterns) {
+        Pattern pat(output_pattern.str());
+        if (pat.Match(output.str())) {
+          matched = output_pattern;
+          break;
+        }
       }
-    }
 
-    if (!matched.IsValid())
-      continue;
-
-    used_rules->insert(rule);
-
-    bool ok = true;
-    Pattern pat(matched.str());
-    for (Symbol input : rule->inputs) {
-      if (rule->secondary_expansion && input.str().find('$') !=
-                                              std::string_view::npos)
+      if (!matched.IsValid())
         continue;
-      std::string buf;
-      pat.AppendSubst(output.str(), input.str(), &buf);
 
-      if (!CanBuildImplicit(Intern(buf), rule, used_rules)) {
-        ok = false;
-        break;
+      used_rules->insert(rule);
+
+      bool ok = true;
+      Pattern pat(matched.str());
+      for (Symbol input : rule->inputs) {
+        if (rule->secondary_expansion &&
+            input.str().find('$') != std::string_view::npos)
+          continue;
+        std::string buf;
+        pat.AppendSubst(output.str(), input.str(), &buf);
+
+        if (!CanBuildImplicit(Intern(buf), rule, used_rules)) {
+          ok = false;
+          break;
+        }
       }
-    }
 
-    used_rules->erase(rule);
+      used_rules->erase(rule);
 
-    if (ok)
-      return true;
+      if (ok)
+        return true;
     }
 
     // Suffix rules participate in GNU make's implicit-rule chains too.  For
@@ -921,8 +924,8 @@ class DepBuilder {
       if (pat.Match(output.str())) {
         bool ok = true;
         for (Symbol input : rule->inputs) {
-          if (rule->secondary_expansion && input.str().find('$') !=
-                                                  std::string_view::npos)
+          if (rule->secondary_expansion &&
+              input.str().find('$') != std::string_view::npos)
             continue;
           std::string buf;
           pat.AppendSubst(output.str(), input.str(), &buf);
@@ -1101,8 +1104,8 @@ class DepBuilder {
     n->delete_on_error = delete_on_error_;
     n->precious = precious_.exists(n->lexical_output);
     n->intermediate = intermediate_.exists(n->lexical_output) &&
-                      !secondary_all_ && !secondary_.exists(n->lexical_output) &&
-                      !n->precious;
+                      !secondary_all_ &&
+                      !secondary_.exists(n->lexical_output) && !n->precious;
     n->oneshell = oneshell_;
     n->ignore_errors = ignore_all_ || ignored_.exists(n->lexical_output);
     n->silent = silent_all_ || silent_.exists(n->lexical_output);
@@ -1127,40 +1130,44 @@ class DepBuilder {
         // Keep the selected rule and its lexical prerequisites.  The output
         // name is canonicalized after rule expansion below.
       } else {
-      n->is_phony = true;
-      DepNode* canonical_node = BuildPlan(canonical, output);
-      // A parent-relative spelling of an ordinary source file does not need
-      // a graph alias.  Keeping the alias would emit, for example,
-      // `out/../inputs/x: phony inputs/x`; Ninja canonicalizes both names and
-      // turns that harmless make spelling into a phony self-cycle.  There is
-      // no recipe or phony semantics to preserve for a rule-less real file,
-      // so use its canonical provider directly.
-      if (!canonical_node->has_rule && !canonical_node->is_phony &&
-          canonical_node->deps.empty() &&
-          canonical_node->order_onlys.empty() &&
-          canonical_node->validations.empty()) {
-        return canonical_node;
-      }
-      // The canonical node may have been discovered earlier through a
-      // different prerequisite path.  Its recipe still needs the active
-      // target-specific scope from this lexical alias (for example flags
-      // attached by the directory that references an external source).
-      Vars* inherited_vars = cur_rule_vars_.get();
-      auto parent = done_.find(needed_by);
-      if (parent != done_.end() && parent->second->rule_vars != nullptr)
-        inherited_vars = parent->second->rule_vars;
-      if (inherited_vars != nullptr && !inherited_vars->empty()) {
-        Vars* merged = new Vars;
-        if (canonical_node->rule_vars != nullptr) {
-          for (const auto& var : *canonical_node->rule_vars)
-            merged->insert(var);
+        n->is_phony = true;
+        DepNode* canonical_node = BuildPlan(canonical, output);
+        // The canonical node may have been discovered earlier through a
+        // different prerequisite path.  Preserve the active target-specific
+        // scope before choosing whether to retain a lexical alias.
+        Vars* inherited_vars = cur_rule_vars_.get();
+        auto parent = done_.find(needed_by);
+        if (parent != done_.end() && parent->second->rule_vars != nullptr)
+          inherited_vars = parent->second->rule_vars;
+        if (inherited_vars != nullptr && !inherited_vars->empty()) {
+          Vars* merged = new Vars;
+          if (canonical_node->rule_vars != nullptr) {
+            for (const auto& var : *canonical_node->rule_vars)
+              merged->insert(var);
+          }
+          for (const auto& var : *inherited_vars)
+            (*merged)[var.first] = var.second;
+          canonical_node->rule_vars = merged;
         }
-        for (const auto& var : *inherited_vars)
-          (*merged)[var.first] = var.second;
-        canonical_node->rule_vars = merged;
-      }
-      n->deps.push_back({canonical, canonical_node});
-      return n;
+
+        // Ninja canonicalizes parent-relative paths.  Multiple lexical
+        // spellings of an existing source file must share one graph node,
+        // even if a depfile gives that source an empty rule of its own.
+        struct stat canonical_stat;
+        const bool existing_file =
+            stat(canonical.c_str(), &canonical_stat) == 0 &&
+            S_ISREG(canonical_stat.st_mode);
+        const bool plain_source = !canonical_node->has_rule &&
+                                  !canonical_node->is_phony &&
+                                  canonical_node->deps.empty() &&
+                                  canonical_node->order_onlys.empty() &&
+                                  canonical_node->validations.empty();
+        if (existing_file || plain_source) {
+          done_[output] = canonical_node;
+          return canonical_node;
+        }
+        n->deps.push_back({canonical, canonical_node});
+        return n;
       }
     }
 
@@ -1214,9 +1221,12 @@ class DepBuilder {
     // An implicit target directly required by an explicit rule is a requested
     // result, not an intermediate.  Only implicit links below another
     // implicit link are automatic intermediates in GNU make's chain model.
-    if (!needed_by.empty() && pattern_rule &&
-        implicit_nodes_.exists(needed_by) && !n->precious &&
-        !secondary_all_ && !secondary_.exists(n->lexical_output))
+    // An existing file found through a fallback pattern rule (such as
+    // FFmpeg's %.h: @:) is a source, not a generated intermediate.  Ninja's
+    // cleanup pass cannot infer that from whether its no-op recipe ran.
+    if (!needed_by.empty() && pattern_rule && !::Exists(n->output.str()) &&
+        implicit_nodes_.exists(needed_by) && !n->precious && !secondary_all_ &&
+        !secondary_.exists(n->lexical_output))
       n->intermediate = true;
 
     // A target-specific rule can provide the commands while a suffix rule
@@ -1225,8 +1235,7 @@ class DepBuilder {
     // rule was not copied into pattern_rule because the explicit rule won.
     if (!n->output_pattern.IsValid() && !suffix_rules_.empty()) {
       std::string_view suffix = GetExt(output.str());
-      if (!suffix.empty() && suffix.front() == '.' &&
-          [&] {
+      if (!suffix.empty() && suffix.front() == '.' && [&] {
             const std::string name(suffix.substr(1));
             if (suffixes_specified_)
               return active_suffixes_.find(name) != active_suffixes_.end();
@@ -1237,11 +1246,11 @@ class DepBuilder {
             // selected. Keep that automatic-variable behavior without
             // importing or depending on GNU make itself.
             static constexpr const char* kDefaultSuffixes[] = {
-                "out", "a", "ln", "o", "c", "cc", "C", "cpp", "p",
-                "f",   "F", "m",  "r", "y", "l", "ym", "lm", "s",
-                "S",   "mod", "sym", "def", "h", "info", "dvi", "tex",
-                "texinfo", "texi", "txinfo", "w", "ch", "web", "sh",
-                "elc", "el"};
+                "out",    "a",  "ln",   "o",   "c",   "cc",      "C",
+                "cpp",    "p",  "f",    "F",   "m",   "r",       "y",
+                "l",      "ym", "lm",   "s",   "S",   "mod",     "sym",
+                "def",    "h",  "info", "dvi", "tex", "texinfo", "texi",
+                "txinfo", "w",  "ch",   "web", "sh",  "elc",     "el"};
             for (const char* default_suffix : kDefaultSuffixes)
               if (name == default_suffix)
                 return true;
@@ -1333,26 +1342,30 @@ class DepBuilder {
                                     : n->actual_inputs.front().str();
       std::string stem;
       if (n->output_pattern.IsValid())
-      stem = Pattern(n->output_pattern.str()).Stem(n->lexical_output.str());
+        stem = Pattern(n->output_pattern.str()).Stem(n->lexical_output.str());
       std::string archive_member;
       const std::string output_name = n->lexical_output.str();
       const size_t archive_open = output_name.find('(');
-      if (archive_open != std::string::npos &&
-          output_name.back() == ')' && archive_open + 1 < output_name.size()) {
-        archive_member = output_name.substr(archive_open + 1,
-                                             output_name.size() - archive_open - 2);
+      if (archive_open != std::string::npos && output_name.back() == ')' &&
+          archive_open + 1 < output_name.size()) {
+        archive_member = output_name.substr(
+            archive_open + 1, output_name.size() - archive_open - 2);
       }
       const std::pair<const char*, std::string> automatic[] = {
-          {"@", n->lexical_output.str()}, {"%", archive_member}, {"<", first},
-          {"^", unique},          {"+", all},  {"*", stem}};
+          {"@", n->lexical_output.str()},
+          {"%", archive_member},
+          {"<", first},
+          {"^", unique},
+          {"+", all},
+          {"*", stem}};
       for (const auto& item : automatic) {
-        secondary_auto_vars.emplace_back(new ScopedVar(
-            cur_rule_vars_.get(), Intern(item.first),
-            new SimpleVar(item.second, VarOrigin::AUTOMATIC, frame.Current(),
-                          n->loc)));
+        secondary_auto_vars.emplace_back(
+            new ScopedVar(cur_rule_vars_.get(), Intern(item.first),
+                          new SimpleVar(item.second, VarOrigin::AUTOMATIC,
+                                        frame.Current(), n->loc)));
       }
-      active_merger->FillOneSecondaryInput(n->lexical_output, secondary_rule,
-                                           n, ev_);
+      active_merger->FillOneSecondaryInput(n->lexical_output, secondary_rule, n,
+                                           ev_);
     };
 
     std::unordered_set<const Rule*> expanded_rules;
@@ -1604,17 +1617,16 @@ class DepBuilder {
       size_t wait_stamp_number = 0;
       auto make_wait_stamp = [&](size_t number,
                                  const std::vector<NamedDepNode>& deps) {
-        std::string name = ".kati_wait/" + n->output.str() + "/" +
-                           std::to_string(number);
+        std::string name =
+            ".kati_wait/" + n->output.str() + "/" + std::to_string(number);
         std::replace(name.begin(), name.end(), '/', '_');
-        DepNode* stamp =
-            g_dep_node_pool.emplace_back(std::make_unique<DepNode>(
-                                             Intern(name), false, false))
-                .get();
+        DepNode* stamp = g_dep_node_pool
+                             .emplace_back(std::make_unique<DepNode>(
+                                 Intern(name), false, false))
+                             .get();
         stamp->has_rule = true;
         stamp->loc = n->loc;
-        stamp->cmds.push_back(
-            Value::NewLiteral(Intern("touch " + name).str()));
+        stamp->cmds.push_back(Value::NewLiteral(Intern("touch " + name).str()));
         stamp->deps = deps;
         return stamp;
       };
@@ -1769,12 +1781,23 @@ bool IsSpecialTarget(Symbol output) {
   // GNU make's special declarations belong here; suffix-rule recognition is
   // handled separately with the active suffix list.
   static constexpr std::string_view kSpecialTargets[] = {
-      ".DEFAULT",          ".DELETE_ON_ERROR", ".EXPORT_ALL_VARIABLES",
-      ".EXTRA_PREREQS",    ".IGNORE",          ".INTERMEDIATE",
-      ".LOW_RESOLUTION_TIME", ".NOTPARALLEL",  ".ONESHELL",
-      ".PHONY",            ".POSIX",           ".PRECIOUS",
-      ".SECONDARY",        ".SECONDEXPANSION", ".SILENT",
-      ".SUFFIXES",         ".WAIT",
+      ".DEFAULT",
+      ".DELETE_ON_ERROR",
+      ".EXPORT_ALL_VARIABLES",
+      ".EXTRA_PREREQS",
+      ".IGNORE",
+      ".INTERMEDIATE",
+      ".LOW_RESOLUTION_TIME",
+      ".NOTPARALLEL",
+      ".ONESHELL",
+      ".PHONY",
+      ".POSIX",
+      ".PRECIOUS",
+      ".SECONDARY",
+      ".SECONDEXPANSION",
+      ".SILENT",
+      ".SUFFIXES",
+      ".WAIT",
   };
   if (std::find(std::begin(kSpecialTargets), std::end(kSpecialTargets), name) !=
       std::end(kSpecialTargets))

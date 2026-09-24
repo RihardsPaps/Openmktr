@@ -29,9 +29,13 @@ bool IsRecursiveKatiCommand(const std::string& command);
 struct ExecResult {
   bool needs_build;
   bool failed;
+  // Whether a requested root itself ran a recipe. Dependency recipes alone
+  // must not trigger an included-makefile restart.
+  bool roots_built;
 };
 
-ExecResult Exec(const std::vector<NamedDepNode>& roots, Evaluator* ev,
+ExecResult Exec(const std::vector<NamedDepNode>& roots,
+                Evaluator* ev,
                 bool parallel = true);
 
 #endif  // EXEC_H_

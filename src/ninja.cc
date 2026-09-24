@@ -446,6 +446,15 @@ class NinjaGenerator {
       cmd.remove_suffix(1);
     }
 
+    // The command may create the directory target itself (for example,
+    // FFmpeg's libavcodec/ rule).  Only elide mkdir for a different output
+    // located inside the directory.
+    std::string_view output(name);
+    while (!output.empty() && output.back() == '/')
+      output.remove_suffix(1);
+    if (cmd == output)
+      return false;
+
     std::string_view dir = Dirname(name);
     if (cmd == dir) {
       return true;
@@ -622,10 +631,32 @@ class NinjaGenerator {
               : EscapeNinja(commands.front().shellflag);
       GenShellScript(node->output.c_str(), commands, &cmd_buf, &description,
                      node->oneshell);
+      // Recipe translation may remove every command.  Keep the Ninja rule a
+      // valid shell no-op, including when the leaf-output guard is added.
+      if (cmd_buf.empty())
+        cmd_buf = ":";
+      // Ninja has no build-log entry for files that predate a newly emitted
+      // graph, and runs their recipes even when make would find them current.
+      // OpenSSL's configdata.pm recipe deliberately fails after reconfiguring,
+      // so the first Ninja run must honor the ordinary timestamp fast path.
+      // Phony and validation prerequisites retain their usual Ninja behavior.
+      const bool has_phony_input = std::any_of(
+          node->deps.begin(), node->deps.end(),
+          [](const NamedDepNode& dep) { return dep.second->is_phony; });
       if (!node->is_phony && node->deps.empty() && node->order_onlys.empty() &&
           node->validations.empty()) {
         cmd_buf = "if [ -e " + ShellQuote(node->output.str()) +
                   " ]; then :; else " + cmd_buf + "; fi";
+      } else if (!node->is_phony && !node->deps.empty() && !has_phony_input &&
+                 node->validations.empty() && Exists(node->output.str())) {
+        const std::string output = ShellQuote(node->output.str());
+        std::string current = "if [ -e " + output + " ]";
+        for (const NamedDepNode& dep : node->deps) {
+          const std::string input = ShellQuote(dep.first.str());
+          current += " && [ -e " + input + " ] && [ ! " + input + " -nt " +
+                     output + " ]";
+        }
+        cmd_buf = current + "; then :; else " + cmd_buf + "; fi";
       }
       // Recursive sub-builds remain serialized; recipe exports are prepared by
       // CommandEvaluator for both direct and Ninja execution.
@@ -707,6 +738,11 @@ class NinjaGenerator {
       rule_key += node->delete_on_error ? '1' : '0';
       rule_key += node->precious ? '1' : '0';
       rule_key += g_flags.emit_sandbox_disabled ? '1' : '0';
+      if (cmd_buf.size() > 100 * 1000) {
+        // Large recipes source a response file named after this output, so
+        // they cannot share a Ninja rule with another output.
+        rule_key += node->output.str();
+      }
 
       auto existing_rule = rules_.find(rule_key);
       if (existing_rule != rules_.end()) {
@@ -724,8 +760,12 @@ class NinjaGenerator {
         if (cmd_buf.size() > 100 * 1000) {
           out << " rspfile = $out.rsp\n";
           out << " rspfile_content = " << cmd_buf << "\n";
+          std::string rspfile = node->output.str() + ".rsp";
+          if (rspfile.front() != '/')
+            rspfile = "./" + rspfile;
+          const std::string source_rspfile = ". " + ShellQuote(rspfile);
           out << " command = " << command_shell << ' ' << command_shellflag
-              << " $out.rsp\n";
+              << ' ' << ShellQuote(source_rspfile) << "\n";
         } else {
           // Keep the recipe opaque to the shell that Ninja uses to launch the
           // command. The recipe itself may contain another shell invocation
