@@ -181,6 +181,12 @@ class BuildCorrectness(unittest.TestCase):
         self.assertEqual(
             (self.directory / "source.h").read_text(), "keep this header"
         )
+        self.run_command("sh", "./ninja.sh", "-t", "clean")
+        self.assertEqual(
+            (self.directory / "source.h").read_text(), "keep this header"
+        )
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "source.o").read_text(), "source")
 
     def test_ninja_respects_current_output_before_first_build_log_entry(self):
         self.makefile(
