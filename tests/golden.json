@@ -2556,7 +2556,7 @@
   },
   "merge_inputs.mk:test2:direct": {
     "files": [],
-    "output": "*** No rule to make target 'bar', needed by 'foo'.\nkati: Nothing to be done for `test2'.\n",
+    "output": "*** Missing prerequisite.\nkati: Nothing to be done for `test2'.\n",
     "status": 1
   },
   "merge_inputs.mk:test2:ninja": {
@@ -3852,7 +3852,7 @@
   },
   "static_pattern.mk:test:direct": {
     "files": [],
-    "output": "*** No rule to make target 'a.cc', needed by 'a.o'.\nkati: Nothing to be done for `test'.\n",
+    "output": "*** Missing prerequisite.\nkati: Nothing to be done for `test'.\n",
     "status": 1
   },
   "static_pattern.mk:test:ninja": {

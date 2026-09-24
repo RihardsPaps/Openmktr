@@ -40,6 +40,12 @@ UNORDERED_OUTPUT_CASES = {
     "target_specific_var_with_pattern.mk",
 }
 UNORDERED_SCRIPT_OUTPUT = {"ninja_pool.sh", "question.sh"}
+# Parallel diagnosis can report either one or both missing siblings before
+# cancellation reaches the other worker.
+RACING_MISSING_PREREQUISITES = {
+    ("merge_inputs.mk", "test2"): {("bar", "foo"), ("baz", "foo")},
+    ("static_pattern.mk", "test"): {("a.cc", "a.o"), ("b.cc", "b.o")},
+}
 # The historical .PRECIOUS script depends on timestamp granularity in Ninja's
 # failed-recipe cleanup and is not a stable snapshot on tmpfs.
 UNSTABLE_SCRIPTS = {"precious_delete_on_error.sh"}
@@ -108,6 +114,16 @@ def run_makefile(source: Path, target: str, ninja: bool) -> dict:
             output = ""
         if not ninja and source.name == "order_only.mk" and target == "test2":
             output = re.sub(r"needed by '(?:foo|test2)'", "needed by '<PARENT>'", output)
+        if not ninja and (source.name, target) in RACING_MISSING_PREREQUISITES:
+            lines = output.splitlines(keepends=True)
+            allowed = RACING_MISSING_PREREQUISITES[(source.name, target)]
+            pattern = re.compile(r"\*\*\* No rule to make target '([^']+)', needed by '([^']+)'\.")
+            matched = [line for line in lines if (match := pattern.fullmatch(line.rstrip("\n")))
+                       and match.groups() in allowed]
+            if matched:
+                output = "*** Missing prerequisite.\n" + "".join(
+                    line for line in lines if line not in matched
+                )
         return {"status": status, "output": output, "files": created_files(directory)}
 
 
