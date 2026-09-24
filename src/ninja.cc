@@ -607,6 +607,13 @@ class NinjaGenerator {
     const DepNode* node = nn.node;
     const std::vector<Command>& commands = nn.commands;
 
+    // Make distinguishes "doc" from "doc/", but Ninja normalizes both to
+    // the same path.  If the directory already exists and "doc" is another
+    // target, the directory recipe is unnecessary and would emit a duplicate
+    // Ninja output.  Its prerequisite edges are omitted for the same reason.
+    if (IsExistingDirectoryAlias(node->output))
+      return;
+
     std::string rule_name = "phony";
     // Ninja owns the build-time job budget. Do not impose a second fixed
     // pool from Kati's graph-generation -j value; ninja.sh exports the
