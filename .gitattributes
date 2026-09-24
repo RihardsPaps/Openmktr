@@ -1,0 +1,8 @@
+*.sh text eol=lf
+*.ninja text eol=lf
+Dockerfile text eol=lf
+*.py text eol=lf
+clang-format-check text eol=lf
+testcase/*.mk text eol=lf
+testcase/crlf.mk -text
+testcase/crlf_after_directive.mk -text

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # A multi-step implicit chain must be selected generically and execute in the
 # correct prerequisite order in both direct and generated-Ninja builds.

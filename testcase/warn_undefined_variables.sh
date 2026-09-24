@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Undefined-variable warnings are diagnostics only: expansion still produces
 # the normal empty value, and defined empty variables are not warned about.

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # GNU make keep-going mode continues independent work but does not run a
 # target whose prerequisite failed.

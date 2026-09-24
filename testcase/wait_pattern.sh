@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Pattern-rule prerequisites must retain .WAIT ordering after the stem is
 # substituted. Test direct Kati and the generated Ninja graph.

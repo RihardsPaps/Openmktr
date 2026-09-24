@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Exercise explicit .INTERMEDIATE cleanup and .SECONDARY protection in both
 # direct Kati execution and generated Ninja graphs.
@@ -6,12 +6,11 @@ set -u
 
 mk=$(realpath "$1")
 
-run_case() {
-	local mode=$1
-	local secondary=$2
-	local tmp
+run_case() (
+	mode=$1
+	secondary=$2
 	tmp=$(mktemp -d)
-	trap 'rm -rf "$tmp"' RETURN
+	trap 'rm -rf "$tmp"' EXIT
 	cat >"$tmp/Makefile" <<EOF
 .INTERMEDIATE: temp
 $secondary
@@ -47,7 +46,7 @@ EOF
 			return 1
 		}
 	fi
-}
+)
 
 run_case direct ''
 run_case direct '.SECONDARY: temp'

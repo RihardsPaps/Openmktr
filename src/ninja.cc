@@ -771,9 +771,7 @@ class NinjaGenerator {
       // a low-resolution prerequisite within the same second.
       const std::string output = ShellQuote(node->output.str());
       if (!node->low_resolution_inputs.empty()) {
-        std::string guard =
-            "kati_mtime() { stat -c %Y \"$$1\" 2>/dev/null || "
-            "stat -f %m \"$$1\" 2>/dev/null; }; ";
+        std::string guard = "kati_mtime() { stat -f %m \"$$1\"; }; ";
         guard += "if [ -e " + output + " ]; then ";
         guard += "kati_lowres_skip=1; ";
         guard += "kati_output_sec=$$(kati_mtime " + output + "); ";

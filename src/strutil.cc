@@ -432,10 +432,13 @@ size_t FindEndOfLine(std::string_view s, size_t e, size_t* lf_cnt) {
     if (c == '\0')
       break;
     if (c == '\\') {
-      if (s[e + 1] == '\n') {
+      if (e + 1 >= s.size()) {
+        ++e;
+      } else if (s[e + 1] == '\n') {
         e += 2;
         ++*lf_cnt;
-      } else if (s[e + 1] == '\r' && s[e + 2] == '\n') {
+      } else if (s[e + 1] == '\r' && e + 2 < s.size() &&
+                 s[e + 2] == '\n') {
         e += 3;
         ++*lf_cnt;
       } else if (s[e + 1] == '\\') {

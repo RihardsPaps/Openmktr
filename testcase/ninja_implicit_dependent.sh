@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 #
 # Copyright 2018 Google Inc. All rights reserved
 #
@@ -30,19 +30,12 @@ primary:
 	@echo Made primary+secondary
 EOF
 
-if [[ "${mk}" =~ ^make ]]; then
-  echo Made primary+secondary
-  echo Made secondary_dep
-  echo Made secondary_dep
-  echo Nothing to do
-else
-  ${mk} -j1
-  ./ninja.sh -j1 -w dupbuild=err;
-  sleep 1
-  touch secondary
-  ./ninja.sh -j1 -w dupbuild=err;
-  sleep 1
-  echo Nothing to do
-  touch primary
-  ./ninja.sh -j1 -w dupbuild=err;
-fi
+${mk} -j1
+./ninja.sh -j1 -w dupbuild=err
+sleep 1
+touch secondary
+./ninja.sh -j1 -w dupbuild=err
+sleep 1
+echo Nothing to do
+touch primary
+./ninja.sh -j1 -w dupbuild=err

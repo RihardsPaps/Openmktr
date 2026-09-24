@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 #
 # Copyright 2018 Google Inc. All rights reserved
 #
@@ -18,7 +18,7 @@ set -u
 
 mk="$@"
 
-function build() {
+build() {
   cat <<EOF > Makefile
 FOO $1$= bar
 FOO $2 baz

@@ -1,38 +1,16 @@
-FROM ubuntu:22.04
+FROM chimeralinux/chimera:latest
 
-RUN apt-get update && apt-get install -y make git-core build-essential curl python3 wget unzip
+# Chimera ships Clang/LLVM, musl, libc++, and a BSD-derived userland.
+RUN apk add clang ninja python chimerautils
+RUN for package in gcc glibc bash coreutils findutils; do \
+      if apk info -e "$package" >/dev/null 2>&1; then \
+        echo "unexpected GNU package: $package" >&2; exit 1; \
+      fi; \
+    done
 
-# Install Go
-RUN \
-  mkdir -p /goroot && \
-  curl https://storage.googleapis.com/golang/go1.14.9.linux-amd64.tar.gz | tar xvzf - -C /goroot --strip-components=1
+WORKDIR /workspace
+COPY . .
+RUN ninja -f build.ninja -j 4 ckati tests
+RUN if ldd ckati | grep -E 'libstdc\+\+|libgcc|libc\.so\.6'; then exit 1; fi
 
-# Install Make, we emulate Make 4.2.1 instead of the default 4.3 currently
-RUN \
-  mkdir -p /make/tmp && \
-  cd /make/tmp && \
-  wget http://mirrors.kernel.org/ubuntu/pool/main/m/make-dfsg/make_4.2.1-1.2_amd64.deb && \
-  ar xv make_4.2.1-1.2_amd64.deb && \
-  tar xf data.tar.xz && \
-  mv usr/bin/make ../ && \
-  cd .. && \
-  rm -rf tmp/
-
-# Install ninja, we need a newer version than is in apt
-RUN \
-  mkdir -p /ninja && \
-  cd /ninja && \
-  wget https://github.com/ninja-build/ninja/releases/download/v1.11.1/ninja-linux.zip && \
-  unzip ninja-linux.zip && \
-  rm ninja-linux.zip
-
-# Set environment variables for Go and Make.
-ENV GOROOT /goroot
-ENV GOPATH /gopath
-ENV PATH $GOROOT/bin:$GOPATH/bin:/make:/ninja:$PATH
-
-# Copy project code.
-COPY . /src
-WORKDIR /src
-
-CMD make test -j8
+CMD ["/bin/sh", "-c", "out/find_test && out/ninja_test && out/strutil_test && python tests/regression.py && sh testcase/dump/run.sh"]

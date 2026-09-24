@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Test the dependency-free pure subset of $(guile ...), both as a direct
 # makefile expansion and in a generated Ninja graph.

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Verify that .WAIT also orders order-only prerequisites in both execution
 # modes, without changing the target's automatic prerequisite variables.

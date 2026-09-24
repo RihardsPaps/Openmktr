@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Recursive make must retain the caller's exported variables and working
 # directory in both direct and generated-Ninja execution.
@@ -22,7 +22,7 @@ EOF
 cat >"$tmp/child/Makefile" <<'EOF'
 .PHONY: all
 all:
-	@printf '%s' "$CHILD_VALUE" > child.out
+	@printf '%s' "$$CHILD_VALUE" > child.out
 EOF
 
 (cd "$tmp" && "$mk" -f Makefile all >/dev/null)

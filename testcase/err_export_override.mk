@@ -2,7 +2,7 @@
 
 # GNU make 4 accepts this syntax. Note kati doesn't agree with make 4
 # either.
-MAKEVER:=$(shell make --version | grep "Make [0-9]" | sed -E 's/.*Make ([0-9]).*/\1/')
+MAKEVER:=$(firstword $(subst ., ,$(MAKE_VERSION)))
 ifeq ($(MAKE)$(MAKEVER),make4)
 $(error test skipped)
 endif

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # GNU make question mode reports whether a target needs rebuilding without
 # executing recipes, including recipes of phony targets.

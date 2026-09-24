@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Both global VPATH and pattern-specific vpath must resolve source
 # prerequisites without changing the logical target names.

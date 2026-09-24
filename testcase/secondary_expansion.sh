@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Secondary expansion must resolve escaped prerequisites at graph-build time,
 # including when the graph is emitted for Ninja.

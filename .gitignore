@@ -1,5 +1,10 @@
 .kati_stamp*
 .ninja_log
+.ninja_deps
+ckati
+out/
+__pycache__/
+*.pyc
 build.*.ninja
 env.*.sh
 ninja.*.sh
@@ -7,3 +12,4 @@ ckati.before-current-rebuild
 foo
 testcase/.kati_stamp
 testcase/build.ninja
+testcase/dump/include_smoke/nop

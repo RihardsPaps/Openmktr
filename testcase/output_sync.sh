@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Output synchronization is generic executor behavior: target mode keeps a
 # recipe's captured output together even when independent recipes run in

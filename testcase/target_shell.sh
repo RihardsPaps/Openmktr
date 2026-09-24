@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Target-specific SHELL and .SHELLFLAGS must be honored by both direct Kati
 # execution and generated Ninja recipes.
@@ -9,18 +9,18 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 cat >"$tmp/Makefile" <<'EOF'
-all: bash-target
+all: shell-target
 
-bash-target: SHELL := /bin/bash
-bash-target: .SHELLFLAGS := -ec
-bash-target:
-	@[[ "bash" = "bash" ]] && printf success > $@
+shell-target: SHELL := /bin/sh
+shell-target: .SHELLFLAGS := -ec
+shell-target:
+	@[ "sh" = "sh" ] && printf success > $@
 EOF
 
 (cd "$tmp" && "$mk" -f Makefile all >/dev/null)
-[ "$(cat "$tmp/bash-target")" = success ] || exit 1
+[ "$(cat "$tmp/shell-target")" = success ] || exit 1
 
-rm -f "$tmp/bash-target"
+rm -f "$tmp/shell-target"
 (cd "$tmp" && "$mk" --ninja --regen -f Makefile >/dev/null 2>&1)
 (cd "$tmp" && ./ninja.sh -j1 all >/dev/null)
-[ "$(cat "$tmp/bash-target")" = success ] || exit 1
+[ "$(cat "$tmp/shell-target")" = success ] || exit 1

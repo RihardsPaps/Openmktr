@@ -1,7 +1,7 @@
 # TODO: Fix this. Maybe $(wildcard) always runs at eval-phase.
 
 # GNU make 4 agrees with ckati.
-MAKEVER:=$(shell make --version | grep "Make [0-9]" | sed -E 's/.*Make ([0-9]).*/\1/')
+MAKEVER:=$(firstword $(subst ., ,$(MAKE_VERSION)))
 ifeq ($(MAKE)$(MAKEVER),make4)
 $(error test skipped)
 endif
