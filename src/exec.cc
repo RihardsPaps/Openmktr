@@ -16,22 +16,22 @@
 
 #include "exec.h"
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
+#include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <condition_variable>
 #include <cstdint>
-#include <atomic>
-#include <algorithm>
-#include <deque>
 #include <functional>
 #include <limits>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <string_view>
@@ -55,7 +55,6 @@ namespace {
 
 const double kNotExist = -2.0;
 const double kProcessing = -1.0;
-thread_local bool kati_worker_context = false;
 
 int CommandExitStatus(int status) {
   if (WIFEXITED(status))
@@ -132,6 +131,7 @@ class WorkerPool {
       std::lock_guard<std::mutex> lock(mu_);
       CHECK(!stopping_);
       tasks_.emplace_back(task);
+      queued_[task.get()] = std::prev(tasks_.end());
       // Keep the pool persistent, but avoid creating a full -jN thread set in
       // every recursive Kati process before that process has work for it.
       if (static_cast<int>(workers_.size()) < max_workers_)
@@ -150,50 +150,18 @@ class WorkerPool {
         std::unique_lock<std::mutex> lock(mu_);
         if (target->complete)
           return target->result;
-        if (tasks_.empty()) {
+        auto queued = queued_.find(target.get());
+        if (queued == queued_.end()) {
           cv_.wait(lock, [&]() {
-            return target->complete || !tasks_.empty();
+            return target->complete || queued_.count(target.get()) != 0;
           });
           continue;
         }
-        task = std::move(tasks_.front());
-        tasks_.pop_front();
+        task = std::move(*queued->second);
+        tasks_.erase(queued->second);
+        queued_.erase(queued);
       }
-      const bool previous_context = kati_worker_context;
-      kati_worker_context = true;
       RunTask(task);
-      kati_worker_context = previous_context;
-    }
-  }
-
-  size_t WaitAny(const std::vector<TaskHandle>& targets) {
-    while (true) {
-      TaskHandle task;
-      {
-        std::unique_lock<std::mutex> lock(mu_);
-        for (size_t i = 0; i < targets.size(); ++i) {
-          if (targets[i]->complete)
-            return i;
-        }
-        if (tasks_.empty()) {
-          cv_.wait(lock, [&]() {
-            if (!tasks_.empty())
-              return true;
-            for (const TaskHandle& target : targets) {
-              if (target->complete)
-                return true;
-            }
-            return false;
-          });
-          continue;
-        }
-        task = std::move(tasks_.front());
-        tasks_.pop_front();
-      }
-      const bool previous_context = kati_worker_context;
-      kati_worker_context = true;
-      RunTask(task);
-      kati_worker_context = previous_context;
     }
   }
 
@@ -218,23 +186,27 @@ class WorkerPool {
           return;
         task = std::move(tasks_.front());
         tasks_.pop_front();
+        queued_.erase(task.get());
       }
-      const bool previous_context = kati_worker_context;
-      kati_worker_context = true;
       RunTask(task);
-      kati_worker_context = previous_context;
     }
   }
 
   std::mutex mu_;
   std::condition_variable cv_;
-  std::deque<TaskHandle> tasks_;
+  std::list<TaskHandle> tasks_;
+  std::unordered_map<Task*, std::list<TaskHandle>::iterator> queued_;
   std::vector<std::thread> workers_;
   int max_workers_;
   bool stopping_;
 };
 
 class Executor {
+  struct Ancestry {
+    Symbol output;
+    std::shared_ptr<const Ancestry> parent;
+  };
+
  public:
   explicit Executor(Evaluator* ev, bool parallel)
       : ce_(ev),
@@ -258,7 +230,17 @@ class Executor {
     return jobs;
   }
 
-  double ExecNode(const DepNode& n, const char* needed_by) {
+  double ExecNode(const DepNode& n,
+                  const char* needed_by,
+                  std::shared_ptr<const Ancestry> parent = nullptr) {
+    for (auto path = parent; path != nullptr; path = path->parent) {
+      if (path->output == n.output) {
+        WARN("Circular %s <- %s dependency dropped.",
+             needed_by ? needed_by : "(null)", n.output.c_str());
+        return kProcessing;
+      }
+    }
+    auto ancestry = std::make_shared<Ancestry>(Ancestry{n.output, parent});
     {
       std::unique_lock<std::mutex> lock(state_mu_);
       auto found = done_.find(n.output);
@@ -303,8 +285,12 @@ class Executor {
         auto current = done_.find(n.output);
         return current == done_.end() ? kNotExist : current->second.timestamp;
       }
-      done_[n.output] = NodeState{true, kProcessing, false,
-                                  std::this_thread::get_id()};
+      if (cancel_requested_.load(std::memory_order_relaxed)) {
+        done_[n.output] = NodeState{false, kNotExist, true, std::thread::id()};
+        return kNotExist;
+      }
+      done_[n.output] =
+          NodeState{true, kProcessing, false, std::this_thread::get_id()};
     }
     // Evaluator tracing uses one process-global stack.  Parallel workers
     // cannot push/pop that stack concurrently; doing so corrupts the stack
@@ -321,12 +307,25 @@ class Executor {
         needed_by ? needed_by : "(null)");
 
     if (!n.has_rule && output_ts == kNotExist && !n.is_phony) {
-      if (needed_by) {
-        ERROR("*** No rule to make target '%s', needed by '%s'.",
-              n.output.c_str(), needed_by);
-      } else {
-        ERROR("*** No rule to make target '%s'.", n.output.c_str());
+      {
+        std::lock_guard<std::mutex> lock(output_mu_);
+        if (needed_by) {
+          fprintf(stderr, "*** No rule to make target '%s', needed by '%s'.\n",
+                  n.output.c_str(), needed_by);
+        } else {
+          fprintf(stderr, "*** No rule to make target '%s'.\n",
+                  n.output.c_str());
+        }
       }
+      {
+        std::lock_guard<std::mutex> lock(state_mu_);
+        done_[n.output] = NodeState{false, kNotExist, true, std::thread::id()};
+      }
+      failed_.store(true, std::memory_order_relaxed);
+      if (!g_flags.keep_going)
+        cancel_requested_.store(true, std::memory_order_relaxed);
+      state_cv_.notify_all();
+      return kNotExist;
     }
 
     double latest = kProcessing;
@@ -335,12 +334,10 @@ class Executor {
     bool dependency_failed = false;
     auto is_low_resolution = [&n](Symbol input) {
       return std::find(n.low_resolution_inputs.begin(),
-                       n.low_resolution_inputs.end(), input) !=
-             n.low_resolution_inputs.end();
+                       n.low_resolution_inputs.end(),
+                       input) != n.low_resolution_inputs.end();
     };
     auto visit_child = [&](const auto& d, bool order_only) {
-      if (order_only && Exists(d.second->output.str()))
-        return;
       // A dependency subgraph is independent from its siblings.  Dispatch
       // the whole subgraph asynchronously and wait for all futures before
       // running this node's recipe.  Limiting this to leaves serialized
@@ -349,17 +346,16 @@ class Executor {
       // Worker tasks expand descendants inline.  Otherwise every worker can
       // wait for a task owned by another waiting worker, starving the finite
       // pool even though the dependency graph itself is acyclic.
-      if (parallel_ && !kati_worker_context && TryAcquireJob()) {
+      if (parallel_ && n.deps.size() + n.order_onlys.size() > 1) {
         children.emplace_back(
-            worker_pool_.Submit([this, child = d.second, output = n.output]() {
-              double ts = ExecNode(*child, output.c_str());
-              ReleaseJob();
-              return ts;
-            }),
+            worker_pool_.Submit(
+                [this, child = d.second, output = n.output, ancestry]() {
+                  return ExecNode(*child, output.c_str(), ancestry);
+                }),
             d.second->is_phony, order_only, is_low_resolution(d.first),
             d.second->output);
       } else {
-        double ts = ExecNode(*d.second, n.output.c_str());
+        double ts = ExecNode(*d.second, n.output.c_str(), ancestry);
         if (IsFailed(d.second->output))
           dependency_failed = true;
         // Order-only prerequisites must be built before the recipe, but do
@@ -394,8 +390,7 @@ class Executor {
     if (dependency_failed) {
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] = NodeState{false, output_ts, true,
-                                    std::thread::id()};
+        done_[n.output] = NodeState{false, output_ts, true, std::thread::id()};
       }
       failed_.store(true, std::memory_order_relaxed);
       state_cv_.notify_all();
@@ -418,8 +413,7 @@ class Executor {
     if (IsOldFile(n.output) && output_ts != kNotExist && n.has_rule) {
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] = NodeState{false, output_ts, false,
-                                    std::thread::id()};
+        done_[n.output] = NodeState{false, output_ts, false, std::thread::id()};
       }
       state_cv_.notify_all();
       return output_ts;
@@ -432,8 +426,8 @@ class Executor {
     if (g_flags.is_touch && n.is_phony) {
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] = NodeState{false, output_ts, dependency_failed,
-                                    std::thread::id()};
+        done_[n.output] =
+            NodeState{false, output_ts, dependency_failed, std::thread::id()};
       }
       state_cv_.notify_all();
       return output_ts;
@@ -446,8 +440,8 @@ class Executor {
       const double touched_ts = GetTimestamp(n.output.c_str());
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] = NodeState{false, touched_ts, false,
-                                    std::thread::id()};
+        done_[n.output] =
+            NodeState{false, touched_ts, false, std::thread::id()};
       }
       state_cv_.notify_all();
       return touched_ts;
@@ -457,8 +451,7 @@ class Executor {
         !output_is_directory) {
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] = NodeState{false, output_ts, false,
-                                    std::thread::id()};
+        done_[n.output] = NodeState{false, output_ts, false, std::thread::id()};
       }
       state_cv_.notify_all();
       return output_ts;
@@ -479,8 +472,7 @@ class Executor {
         needs_build_.store(true, std::memory_order_relaxed);
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] = NodeState{false, output_ts, false,
-                                    std::thread::id()};
+        done_[n.output] = NodeState{false, output_ts, false, std::thread::id()};
       }
       state_cv_.notify_all();
       return output_ts;
@@ -495,7 +487,12 @@ class Executor {
       needs_build_.store(true, std::memory_order_relaxed);
 
     bool node_failed = false;
+    bool ran_recipe = false;
     for (const Command& command : commands) {
+      if (cancel_requested_.load(std::memory_order_relaxed)) {
+        node_failed = true;
+        break;
+      }
       {
         std::lock_guard<std::mutex> lock(state_mu_);
         num_commands_ += 1;
@@ -523,26 +520,25 @@ class Executor {
           // about to inspect.  GNU make keeps the recursive invocation as a
           // single job-server job; do the equivalent here while retaining
           // parallelism inside the child executor.
-          std::unique_lock<std::mutex> recursive_lock(
-              recursive_command_mu_);
-          std::string out;
+          std::unique_lock<std::mutex> recursive_lock(recursive_command_mu_);
           const std::string& command_shell =
               command.shell.empty() ? shell_ : command.shell;
           const std::string& command_shellflag =
               command.shellflag.empty() ? shellflag_ : command.shellflag;
+          AcquireJob();
           const int result =
-              RunCommand(command_shell, command_shellflag, command.cmd,
-                         RedirectStderr::STDOUT, &out, false);
-          PrintCommandOutput(out);
+              RunRecipe(command_shell, command_shellflag, command.cmd, false);
+          ReleaseJob();
           if (result != 0 && !command.ignore_error) {
             node_failed = true;
             failed_.store(true, std::memory_order_relaxed);
+            DeleteFailedOutput(n, output_ts);
             if (!g_flags.keep_going)
-              exit(1);
+              cancel_requested_.store(true, std::memory_order_relaxed);
+            break;
           }
         }
       } else {
-        std::string out;
         const bool recursive = IsRecursiveKatiCommand(command.cmd);
         std::unique_lock<std::mutex> recursive_lock;
         std::string command_text = command.cmd;
@@ -551,8 +547,7 @@ class Executor {
           // let sibling opaque commands mutate the same make directory at
           // the same time.  Normal compile/link recipes remain parallel, and
           // the child make keeps its own parallel executor.
-          recursive_lock = std::unique_lock<std::mutex>(
-              recursive_command_mu_);
+          recursive_lock = std::unique_lock<std::mutex>(recursive_command_mu_);
           // Recursive children share the wrapper's FIFO.  The parent does
           // not acquire a token for this opaque boundary (see RunCommand
           // below), so the child can safely consume tokens for its own
@@ -567,17 +562,17 @@ class Executor {
           // srcroot in recursive Kbuild).  Ninja recipes source env.sh at
           // their own process boundary; recursive Kati must inherit this
           // process environment unchanged.
-          command_text = "export KATI_JOBSERVER_RESERVED=0; " +
-                         command_text;
+          command_text = "export KATI_JOBSERVER_RESERVED=0; " + command_text;
         }
         const std::string& command_shell =
             command.shell.empty() ? shell_ : command.shell;
         const std::string& command_shellflag =
             command.shellflag.empty() ? shellflag_ : command.shellflag;
-        int result = RunCommand(command_shell, command_shellflag, command_text,
-                                RedirectStderr::STDOUT, &out,
-                                !recursive);
-        PrintCommandOutput(out);
+        AcquireJob();
+        int result = RunRecipe(command_shell, command_shellflag, command_text,
+                               !recursive);
+        ReleaseJob();
+        ran_recipe = true;
         if (result != 0) {
           if (command.ignore_error) {
             fprintf(stderr, "[%s] Error %d (ignored)\n", command.output.c_str(),
@@ -588,51 +583,109 @@ class Executor {
             fprintf(stderr, "    command: %s\n", command.cmd.c_str());
             node_failed = true;
             failed_.store(true, std::memory_order_relaxed);
+            DeleteFailedOutput(n, output_ts);
             if (!g_flags.keep_going)
-              exit(1);
+              cancel_requested_.store(true, std::memory_order_relaxed);
             break;
           }
         }
       }
     }
 
+    const double completed_ts =
+        ran_recipe ? GetTimestamp(n.output.c_str()) : output_ts;
     {
       std::lock_guard<std::mutex> lock(state_mu_);
-      done_[n.output] = NodeState{false, output_ts, node_failed,
-                                  std::thread::id()};
+      if (ran_recipe && !node_failed)
+        built_outputs_.insert(n.output);
+      done_[n.output] =
+          NodeState{false, completed_ts, node_failed, std::thread::id()};
     }
     state_cv_.notify_all();
-    return output_ts;
+    return completed_ts;
   }
 
   uint64_t Count() { return num_commands_; }
 
-  void PrintCommandOutput(const std::string& output) {
-    if (output.empty())
-      return;
+  int RunRecipe(const std::string& shell,
+                const std::string& shellflag,
+                const std::string& command,
+                bool acquire_job_token) {
+    std::string unused;
     if (g_flags.output_sync == Flags::OutputSync::kNone) {
-      printf("%s", output.c_str());
-      fflush(stdout);
-      return;
+      return RunCommand(shell, shellflag, command, RedirectStderr::STDOUT,
+                        &unused, acquire_job_token,
+                        [this](std::string_view data) {
+                          std::lock_guard<std::mutex> lock(output_mu_);
+                          fwrite(data.data(), 1, data.size(), stdout);
+                          fflush(stdout);
+                        });
     }
     if (g_flags.output_sync == Flags::OutputSync::kLine) {
-      size_t start = 0;
-      while (start < output.size()) {
-        size_t end = output.find('\n', start);
-        if (end == std::string::npos)
-          end = output.size();
-        else
-          ++end;
+      std::string pending;
+      auto emit = [this](std::string_view data) {
         std::lock_guard<std::mutex> lock(output_mu_);
-        fwrite(output.data() + start, 1, end - start, stdout);
+        fwrite(data.data(), 1, data.size(), stdout);
         fflush(stdout);
-        start = end;
-      }
-      return;
+      };
+      const int status =
+          RunCommand(shell, shellflag, command, RedirectStderr::STDOUT, &unused,
+                     acquire_job_token, [&](std::string_view data) {
+                       pending.append(data);
+                       size_t end;
+                       while ((end = pending.find('\n')) != std::string::npos) {
+                         emit(std::string_view(pending).substr(0, end + 1));
+                         pending.erase(0, end + 1);
+                       }
+                       if (pending.size() > 65536) {
+                         emit(pending);
+                         pending.clear();
+                       }
+                     });
+      if (!pending.empty())
+        emit(pending);
+      return status;
     }
-    std::lock_guard<std::mutex> lock(output_mu_);
-    printf("%s", output.c_str());
-    fflush(stdout);
+    constexpr size_t kMemoryLimit = 1024 * 1024;
+    FILE* spool = nullptr;
+    std::string buffered;
+    const int status = RunCommand(
+        shell, shellflag, command, RedirectStderr::STDOUT, &unused,
+        acquire_job_token, [&](std::string_view data) {
+          if (spool == nullptr &&
+              buffered.size() + data.size() <= kMemoryLimit) {
+            buffered.append(data);
+            return;
+          }
+          if (spool == nullptr) {
+            spool = tmpfile();
+            if (spool == nullptr)
+              PERROR("tmpfile failed");
+            if (fwrite(buffered.data(), 1, buffered.size(), spool) !=
+                buffered.size())
+              PERROR("spool write failed");
+            buffered.clear();
+          }
+          if (fwrite(data.data(), 1, data.size(), spool) != data.size())
+            PERROR("spool write failed");
+        });
+    if (spool != nullptr && fseek(spool, 0, SEEK_SET) != 0)
+      PERROR("spool rewind failed");
+    {
+      std::lock_guard<std::mutex> lock(output_mu_);
+      if (spool != nullptr) {
+        char buf[8192];
+        size_t count;
+        while ((count = fread(buf, 1, sizeof(buf), spool)) != 0)
+          fwrite(buf, 1, count, stdout);
+      } else {
+        fwrite(buffered.data(), 1, buffered.size(), stdout);
+      }
+      fflush(stdout);
+    }
+    if (spool != nullptr && fclose(spool) != 0)
+      PERROR("spool close failed");
+    return status;
   }
 
   bool NeedsBuild() const {
@@ -671,31 +724,17 @@ class Executor {
     }
 
     std::vector<WorkerPool::TaskHandle> futures;
-    size_t next_root = 0;
-    auto submit_root = [&](const NamedDepNode& root) {
-      futures.emplace_back(worker_pool_.Submit([this, node = root.second]() {
-        double ts = ExecNode(*node, nullptr);
-        ReleaseJob();
-        return ts;
-      }));
-      ++next_root;
-    };
-
-    while (next_root < roots.size() && TryAcquireJob())
-      submit_root(roots[next_root]);
-
-    // Refill each slot as soon as its root completes instead of processing
-    // all excess roots in a serial tail batch.
-    size_t completed = 0;
-    while (completed < roots.size()) {
-      const size_t finished = worker_pool_.WaitAny(futures);
-      futures.erase(futures.begin() + finished);
-      ++completed;
-      if (next_root < roots.size()) {
-        CHECK(TryAcquireJob());
-        submit_root(roots[next_root]);
-      }
+    for (const auto& root : roots) {
+      futures.emplace_back(worker_pool_.Submit(
+          [this, node = root.second]() { return ExecNode(*node, nullptr); }));
     }
+    for (const auto& future : futures)
+      worker_pool_.Wait(future);
+  }
+
+  bool WasBuilt(Symbol output) {
+    std::lock_guard<std::mutex> lock(state_mu_);
+    return built_outputs_.count(output) != 0;
   }
 
  private:
@@ -712,21 +751,27 @@ class Executor {
     return it != done_.end() && it->second.failed;
   }
 
-  bool TryAcquireJob() {
-    std::lock_guard<std::mutex> lock(job_mu_);
-    if (active_jobs_ >= job_limit_)
-      return false;
+  void AcquireJob() {
+    std::unique_lock<std::mutex> lock(job_mu_);
+    job_cv_.wait(lock, [this] { return active_jobs_ < job_limit_; });
     ++active_jobs_;
-    return true;
   }
 
   void ReleaseJob() {
     std::lock_guard<std::mutex> lock(job_mu_);
     --active_jobs_;
+    job_cv_.notify_one();
+  }
+
+  void DeleteFailedOutput(const DepNode& node, double previous_ts) {
+    if (node.delete_on_error && !node.precious &&
+        GetTimestamp(node.output.str()) != previous_ts)
+      unlink(node.output.c_str());
   }
 
   CommandEvaluator ce_;
   std::unordered_map<Symbol, NodeState> done_;
+  std::unordered_set<Symbol> built_outputs_;
   // Protected by state_mu_.  Each entry describes the dependency currently
   // awaited by a worker, allowing parallel cycles to be diagnosed instead of
   // deadlocking the executor.
@@ -737,6 +782,7 @@ class Executor {
   std::mutex output_mu_;
   std::mutex recursive_command_mu_;
   std::mutex job_mu_;
+  std::condition_variable job_cv_;
   int job_limit_;
   int active_jobs_;
   std::string shell_;
@@ -744,6 +790,7 @@ class Executor {
   uint64_t num_commands_;
   std::atomic<bool> needs_build_{false};
   std::atomic<bool> failed_{false};
+  std::atomic<bool> cancel_requested_{false};
   bool parallel_;
   WorkerPool worker_pool_;
 };
@@ -754,7 +801,8 @@ bool IsRecursiveKatiCommand(const std::string& command) {
   return IsRecursiveKatiCommandMarker(command);
 }
 
-ExecResult Exec(const std::vector<NamedDepNode>& roots, Evaluator* ev,
+ExecResult Exec(const std::vector<NamedDepNode>& roots,
+                Evaluator* ev,
                 bool parallel) {
   for (const auto& root : roots) {
     if (root.second->is_notparallel) {
@@ -773,7 +821,8 @@ ExecResult Exec(const std::vector<NamedDepNode>& roots, Evaluator* ev,
     pending.pop_back();
     if (!visited.insert(node->output).second)
       continue;
-    if (node->intermediate)
+    if (node->intermediate && !g_flags.is_dry_run && !g_flags.is_question &&
+        executor.WasBuilt(node->output))
       unlink(node->output.str().c_str());
     for (const auto& dep : node->deps)
       pending.push_back(dep.second);

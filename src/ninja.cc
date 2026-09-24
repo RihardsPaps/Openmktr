@@ -52,8 +52,6 @@
 #include "var.h"
 #include "version.h"
 
-extern char** environ;
-
 static std::string ShellQuote(std::string_view s) {
   std::string out = "'";
   for (char c : s) {
@@ -95,21 +93,6 @@ static bool EnsureDirectory(std::string_view path) {
       current += '/';
   }
   return true;
-}
-
-// Text inserted after command translation still passes through Ninja's
-// parser.  Preserve shell dollar expansions in that text by escaping them
-// for Ninja without touching the already-translated command body.
-static std::string NinjaEscapeInserted(std::string_view s) {
-  std::string out;
-  out.reserve(s.size());
-  for (char c : s) {
-    if (c == '$')
-      out += "$$";
-    else
-      out += c;
-  }
-  return out;
 }
 
 static size_t FindCommandLineFlag(std::string_view cmd, std::string_view name) {
@@ -250,8 +233,7 @@ class NinjaGenerator {
   void Generate(const std::vector<NamedDepNode>& nodes,
                 const std::string& orig_args) {
     if (g_flags.ninja_dir && !EnsureDirectory(g_flags.ninja_dir))
-      ERROR("*** cannot create Ninja output directory: %s",
-            g_flags.ninja_dir);
+      ERROR("*** cannot create Ninja output directory: %s", g_flags.ninja_dir);
     unlink(GetNinjaStampFilename().c_str());
     PopulateNinjaNodes(nodes);
     GenerateNinja();
@@ -284,19 +266,13 @@ class NinjaGenerator {
     // would incorrectly run guard recipes such as Kbuild's "missing .config"
     // diagnostic even when the file is present. FORCE and other explicit
     // prerequisites still enter the graph normally.
-    if (node.has_rule && !node.is_phony && Exists(node.output.str()) &&
-        node.deps.empty() && node.order_onlys.empty() &&
-        node.validations.empty()) {
-      return;
-    }
     if (done_.exists(node.output)) {
       return;
     }
     done_.insert(node.output);
     active_nodes_.insert(node.output.str());
-    ScopedFrame frame(
-        ce_.evaluator()->Enter(FrameType::NINJA, node.lexical_output.str(),
-                               node.loc));
+    ScopedFrame frame(ce_.evaluator()->Enter(
+        FrameType::NINJA, node.lexical_output.str(), node.loc));
 
     // A hack to exclude out phony target in Android. If this exists,
     // "ninja -t clean" tries to remove this directory and fails.
@@ -384,8 +360,7 @@ class NinjaGenerator {
           // child process.  Resolve such assignment values while the parent
           // evaluator is still available; otherwise the child receives an
           // empty override and masks its own compiler definition.
-          if (in[1] == '(' && quote == '\'' &&
-              cmd_buf->size() > orig_size &&
+          if (in[1] == '(' && quote == '\'' && cmd_buf->size() > orig_size &&
               (*cmd_buf)[cmd_buf->size() - 1] == '=') {
             const char* end = in + 2;
             int depth = 1;
@@ -541,7 +516,24 @@ class NinjaGenerator {
         *cmd_buf += " && ";
       }
 
-      const char* in = c.cmd.c_str();
+      std::string encoded_script;
+      if (preserve_newlines) {
+        encoded_script = "eval \"$(printf '%s\\n'";
+        size_t start = 0;
+        while (start <= c.cmd.size()) {
+          const size_t end = c.cmd.find('\n', start);
+          encoded_script +=
+              " " + ShellQuote(c.cmd.substr(start, end == std::string::npos
+                                                       ? std::string::npos
+                                                       : end - start));
+          if (end == std::string::npos)
+            break;
+          start = end + 1;
+        }
+        encoded_script += ")\"";
+      }
+      const char* in =
+          preserve_newlines ? encoded_script.c_str() : c.cmd.c_str();
       while (isspace(*in))
         in++;
 
@@ -622,122 +614,22 @@ class NinjaGenerator {
       std::string description = "build $out";
       std::string cmd_buf;
       const std::string command_shell =
-          commands.front().shell.empty() ? shell_ :
-                                           EscapeNinja(commands.front().shell);
+          commands.front().shell.empty() ? shell_
+                                         : EscapeNinja(commands.front().shell);
       const std::string command_shellflag =
           commands.front().shellflag.empty()
               ? shell_flags_
               : EscapeNinja(commands.front().shellflag);
       GenShellScript(node->output.c_str(), commands, &cmd_buf, &description,
                      node->oneshell);
-      // Recursive Kati commands execute after graph generation, in a new
-      // process.  The child must receive the effective values of exported
-      // make variables from this node's scope, not only the original process
-      // environment.  This matters for ordinary recursive make patterns
-      // where a parent directory appends flags before descending into a
-      // child directory.
-      if (IsRecursiveKatiCommand(cmd_buf)) {
-        // A recursive Kati invocation is an opaque sub-build from Ninja's
-        // point of view.  Its child makefile can update outputs which are
-        // not visible in this graph (Kbuild commonly regenerates shared
-        // headers from several recursive entry points).  Running such
-        // invocations concurrently can therefore race on the same temporary
-        // files.  Keep the boundary parallel-safe without imposing a global
-        // limit on ordinary compiler recipes.
-        use_local_pool = true;
-        std::string exported;
-        std::unordered_set<std::string> emitted_exports;
-        auto emit_export = [&](Symbol name) {
-          const std::string name_string(name.str());
-          if (name_string == "MAKEFLAGS" || name_string == "MAKEOVERRIDES")
-            return;
-          Var* variable = ev_->LookupVar(name);
-          if (variable == nullptr || !variable->IsDefined())
-            return;
-          if (name_string.empty() ||
-              (!std::isalpha(static_cast<unsigned char>(name_string[0])) &&
-               name_string[0] != '_'))
-            return;
-          for (size_t i = 1; i < name_string.size(); ++i) {
-            if (!std::isalnum(static_cast<unsigned char>(name_string[i])) &&
-                name_string[i] != '_')
-              return;
-          }
-          if (!emitted_exports.insert(name_string).second)
-            return;
-          exported += "export ";
-          exported += name_string;
-          exported += "=";
-          exported += NinjaEscapeInserted(ShellQuote(ev_->EvalVar(name)));
-          exported += "; ";
-        };
-
-        for (const auto& [name, is_exported] : ev_->exports()) {
-          if (!is_exported)
-            continue;
-          emit_export(name);
-        }
-        if (ev_->current_scope() != nullptr) {
-          for (Symbol name : ev_->current_scope()->exported())
-            if (ev_->current_scope()->IsExported(name))
-              emit_export(name);
-        }
-
-        // Variables imported from the caller's environment are exported by
-        // GNU make unless explicitly unexported.  Their values can be
-        // changed by a recursive makefile (for example by appending a
-        // directory-specific compiler flag), so the original environment
-        // snapshot alone is insufficient for a deferred child graph.
-        for (char** p = environ; p != nullptr && *p != nullptr; ++p) {
-          const char* equal = strchr(*p, '=');
-          if (equal == nullptr || equal == *p)
-            continue;
-          const std::string_view name_view(*p, equal - *p);
-          if (name_view == "MAKEFLAGS" || name_view == "MAKEOVERRIDES")
-            continue;
-          const Symbol name = Intern(name_view);
-          auto explicit_export = ev_->exports().find(name);
-          if (explicit_export != ev_->exports().end() &&
-              !explicit_export->second)
-            continue;
-          Var* value = ev_->LookupVar(name);
-          if (value == nullptr || !value->IsDefined())
-            continue;
-          const std::string current = ev_->EvalVar(name);
-          if (current != equal + 1)
-            emit_export(name);
-        }
-        Var* makeflags = ev_->LookupVar(Intern("MAKEFLAGS"));
-        if (makeflags != nullptr && makeflags->IsDefined()) {
-          exported = "export MAKEFLAGS=" +
-                     ShellQuote(makeflags->Eval(ev_)) +
-                     "; unset MAKEOVERRIDES; " + exported;
-        } else {
-          exported = "unset MAKEFLAGS MAKEOVERRIDES; " + exported;
-        }
-        cmd_buf = exported + cmd_buf;
+      if (!node->is_phony && node->deps.empty() && node->order_onlys.empty() &&
+          node->validations.empty()) {
+        cmd_buf = "if [ -e " + ShellQuote(node->output.str()) +
+                  " ]; then :; else " + cmd_buf + "; fi";
       }
-      if (node->export_all_variables) {
-        std::string exported;
-        std::unordered_set<std::string> emitted_exports;
-        for (std::string_view name_view : GetSymbolNames([](Var* var) {
-               return var->IsDefined() && !var->Obsolete();
-             })) {
-          if (!IsShellIdentifier(name_view) ||
-              !emitted_exports.insert(std::string(name_view)).second)
-            continue;
-          Symbol name = Intern(name_view);
-          Var* variable = ev_->LookupVar(name);
-          if (variable == nullptr || !variable->IsDefined())
-            continue;
-          exported += "export ";
-          exported += name_view;
-          exported += "=";
-          exported += NinjaEscapeInserted(ShellQuote(ev_->EvalVar(name)));
-          exported += "; ";
-        }
-        cmd_buf = exported + cmd_buf;
-      }
+      // Recursive sub-builds remain serialized; recipe exports are prepared by
+      // CommandEvaluator for both direct and Ninja execution.
+      use_local_pool = IsRecursiveKatiCommand(cmd_buf);
       // The generated environment snapshot is part of Kati's graph output,
       // but users may invoke Ninja directly instead of using ninja.sh.  Load
       // that snapshot inside every recipe so exported make variables have the
@@ -750,9 +642,8 @@ class NinjaGenerator {
       // preserving absolute paths verbatim.
       const std::string env_script = GetEnvScriptFilename();
       const std::string env_script_ref =
-          !env_script.empty() && env_script.front() == '/'
-              ? env_script
-              : "./" + env_script;
+          !env_script.empty() && env_script.front() == '/' ? env_script
+                                                           : "./" + env_script;
       const std::string quoted_env_script = ShellQuote(env_script_ref);
       cmd_buf = "if [ -r " + quoted_env_script + " ]; then . " +
                 quoted_env_script + "; fi; " + cmd_buf;
@@ -776,14 +667,15 @@ class NinjaGenerator {
         guard += "kati_lowres_skip=1; ";
         guard += "kati_output_sec=$$(kati_mtime " + output + "); ";
         for (Symbol input : node->low_resolution_inputs) {
-          guard += "if [ ! -e " + ShellQuote(input.str()) + " ] || [ $$(kati_mtime " +
-                   ShellQuote(input.str()) + ") -gt \"$$kati_output_sec\" ]; then "
+          guard += "if [ ! -e " + ShellQuote(input.str()) +
+                   " ] || [ $$(kati_mtime " + ShellQuote(input.str()) +
+                   ") -gt \"$$kati_output_sec\" ]; then "
                    "kati_lowres_skip=0; fi; ";
         }
         for (Symbol input : node->actual_inputs) {
           if (std::find(node->low_resolution_inputs.begin(),
-                        node->low_resolution_inputs.end(), input) !=
-              node->low_resolution_inputs.end())
+                        node->low_resolution_inputs.end(),
+                        input) != node->low_resolution_inputs.end())
             continue;
           guard += "if [ " + ShellQuote(input.str()) + " -nt " + output +
                    " ]; then kati_lowres_skip=0; fi; ";
@@ -792,38 +684,13 @@ class NinjaGenerator {
         cmd_buf = guard + cmd_buf;
       }
 
-      // GNU make permits a regeneration recipe to update its declared output
-      // and then return failure to request a fresh make pass.  Ninja does not
-      // retain a failed edge in its command log, so the same recipe would be
-      // executed forever on every invocation.  Preserve the useful part of
-      // GNU make's restart behavior generically: if a failing recipe changed
-      // its declared output during this invocation, consider that edge
-      // complete.  A failure that leaves the output untouched remains a real
-      // build failure.  The recipe is isolated in a subshell so this wrapper
-      // cannot alter its shell state or parallel scheduling behavior.
-      // Directory targets commonly wrap recursive make invocations.  Their
-      // directory already exists, so a changed directory timestamp must not
-      // turn a failed child build into a successful regeneration.
-      const std::string restart_output =
-          "[ -e " + output + " ] && [ ! -d " + output + " ]";
-      cmd_buf =
-          "kati_restart_stamp=$${TMPDIR:-/tmp}/kati-restart-$$$$; "
-          "touch \"$$kati_restart_stamp\"; ( " + cmd_buf +
-          " ); kati_restart_status=$$?; "
-          "if [ $$kati_restart_status -ne 0 ] && " +
-          (node->delete_on_error && !node->precious
-               ? "false"
-               : restart_output) +
-          " && [ " + output +
-          " -nt \"$$kati_restart_stamp\" ]; then "
-          "rm -f \"$$kati_restart_stamp\"; "
-          "echo 'kati: output updated by a failed regeneration recipe; "
-          "continuing with the generated graph' >&2; exit 0; fi; "
-          "if [ $$kati_restart_status -ne 0 ] && [ " +
-          (node->delete_on_error && !node->precious ? "-e " + output
-                                                    : "false") +
-          " ]; then rm -f " + output + "; fi; "
-          "rm -f \"$$kati_restart_stamp\"; exit $$kati_restart_status";
+      if (node->delete_on_error && !node->precious) {
+        cmd_buf = "( " + cmd_buf +
+                  " ); kati_status=$$?; "
+                  "if [ $$kati_status -ne 0 ] && [ -e " +
+                  output + " ] && [ ! -d " + output + " ]; then rm -f " +
+                  output + "; fi; exit $$kati_status";
+      }
       std::string depfile;
       const bool has_depfile = GetDepfile(node, &cmd_buf, &depfile);
       std::string rule_key = description;
@@ -866,8 +733,7 @@ class NinjaGenerator {
           // r=...; export r; ...). ShellQuote preserves the command until the
           // requested shell parses it.
           out << " command = " << command_shell << ' ' << command_shellflag
-              << ' '
-              << ShellQuote(cmd_buf) << "\n";
+              << ' ' << ShellQuote(cmd_buf) << "\n";
         }
         if (node->is_restat)
           out << " restat = 1\n";
@@ -1090,7 +956,9 @@ class NinjaGenerator {
 
   void GenerateNinja() {
     ScopedTimeReporter tr("ninja gen (emit)");
-    std::ofstream out(GetNinjaFilename(), std::ios::binary);
+    const std::string filename = GetNinjaFilename();
+    const std::string temporary = filename + ".tmp";
+    std::ofstream out(temporary, std::ios::binary);
     if (!out)
       PERROR("fopen(build.ninja) failed");
 
@@ -1174,10 +1042,17 @@ class NinjaGenerator {
       std::string_view val(getenv(e.c_str()));
       used_envs_.emplace(e.str(), std::string(val));
     }
+    out.close();
+    if (!out)
+      PERROR("write(build.ninja) failed");
+    if (rename(temporary.c_str(), filename.c_str()) != 0)
+      PERROR("rename(build.ninja) failed");
   }
 
   void GenerateShell() {
-    FILE* fp = fopen(GetEnvScriptFilename().c_str(), "wb");
+    const std::string env_filename = GetEnvScriptFilename();
+    const std::string env_temporary = env_filename + ".tmp";
+    FILE* fp = fopen(env_temporary.c_str(), "wb");
     if (fp == NULL)
       PERROR("fopen(env.sh) failed");
 
@@ -1197,8 +1072,8 @@ class NinjaGenerator {
         std::string val = ev_->EvalVar(symbol);
         const std::string quoted_symbol = ShellQuote(symbol.str());
         const std::string quoted_val = ShellQuote(val);
-        fprintf(fp, "export %s=%s\n",
-                quoted_symbol.c_str(), quoted_val.c_str());
+        fprintf(fp, "export %s=%s\n", quoted_symbol.c_str(),
+                quoted_val.c_str());
       } else {
         const std::string quoted_symbol = ShellQuote(symbol.str());
         fprintf(fp, "unset %s\n", quoted_symbol.c_str());
@@ -1228,13 +1103,17 @@ class NinjaGenerator {
       const std::string val = ev_->EvalVar(symbol);
       const std::string quoted_symbol = ShellQuote(symbol.str());
       const std::string quoted_val = ShellQuote(val);
-      fprintf(fp, "export %s=%s\n", quoted_symbol.c_str(),
-              quoted_val.c_str());
+      fprintf(fp, "export %s=%s\n", quoted_symbol.c_str(), quoted_val.c_str());
     }
 
-    fclose(fp);
+    if (fclose(fp) != 0)
+      PERROR("fclose(env.sh) failed");
+    if (rename(env_temporary.c_str(), env_filename.c_str()) != 0)
+      PERROR("rename(env.sh) failed");
 
-    fp = fopen(GetNinjaShellScriptFilename().c_str(), "wb");
+    const std::string launcher_filename = GetNinjaShellScriptFilename();
+    const std::string launcher_temporary = launcher_filename + ".tmp";
+    fp = fopen(launcher_temporary.c_str(), "wb");
     if (fp == NULL)
       PERROR("fopen(ninja.sh) failed");
 
@@ -1261,33 +1140,44 @@ class NinjaGenerator {
     fprintf(fp, "    -j[0-9]*) ninja_jobs=\"${arg#-j}\" ;;\n");
     fprintf(fp, "    -j=*) ninja_jobs=\"${arg#-j=}\" ;;\n");
     fprintf(fp, "    -j) prev=\"-j\" ;;\n");
-    fprintf(fp, "    [0-9]*) if [ \"$prev\" = \"-j\" ]; then ninja_jobs=\"$arg\"; prev=\"\"; fi ;;\n");
+    fprintf(fp,
+            "    [0-9]*) if [ \"$prev\" = \"-j\" ]; then ninja_jobs=\"$arg\"; "
+            "prev=\"\"; fi ;;\n");
     fprintf(fp, "    *) prev=\"\" ;;\n");
     fprintf(fp, "  esac\n");
     fprintf(fp, "done\n");
     fprintf(fp, "if [ \"$kati_jobs_explicit\" -eq 0 ]; then\n");
     fprintf(fp, "  kati_jobs=\"${ninja_jobs:-$default_kati_jobs}\"\n");
     fprintf(fp, "fi\n");
-    fprintf(fp, "if [ -n \"$kati_jobs\" ]; then export KATI_JOBS=\"$kati_jobs\"; fi\n");
+    fprintf(
+        fp,
+        "if [ -n \"$kati_jobs\" ]; then export KATI_JOBS=\"$kati_jobs\"; fi\n");
 
     // Recursive Kati processes are invisible to Ninja's scheduler. Give them
     // one shared byte-token FIFO so nested Kati executors consume the same
     // runtime budget instead of multiplying it at every recursion level.
     fprintf(fp, "kati_fifo=\"\"\n");
     fprintf(fp, "if [ -z \"${KATI_JOBSERVER_FIFO:-}\" ]; then\n");
-    fprintf(fp, "  case \"$kati_jobs\" in ''|0|*[!0-9]*) kati_jobs=1; export KATI_JOBS=1 ;; esac\n");
+    fprintf(fp,
+            "  case \"$kati_jobs\" in ''|0|*[!0-9]*) kati_jobs=1; export "
+            "KATI_JOBS=1 ;; esac\n");
     fprintf(fp, "  kati_fifo_base=\"${TMPDIR:-/tmp}/kati-jobserver-$$\"\n");
     fprintf(fp, "  kati_fifo=\"$kati_fifo_base\"\n");
     fprintf(fp, "  kati_fifo_i=0\n");
-    fprintf(fp, "  while ! (umask 077 && mkfifo \"$kati_fifo\") 2>/dev/null; do\n");
+    fprintf(fp,
+            "  while ! (umask 077 && mkfifo \"$kati_fifo\") 2>/dev/null; do\n");
     fprintf(fp, "    kati_fifo_i=$((kati_fifo_i + 1))\n");
     fprintf(fp, "    kati_fifo=\"$kati_fifo_base-$kati_fifo_i\"\n");
     fprintf(fp, "  done\n");
     fprintf(fp, "  exec 9<>\"$kati_fifo\"\n");
     fprintf(fp, "  kati_i=0\n");
-    fprintf(fp, "  while [ \"$kati_i\" -lt \"$kati_jobs\" ]; do printf x >&9; kati_i=$((kati_i + 1)); done\n");
+    fprintf(fp,
+            "  while [ \"$kati_i\" -lt \"$kati_jobs\" ]; do printf x >&9; "
+            "kati_i=$((kati_i + 1)); done\n");
     fprintf(fp, "  export KATI_JOBSERVER_FIFO=\"$kati_fifo\"\n");
-    fprintf(fp, "  trap 'if [ -n \"${kati_fifo:-}\" ]; then rm -f \"$kati_fifo\"; fi' EXIT HUP INT TERM\n");
+    fprintf(fp,
+            "  trap 'if [ -n \"${kati_fifo:-}\" ]; then rm -f \"$kati_fifo\"; "
+            "fi' EXIT HUP INT TERM\n");
     fprintf(fp, "fi\n");
 
     // Keep Ninja as a child so the wrapper can cleanly terminate it before
@@ -1297,8 +1187,11 @@ class NinjaGenerator {
     // incremental attempt by racing the same output directory.
     fprintf(fp, "kati_ninja_pid=\"\"\n");
     fprintf(fp, "kati_cleanup() {\n");
-    fprintf(fp, "  if [ -n \"$kati_ninja_pid\" ]; then kill -TERM \"$kati_ninja_pid\" 2>/dev/null || :; fi\n");
-    fprintf(fp, "  if [ -n \"${kati_fifo:-}\" ]; then rm -f \"$kati_fifo\"; fi\n");
+    fprintf(fp,
+            "  if [ -n \"$kati_ninja_pid\" ]; then kill -TERM "
+            "\"$kati_ninja_pid\" 2>/dev/null || :; fi\n");
+    fprintf(fp,
+            "  if [ -n \"${kati_fifo:-}\" ]; then rm -f \"$kati_fifo\"; fi\n");
     fprintf(fp, "}\n");
     fprintf(fp, "trap 'kati_cleanup; exit 129' HUP INT TERM\n");
     fprintf(fp, "ninja -f %s ", GetNinjaFilename().c_str());
@@ -1314,10 +1207,13 @@ class NinjaGenerator {
     fprintf(fp, "if [ -n \"$kati_fifo\" ]; then rm -f \"$kati_fifo\"; fi\n");
     fprintf(fp, "exit $kati_status\n");
 
-    fclose(fp);
+    if (fclose(fp) != 0)
+      PERROR("fclose(ninja.sh) failed");
 
-    if (chmod(GetNinjaShellScriptFilename().c_str(), 0755) != 0)
+    if (chmod(launcher_temporary.c_str(), 0755) != 0)
       PERROR("chmod ninja.sh failed");
+    if (rename(launcher_temporary.c_str(), launcher_filename.c_str()) != 0)
+      PERROR("rename(ninja.sh) failed");
   }
 
   void GenerateStamp(const std::string& orig_args) {
@@ -1326,6 +1222,7 @@ class NinjaGenerator {
 
     size_t r = fwrite(&start_time_, sizeof(start_time_), 1, fp);
     CHECK(r == 1);
+    CHECK(fwrite("KAT2", 1, 4, fp) == 4);
 
     std::unordered_set<std::string> makefiles;
     MakefileCacheManager::Get().GetAllFilenames(&makefiles);
@@ -1400,9 +1297,11 @@ class NinjaGenerator {
 
     DumpString(fp, orig_args);
 
-    fclose(fp);
-
-    rename(GetStampTempFilename().c_str(), GetNinjaStampFilename().c_str());
+    if (fclose(fp) != 0)
+      PERROR("fclose(kati_stamp) failed");
+    if (rename(GetStampTempFilename().c_str(),
+               GetNinjaStampFilename().c_str()) != 0)
+      PERROR("rename(kati_stamp) failed");
   }
 
   CommandEvaluator ce_;
@@ -1430,6 +1329,10 @@ std::string GetNinjaFilename() {
 
 std::string GetNinjaShellScriptFilename() {
   return NinjaGenerator::GetFilename("ninja%s.sh");
+}
+
+std::string GetEnvScriptFilename() {
+  return NinjaGenerator::GetFilename("env%s.sh");
 }
 
 std::string GetNinjaStampFilename() {

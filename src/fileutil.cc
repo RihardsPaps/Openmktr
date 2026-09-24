@@ -123,7 +123,8 @@ int RunCommand(const std::string& shell,
                const std::string& cmd,
                RedirectStderr redirect_stderr,
                std::string* s,
-               bool acquire_job_token) {
+               bool acquire_job_token,
+               const std::function<void(std::string_view)>& on_output) {
   const int job_token = acquire_job_token ? AcquireKatiJobToken() : -1;
   const char* argv[] = {NULL, NULL, NULL, NULL};
   std::string cmd_with_shell;
@@ -144,6 +145,9 @@ int RunCommand(const std::string& shell,
   int pipefd[2];
   if (pipe(pipefd) != 0)
     PERROR("pipe failed");
+  if (fcntl(pipefd[0], F_SETFD, FD_CLOEXEC) < 0 ||
+      fcntl(pipefd[1], F_SETFD, FD_CLOEXEC) < 0)
+    PERROR("fcntl(FD_CLOEXEC) failed");
 
   posix_spawn_file_actions_t action;
   int err = posix_spawn_file_actions_init(&action);
@@ -212,25 +216,20 @@ int RunCommand(const std::string& shell,
   int status;
   close(pipefd[1]);
   while (true) {
-    int result = waitpid(pid, &status, WNOHANG);
-    if (result < 0)
-      PERROR("waitpid failed");
-
-    while (true) {
-      char buf[4096];
-      ssize_t r = HANDLE_EINTR(read(pipefd[0], buf, 4096));
-      if (r < 0)
-        PERROR("read failed");
-      if (r == 0)
-        break;
-      s->append(buf, buf + r);
-    }
-
-    if (result != 0) {
+    char buf[4096];
+    ssize_t r = HANDLE_EINTR(read(pipefd[0], buf, sizeof(buf)));
+    if (r < 0)
+      PERROR("read failed");
+    if (r == 0)
       break;
-    }
+    if (on_output)
+      on_output(std::string_view(buf, r));
+    else
+      s->append(buf, buf + r);
   }
   close(pipefd[0]);
+  if (HANDLE_EINTR(waitpid(pid, &status, 0)) < 0)
+    PERROR("waitpid failed");
 
   ReleaseKatiJobToken(job_token);
   return status;

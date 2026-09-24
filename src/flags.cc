@@ -17,11 +17,13 @@
 #include "flags.h"
 #include "fileutil.h"
 
+#include <limits.h>
 #include <stdlib.h>
 #include <unistd.h>
 
 #include "log.h"
 #include "strutil.h"
+#include "version.h"
 
 Flags g_flags;
 
@@ -72,6 +74,9 @@ static bool ParseCommandLineOptionWithArg(std::string_view option,
   if (!HasPrefix(arg, option))
     return false;
   if (arg[option.size()] == '\0') {
+    if (argv[*index + 1] == nullptr)
+      ERROR("Missing value for %.*s", static_cast<int>(option.size()),
+            option.data());
     ++*index;
     *out_arg = argv[*index];
     return true;
@@ -106,7 +111,6 @@ void Flags::Parse(int argc, char** argv) {
   }
 
   if (const char* makeflags = getenv("MAKEFLAGS")) {
-
     // GNU make uses backslash escaping in MAKEFLAGS/MAKEOVERRIDES so that
     // whitespace inside a command-line variable value survives recursive
     // make invocations.  WordScanner is intentionally a simple whitespace
@@ -161,26 +165,28 @@ void Flags::Parse(int argc, char** argv) {
 
   for (int i = 1; i < argc; i++) {
     const char* arg = argv[i];
+    if (strcmp(arg, "--version") == 0) {
+      printf("ckati %s\n", kGitVersion);
+      exit(0);
+    }
     bool should_propagate = true;
     int pi = i;
 
-    if (arg[0] == '-' && arg[1] != '-' &&
-        arg[1] != '\0' && arg[2] != '\0') {
+    if (arg[0] == '-' && arg[1] != '-' && arg[1] != '\0' && arg[2] != '\0') {
       bool valid_cluster = true;
       bool handled = false;
 
       for (size_t pos = 1; arg[pos] != '\0'; pos++) {
         char option = arg[pos];
 
-        if (option == 'c' || option == 'd' || option == 'i' ||
-            option == 'n' || option == 'q' || option == 's' ||
-            option == 't' || option == 'k' || option == 'o') {
+        if (option == 'c' || option == 'd' || option == 'i' || option == 'n' ||
+            option == 'q' || option == 's' || option == 't' || option == 'k' ||
+            option == 'o') {
           handled = true;
           continue;
         }
 
-        if (option == 'C' || option == 'f' ||
-            option == 'j') {
+        if (option == 'C' || option == 'f' || option == 'j') {
           handled = true;
 
           const char* value = arg + pos + 1;
@@ -237,8 +243,7 @@ void Flags::Parse(int argc, char** argv) {
     } else if (ParseCommandLineOptionWithArg("--old-file", argv, &i,
                                              &old_file)) {
       old_files.emplace_back(TrimLeadingCurdir(old_file));
-    } else if (ParseCommandLineOptionWithArg("-W", argv, &i,
-                                             &what_if_file)) {
+    } else if (ParseCommandLineOptionWithArg("-W", argv, &i, &what_if_file)) {
       what_if_files.emplace_back(TrimLeadingCurdir(what_if_file));
     } else if (ParseCommandLineOptionWithArg("--what-if", argv, &i,
                                              &what_if_file) ||
@@ -350,16 +355,22 @@ void Flags::Parse(int argc, char** argv) {
         traced_variables_pattern.push_back(Pattern(pat));
       }
     } else if (ParseCommandLineOptionWithArg("-j", argv, &i, &num_jobs_str)) {
-      num_jobs = strtol(num_jobs_str, NULL, 10);
-      if (num_jobs <= 0) {
+      char* end = nullptr;
+      long parsed = strtol(num_jobs_str, &end, 10);
+      if (*num_jobs_str == '\0' || *end != '\0' || parsed <= 0 ||
+          parsed > INT_MAX) {
         ERROR("Invalid -j flag: %s", num_jobs_str);
       }
+      num_jobs = static_cast<int>(parsed);
     } else if (ParseCommandLineOptionWithArg("--remote_num_jobs", argv, &i,
                                              &num_jobs_str)) {
-      remote_num_jobs = strtol(num_jobs_str, NULL, 10);
-      if (remote_num_jobs <= 0) {
+      char* end = nullptr;
+      long parsed = strtol(num_jobs_str, &end, 10);
+      if (*num_jobs_str == '\0' || *end != '\0' || parsed <= 0 ||
+          parsed > INT_MAX) {
         ERROR("Invalid -j flag: %s", num_jobs_str);
       }
+      remote_num_jobs = static_cast<int>(parsed);
     } else if (ParseCommandLineOptionWithArg("--ninja_suffix", argv, &i,
                                              &ninja_suffix)) {
     } else if (ParseCommandLineOptionWithArg("--ninja_dir", argv, &i,

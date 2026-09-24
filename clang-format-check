@@ -5,7 +5,14 @@ formatter=${CLANG_FORMAT:-clang-format}
 formatted=$(mktemp)
 trap 'rm -f "$formatted"' EXIT HUP INT TERM
 
-for source in src/*.cc src/*.h; do
+if [ -n "${CLANG_FORMAT_FILES:-}" ]; then
+  # CI supplies repository-relative C++ paths changed by this patch.
+  set -- $CLANG_FORMAT_FILES
+else
+  set -- src/*.cc src/*.h
+fi
+
+for source do
   "$formatter" "$source" > "$formatted"
   if ! cmp -s "$formatted" "$source"; then
     printf 'Formatting differs: %s\n' "$source" >&2

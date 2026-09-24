@@ -12,7 +12,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Build GNU-free test image
-        run: docker build -t kati-test .
+        run: |
+          set -o pipefail
+          docker build --build-arg KATI_SOURCE_REVISION=${{ github.sha }} -t kati-test . 2>&1 | tee build.log
+      - name: Check changed C++ formatting
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+        run: |
+          base="${PR_BASE:-$PUSH_BASE}"
+          files=$(git diff --name-only --diff-filter=ACMRT "$base" "$GITHUB_SHA" -- 'src/*.cc' 'src/*.h')
+          if [ -n "$files" ]; then
+            docker run --rm -e CLANG_FORMAT_FILES="$files" kati-test sh clang-format-check
+          fi
       - name: Run tests in Chimera
-        run: docker run --rm kati-test
+        run: |
+          set -o pipefail
+          docker run --rm kati-test 2>&1 | tee tests.log
+      - name: Run sanitizer checks in Chimera
+        run: |
+          set -o pipefail
+          docker run --rm -e ASAN_OPTIONS=detect_leaks=0 kati-test /bin/sh -c '
+            python tools/gen_sanitizer_build.py &&
+            ninja -f build.sanitizer.ninja -j4 ckati-sanitized tests &&
+            out/sanitized/find_test && out/sanitized/ninja_test &&
+            out/sanitized/strutil_test &&
+            KATI_BINARY=/workspace/ckati-sanitized python tests/correctness.py' 2>&1 | tee sanitizer.log
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: chimera-logs
+          path: '*.log'

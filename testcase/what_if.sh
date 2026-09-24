@@ -13,17 +13,20 @@ cat >"$tmp/Makefile" <<'EOF'
 all: out
 
 out: dep | order
-	@printf out >> log
+	@printf out >> log; : > out
 
 dep:
-	@printf dep >> log
+	@printf dep >> log; : > dep
 
 order:
-	@printf order >> log
+	@printf order >> log; : > order
 EOF
 
 (cd "$tmp" && "$mk" -f Makefile all >/dev/null)
-[ "$(cat "$tmp/log")" = deporderout ] || exit 1
+case "$(cat "$tmp/log")" in
+  deporderout|orderdepout) ;;
+  *) exit 1 ;;
+esac
 
 : >"$tmp/log"
 (cd "$tmp" && "$mk" -W ./dep -f Makefile all >/dev/null)

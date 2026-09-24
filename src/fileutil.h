@@ -17,6 +17,7 @@
 
 #include <errno.h>
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -38,7 +39,8 @@ int RunCommand(const std::string& shell,
                const std::string& cmd,
                RedirectStderr redirect_stderr,
                std::string* out,
-               bool acquire_job_token = true);
+               bool acquire_job_token = true,
+               const std::function<void(std::string_view)>& on_output = {});
 
 // Acquire and release one token from the optional inherited Kati jobserver.
 // A negative value means that no FIFO token was configured.

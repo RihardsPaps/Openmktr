@@ -75,6 +75,20 @@ The C++ code is organized around that path:
 
 Both modes use the same parsing and rule resolution. Some Makefile constructs have no exact Ninja equivalent; changes to conversion behavior need coverage in both modes.
 
+## Modes and compatibility
+
+| Behavior | Direct execution | Generated Ninja |
+| --- | --- | --- |
+| Dependency scheduling | Runs recipes with a bounded `-j` job limit. | Ninja schedules the emitted graph. |
+| Makefile changes | Parsed on each invocation. | Rerun `ckati --ninja --regen` before invoking the generated graph. |
+| Exported variables | Captured at each recipe boundary. | Captured during graph generation and restored by generated recipes. |
+| Recursive builds | Child Kati processes evaluate their own Makefiles. | Recursive commands are opaque Ninja edges and share a Kati jobserver. |
+| Dynamic Makefile features | Evaluated by Kati when supported. | Features without an exact Ninja equivalent may be resolved during graph generation. |
+
+Kati implements a subset of GNU Make syntax. The `load` directive for dynamic Make extensions is unsupported. If a Makefile relies on side effects from parse-time `$(shell ...)`, generated graphs need particular care: regeneration rechecks recorded inputs and command results, but Ninja itself does not re-evaluate the Makefile. Prefer direct mode for workflows whose dependencies can change while recipes run.
+
+Common options are `-f FILE` for the Makefile, `-jN` for direct execution concurrency, `-k` to continue after recipe failures, `-n` for a dry run, `-q` to ask whether targets need building, and `-t` to update existing targets without recipes. `--ninja` writes a Ninja graph; add `--regen` to reuse it when its recorded inputs are current. `--ninja_dir DIR` places generated files in another directory. `--version` prints the source revision built into `ckati`; local builds with uncommitted changes have a `+dirty` suffix.
+
 ## GNU-free boundary
 
 The supported build and test path is the Chimera Linux environment in [`Dockerfile`](Dockerfile). It uses Clang/LLVM, musl, libc++, Ninja, Python, and POSIX shell tools. The project does not require GNU Make, GCC, glibc, Bash, or GNU utilities to build, test, or run `ckati`. Makefile syntax compatibility is implemented in this project; it does not execute GNU Make.
@@ -90,11 +104,14 @@ Inside Chimera, run the test binaries and self-contained regression snapshots wi
 ```sh
 ninja -f build.ninja -j4 ckati tests
 out/find_test && out/ninja_test && out/strutil_test
+python tests/correctness.py
 python tests/regression.py
 sh testcase/dump/run.sh
 ```
 
-The snapshot suite covers direct execution, Ninja generation, recursive and parallel builds, and converted POSIX shell tests. It compares against checked-in expected outcomes, without a GNU Make reference executable. Some fixtures intentionally expect a nonzero result. When changing behavior, add or update a fixture in [`testcase/`](testcase/), then run `python tests/regression.py --record` and review the resulting snapshot diff.
+The snapshot suite covers direct execution, Ninja generation, recursive and parallel builds, and converted POSIX shell tests. It compares against checked-in expected outcomes, without a GNU Make reference executable. Some fixtures intentionally expect a nonzero result. The existing crash cases are listed separately in [`known_crashes.json`](tests/known_crashes.json); recording snapshots rejects new crashes and requires recovered cases to leave that list. Use `python tests/regression.py --case pattern` to inspect matching scenarios. When changing behavior, add or update a fixture in [`testcase/`](testcase/), then run `python tests/regression.py --record` in Chimera and review the resulting snapshot diff.
+
+The focused correctness suite checks incremental rebuilds, failure handling, recipe exports, regeneration, and job limits using output contents and exit codes. To run the compiler sanitizers in a separate output directory, use `python tools/gen_sanitizer_build.py`, build `ckati-sanitized tests` with `ninja -f build.sanitizer.ninja`, then set `KATI_BINARY` to the sanitized binary when running `tests/correctness.py`. The CI image runs these checks on musl.
 
 To measure conversion, no-op regeneration, parallel execution, peak memory, and binary size:
 
@@ -103,7 +120,7 @@ python tests/bench.py ./ckati
 python tests/bench.py ./ckati --baseline /path/to/baseline/ckati
 ```
 
-Build both binaries with the same toolchain for a useful comparison. [PR #1](https://github.com/RihardsPaps/UNIVERSAL_GNUMAKE_TO_NINJA_TOOL/pull/1) records the original C++ comparison, test results, and GNU dependency audit. On those fixed workloads, the refactor showed no material runtime or peak-memory regression and reduced the binary from 894,896 to 836,960 bytes.
+The benchmark covers conversion, no-op regeneration, flat and nested parallel execution, incremental no-op builds, peak memory, and binary size. Build both binaries with the same toolchain for a useful comparison. [PR #1](https://github.com/RihardsPaps/UNIVERSAL_GNUMAKE_TO_NINJA_TOOL/pull/1) records the original C++ comparison, test results, and GNU dependency audit. On those fixed workloads, the refactor showed no material runtime or peak-memory regression and reduced the binary from 894,896 to 836,960 bytes.
 
 ## Contributing
 

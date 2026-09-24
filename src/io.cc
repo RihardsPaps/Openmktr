@@ -16,6 +16,8 @@
 
 #include "io.h"
 
+#include <limits.h>
+
 #include "log.h"
 
 void DumpInt(FILE* fp, int v) {
@@ -24,6 +26,7 @@ void DumpInt(FILE* fp, int v) {
 }
 
 void DumpString(FILE* fp, std::string_view s) {
+  CHECK(s.size() <= INT_MAX);
   DumpInt(fp, s.size());
   size_t r = fwrite(s.data(), 1, s.size(), fp);
   CHECK(r == s.size());
@@ -39,10 +42,13 @@ int LoadInt(FILE* fp) {
 
 bool LoadString(FILE* fp, std::string* s) {
   int len = LoadInt(fp);
-  if (len < 0)
+  constexpr int kMaxStampString = 256 * 1024 * 1024;
+  if (len < 0 || len > kMaxStampString)
     return false;
   s->resize(len);
-  size_t r = fread(&(*s)[0], 1, s->size(), fp);
+  if (s->empty())
+    return true;
+  size_t r = fread(s->data(), 1, s->size(), fp);
   if (r != s->size())
     return false;
   return true;
