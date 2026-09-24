@@ -24,7 +24,7 @@ jobs:
           PUSH_BASE: ${{ github.event.before }}
         run: |
           base="${PR_BASE:-$PUSH_BASE}"
-          files=$(git diff --name-only "$base" "$GITHUB_SHA" -- 'src/*.cc' 'src/*.h')
+          files=$(git diff --name-only --diff-filter=ACMRT "$base" "$GITHUB_SHA" -- 'src/*.cc' 'src/*.h')
           if [ -n "$files" ]; then
             docker run --rm -e CLANG_FORMAT_FILES="$files" kati-test sh clang-format-check
           fi
