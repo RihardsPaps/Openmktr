@@ -4650,7 +4650,7 @@
   "what_if.sh:script": {
     "files": [],
     "output": "",
-    "status": 1
+    "status": 0
   },
   "whitespace_in_cmd.mk:test:direct": {
     "files": [],
