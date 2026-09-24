@@ -1,15 +1,12 @@
-# This is the official list of kati authors for copyright purposes.
-# This file is distinct from the CONTRIBUTORS files.
-# See the latter for an explanation.
-#
-# Names should be added to this file as:
-#	Name or Organization <email address>
-# The email address is not required for organizations.
-#
-# Please keep the list sorted.
+# Upstream Kati copyright authors (original AUTHORS record).
+# Existing source copyright notices and LICENSE remain authoritative.
 
 Delilah Hoare <delilah@dhoare.me>
 Google Inc.
 Koichi Shiraishi <zchee.io@gmail.com>
 Kouhei Sutou <kou@cozmixng.org>
 Po Hu <hupo1985@gmail.com>
+
+# GNU-free fork design and maintenance (project credit, not a copyright claim).
+Haralds Paps
+Rihards Paps
