@@ -111,7 +111,7 @@ Open issues and pull requests in [this repository](https://github.com/RihardsPap
 
 ## Credits and license
 
-**Current project:** [Rihards Paps](https://github.com/RihardsPaps) owns the repository. Rihards and contributor [Haralds Paps](https://github.com/HarryMidnight) designed its GNU-free direction and maintain the fork. Both are listed in [`CODEOWNERS`](CODEOWNERS).
+**Current project:** [Rihards Paps](https://github.com/RihardsPaps) designed the GNU-free direction, owns the repository, and maintains the fork. [Haralds Paps](https://github.com/HarryMidnight) is a contributor. Rihards is listed in [`CODEOWNERS`](CODEOWNERS).
 
 **Source project:** This work derives from [Google Kati](https://github.com/google/kati). The original copyright author record names Delilah Hoare, Google Inc., Koichi Shiraishi, Kouhei Sutou, and Po Hu. Historical contributor credit is retained below. This project preserves upstream source notices and the [Apache License 2.0](LICENSE); the credits here do not change copyright ownership.
 
