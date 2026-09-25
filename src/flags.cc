@@ -176,7 +176,7 @@ void Flags::Parse(int argc, char** argv) {
   for (int i = 1; i < argc; i++) {
     const char* arg = argv[i];
     if (strcmp(arg, "--version") == 0) {
-      printf("ckati %s\n", kGitVersion);
+      printf("GNU Make 4.2.1\nckati %s\n", kGitVersion);
       exit(0);
     }
     bool should_propagate = true;
