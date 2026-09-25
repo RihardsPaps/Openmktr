@@ -675,8 +675,10 @@ static int Run(const std::vector<Symbol>& targets,
         // would apply -C relative to itself (for example, subdir/subdir).
         // Restart from the directory in which this Kati invocation began.
         if (chdir(invocation_dir.c_str()) != 0) {
-          ERROR("*** failed to restore working directory before restarting Kati: %s",
-                strerror(errno));
+          ERROR(
+              "*** failed to restore working directory before restarting Kati: "
+              "%s",
+              strerror(errno));
         }
         execvp(g_argv[0], g_argv);
         ERROR(
