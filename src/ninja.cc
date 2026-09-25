@@ -426,10 +426,20 @@ class NinjaGenerator {
       cmd_buf->resize(cmd_buf->size() - 1);
     }
 
-    while (true) {
+    while (cmd_buf->size() > orig_size) {
       char c = (*cmd_buf)[cmd_buf->size() - 1];
-      if (!isspace(c) && c != ';')
+      if (c == ';') {
+        size_t backslashes = 0;
+        for (size_t i = cmd_buf->size() - 1;
+             i > orig_size && (*cmd_buf)[i - 1] == '\\'; --i)
+          ++backslashes;
+        // An escaped semicolon is an argument (e.g. find -exec ... \;),
+        // not a redundant shell command separator.
+        if (backslashes % 2 != 0)
+          break;
+      } else if (!isspace(static_cast<unsigned char>(c))) {
         break;
+      }
       cmd_buf->resize(cmd_buf->size() - 1);
     }
 

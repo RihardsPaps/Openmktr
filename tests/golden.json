@@ -1557,6 +1557,23 @@
     "output": "[1/1] build test3\n#PASS\n",
     "status": 0
   },
+  "escaped_trailing_semicolon.mk:test:direct": {
+    "files": [
+      "found",
+      "input"
+    ],
+    "output": "",
+    "status": 0
+  },
+  "escaped_trailing_semicolon.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "found",
+      "input"
+    ],
+    "output": "[1/1] build test\n",
+    "status": 0
+  },
   "escaped_wildcard.mk:test1:direct": {
     "files": [
       "foo"
