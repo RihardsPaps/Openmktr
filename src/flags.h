@@ -87,6 +87,7 @@ struct Flags {
   std::vector<const char*> subkati_args;
   std::vector<std::string> old_files;
   std::vector<std::string> what_if_files;
+  std::vector<std::string> include_dirs;
   std::vector<Symbol> targets;
   std::vector<std::string_view> cl_vars;
   std::vector<std::string> writable;

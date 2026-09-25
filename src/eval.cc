@@ -309,7 +309,12 @@ Var* Evaluator::EvalRHS(Symbol lhs,
   // assignments.  In particular, a later "VAR += value" must not mutate the
   // command-line Var in place before Vars::Assign() gets a chance to reject
   // the replacement.  The makefile can explicitly opt in with "override".
-  if (!is_bootstrap_ && !is_commandline_ && !is_override) {
+  // MAKEFLAGS is maintained by make itself and may be extended by a
+  // makefile (Kbuild adds its source include directory this way).  The
+  // normalized transport value installed before parsing must not turn it
+  // into an immutable command-line assignment.
+  if (!is_bootstrap_ && !is_commandline_ && !is_override &&
+      !(lhs == Intern("MAKEFLAGS"))) {
     Var* command_line_var = PeekVarInCurrentScope(lhs);
     if (command_line_var->IsDefined() &&
         command_line_var->Origin() == VarOrigin::COMMAND_LINE) {
@@ -835,7 +840,17 @@ void Evaluator::EvalInclude(const IncludeStmt* stmt) {
 
   const std::string&& pats = stmt->expr->Eval(this);
   for (std::string_view pat : WordScanner(pats)) {
-    const auto& files = Glob(pat);
+    std::vector<std::string> files = Glob(pat);
+    if (files.empty() && !pat.empty() && pat.front() != '/') {
+      for (const std::string& dir : g_flags.include_dirs) {
+        const std::string candidate = ConcatDir(dir, pat);
+        const auto& matches = Glob(candidate);
+        if (!matches.empty()) {
+          files.assign(matches.begin(), matches.end());
+          break;
+        }
+      }
+    }
 
     if (files.empty()) {
       // GNU make attempts to remake missing makefiles for both include and

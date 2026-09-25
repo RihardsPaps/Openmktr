@@ -100,6 +100,7 @@ void Flags::Parse(int argc, char** argv) {
   const char* num_jobs_str;
   const char* old_file;
   const char* what_if_file;
+  const char* include_dir;
   const char* writable_str;
   const char* variable_assignment_trace_filter;
 
@@ -153,7 +154,16 @@ void Flags::Parse(int argc, char** argv) {
       token += c;
     }
 
-    for (const std::string& tok : makeflags_tokens) {
+    for (size_t i = 0; i < makeflags_tokens.size(); ++i) {
+      const std::string& tok = makeflags_tokens[i];
+      if (tok == "-I" || tok == "--include-dir") {
+        if (i + 1 < makeflags_tokens.size())
+          include_dirs.push_back(makeflags_tokens[++i]);
+      } else if (HasPrefix(tok, "--include-dir=")) {
+        include_dirs.push_back(tok.substr(strlen("--include-dir=")));
+      } else if (HasPrefix(tok, "-I") && tok.size() > 2) {
+        include_dirs.push_back(tok.substr(2));
+      }
       if (!HasPrefix(tok, "-") && tok.find('=') != std::string::npos) {
         const std::string_view name = CommandLineVariableName(tok);
         if (name == "MAKEFLAGS" || name == "MAKEOVERRIDES")
@@ -342,6 +352,10 @@ void Flags::Parse(int argc, char** argv) {
       werror_real_no_cmds = true;
     } else if (ParseCommandLineOptionWithArg("-C", argv, &i, &working_dir)) {
       should_propagate = false;
+    } else if (ParseCommandLineOptionWithArg("-I", argv, &i, &include_dir) ||
+               ParseCommandLineOptionWithArg("--include-dir", argv, &i,
+                                             &include_dir)) {
+      include_dirs.emplace_back(include_dir);
     } else if (ParseCommandLineOptionWithArg("--dump_include_graph", argv, &i,
                                              &dump_include_graph)) {
     } else if (ParseCommandLineOptionWithArg("--dump_variable_assignment_trace",
