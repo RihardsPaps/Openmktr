@@ -485,7 +485,8 @@ SegfaultHandler::~SegfaultHandler() {
 
 static int Run(const std::vector<Symbol>& targets,
                const std::vector<std::string_view>& cl_vars,
-               const std::string& orig_args) {
+               const std::string& orig_args,
+               const std::string& invocation_dir) {
   double start_time = GetTime();
 
   if (g_flags.generate_ninja && (g_flags.regen || g_flags.dump_kati_stamp)) {
@@ -669,6 +670,16 @@ static int Run(const std::vector<Symbol>& targets,
          * which is the same semantic boundary GNU make uses after remaking
          * an included makefile.
          */
+        // A relative -C has already changed this process's working directory.
+        // execvp preserves that directory, so replaying the original argv
+        // would apply -C relative to itself (for example, subdir/subdir).
+        // Restart from the directory in which this Kati invocation began.
+        if (chdir(invocation_dir.c_str()) != 0) {
+          ERROR(
+              "*** failed to restore working directory before restarting Kati: "
+              "%s",
+              strerror(errno));
+        }
         execvp(g_argv[0], g_argv);
         ERROR(
             "*** failed to restart Kati after remaking included makefiles: %s",
@@ -875,6 +886,10 @@ int main(int argc, char* argv[]) {
       orig_args += ' ';
     orig_args += argv[i];
   }
+  char invocation_dir_buf[PATH_MAX];
+  if (!getcwd(invocation_dir_buf, sizeof(invocation_dir_buf)))
+    PERROR("getcwd");
+  const std::string invocation_dir(invocation_dir_buf);
   g_flags.Parse(argc, argv);
   if (g_flags.working_dir) {
     int ret = chdir(g_flags.working_dir);
@@ -888,7 +903,7 @@ int main(int argc, char* argv[]) {
   // This depends on command line flags.
   if (g_flags.use_find_emulator)
     InitFindEmulator();
-  int r = Run(g_flags.targets, g_flags.cl_vars, orig_args);
+  int r = Run(g_flags.targets, g_flags.cl_vars, orig_args, invocation_dir);
   ReportAllStats();
   return r;
 }
