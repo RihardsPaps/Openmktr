@@ -766,6 +766,7 @@ void Evaluator::EvalCommand(const CommandStmt* stmt) {
 
 void Evaluator::EvalIf(const IfStmt* stmt) {
   loc_ = stmt->loc();
+  Rule* enclosing_rule = last_rule_;
 
   bool is_true;
   switch (stmt->op) {
@@ -795,6 +796,12 @@ void Evaluator::EvalIf(const IfStmt* stmt) {
       CHECK(false);
       abort();
   }
+
+  // A conditional does not end the preceding rule. Its condition can expand
+  // functions such as $(eval), which evaluate other statements and change
+  // last_rule_. Restore the rule before evaluating the selected branch so
+  // recipes after the conditional still attach to it.
+  last_rule_ = enclosing_rule;
 
   const std::vector<Stmt*>* stmts;
   if (is_true) {

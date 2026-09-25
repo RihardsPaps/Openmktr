@@ -53,6 +53,20 @@ class BuildCorrectness(unittest.TestCase):
         ).stdout.strip()
         self.assertEqual(version, "4.2.1")
 
+    def test_eval_in_conditional_preserves_preceding_rule(self):
+        self.makefile(
+            "SOURCE = $(eval SIDE := live)package\n"
+            "all:\n"
+            "ifneq ($(SOURCE),)\n"
+            "\t@printf '%s' '$(SIDE)' > result\n"
+            "endif\n"
+        )
+        self.direct("all")
+        self.assertEqual((self.directory / "result").read_text(), "live")
+        (self.directory / "result").unlink()
+        self.ninja()
+        self.assertEqual((self.directory / "result").read_text(), "live")
+
     def test_rebuilt_child_updates_parent(self):
         self.makefile("all: parent\nparent: child\n\t@cat child > parent\n"
                       "child: source\n\t@cat source > child\n")
