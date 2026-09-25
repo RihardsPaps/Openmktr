@@ -40,6 +40,19 @@ class BuildCorrectness(unittest.TestCase):
         self.direct("--ninja", "--regen")
         return self.run_command("sh", "./ninja.sh", "-j2")
 
+    def test_version_is_compatible_with_make_host_checks(self):
+        _, output = self.direct("--version")
+        self.assertRegex(output, r"\AGNU Make 4\.2\.1\nckati [^\n]+\n\Z")
+
+        # Buildroot's check-host-make.sh extracts the first version line
+        # with these sed expressions before comparing major and minor.
+        version = subprocess.run(
+            ["sed", "-e", r"s/^.* \([0-9\.]\)/\1/g",
+             "-e", r"s/[-\n].*//g", "-e", "1q"],
+            input=output, text=True, capture_output=True, check=True,
+        ).stdout.strip()
+        self.assertEqual(version, "4.2.1")
+
     def test_rebuilt_child_updates_parent(self):
         self.makefile("all: parent\nparent: child\n\t@cat child > parent\n"
                       "child: source\n\t@cat source > child\n")
