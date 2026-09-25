@@ -356,6 +356,7 @@ void Flags::Parse(int argc, char** argv) {
                ParseCommandLineOptionWithArg("--include-dir", argv, &i,
                                              &include_dir)) {
       include_dirs.emplace_back(include_dir);
+      command_line_include_dirs.emplace_back(include_dir);
     } else if (ParseCommandLineOptionWithArg("--dump_include_graph", argv, &i,
                                              &dump_include_graph)) {
     } else if (ParseCommandLineOptionWithArg("--dump_variable_assignment_trace",

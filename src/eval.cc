@@ -838,7 +838,8 @@ void Evaluator::EvalInclude(const IncludeStmt* stmt) {
   const std::string&& pats = stmt->expr->Eval(this);
   for (std::string_view pat : WordScanner(pats)) {
     std::vector<std::string> files = Glob(pat);
-    if (files.empty() && !pat.empty() && pat.front() != '/') {
+    if (files.empty() && !pat.empty() && pat.front() != '/' &&
+        pat.find_first_of("?*[\\") == std::string_view::npos) {
       for (const std::string& dir : g_flags.include_dirs) {
         const std::string candidate = ConcatDir(dir, pat);
         const auto& matches = Glob(candidate);

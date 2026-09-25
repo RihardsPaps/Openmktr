@@ -3604,7 +3604,7 @@
   },
   "recursive_include_dir.sh:script": {
     "files": [],
-    "output": "direct PASS\nninja PASS\noptions PASS\n",
+    "output": "direct PASS\nninja PASS\noptions PASS\nrecursive options PASS\nspaced option PASS\nwildcard PASS\n",
     "status": 0
   },
   "recursive_make.sh:script": {
