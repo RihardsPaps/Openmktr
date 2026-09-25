@@ -309,7 +309,12 @@ Var* Evaluator::EvalRHS(Symbol lhs,
   // assignments.  In particular, a later "VAR += value" must not mutate the
   // command-line Var in place before Vars::Assign() gets a chance to reject
   // the replacement.  The makefile can explicitly opt in with "override".
-  if (!is_bootstrap_ && !is_commandline_ && !is_override) {
+  // MAKEFLAGS is maintained by make itself and may be extended by a
+  // makefile (Kbuild adds its source include directory this way).  The
+  // normalized transport value installed before parsing must not turn it
+  // into an immutable command-line assignment.
+  if (!is_bootstrap_ && !is_commandline_ && !is_override &&
+      !(lhs == Intern("MAKEFLAGS"))) {
     Var* command_line_var = PeekVarInCurrentScope(lhs);
     if (command_line_var->IsDefined() &&
         command_line_var->Origin() == VarOrigin::COMMAND_LINE) {
@@ -383,8 +388,8 @@ void Evaluator::EvalUndefine(const UndefineStmt* stmt) {
   sym.SetGlobalVar(Var::Undefined(), false, &readonly);
 
   if (readonly) {
-    Error(StringPrintf("*** cannot undefine readonly variable: %s",
-                       sym.c_str()));
+    Error(
+        StringPrintf("*** cannot undefine readonly variable: %s", sym.c_str()));
   }
 }
 
@@ -469,8 +474,8 @@ static std::string_view ParseRuleTargets(const Loc& loc,
   // A target-specific variable assignment may legally mix ordinary targets
   // and pattern targets.  Only classify the rule as a pattern rule when all
   // of its targets are patterns; mixed target lists remain explicit targets.
-  *is_pattern_rule = pattern_rule_count != 0 &&
-                     pattern_rule_count == targets->size();
+  *is_pattern_rule =
+      pattern_rule_count != 0 && pattern_rule_count == targets->size();
   return before_term.substr(pos + 1);
 }
 
@@ -573,11 +578,10 @@ void Evaluator::EvalRuleSpecificAssign(const std::vector<Symbol>& targets,
       if (inherited->IsDefined()) {
         Var* local;
         if (inherited->Flavor() == std::string("simple")) {
-          local = new SimpleVar(std::string(inherited->String()),
-                                is_override ? VarOrigin::OVERRIDE
-                                            : inherited->Origin(),
-                                stack_.back(),
-                                loc_);
+          local = new SimpleVar(
+              std::string(inherited->String()),
+              is_override ? VarOrigin::OVERRIDE : inherited->Origin(),
+              stack_.back(), loc_);
         } else {
           // Recursive variables must retain their complete expression tree
           // when an inherited value is materialized in a target-specific
@@ -612,9 +616,7 @@ void Evaluator::EvalRuleSpecificAssign(const std::vector<Symbol>& targets,
     } else {
       bool needs_assign;
       Var* rhs_var = EvalRHS(var_sym, rhs, std::string_view("*TODO*"),
-                             assign_op,
-                             is_override,
-                             &needs_assign);
+                             assign_op, is_override, &needs_assign);
       if (needs_assign) {
         bool readonly;
         rhs_var->SetAssignOp(assign_op);
@@ -624,7 +626,7 @@ void Evaluator::EvalRuleSpecificAssign(const std::vector<Symbol>& targets,
                              var_name));
         }
       }
-    if (is_final) {
+      if (is_final) {
         rhs_var->SetReadOnly();
       }
     }
@@ -654,8 +656,8 @@ void Evaluator::EvalRule(const RuleStmt* stmt) {
 
   std::string expanded_after_targets(after_targets);
   std::string rule_without_comment;
-  after_targets = StripRuleComment(expanded_after_targets,
-                                   &rule_without_comment);
+  after_targets =
+      StripRuleComment(expanded_after_targets, &rule_without_comment);
 
   // An empty prerequisite list is valid (for example, "target:"). Reading
   // element zero before checking the view's length is undefined behavior and
@@ -705,8 +707,8 @@ void Evaluator::EvalRule(const RuleStmt* stmt) {
   // lexical and applies to rules parsed after it, just like GNU make's
   // declaration.  Do not leave a synthetic special target in the graph.
   if (rule->outputs.size() == 1 &&
-      rule->outputs[0] == Intern(".SECONDEXPANSION") &&
-      after_targets.empty() && rule->cmds.empty()) {
+      rule->outputs[0] == Intern(".SECONDEXPANSION") && after_targets.empty() &&
+      rule->cmds.empty()) {
     secondary_expansion_ = true;
     delete rule;
     return;
@@ -835,7 +837,18 @@ void Evaluator::EvalInclude(const IncludeStmt* stmt) {
 
   const std::string&& pats = stmt->expr->Eval(this);
   for (std::string_view pat : WordScanner(pats)) {
-    const auto& files = Glob(pat);
+    std::vector<std::string> files = Glob(pat);
+    if (files.empty() && !pat.empty() && pat.front() != '/' &&
+        pat.find_first_of("?*[\\") == std::string_view::npos) {
+      for (const std::string& dir : g_flags.include_dirs) {
+        const std::string candidate = ConcatDir(dir, pat);
+        const auto& matches = Glob(candidate);
+        if (!matches.empty()) {
+          files.assign(matches.begin(), matches.end());
+          break;
+        }
+      }
+    }
 
     if (files.empty()) {
       // GNU make attempts to remake missing makefiles for both include and
@@ -905,7 +918,8 @@ void Evaluator::EvalVpath(const Value* expr) {
 }
 
 void Evaluator::SetVpath(std::string_view pattern,
-                         std::string_view directories, bool append,
+                         std::string_view directories,
+                         bool append,
                          bool from_vpath) {
   if (!append) {
     vpaths_.erase(
@@ -936,8 +950,7 @@ void Evaluator::SetVpath(std::string_view pattern,
   if (!vpath.directories.empty()) {
     if (append) {
       for (Vpath& existing : vpaths_) {
-        if (existing.pattern == pattern &&
-            existing.from_vpath == from_vpath) {
+        if (existing.pattern == pattern && existing.from_vpath == from_vpath) {
           existing.directories.insert(existing.directories.end(),
                                       vpath.directories.begin(),
                                       vpath.directories.end());

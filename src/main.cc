@@ -244,7 +244,8 @@ static std::string BuildMakeOverrides(Evaluator* ev) {
 }
 
 static void UpdateMakeFlags(Evaluator* ev) {
-  if (g_flags.cl_vars.empty() && !g_flags.no_print_directory) {
+  if (g_flags.cl_vars.empty() && !g_flags.no_print_directory &&
+      g_flags.command_line_include_dirs.empty()) {
     // MAKEOVERRIDES is an inherited transport variable.  If this recursive
     // invocation has no effective command-line assignments, retaining the
     // parent's value would promote stale assignments back to command-line
@@ -359,6 +360,16 @@ static void UpdateMakeFlags(Evaluator* ev) {
     append_option("-t");
   if (g_flags.is_silent_mode)
     append_option("-s");
+
+  // Options inherited from MAKEFLAGS are already present in makeflags_value.
+  // Add only directories supplied on this command line, preserving their
+  // order and escaping whitespace for the next invocation's option parser.
+  for (const std::string& dir : g_flags.command_line_include_dirs) {
+    if (!makeflags_value.empty())
+      makeflags_value += ' ';
+    makeflags_value += "-I";
+    makeflags_value += EscapeMakeOverrideValue(dir);
+  }
 
   if (g_flags.no_print_directory &&
       makeflags_value.find("--no-print-directory") == std::string::npos) {
