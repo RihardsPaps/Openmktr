@@ -502,7 +502,7 @@ class Executor {
         fflush(stdout);
       }
       if (g_flags.is_dry_run) {
-      const bool recursive = IsRecursiveKatiCommand(command.cmd);
+        const bool recursive = IsRecursiveKatiCommand(command.cmd);
         {
           std::lock_guard<std::mutex> lock(output_mu_);
           if (!command.cmd.empty() && command.cmd != ":")

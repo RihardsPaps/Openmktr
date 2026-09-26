@@ -16,8 +16,8 @@
 
 #include "rule.h"
 
-#include "expr.h"
 #include "eval.h"
+#include "expr.h"
 #include "fileutil.h"
 #include "log.h"
 #include "parser.h"
@@ -149,8 +149,7 @@ void Rule::ParseInputs(const std::string_view& inputs_str) {
     // that triggers the recursive build of the output directory.
     if (trimmed.empty() && current_directory)
       trimmed = ".";
-    const bool has_wildcard =
-        trimmed.find_first_of("*?[") != std::string::npos;
+    const bool has_wildcard = trimmed.find_first_of("*?[") != std::string::npos;
 
     if (has_wildcard) {
       const auto& files = Glob(trimmed);
@@ -192,9 +191,9 @@ void Rule::ParsePrerequisites(const std::string_view& line,
     // escaped references such as $$(compile-command.c) receive their normal
     // second expansion when the rule is executed.
     Loc command_loc = rule_stmt->loc();
-    cmds.push_back(ParseExpr(
-        &command_loc, TrimLeftSpace(line.substr(separator_pos + 1)),
-        ParseExprOpt::COMMAND));
+    cmds.push_back(ParseExpr(&command_loc,
+                             TrimLeftSpace(line.substr(separator_pos + 1)),
+                             ParseExprOpt::COMMAND));
     prereq_string = line.substr(0, separator_pos);
   }
 

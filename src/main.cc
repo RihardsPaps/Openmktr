@@ -253,8 +253,7 @@ static std::string BuildMakeOverrides(Evaluator* ev) {
 
 static void UpdateMakeFlags(Evaluator* ev) {
   if (g_flags.cl_vars.empty() && !g_flags.no_print_directory &&
-      g_flags.command_line_include_dirs.empty() &&
-      !g_flags.no_builtin_rules) {
+      g_flags.command_line_include_dirs.empty() && !g_flags.no_builtin_rules) {
     // MAKEOVERRIDES is an inherited transport variable.  If this recursive
     // invocation has no effective command-line assignments, retaining the
     // parent's value would promote stale assignments back to command-line

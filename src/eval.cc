@@ -705,8 +705,8 @@ void Evaluator::EvalRule(const RuleStmt* stmt) {
   }
   if (secondary_expansion_ && !after_targets.empty()) {
     rule->secondary_expansion = true;
-    const size_t prereq_end = separator == ';' ? separator_pos
-                                               : after_targets.size();
+    const size_t prereq_end =
+        separator == ';' ? separator_pos : after_targets.size();
     rule->secondary_prerequisites =
         std::string(after_targets.substr(0, prereq_end));
   }
