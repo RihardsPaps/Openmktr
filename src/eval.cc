@@ -39,16 +39,6 @@
 
 namespace {
 
-bool SameMakefile(const std::string& lhs, const std::string& rhs) {
-  char lhs_path[PATH_MAX];
-  char rhs_path[PATH_MAX];
-  const char* lhs_real = realpath(lhs.c_str(), lhs_path);
-  const char* rhs_real = realpath(rhs.c_str(), rhs_path);
-  if (lhs_real != nullptr && rhs_real != nullptr)
-    return strcmp(lhs_real, rhs_real) == 0;
-  return lhs == rhs;
-}
-
 // Rule prerequisites are evaluated before they are tokenized.  Comments in
 // the rule's original text must therefore remain comments after expansion;
 // otherwise an '=' in an inline comment can be mistaken for a rule-specific
@@ -715,7 +705,10 @@ void Evaluator::EvalRule(const RuleStmt* stmt) {
   }
   if (secondary_expansion_ && !after_targets.empty()) {
     rule->secondary_expansion = true;
-    rule->secondary_prerequisites = std::string(after_targets);
+    const size_t prereq_end = separator == ';' ? separator_pos
+                                               : after_targets.size();
+    rule->secondary_prerequisites =
+        std::string(after_targets.substr(0, prereq_end));
   }
   rule->ParsePrerequisites(after_targets, separator_pos, stmt);
 
@@ -877,19 +870,13 @@ void Evaluator::EvalInclude(const IncludeStmt* stmt) {
         included_makefiles_.push_back(fname);
       }
 
-      // Check before adding fname to the active chain.  The chain contains
-      // files whose bodies are currently being evaluated; the current file
-      // must not be mistaken for a recursive include of itself.
-      bool recursive = false;
-      for (const std::string& include : active_include_files_) {
-        if (SameMakefile(include, fname)) {
-          recursive = true;
-          break;
-        }
-      }
-      if (recursive) {
-        WARN_LOC(loc_, "recursive include of %s ignored", fname.c_str());
-        continue;
+      // GNU make permits a makefile to include itself recursively.  This is
+      // useful when each inclusion advances a variable-driven iterator (for
+      // example, generating one rule per module).  Bound the nesting depth
+      // to diagnose unbounded include cycles without rejecting valid
+      // recursive includes.
+      if (active_include_files_.size() >= 1024) {
+        ERROR_LOC(loc_, "*** makefile include nesting exceeds 1024 levels");
       }
 
       include_stack_.push_back(stmt->loc());
@@ -970,8 +957,9 @@ void Evaluator::SetVpath(std::string_view pattern,
 }
 
 std::string Evaluator::ResolveVpath(Symbol target) const {
-  if (Exists(target.str()))
+  if (Exists(target.str())) {
     return target.str();
+  }
 
   // GNU make searches matching vpath directives before the global VPATH,
   // regardless of where the VPATH assignment appeared in the makefile.

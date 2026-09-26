@@ -77,6 +77,7 @@ struct Flags {
   const char* no_ignore_dirty_pattern;
   const char* ignore_optional_include_pattern;
   const char* makefile;
+  std::vector<const char*> makefiles;
   const char* ninja_dir;
   const char* ninja_suffix;
   const char* working_dir;  // -C <dir>

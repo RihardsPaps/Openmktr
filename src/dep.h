@@ -59,6 +59,10 @@ struct DepNode {
   bool silent;
   bool export_all_variables;
   std::vector<Symbol> implicit_outputs;
+  // Prerequisites contributed by the selected implicit rule. These are
+  // distinct from explicit prerequisites merged onto the target and are
+  // needed to identify files introduced by an implicit-rule chain.
+  std::vector<Symbol> implicit_inputs;
   std::vector<Symbol> actual_inputs;
   std::vector<Symbol> actual_order_only_inputs;
   std::vector<Symbol> low_resolution_inputs;

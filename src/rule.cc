@@ -185,12 +185,16 @@ void Rule::ParsePrerequisites(const std::string_view& line,
   // First, separate command. At this point separator_pos should point to ';'
   // unless null.
   std::string_view prereq_string = line;
-  if (separator_pos != std::string::npos &&
-      rule_stmt->sep != RuleStmt::SEP_SEMICOLON) {
+  if (separator_pos != std::string::npos) {
     CHECK(line[separator_pos] == ';');
-    // TODO: Maybe better to avoid Intern here?
-    cmds.push_back(Value::NewLiteral(
-        Intern(TrimLeftSpace(line.substr(separator_pos + 1))).str()));
+    // This command came from an expanded rule line (for example, a rule
+    // emitted by a variable reference). Parse it as a make expression so
+    // escaped references such as $$(compile-command.c) receive their normal
+    // second expansion when the rule is executed.
+    Loc command_loc = rule_stmt->loc();
+    cmds.push_back(ParseExpr(
+        &command_loc, TrimLeftSpace(line.substr(separator_pos + 1)),
+        ParseExprOpt::COMMAND));
     prereq_string = line.substr(0, separator_pos);
   }
 

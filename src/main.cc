@@ -67,6 +67,14 @@ static void ReadBootstrapMakefile(const std::vector<Symbol>& targets,
        "ARFLAGS?=rv\n"
        "RANLIB?=ranlib\n"
        "RM?=rm -f\n"
+       // These are GNU make's default compilation variables. Projects often
+       // reuse them in explicit pattern rules rather than spelling out the
+       // compiler command, even when they provide their own dependency flags.
+       "COMPILE.c = $(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c\n"
+       "COMPILE.S = $(CC) $(ASFLAGS) $(CPPFLAGS) $(TARGET_MACH) -c\n"
+       "LINK.c = $(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) $(TARGET_ARCH)\n"
+       "LINK.o = $(CC) $(LDFLAGS) $(TARGET_ARCH)\n"
+       "OUTPUT_OPTION = -o $@\n"
        // Pretend to be GNU make 4.2.1, for compatibility.
        "MAKE_VERSION?=4.2.1\n"
        ".FEATURES?=output-sync\n"
@@ -245,7 +253,8 @@ static std::string BuildMakeOverrides(Evaluator* ev) {
 
 static void UpdateMakeFlags(Evaluator* ev) {
   if (g_flags.cl_vars.empty() && !g_flags.no_print_directory &&
-      g_flags.command_line_include_dirs.empty()) {
+      g_flags.command_line_include_dirs.empty() &&
+      !g_flags.no_builtin_rules) {
     // MAKEOVERRIDES is an inherited transport variable.  If this recursive
     // invocation has no effective command-line assignments, retaining the
     // parent's value would promote stale assignments back to command-line
@@ -360,6 +369,8 @@ static void UpdateMakeFlags(Evaluator* ev) {
     append_option("-t");
   if (g_flags.is_silent_mode)
     append_option("-s");
+  if (g_flags.no_builtin_rules)
+    append_option("-r");
 
   // Options inherited from MAKEFLAGS are already present in makeflags_value.
   // Add only directories supplied on this command line, preserving their
@@ -514,7 +525,7 @@ static int Run(const std::vector<Symbol>& targets,
     }
 
     Intern("MAKEFILE_LIST")
-        .SetGlobalVar(new SimpleVar(StringPrintf(" %s", g_flags.makefile),
+        .SetGlobalVar(new SimpleVar(StringPrintf(" %s", g_flags.makefiles[0]),
                                     VarOrigin::FILE, ev.CurrentFrame(),
                                     ev.loc()));
 
@@ -564,15 +575,19 @@ static int Run(const std::vector<Symbol>& targets,
       ScopedFrame eval_frame(ev.Enter(FrameType::PHASE, "*parse*", Loc()));
       ScopedTimeReporter tr("eval time");
 
-      ScopedFrame file_frame(
-          ev.Enter(FrameType::PARSE, g_flags.makefile, Loc()));
+      for (size_t i = 0; i < g_flags.makefiles.size(); ++i) {
+        const char* makefile = g_flags.makefiles[i];
+        if (i != 0) {
+          Var* makefile_list = ev.LookupVar(Intern("MAKEFILE_LIST"));
+          makefile_list->AppendVar(&ev, Value::NewLiteral(makefile));
+        }
 
-      const Makefile& mk =
-          MakefileCacheManager::Get().ReadMakefile(g_flags.makefile);
-
-      for (Stmt* stmt : mk.stmts()) {
-        LOG("%s", stmt->DebugString().c_str());
-        stmt->Eval(&ev);
+        ScopedFrame file_frame(ev.Enter(FrameType::PARSE, makefile, Loc()));
+        const Makefile& mk = MakefileCacheManager::Get().ReadMakefile(makefile);
+        for (Stmt* stmt : mk.stmts()) {
+          LOG("%s", stmt->DebugString().c_str());
+          stmt->Eval(&ev);
+        }
       }
     }
 
@@ -795,7 +810,7 @@ static int Run(const std::vector<Symbol>& targets,
 }
 
 static void FindFirstMakefie() {
-  if (g_flags.makefile != NULL)
+  if (!g_flags.makefiles.empty())
     return;
   if (Exists("GNUmakefile")) {
     g_flags.makefile = "GNUmakefile";
@@ -806,6 +821,8 @@ static void FindFirstMakefie() {
   } else if (Exists("Makefile")) {
     g_flags.makefile = "Makefile";
   }
+  if (g_flags.makefile != nullptr)
+    g_flags.makefiles.push_back(g_flags.makefile);
 }
 
 static void HandleRealpath(int argc, char** argv) {

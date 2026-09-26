@@ -156,6 +156,20 @@ void Flags::Parse(int argc, char** argv) {
 
     for (size_t i = 0; i < makeflags_tokens.size(); ++i) {
       const std::string& tok = makeflags_tokens[i];
+      // GNU make carries -r in MAKEFLAGS so recursive makes also disable
+      // built-in implicit rules.  Kati's long spelling is accepted below,
+      // but recursive GNU make invocations use this short form.
+      if (tok == "-r") {
+        no_builtin_rules = true;
+      } else if (tok.size() > 2 && tok[0] == '-' && tok[1] != '-') {
+        for (size_t j = 1; j < tok.size(); ++j) {
+          if (tok[j] == 'C' || tok[j] == 'f' || tok[j] == 'I' ||
+              tok[j] == 'j' || tok[j] == 'o' || tok[j] == 'W')
+            break;
+          if (tok[j] == 'r')
+            no_builtin_rules = true;
+        }
+      }
       if (tok == "-I" || tok == "--include-dir") {
         if (i + 1 < makeflags_tokens.size())
           include_dirs.push_back(makeflags_tokens[++i]);
@@ -191,8 +205,10 @@ void Flags::Parse(int argc, char** argv) {
 
         if (option == 'c' || option == 'd' || option == 'i' || option == 'n' ||
             option == 'q' || option == 's' || option == 't' || option == 'k' ||
-            option == 'o') {
+            option == 'o' || option == 'r') {
           handled = true;
+          if (option == 'r')
+            no_builtin_rules = true;
           continue;
         }
 
@@ -212,7 +228,9 @@ void Flags::Parse(int argc, char** argv) {
             working_dir = value;
             should_propagate = false;
           } else if (option == 'f') {
-            makefile = value;
+            makefiles.push_back(value);
+            if (makefile == nullptr)
+              makefile = value;
             should_propagate = false;
           } else {
             num_jobs = strtol(value, NULL, 10);
@@ -235,7 +253,10 @@ void Flags::Parse(int argc, char** argv) {
     }
 
     if (!strcmp(arg, "-f")) {
-      makefile = argv[++i];
+      const char* value = argv[++i];
+      makefiles.push_back(value);
+      if (makefile == nullptr)
+        makefile = value;
       should_propagate = false;
     } else if (!strcmp(arg, "-c")) {
       is_syntax_check_only = true;
@@ -262,7 +283,8 @@ void Flags::Parse(int argc, char** argv) {
       what_if_files.emplace_back(TrimLeadingCurdir(what_if_file));
     } else if (!strcmp(arg, "-t") || !strcmp(arg, "--touch")) {
       is_touch = true;
-    } else if (!strcmp(arg, "-s") || !strcmp(arg, "--silent")) {
+    } else if (!strcmp(arg, "-s") || !strcmp(arg, "--silent") ||
+               !strcmp(arg, "--quiet")) {
       is_silent_mode = true;
     } else if (!strcmp(arg, "--output-sync")) {
       output_sync = OutputSync::kTarget;
@@ -305,6 +327,8 @@ void Flags::Parse(int argc, char** argv) {
     } else if (!strcmp(arg, "--color_warnings")) {
       color_warnings = true;
     } else if (!strcmp(arg, "--no_builtin_rules")) {
+      no_builtin_rules = true;
+    } else if (!strcmp(arg, "-r")) {
       no_builtin_rules = true;
     } else if (!strcmp(arg, "--no_ninja_prelude")) {
       no_ninja_prelude = true;

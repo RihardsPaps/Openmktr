@@ -202,7 +202,16 @@ void Pattern::AppendSubstRef(std::string_view str,
     AppendSubst(str, subst, out);
     return;
   }
+  if (pat_.empty()) {
+    out->append(str.begin(), str.end());
+    out->append(subst.begin(), subst.end());
+    return;
+  }
   std::string_view s = TrimSuffix(str, pat_);
+  if (s.size() == str.size()) {
+    out->append(str.begin(), str.end());
+    return;
+  }
   out->append(s.begin(), s.end());
   out->append(subst.begin(), subst.end());
 }
