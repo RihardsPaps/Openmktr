@@ -202,7 +202,16 @@ void Pattern::AppendSubstRef(std::string_view str,
     AppendSubst(str, subst, out);
     return;
   }
+  if (pat_.empty()) {
+    out->append(str.begin(), str.end());
+    out->append(subst.begin(), subst.end());
+    return;
+  }
   std::string_view s = TrimSuffix(str, pat_);
+  if (s.size() == str.size()) {
+    out->append(str.begin(), str.end());
+    return;
+  }
   out->append(s.begin(), s.end());
   out->append(subst.begin(), subst.end());
 }
@@ -437,8 +446,7 @@ size_t FindEndOfLine(std::string_view s, size_t e, size_t* lf_cnt) {
       } else if (s[e + 1] == '\n') {
         e += 2;
         ++*lf_cnt;
-      } else if (s[e + 1] == '\r' && e + 2 < s.size() &&
-                 s[e + 2] == '\n') {
+      } else if (s[e + 1] == '\r' && e + 2 < s.size() && s[e + 2] == '\n') {
         e += 3;
         ++*lf_cnt;
       } else if (s[e + 1] == '\\') {

@@ -819,8 +819,9 @@ ExecResult Exec(const std::vector<NamedDepNode>& roots,
     if (!visited.insert(node->output).second)
       continue;
     if (node->intermediate && !g_flags.is_dry_run && !g_flags.is_question &&
-        executor.WasBuilt(node->output))
+        executor.WasBuilt(node->output)) {
       unlink(node->output.str().c_str());
+    }
     for (const auto& dep : node->deps)
       pending.push_back(dep.second);
     for (const auto& dep : node->order_onlys)

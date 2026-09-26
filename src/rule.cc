@@ -16,8 +16,8 @@
 
 #include "rule.h"
 
-#include "expr.h"
 #include "eval.h"
+#include "expr.h"
 #include "fileutil.h"
 #include "log.h"
 #include "parser.h"
@@ -149,8 +149,7 @@ void Rule::ParseInputs(const std::string_view& inputs_str) {
     // that triggers the recursive build of the output directory.
     if (trimmed.empty() && current_directory)
       trimmed = ".";
-    const bool has_wildcard =
-        trimmed.find_first_of("*?[") != std::string::npos;
+    const bool has_wildcard = trimmed.find_first_of("*?[") != std::string::npos;
 
     if (has_wildcard) {
       const auto& files = Glob(trimmed);
@@ -185,12 +184,19 @@ void Rule::ParsePrerequisites(const std::string_view& line,
   // First, separate command. At this point separator_pos should point to ';'
   // unless null.
   std::string_view prereq_string = line;
-  if (separator_pos != std::string::npos &&
-      rule_stmt->sep != RuleStmt::SEP_SEMICOLON) {
+  if (separator_pos != std::string::npos) {
     CHECK(line[separator_pos] == ';');
-    // TODO: Maybe better to avoid Intern here?
-    cmds.push_back(Value::NewLiteral(
-        Intern(TrimLeftSpace(line.substr(separator_pos + 1))).str()));
+    // This command came from an expanded rule line (for example, a rule
+    // emitted by a variable reference). Parse it as a make expression so
+    // escaped references such as $$(compile-command.c) receive their normal
+    // second expansion when the rule is executed.
+    Loc command_loc = rule_stmt->loc();
+    // ParseExpr stores string_views into its input in literal nodes. The
+    // expanded rule line is temporary, so intern the command before parsing
+    // it to keep those views valid for the lifetime of the rule.
+    std::string_view command =
+        Intern(TrimLeftSpace(line.substr(separator_pos + 1))).str();
+    cmds.push_back(ParseExpr(&command_loc, command, ParseExprOpt::COMMAND));
     prereq_string = line.substr(0, separator_pos);
   }
 

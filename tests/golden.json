@@ -321,6 +321,18 @@
     "output": "[1/7] build proto.o\ncompile proto.o from proto.c\n[2/7] build protoc\nlink protoc from proto.o\n[3/7] build foo.c\nprotoc foo.c from foo.proto\n[4/7] build xbar.c\nprotoc xbar.c from xbar.proto\n[5/7] build foo.o\ncompile foo.o from foo.c\n[6/7] build xbar.o\ncompile xbar.o from xbar.c\n[7/7] build foo\nlink foo from foo.o\n",
     "status": 0
   },
+  "builtin_link_c.mk:test:direct": {
+    "files": [],
+    "output": "test-cc test-cflags test-cppflags test-ldflags \n",
+    "status": 0
+  },
+  "builtin_link_c.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\ntest-cc test-cflags test-cppflags test-ldflags \n",
+    "status": 0
+  },
   "builtin_rules.mk:test1:direct": {
     "files": [
       "bar.cc",
@@ -882,6 +894,23 @@
       ".ninja_log"
     ],
     "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "empty_pattern_rule_suffix_fallback.mk:test:direct": {
+    "files": [
+      "sample.c",
+      "sample.m"
+    ],
+    "output": "  BUILD   sample.c\n  BUILD   sample.m\n  BUILD   sample.o\nCOMPILE sample.o from sample.c\n",
+    "status": 0
+  },
+  "empty_pattern_rule_suffix_fallback.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "sample.c",
+      "sample.m"
+    ],
+    "output": "[1/3] build sample.c\n[2/3] build sample.m\n[3/3] build sample.o\nCOMPILE sample.o from sample.c\n",
     "status": 0
   },
   "empty_static_pattern.sh:script": {
@@ -1648,6 +1677,21 @@
     "output": "X Y Z\n[1/1] build test\nPASS\nPASS\nPASS\nPASS\nPASS\n_PASS_\n",
     "status": 0
   },
+  "eval_inline_multiline_recipe.mk:default:direct": {
+    "files": [
+      "input"
+    ],
+    "output": "",
+    "status": 0
+  },
+  "eval_inline_multiline_recipe.mk:default:ninja": {
+    "files": [
+      ".ninja_log",
+      "input"
+    ],
+    "output": "[1/1] build input\n",
+    "status": 0
+  },
   "eval_starts_with_comment.mk:test:direct": {
     "files": [],
     "output": "  BUILD   test\nPASS\n",
@@ -2151,6 +2195,11 @@
     "output": "",
     "status": 0
   },
+  "implicit_directory_prerequisite.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
   "implicit_intermediate_cleanup.sh:script": {
     "files": [],
     "output": "",
@@ -2252,6 +2301,20 @@
     "output": "[1/2] build foo.c\n[2/2] build foo.h\n",
     "status": 0
   },
+  "implicit_pattern_rule_order.mk:default:direct": {
+    "files": [],
+    "output": "architecture prerequisite\nselected architecture source: arch/item.S\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_order.mk:default:ninja": {
+    "files": [
+      ".ninja_log",
+      "arch",
+      "out"
+    ],
+    "output": "[1/2] build arch/item.S\narchitecture prerequisite\n[2/2] build out/item.o\nselected architecture source: arch/item.S\n",
+    "status": 0
+  },
   "implicit_pattern_rule_phony.mk:test2:direct": {
     "files": [
       "foo.x"
@@ -2298,6 +2361,19 @@
     "files": [],
     "output": "Makefile:6: warning: implicit rules are deprecated: %.foo\nPASS\nMakefile:6: *** implicit rules are obsolete: %.foo\n",
     "status": 1
+  },
+  "implicit_prerequisite_only_pattern.mk:test:direct": {
+    "files": [],
+    "output": "recurse into subdirectory\n",
+    "status": 0
+  },
+  "implicit_prerequisite_only_pattern.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "localedata"
+    ],
+    "output": "[1/1] build localedata/subdir_lib\nrecurse into subdirectory\n",
+    "status": 0
   },
   "implicit_suffix_chain.sh:script": {
     "files": [],
@@ -2872,6 +2948,11 @@
       ".ninja_log"
     ],
     "output": "[1/1] build test7\nfirst\nsecond third\n",
+    "status": 0
+  },
+  "multiple_makefiles.sh:script": {
+    "files": [],
+    "output": "",
     "status": 0
   },
   "multiple_output_patterns.mk:test:direct": {
@@ -3526,6 +3607,11 @@
     "output": "",
     "status": 0
   },
+  "quiet_alias.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
+  },
   "quine.mk:default:direct": {
     "files": [],
     "output": "define q\n$$(info define q)\n$$(info $$(subst $$$$,$$$$$$$$,$$q))\n$$(info endef)\n$$(info $$$$(eval $$$$q))\nendef\n$(eval $q)\n*** No targets.\n",
@@ -4061,6 +4147,18 @@
     "output": "[1/1] build test\nhoge.o mgoe.o\n",
     "status": 0
   },
+  "suffix_subst_unmatched.mk:default:direct": {
+    "files": [],
+    "output": "matched=item.h.d unmatched=item.h appended=item.h.d\n",
+    "status": 0
+  },
+  "suffix_subst_unmatched.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build all\nmatched=item.h.d unmatched=item.h appended=item.h.d\n",
+    "status": 0
+  },
   "tab_comment.mk:test:direct": {
     "files": [],
     "output": "  BUILD   test\nPASS\n",
@@ -4576,6 +4674,11 @@
     "files": [],
     "output": "ninja: error: 'foo.c', needed by 'bar', missing and no known rule to make it\n",
     "status": 1
+  },
+  "vpath_parent_directory.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
   },
   "wait.mk:default:direct": {
     "files": [
