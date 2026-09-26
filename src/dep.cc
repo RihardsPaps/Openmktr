@@ -59,8 +59,8 @@ static std::string_view ImplicitMatchTarget(Symbol output, Symbol pattern) {
 }
 
 static std::string SubstituteImplicitPrerequisite(Symbol output,
-                                                   Symbol pattern,
-                                                   std::string_view input) {
+                                                  Symbol pattern,
+                                                  std::string_view input) {
   Pattern pat(pattern.str());
   std::string result;
   std::string_view match_target = ImplicitMatchTarget(output, pattern);
@@ -71,8 +71,7 @@ static std::string SubstituteImplicitPrerequisite(Symbol output,
     // An absolute prerequisite already names its location.  Prefixing the
     // target directory to it would turn, for example, /build/libc.so into
     // /build/subdir/build/libc.so.
-    if (dir != "." && !dir.empty() &&
-        (result.empty() || result.front() != '/'))
+    if (dir != "." && !dir.empty() && (result.empty() || result.front() != '/'))
       result = std::string(dir) + "/" + result;
   }
   return result;
@@ -108,8 +107,7 @@ void ApplyOutputPattern(const Rule& r,
     if (input.str().find('%') != std::string_view::npos &&
         output_pattern.str().find('/') == std::string_view::npos) {
       std::string_view dir = Dirname(output.str());
-      if (dir != "." && !dir.empty() &&
-          (buf.empty() || buf.front() != '/'))
+      if (dir != "." && !dir.empty() && (buf.empty() || buf.front() != '/'))
         buf = std::string(dir) + "/" + buf;
     }
     // Keep the lexical spelling through rule lookup and command expansion.
@@ -195,8 +193,8 @@ class RuleTrie {
   std::unordered_map<char, RuleTrie*> children_;
 };
 
-static std::vector<const Rule*> GetImplicitRuleCandidates(
-    const RuleTrie* rules, Symbol output) {
+static std::vector<const Rule*> GetImplicitRuleCandidates(const RuleTrie* rules,
+                                                          Symbol output) {
   std::vector<const Rule*> candidates;
   rules->Get(output.str(), &candidates);
   std::string_view basename = Basename(output.str());
@@ -204,12 +202,11 @@ static std::vector<const Rule*> GetImplicitRuleCandidates(
     rules->Get(basename, &candidates);
 
   std::unordered_set<const Rule*> seen;
-  candidates.erase(
-      std::remove_if(candidates.begin(), candidates.end(),
-                     [&seen](const Rule* rule) {
-                       return !seen.insert(rule).second;
-                     }),
-      candidates.end());
+  candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
+                                  [&seen](const Rule* rule) {
+                                    return !seen.insert(rule).second;
+                                  }),
+                   candidates.end());
   return candidates;
 }
 
@@ -224,14 +221,12 @@ static bool IsImplicitRuleCancellation(Symbol output,
                                        const std::vector<const Rule*>& rules) {
   for (const Rule* rule : rules) {
     const bool has_recipe = HasRuleRecipe(rule);
-    if (has_recipe || !rule->inputs.empty() ||
-        !rule->order_only_inputs.empty())
+    if (has_recipe || !rule->inputs.empty() || !rule->order_only_inputs.empty())
       continue;
 
     for (Symbol output_pattern : rule->output_patterns) {
       if (IsDirectoryTarget(output) &&
-          (output_pattern.str().empty() ||
-           output_pattern.str().back() != '/'))
+          (output_pattern.str().empty() || output_pattern.str().back() != '/'))
         continue;
       Pattern pat(output_pattern.str());
       if (pat.Match(ImplicitMatchTarget(output, output_pattern)))
@@ -311,7 +306,9 @@ struct RuleMerger {
     rules.push_back(r);
   }
 
-  void FillDepNodeFromRule(Symbol output, const Rule* r, DepNode* n,
+  void FillDepNodeFromRule(Symbol output,
+                           const Rule* r,
+                           DepNode* n,
                            bool implicit_rule = false) const {
     if (is_double_colon)
       copy(r->cmds.begin(), r->cmds.end(), back_inserter(n->cmds));
@@ -465,9 +462,9 @@ struct RuleMerger {
     std::vector<Symbol> order_only_inputs;
     std::vector<std::vector<Symbol>> wait_groups;
     r->ParseSecondaryInputs(ev, &inputs, &order_only_inputs, &wait_groups);
-      ApplyOutputPattern(*r, output, inputs, &n->actual_inputs);
-      ApplyOutputPattern(*r, output, order_only_inputs,
-                         &n->actual_order_only_inputs);
+    ApplyOutputPattern(*r, output, inputs, &n->actual_inputs);
+    ApplyOutputPattern(*r, output, order_only_inputs,
+                       &n->actual_order_only_inputs);
     if (implicit_rule) {
       std::vector<Symbol> chain_inputs;
       auto collect_chain_inputs = [&](const std::vector<Symbol>& prereqs) {
@@ -996,9 +993,8 @@ class DepBuilder {
 
       Symbol matched;
       for (Symbol output_pattern : rule->output_patterns) {
-        if (IsDirectoryTarget(output) &&
-            (output_pattern.str().empty() ||
-             output_pattern.str().back() != '/'))
+        if (IsDirectoryTarget(output) && (output_pattern.str().empty() ||
+                                          output_pattern.str().back() != '/'))
           continue;
         Pattern pat(output_pattern.str());
         if (pat.Match(ImplicitMatchTarget(output, output_pattern))) {
@@ -1069,8 +1065,7 @@ class DepBuilder {
     Symbol matched;
     for (Symbol output_pattern : rule->output_patterns) {
       if (IsDirectoryTarget(output) &&
-          (output_pattern.str().empty() ||
-           output_pattern.str().back() != '/'))
+          (output_pattern.str().empty() || output_pattern.str().back() != '/'))
         continue;
       Pattern pat(output_pattern.str());
       if (pat.Match(ImplicitMatchTarget(output, output_pattern))) {
@@ -1104,7 +1099,6 @@ class DepBuilder {
     if (!matched.IsValid())
       return false;
 
-
     // Recipe-less pattern rules can still provide prerequisite relationships
     // (GNU make uses these, for example, to route a directory stamp target
     // through a recursive subdirectory target).  Keep treating a rule with
@@ -1135,8 +1129,8 @@ class DepBuilder {
               used_rules.insert(suffix_rule.get());
               usable = CanBuildImplicit(input, suffix_rule.get(), &used_rules);
             }
-            if (usable && pattern_stem_size >=
-                              output.str().size() - suffix.size())
+            if (usable &&
+                pattern_stem_size >= output.str().size() - suffix.size())
               return false;
           }
         }
@@ -1245,20 +1239,20 @@ class DepBuilder {
     // GNU make tries the implicit rule with the shortest stem first.  Trie
     // lookup groups rules by literal prefixes/suffixes, which is useful for
     // finding candidates but does not by itself preserve that priority.
-    std::stable_sort(irules.begin(), irules.end(), [output](const Rule* a,
-                                                            const Rule* b) {
-      auto stem_size = [output](const Rule* rule) {
-        size_t result = std::string_view::npos;
-        for (Symbol pattern : rule->output_patterns) {
-          Pattern pat(pattern.str());
-          std::string_view target = ImplicitMatchTarget(output, pattern);
-          if (pat.Match(target))
-            result = std::min(result, pat.Stem(target).size());
-        }
-        return result;
-      };
-      return stem_size(a) < stem_size(b);
-    });
+    std::stable_sort(
+        irules.begin(), irules.end(), [output](const Rule* a, const Rule* b) {
+          auto stem_size = [output](const Rule* rule) {
+            size_t result = std::string_view::npos;
+            for (Symbol pattern : rule->output_patterns) {
+              Pattern pat(pattern.str());
+              std::string_view target = ImplicitMatchTarget(output, pattern);
+              if (pat.Match(target))
+                result = std::min(result, pat.Stem(target).size());
+            }
+            return result;
+          };
+          return stem_size(a) < stem_size(b);
+        });
 
     for (auto iter = irules.begin(); iter != irules.end(); ++iter) {
       if (implicit_rules_used != nullptr &&
@@ -1290,8 +1284,7 @@ class DepBuilder {
 
     for (const std::shared_ptr<Rule>& irule : found->second) {
       if (implicit_rules_used != nullptr &&
-          implicit_rules_used->find(irule.get()) !=
-              implicit_rules_used->end())
+          implicit_rules_used->find(irule.get()) != implicit_rules_used->end())
         continue;
       CHECK(irule->inputs.size() == 1);
       Symbol input = ReplaceSuffix(output, irule->inputs[0]);
@@ -1360,9 +1353,8 @@ class DepBuilder {
       // commonly use the requesting directory's $(obj)/$(src) relationship;
       // canonicalizing a parent-relative prerequisite before this lookup can
       // incorrectly fall through to a generic built-in rule.
-      if (PickRule(output, n, &lexical_merger, &lexical_pattern,
-                   &lexical_vars, implicit_rules_used,
-                   &lexical_selected_implicit_rule)) {
+      if (PickRule(output, n, &lexical_merger, &lexical_pattern, &lexical_vars,
+                   implicit_rules_used, &lexical_selected_implicit_rule)) {
         // Keep the selected rule and its lexical prerequisites.  The output
         // name is canonicalized after rule expansion below.
       } else {
@@ -1958,11 +1950,11 @@ class DepBuilder {
             stat(vpath_parent.c_str(), &parent_stat) == 0 &&
             S_ISDIR(parent_stat.st_mode);
         if (!local_parent_exists && !vpath_parent_exists) {
-          const bool already_ordered = std::any_of(
-              n->order_onlys.begin(), n->order_onlys.end(),
-              [parent_symbol](const NamedDepNode& dep) {
-                return dep.first == parent_symbol;
-              });
+          const bool already_ordered =
+              std::any_of(n->order_onlys.begin(), n->order_onlys.end(),
+                          [parent_symbol](const NamedDepNode& dep) {
+                            return dep.first == parent_symbol;
+                          });
           if (!already_ordered) {
             DepNode* parent = BuildPlan(parent_symbol, n->output);
             // Only add a dependency when make has a way to build the missing
