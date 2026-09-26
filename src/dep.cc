@@ -1463,21 +1463,25 @@ class DepBuilder {
       implicit_nodes_.insert(n->lexical_output);
     }
 
-    // An implicit target directly required by an explicit rule is a requested
-    // result, not an intermediate.  Only implicit links below another
-    // implicit link are automatic intermediates in GNU make's chain model.
-    // An existing file found through a fallback pattern rule (such as
-    // FFmpeg's %.h: @:) is a source, not a generated intermediate.  Ninja's
-    // cleanup pass cannot infer that from whether its no-op recipe ran.
+    // A generated target in an implicit-rule chain is intermediate. The
+    // recipe-bearing catch-all `%:` rule is GNU make's last-resort rule and
+    // its outputs are intermediate even when an explicit target names them
+    // directly as prerequisites. Existing files found through a fallback
+    // pattern rule are sources, not generated intermediates.
     const auto parent = done_.find(needed_by);
     const bool implicit_chain_input =
         parent != done_.end() &&
         std::find(parent->second->implicit_inputs.begin(),
                   parent->second->implicit_inputs.end(),
                   n->lexical_output) != parent->second->implicit_inputs.end();
-    if (!needed_by.empty() && pattern_rule && implicit_chain_input &&
-        !::Exists(n->output.str()) && implicit_nodes_.exists(needed_by) &&
-        !n->precious && !secondary_all_ &&
+    const bool last_resort_rule =
+        pattern_rule && pattern_rule->output_patterns.size() == 1 &&
+        pattern_rule->output_patterns.front() == Intern("%") &&
+        pattern_rule->inputs.empty() && pattern_rule->order_only_inputs.empty();
+    if (!needed_by.empty() && pattern_rule &&
+        ((implicit_chain_input && implicit_nodes_.exists(needed_by)) ||
+         last_resort_rule) &&
+        !::Exists(n->output.str()) && !n->precious && !secondary_all_ &&
         !secondary_.exists(n->lexical_output))
       n->intermediate = true;
 

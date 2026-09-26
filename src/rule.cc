@@ -191,9 +191,12 @@ void Rule::ParsePrerequisites(const std::string_view& line,
     // escaped references such as $$(compile-command.c) receive their normal
     // second expansion when the rule is executed.
     Loc command_loc = rule_stmt->loc();
-    cmds.push_back(ParseExpr(&command_loc,
-                             TrimLeftSpace(line.substr(separator_pos + 1)),
-                             ParseExprOpt::COMMAND));
+    // ParseExpr stores string_views into its input in literal nodes. The
+    // expanded rule line is temporary, so intern the command before parsing
+    // it to keep those views valid for the lifetime of the rule.
+    std::string_view command =
+        Intern(TrimLeftSpace(line.substr(separator_pos + 1))).str();
+    cmds.push_back(ParseExpr(&command_loc, command, ParseExprOpt::COMMAND));
     prereq_string = line.substr(0, separator_pos);
   }
 

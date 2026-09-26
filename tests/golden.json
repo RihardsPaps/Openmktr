@@ -2362,6 +2362,19 @@
     "output": "Makefile:6: warning: implicit rules are deprecated: %.foo\nPASS\nMakefile:6: *** implicit rules are obsolete: %.foo\n",
     "status": 1
   },
+  "implicit_prerequisite_only_pattern.mk:test:direct": {
+    "files": [],
+    "output": "recurse into subdirectory\n",
+    "status": 0
+  },
+  "implicit_prerequisite_only_pattern.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "localedata"
+    ],
+    "output": "[1/1] build localedata/subdir_lib\nrecurse into subdirectory\n",
+    "status": 0
+  },
   "implicit_suffix_chain.sh:script": {
     "files": [],
     "output": "",
