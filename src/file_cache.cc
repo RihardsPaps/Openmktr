@@ -28,6 +28,12 @@ const Makefile& MakefileCacheManager::ReadMakefile(
   return (cache_.emplace(filename, filename).first)->second;
 }
 
+const Makefile& MakefileCacheManager::ReadStdinMakefile() {
+  if (!stdin_makefile_)
+    stdin_makefile_ = std::make_unique<Makefile>("-", true);
+  return *stdin_makefile_;
+}
+
 void MakefileCacheManager::GetAllFilenames(
     std::unordered_set<std::string>* out) {
   for (const auto& p : cache_)

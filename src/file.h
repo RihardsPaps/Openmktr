@@ -24,7 +24,7 @@ struct Stmt;
 
 class Makefile {
  public:
-  explicit Makefile(const std::string& filename);
+  explicit Makefile(const std::string& filename, bool from_stdin = false);
   ~Makefile();
 
   const std::string& buf() const { return buf_; }

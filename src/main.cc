@@ -552,7 +552,13 @@ static int Run(const std::vector<Symbol>& targets,
                const std::string& invocation_dir) {
   double start_time = GetTime();
 
-  if (g_flags.generate_ninja && (g_flags.regen || g_flags.dump_kati_stamp)) {
+  const bool has_stdin_makefile =
+      std::any_of(g_flags.makefiles.begin(), g_flags.makefiles.end(),
+                  [](const char* name) { return strcmp(name, "-") == 0; });
+  // Stdin has no persistent timestamp. Even a real file named '-' cannot
+  // establish that the stream supplied to this invocation is unchanged.
+  if (!has_stdin_makefile && g_flags.generate_ninja &&
+      (g_flags.regen || g_flags.dump_kati_stamp)) {
     ScopedTimeReporter tr("regen check time");
     if (!NeedsRegen(start_time, orig_args)) {
       fprintf(stderr, "No need to regenerate ninja file\n");
@@ -647,7 +653,10 @@ static int Run(const std::vector<Symbol>& targets,
         }
 
         ScopedFrame file_frame(ev.Enter(FrameType::PARSE, makefile, Loc()));
-        const Makefile& mk = MakefileCacheManager::Get().ReadMakefile(makefile);
+        const Makefile& mk =
+            strcmp(makefile, "-") == 0
+                ? MakefileCacheManager::Get().ReadStdinMakefile()
+                : MakefileCacheManager::Get().ReadMakefile(makefile);
         for (Stmt* stmt : mk.stmts()) {
           LOG("%s", stmt->DebugString().c_str());
           stmt->Eval(&ev);
@@ -900,6 +909,26 @@ static int Run(const std::vector<Symbol>& targets,
               "*** failed to restore working directory before restarting Kati: "
               "%s",
               strerror(errno));
+        }
+        // A pipe cannot be reread after exec. Preserve a stdin Makefile in an
+        // anonymous temporary file so the restarted evaluator sees the same
+        // input after rebuilding an include.
+        for (const char* makefile : g_flags.makefiles) {
+          if (strcmp(makefile, "-") != 0)
+            continue;
+          const std::string& contents =
+              MakefileCacheManager::Get().ReadStdinMakefile().buf();
+          FILE* input = tmpfile();
+          if (input == nullptr)
+            PERROR("tmpfile for stdin Makefile failed");
+          if (fwrite(contents.data(), 1, contents.size(), input) !=
+                  contents.size() ||
+              fflush(input) != 0 || fseek(input, 0, SEEK_SET) != 0 ||
+              dup2(fileno(input), STDIN_FILENO) < 0)
+            PERROR("preserving stdin Makefile failed");
+          if (fclose(input) != 0)
+            PERROR("close stdin Makefile copy failed");
+          break;
         }
         execvp(g_argv[0], g_argv);
         ERROR(
