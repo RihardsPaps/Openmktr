@@ -3330,7 +3330,7 @@
       "first",
       "second"
     ],
-    "output": "  BUILD   .kati_wait_all_0\nnotparallel-target=ok\n",
+    "output": "  BUILD   .kati_wait_616c6c_0\nnotparallel-target=ok\n",
     "status": 0
   },
   "notparallel_target.mk:default:ninja": {
@@ -3339,7 +3339,7 @@
       "first",
       "second"
     ],
-    "output": "[1/4] build first\n[2/4] build .kati_wait_all_0\n[3/4] build second\n[4/4] build all\nnotparallel-target=ok\n",
+    "output": "[1/4] build first\n[2/4] build .kati_wait_616c6c_0\n[3/4] build second\n[4/4] build all\nnotparallel-target=ok\n",
     "status": 0
   },
   "old_file.sh:script": {
@@ -4849,7 +4849,7 @@
       "second",
       "third"
     ],
-    "output": "  BUILD   .kati_wait_all_0\nwait=ok\n",
+    "output": "  BUILD   .kati_wait_616c6c_0\nwait=ok\n",
     "status": 0
   },
   "wait.mk:default:ninja": {
@@ -4860,7 +4860,7 @@
       "second",
       "third"
     ],
-    "output": "[1/6] build first\n[2/6] build second\n[3/6] build .kati_wait_all_0\n[4/6] build third\n[5/6] build fourth\n[6/6] build all\nwait=ok\n",
+    "output": "[1/6] build first\n[2/6] build second\n[3/6] build .kati_wait_616c6c_0\n[4/6] build third\n[5/6] build fourth\n[6/6] build all\nwait=ok\n",
     "status": 0
   },
   "wait_order_only.sh:script": {

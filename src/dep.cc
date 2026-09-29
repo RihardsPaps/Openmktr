@@ -2371,16 +2371,29 @@ class DepBuilder {
       size_t wait_stamp_number = 0;
       auto make_wait_stamp = [&](size_t number,
                                  const std::vector<NamedDepNode>& deps) {
-        std::string name =
-            ".kati_wait/" + n->output.str() + "/" + std::to_string(number);
-        std::replace(name.begin(), name.end(), '/', '_');
+        // Encode every byte, so paths such as a/b and a_b cannot share a
+        // barrier. Split long encodings to stay within filename limits.
+        static constexpr char hex[] = "0123456789abcdef";
+        std::string name = ".kati_wait_";
+        size_t encoded = 0;
+        for (unsigned char byte : n->output.str()) {
+          if (encoded && encoded % 100 == 0)
+            name += '/';
+          name += hex[byte >> 4];
+          name += hex[byte & 15];
+          encoded += 2;
+        }
+        name += "_" + std::to_string(number);
         DepNode* stamp = g_dep_node_pool
                              .emplace_back(std::make_unique<DepNode>(
                                  Intern(name), false, false))
                              .get();
         stamp->has_rule = true;
         stamp->loc = n->loc;
-        stamp->cmds.push_back(Value::NewLiteral(Intern("touch " + name).str()));
+        std::string command = "touch " + name;
+        if (encoded > 100)
+          command = "mkdir -p " + std::string(Dirname(name)) + " && " + command;
+        stamp->cmds.push_back(Value::NewLiteral(Intern(command).str()));
         stamp->deps = deps;
         return stamp;
       };

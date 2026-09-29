@@ -40,6 +40,33 @@ class BuildCorrectness(unittest.TestCase):
         self.direct("--ninja", "--regen")
         return self.run_command("sh", "./ninja.sh", "-j2")
 
+    def test_wait_barriers_distinguish_slashes_from_underscores(self):
+        makefile = (
+            ".PHONY: all a/b a_b first second third fourth\n"
+            "all: a/b a_b\n"
+            "a/b: first .WAIT second\n"
+            "a_b: third .WAIT fourth\n"
+            "first:\n\t@touch first.done\n"
+            "second:\n\t@test -f first.done\n"
+            "third:\n\t@sleep 0.1; touch third.done\n"
+            "fourth:\n\t@test -f third.done\n")
+        for target in ("a/b", "a/" + "b" * 60 + "/" + "c" * 60):
+            with self.subTest(target=target):
+                self.makefile(makefile.replace("a/b", target).replace(
+                    "a_b", target.replace("/", "_")))
+                self.direct("--ninja", "all")
+                graph = (self.directory / "build.ninja").read_text()
+                barriers = [line.split(":", 1)[0] for line in graph.splitlines()
+                            if line.startswith("build .kati_wait_")]
+                self.assertEqual(len(barriers), 2, graph)
+                self.assertEqual(len(set(barriers)), 2, graph)
+                self.run_command("sh", "./ninja.sh", "-j4")
+                (self.directory / "first.done").unlink()
+                (self.directory / "third.done").unlink()
+                self.direct("-j4", "all")
+                (self.directory / "first.done").unlink()
+                (self.directory / "third.done").unlink()
+
     def test_version_is_compatible_with_make_host_checks(self):
         _, output = self.direct("--version")
         self.assertRegex(output, r"\AGNU Make 4\.2\.1\nckati [^\n]+\n\Z")
