@@ -73,6 +73,7 @@ enum struct ParseExprOpt {
   DEFINE,
   COMMAND,
   FUNC,
+  ARGV,
 };
 
 Value* ParseExprImpl(Loc* loc,

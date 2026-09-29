@@ -36,6 +36,7 @@
 #endif
 
 #include <unordered_map>
+#include <unordered_set>
 
 #include "log.h"
 #include "strutil.h"
@@ -148,7 +149,9 @@ int RunCommand(const std::string& shell,
                std::string* s,
                bool acquire_job_token,
                const std::function<void(std::string_view)>& on_output,
-               int make_level) {
+               int make_level,
+               const std::vector<std::string>* extra_env,
+               const std::vector<std::string>* unset_env) {
   // A recipe owns one jobserver slot while its shell runs. Pass that slot to
   // nested Kati processes started indirectly by scripts or configure tests.
   // An explicitly recursive boundary can pass along an inherited reservation
@@ -164,9 +167,20 @@ int RunCommand(const std::string& shell,
                    : "";
   std::vector<char*> child_env;
   const std::string level_env = "MAKELEVEL=" + std::to_string(make_level);
-  const bool custom_env = forward_slot || make_level >= 0;
+  const bool custom_env = forward_slot || make_level >= 0 ||
+                          extra_env != nullptr || unset_env != nullptr;
   if (custom_env) {
+    std::unordered_set<std::string_view> replaced;
+    if (extra_env != nullptr)
+      for (const std::string& entry : *extra_env)
+        replaced.insert(std::string_view(entry).substr(0, entry.find('=')));
+    if (unset_env != nullptr)
+      for (const std::string& name : *unset_env)
+        replaced.insert(name);
     for (char** entry = environ; *entry != nullptr; ++entry) {
+      const std::string_view inherited(*entry);
+      if (replaced.count(inherited.substr(0, inherited.find('='))) != 0)
+        continue;
       if (forward_slot && strncmp(*entry, "KATI_JOBSERVER_RESERVED=", 24) == 0)
         continue;
       if (make_level >= 0 && strncmp(*entry, "MAKELEVEL=", 10) == 0)
@@ -177,6 +191,9 @@ int RunCommand(const std::string& shell,
       child_env.push_back(const_cast<char*>(reserved_env.c_str()));
     if (make_level >= 0)
       child_env.push_back(const_cast<char*>(level_env.c_str()));
+    if (extra_env != nullptr)
+      for (const std::string& entry : *extra_env)
+        child_env.push_back(const_cast<char*>(entry.c_str()));
     child_env.push_back(nullptr);
   }
   // Linux also limits each individual argument (MAX_ARG_STRLEN), even when

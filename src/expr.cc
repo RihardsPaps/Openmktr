@@ -338,7 +338,8 @@ Value* Value::NewLiteral(std::string_view s) {
 }
 
 bool ShouldHandleComments(ParseExprOpt opt) {
-  return opt != ParseExprOpt::DEFINE && opt != ParseExprOpt::COMMAND;
+  return opt != ParseExprOpt::DEFINE && opt != ParseExprOpt::COMMAND &&
+         opt != ParseExprOpt::ARGV;
 }
 
 void ParseFunc(Loc* loc,

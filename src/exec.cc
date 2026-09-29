@@ -244,6 +244,11 @@ class Executor {
                               std::unordered_set<Symbol>* visiting) {
     if (!visiting->insert(node.output).second)
       return false;
+    if (node.is_phony ||
+        std::find(node.double_colon_group_has_prerequisites.begin(),
+                  node.double_colon_group_has_prerequisites.end(),
+                  false) != node.double_colon_group_has_prerequisites.end())
+      return false;
     for (const auto& dep : node.deps) {
       const DepNode& child = *dep.second;
       if (child.is_phony || IsWhatIf(child.output))
@@ -342,12 +347,15 @@ class Executor {
           ce_.evaluator()->Enter(FrameType::EXEC, n.output.c_str(), n.loc));
     }
     double output_ts = GetTimestamp(n.output.c_str());
+    if (output_ts == kNotExist && n.vpath_provider.IsValid())
+      output_ts = GetTimestamp(n.vpath_provider.c_str());
 
     // GNU make does not regenerate a missing implicit intermediate merely
     // because it cleaned that file after an earlier successful build. If an
     // existing parent is newer than every source beneath the intermediate,
     // let the parent use its own timestamp without recreating the chain.
-    if (n.intermediate && output_ts == kNotExist && parent_node) {
+    if (n.intermediate && output_ts == kNotExist && parent_node &&
+        !parent_node->is_phony) {
       const double parent_ts = GetTimestamp(needed_by);
       std::unordered_set<Symbol> visited;
       if (parent_ts != kNotExist &&
@@ -521,7 +529,7 @@ class Executor {
     // incremental no-op builds.
     auto double_colon_group_needs_build = [&](size_t group, double target_ts) {
       if (target_ts == kNotExist || n.is_phony ||
-          n.double_colon_group_inputs[group].empty())
+          !n.double_colon_group_has_prerequisites[group])
         return true;
       for (Symbol input : n.double_colon_group_inputs[group]) {
         if (IsWhatIf(input))
@@ -662,7 +670,8 @@ class Executor {
               command.shellflag.empty() ? shellflag_ : command.shellflag;
           AcquireJob();
           const int result =
-              RunRecipe(command_shell, command_shellflag, command.cmd, false);
+              RunRecipe(command_shell, command_shellflag, command.cmd, false,
+                        command.environment, command.unset_environment);
           ReleaseJob();
           if (result != 0 && !command.ignore_error) {
             node_failed = true;
@@ -702,7 +711,8 @@ class Executor {
             command.shellflag.empty() ? shellflag_ : command.shellflag;
         AcquireJob();
         int result = RunRecipe(command_shell, command_shellflag, command_text,
-                               !recursive);
+                               !recursive, command.environment,
+                               command.unset_environment);
         ReleaseJob();
         ran_recipe = true;
         if (result != 0) {
@@ -747,7 +757,9 @@ class Executor {
   int RunRecipe(const std::string& shell,
                 const std::string& shellflag,
                 const std::string& command,
-                bool acquire_job_token) {
+                bool acquire_job_token,
+                const std::vector<std::string>& environment,
+                const std::vector<std::string>& unset_environment) {
     std::string unused;
     if (g_flags.output_sync == Flags::OutputSync::kNone) {
       return RunCommand(
@@ -758,7 +770,7 @@ class Executor {
             fwrite(data.data(), 1, data.size(), stdout);
             fflush(stdout);
           },
-          g_flags.make_level + 1);
+          g_flags.make_level + 1, &environment, &unset_environment);
     }
     if (g_flags.output_sync == Flags::OutputSync::kLine) {
       std::string pending;
@@ -782,7 +794,7 @@ class Executor {
               pending.clear();
             }
           },
-          g_flags.make_level + 1);
+          g_flags.make_level + 1, &environment, &unset_environment);
       if (!pending.empty())
         emit(pending);
       return status;
@@ -811,7 +823,7 @@ class Executor {
           if (fwrite(data.data(), 1, data.size(), spool) != data.size())
             PERROR("spool write failed");
         },
-        g_flags.make_level + 1);
+        g_flags.make_level + 1, &environment, &unset_environment);
     if (spool != nullptr && fseek(spool, 0, SEEK_SET) != 0)
       PERROR("spool rewind failed");
     {

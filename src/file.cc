@@ -36,7 +36,11 @@ Makefile::Makefile(const std::string& filename)
     // consumed. Keep an anonymous seekable copy on an inherited descriptor
     // so -f - reads the same makefile after execvp.
     const char* saved_fd = getenv("KATI_STDIN_MAKEFILE_FD");
-    if (saved_fd != nullptr) {
+    const char* saved_pid = getenv("KATI_STDIN_MAKEFILE_PID");
+    // execvp keeps the PID; a recursive make started by a recipe has a new
+    // PID and must consume its own standard input.
+    if (saved_fd != nullptr && saved_pid != nullptr &&
+        std::to_string(getpid()) == saved_pid) {
       char* end = nullptr;
       long descriptor = strtol(saved_fd, &end, 10);
       struct stat st;
@@ -80,6 +84,9 @@ Makefile::Makefile(const std::string& filename)
     if (setenv("KATI_STDIN_MAKEFILE_FD", std::to_string(descriptor).c_str(),
                1) != 0)
       PERROR("recording standard-input makefile descriptor failed");
+    if (setenv("KATI_STDIN_MAKEFILE_PID", std::to_string(getpid()).c_str(),
+               1) != 0)
+      PERROR("recording standard-input makefile process failed");
     Parse(this);
     return;
   }

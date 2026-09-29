@@ -30,6 +30,8 @@ struct Command {
   std::string display_cmd;
   std::string shell;
   std::string shellflag;
+  std::vector<std::string> environment;
+  std::vector<std::string> unset_environment;
   bool echo;
   bool verbose = false;
   bool force_run = false;

@@ -170,6 +170,8 @@ void SimpleVar::Eval(Evaluator* ev, std::string* s) const {
 void SimpleVar::AppendVar(Evaluator* ev, Value* v) {
   std::string buf;
   v->Eval(ev, &buf);
+  if (buf.empty())
+    return;
   if (TargetAppend())
     SetTargetAppend(Value::NewExpr(v->Location(), TargetAppend(),
                                    Value::NewLiteral(" "),

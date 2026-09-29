@@ -126,8 +126,8 @@ static bool IsRecursiveTransportVariable(std::string_view name) {
 // Recursive commands executed directly by Kati do not pass through the
 // Ninja emitter.  Export the effective values at this command boundary so a
 // child sees directory-local modifications just as it would under make.
-static void ExportRecursiveEnvironment(std::string* command, Evaluator* ev) {
-  const bool recursive = IsRecursiveKatiCommand(*command);
+static void ExportRecursiveEnvironment(Command* command, Evaluator* ev) {
+  const bool recursive = IsRecursiveKatiCommand(command->cmd);
 
   std::string exports;
   std::unordered_set<std::string> emitted;
@@ -149,7 +149,11 @@ static void ExportRecursiveEnvironment(std::string* command, Evaluator* ev) {
         !emitted.insert(name_string).second)
       return;
     const std::string value = ev->EvalVar(name);
-    exports += "export " + name_string + "=" + ShellQuoteCommand(value) + "; ";
+    if (g_flags.generate_ninja)
+      exports +=
+          "export " + name_string + "=" + ShellQuoteCommand(value) + "; ";
+    else
+      command->environment.push_back(name_string + "=" + value);
   };
 
   // GNU make exports command-line assignments to every directly executed
@@ -177,7 +181,8 @@ static void ExportRecursiveEnvironment(std::string* command, Evaluator* ev) {
         if (ev->current_scope()->IsExported(name))
           emit(name);
     }
-    command->insert(0, exports);
+    if (g_flags.generate_ninja)
+      command->cmd.insert(0, exports);
     return;
   }
 
@@ -214,20 +219,28 @@ static void ExportRecursiveEnvironment(std::string* command, Evaluator* ev) {
   // makefile may assign CC=... itself, so command-line values such as
   // CC=clang must remain command-line overrides in the child.
   Var* makeflags = ev->LookupVar(Intern("MAKEFLAGS"));
+  if (!g_flags.generate_ninja) {
+    if (makeflags != nullptr && makeflags->IsDefined())
+      command->environment.push_back("MAKEFLAGS=" + makeflags->Eval(ev));
+    else
+      command->unset_environment.push_back("MAKEFLAGS");
+    command->unset_environment.push_back("MAKEOVERRIDES");
+    return;
+  }
   if (makeflags != nullptr && makeflags->IsDefined()) {
     exports = "export MAKEFLAGS=" + ShellQuoteCommand(makeflags->Eval(ev)) +
               "; unset MAKEOVERRIDES; " + exports;
   } else {
     exports = "unset MAKEFLAGS MAKEOVERRIDES; " + exports;
   }
-  command->insert(0, exports);
+  command->cmd.insert(0, exports);
 }
 
 // .EXPORT_ALL_VARIABLES makes every make variable whose name can be passed
 // through a POSIX environment visible to every recipe.  Keep this at the
 // recipe boundary rather than changing Kati's own process environment: the
 // latter would leak target-local values between parallel recipes.
-static void ExportAllVariables(std::string* command, Evaluator* ev) {
+static void ExportAllVariables(Command* command, Evaluator* ev) {
   std::string exports;
   std::unordered_set<std::string> emitted;
   for (std::string_view name_view : GetSymbolNames(
@@ -239,10 +252,15 @@ static void ExportAllVariables(std::string* command, Evaluator* ev) {
     Var* variable = ev->LookupVar(name);
     if (variable == nullptr || !variable->IsDefined())
       continue;
-    exports += "export " + std::string(name_view) + "=" +
-               ShellQuoteCommand(ev->EvalVar(name)) + "; ";
+    const std::string value = ev->EvalVar(name);
+    if (g_flags.generate_ninja)
+      exports += "export " + std::string(name_view) + "=" +
+                 ShellQuoteCommand(value) + "; ";
+    else
+      command->environment.push_back(std::string(name_view) + "=" + value);
   }
-  command->insert(0, exports);
+  if (g_flags.generate_ninja)
+    command->cmd.insert(0, exports);
 }
 
 class AutoVar : public Var {
@@ -317,33 +335,44 @@ void AutoAtVar::Eval(Evaluator*, std::string* s) const {
     *s += n->lexical_output.str();
 }
 
-void AutoLessVar::Eval(Evaluator*, std::string* s) const {
+static Symbol EffectivePrerequisite(Evaluator* ev, Symbol input) {
+  if (!g_flags.generate_ninja && !Exists(input.str())) {
+    const std::string provider = ev->ResolveVpath(input);
+    if (!provider.empty())
+      return Intern(provider);
+  }
+  return input;
+}
+
+void AutoLessVar::Eval(Evaluator* ev, std::string* s) const {
   const DepNode* n = ce_->current_dep_node();
   if (!n)
     return;
   auto& ai = n->actual_inputs;
   if (!ai.empty())
-    *s += ai[0].str();
+    *s += EffectivePrerequisite(ev, ai[0]).str();
 }
 
-void AutoHatVar::Eval(Evaluator*, std::string* s) const {
+void AutoHatVar::Eval(Evaluator* ev, std::string* s) const {
   const DepNode* n = ce_->current_dep_node();
   if (!n)
     return;
   std::unordered_set<std::string_view> seen;
   WordWriter ww(s);
   for (Symbol ai : n->actual_inputs) {
+    ai = EffectivePrerequisite(ev, ai);
     if (seen.insert(ai.str()).second)
       ww.Write(ai.str());
   }
 }
 
-void AutoPlusVar::Eval(Evaluator*, std::string* s) const {
+void AutoPlusVar::Eval(Evaluator* ev, std::string* s) const {
   const DepNode* n = ce_->current_dep_node();
   if (!n)
     return;
   WordWriter ww(s);
   for (Symbol ai : n->actual_inputs) {
+    ai = EffectivePrerequisite(ev, ai);
     ww.Write(ai.str());
   }
 }
@@ -418,6 +447,7 @@ void AutoQuestionVar::Eval(Evaluator* ev, std::string* s) const {
     // newer-prerequisite list used by generated makefile refresh recipes.
     double target_age = ce_->target_age();
     for (Symbol ai : n->actual_inputs) {
+      ai = EffectivePrerequisite(ev, ai);
       double input_age = GetTimestamp(ai.str());
       if (std::find(n->low_resolution_inputs.begin(),
                     n->low_resolution_inputs.end(),
@@ -442,13 +472,13 @@ void AutoPercentVar::Eval(Evaluator*, std::string* s) const {
   }
 }
 
-void AutoPipeVar::Eval(Evaluator*, std::string* s) const {
+void AutoPipeVar::Eval(Evaluator* ev, std::string* s) const {
   const DepNode* n = ce_->current_dep_node();
   if (!n)
     return;
   WordWriter ww(s);
   for (Symbol input : n->actual_order_only_inputs)
-    ww.Write(input.str());
+    ww.Write(EffectivePrerequisite(ev, input).str());
 }
 
 void AutoSuffixDVar::Eval(Evaluator* ev, std::string* s) const {
@@ -552,7 +582,13 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
   // Silent recipes do not need a display mode. Avoid expanding an otherwise
   // unused V definition for them (it may be recursive or have side effects).
   auto is_verbose = [&](bool echo) {
-    return echo && (environment_verbose || ev_->EvalVar(Intern("V")) == "1");
+    if (!echo)
+      return false;
+    Var* verbosity = ev_->LookupVar(Intern("V"));
+    // V is a display extension, not a make variable used by this recipe.
+    // Expanding a deferred definition here can run shell functions or fail.
+    return environment_verbose ||
+           (verbosity->IsDefined() && verbosity->String() == "1");
   };
   if (n.oneshell) {
     std::string script;
@@ -596,9 +632,9 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
       // make commands must receive the effective exported make variables at
       // this recipe boundary as well; otherwise makefile assignments made
       // after the snapshot are lost in the child.
-      ExportRecursiveEnvironment(&command.cmd, ev_);
+      ExportRecursiveEnvironment(&command, ev_);
       if (n.export_all_variables)
-        ExportAllVariables(&command.cmd, ev_);
+        ExportAllVariables(&command, ev_);
       command.echo = echo && !n.silent;
       command.ignore_error = ignore_error || n.ignore_errors;
     }
@@ -644,9 +680,9 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
           command.force_run = force_run;
           // See the oneshell case above: recursive commands need the current
           // makefile export state even when Ninja defers their execution.
-          ExportRecursiveEnvironment(&command.cmd, ev_);
+          ExportRecursiveEnvironment(&command, ev_);
           if (n.export_all_variables)
-            ExportAllVariables(&command.cmd, ev_);
+            ExportAllVariables(&command, ev_);
           command.echo = echo && !n.silent;
           command.ignore_error = ignore_error || n.ignore_errors;
         }

@@ -41,7 +41,9 @@ int RunCommand(const std::string& shell,
                std::string* out,
                bool acquire_job_token = true,
                const std::function<void(std::string_view)>& on_output = {},
-               int make_level = -1);
+               int make_level = -1,
+               const std::vector<std::string>* extra_env = nullptr,
+               const std::vector<std::string>* unset_env = nullptr);
 
 // Acquire and release one slot from the optional inherited Kati jobserver.
 // -1 means no slot; -2 is the inherited slot reserved by a parent recipe.

@@ -42,6 +42,9 @@ struct DepNode {
   // edges and filesystem checks; these are distinct when a rule names a
   // target through a parent-relative alias such as dir/../child.
   Symbol lexical_output;
+  // Existing source-tree copy of a rule-bearing logical target. The rule and
+  // its prerequisites remain in the graph until execution decides freshness.
+  Symbol vpath_provider;
   std::vector<Value*> cmds;
   std::vector<NamedDepNode> deps;
   std::vector<NamedDepNode> order_onlys;
@@ -68,6 +71,7 @@ struct DepNode {
   // Double-colon rules retain independent prerequisite freshness and recipe
   // groups. Their recipes must not be merged into one always-run sequence.
   std::vector<std::vector<Symbol>> double_colon_group_inputs;
+  std::vector<bool> double_colon_group_has_prerequisites;
   std::vector<size_t> double_colon_group_for_cmd;
   std::vector<Symbol> low_resolution_inputs;
   std::vector<std::vector<Symbol>> wait_groups;

@@ -182,20 +182,6 @@ static std::string EscapeMakeOverrideValue(std::string_view value) {
   return result;
 }
 
-static std::string RemoveParserHashEscapes(std::string_view value) {
-  std::string result;
-  result.reserve(value.size());
-  for (char c : value) {
-    // Command-line assignments are fed through the makefile parser with an
-    // extra backslash before each literal '#'. The backslash belongs to that
-    // parser invocation, not to the value forwarded through MAKEFLAGS.
-    if (c == '#' && !result.empty() && result.back() == '\\')
-      result.pop_back();
-    result += c;
-  }
-  return result;
-}
-
 static std::string BuildMakeOverrides(Evaluator* ev) {
   std::vector<Symbol> names;
   std::unordered_set<Symbol> seen;
@@ -265,9 +251,18 @@ static std::string BuildMakeOverrides(Evaluator* ev) {
       // override. Replaying += in a child would append to the already
       // exported environment value (and may evaluate a deferred expression
       // before the child's makefile has defined its variables).
+      const bool simple = std::string_view(var->Flavor()) == "simple";
       result += name.str();
-      result += '=';
-      result += EscapeMakeOverrideValue(RemoveParserHashEscapes(var->String()));
+      result += simple ? ":=" : "=";
+      std::string value(var->String());
+      if (simple) {
+        // A simply expanded override must remain literal when a child
+        // parses it from MAKEFLAGS.
+        for (size_t pos = 0; (pos = value.find('$', pos)) != std::string::npos;
+             pos += 2)
+          value.insert(pos, 1, '$');
+      }
+      result += EscapeMakeOverrideValue(value);
       break;
     }
   }
@@ -622,17 +617,8 @@ static int Run(const std::vector<Symbol>& targets,
 
       for (std::string_view l : cl_vars) {
         std::vector<Stmt*> asts;
-        // A # in an argv assignment is literal. Parsing argv as makefile
-        // syntax would otherwise turn the rest of the value into a comment
-        // (and break Automake's TAP stderr-prefix option on recursion).
-        std::string assignment;
-        assignment.reserve(l.size());
-        for (char c : l) {
-          if (c == '#')
-            assignment += '\\';
-          assignment += c;
-        }
-        Parse(Intern(assignment).str(), Loc("*bootstrap*", 0), &asts);
+        // Hashes and preceding backslashes in argv assignments are literal.
+        ParseArgvAssignment(l, Loc("*bootstrap*", 0), &asts);
         CHECK(asts.size() == 1);
         asts[0]->Eval(&ev);
       }
@@ -704,8 +690,8 @@ static int Run(const std::vector<Symbol>& targets,
       auto has_unconditional_double_colon = [&](std::string_view filename) {
         filename = TrimLeadingCurdir(filename);
         for (const Rule* rule : ev.rules()) {
-          if (!rule->is_double_colon || !rule->inputs.empty() ||
-              !rule->order_only_inputs.empty())
+          if (!rule->is_double_colon || rule->cmds.empty() ||
+              !rule->inputs.empty() || !rule->order_only_inputs.empty())
             continue;
           for (Symbol output : rule->outputs)
             if (TrimLeadingCurdir(output.str()) == filename)

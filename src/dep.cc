@@ -413,6 +413,9 @@ struct RuleMerger {
           return;
         const size_t group = n->double_colon_group_inputs.size();
         n->double_colon_group_inputs.emplace_back();
+        n->double_colon_group_has_prerequisites.push_back(
+            !rule->inputs.empty() || !rule->order_only_inputs.empty() ||
+            rule->secondary_expansion);
         ApplyOutputPattern(*rule, output, rule->inputs,
                            &n->double_colon_group_inputs.back());
         n->cmds.insert(n->cmds.end(), rule->cmds.begin(), rule->cmds.end());
@@ -680,7 +683,7 @@ class DepBuilder {
       if (suffixes_specified_) {
         if (active_suffixes_.count(suffix) != 0)
           return true;
-      } else {
+      } else if (!g_flags.no_builtin_rules) {
         for (const char* candidate : kDefaultSuffixes)
           if (suffix == candidate)
             return true;
@@ -880,40 +883,6 @@ class DepBuilder {
   }
 
   void ResolveVpathInputs(std::vector<Symbol>* inputs) {
-    // A VPATH provider is reusable only when none of its buildable
-    // prerequisites will be updated first. Looking at their current mtimes
-    // alone misses changes deeper in the explicit dependency graph.
-    std::function<bool(Symbol, std::unordered_set<Symbol>*)> will_update =
-        [&](Symbol target, std::unordered_set<Symbol>* visiting) {
-          if (phony_.exists(target) || !visiting->insert(target).second)
-            return true;
-          const auto found = rules_.find(target);
-          const std::string provider = ev_->ResolveVpath(target);
-          const double timestamp =
-              provider.empty() ? -2.0 : GetTimestamp(provider);
-          if (timestamp < 0) {
-            visiting->erase(target);
-            return true;
-          }
-          if (found != rules_.end()) {
-            for (const Rule* rule : found->second.rules) {
-              if (rule->secondary_expansion) {
-                visiting->erase(target);
-                return true;
-              }
-              for (Symbol prerequisite : rule->inputs) {
-                const std::string source = ev_->ResolveVpath(prerequisite);
-                if (source.empty() || GetTimestamp(source) > timestamp ||
-                    will_update(prerequisite, visiting)) {
-                  visiting->erase(target);
-                  return true;
-                }
-              }
-            }
-          }
-          visiting->erase(target);
-          return false;
-        };
     for (Symbol& input : *inputs) {
       // A directory can be both a VPATH-visible source directory and a
       // recursive output target. Preserve the target-side spelling when Kati
@@ -923,55 +892,19 @@ class DepBuilder {
       if (phony_.exists(input) ||
           (stat(input.str().c_str(), &st) == 0 && S_ISDIR(st.st_mode)))
         continue;
-      // An explicit rule can name a VPATH file. GNU make uses the source-tree
-      // copy when it is at least as new as every ordinary prerequisite, and
-      // rebuilds in the build tree otherwise. This matters for distributed
-      // generated yacc sources in an out-of-tree Automake build.
       auto found_rule = rules_.find(input);
       std::string resolved = ev_->ResolveVpath(input);
       if (found_rule != rules_.end()) {
-        bool source_is_current = !resolved.empty();
-        bool can_rebuild_here = false;
-        for (const Rule* rule : found_rule->second.rules)
-          can_rebuild_here |= !rule->cmds.empty();
-        const double source_time =
-            source_is_current ? GetTimestamp(resolved) : -2.0;
-        for (const Rule* rule : found_rule->second.rules) {
-          if (rule->secondary_expansion) {
-            source_is_current = false;
-            break;
-          }
-          for (Symbol prerequisite : rule->inputs) {
-            if (phony_.exists(prerequisite)) {
-              source_is_current = false;
-              break;
-            }
-            double prerequisite_time = GetTimestamp(prerequisite.str());
-            if (prerequisite_time < 0) {
-              std::string prerequisite_source = ev_->ResolveVpath(prerequisite);
-              if (!prerequisite_source.empty())
-                prerequisite_time = GetTimestamp(prerequisite_source);
-            }
-            if (can_rebuild_here &&
-                (prerequisite_time < 0 || prerequisite_time > source_time)) {
-              source_is_current = false;
-              break;
-            }
-            if (can_rebuild_here) {
-              std::unordered_set<Symbol> visiting;
-              visiting.insert(input);
-              if (will_update(prerequisite, &visiting)) {
-                source_is_current = false;
-                break;
-              }
-            }
-          }
-          if (!source_is_current)
-            break;
-        }
-        if (!source_is_current)
-          continue;
+        // Keep rule-bearing targets in the graph. Their implicit, order-only,
+        // and double-colon dependencies must still be visited even when a
+        // VPATH copy is currently usable.
+        continue;
       }
+      // A matching implicit rule may create this target in the build tree.
+      // Replacing it with its source-tree provider would make that rule write
+      // back into the source tree and bypass the intended target path.
+      if (!GetImplicitRuleCandidates(implicit_rules_.get(), input).empty())
+        continue;
       if (!resolved.empty()) {
         // A VPATH match can itself be a directory in the source tree.  Keep
         // the logical target name in that case: it may be supplied by a
@@ -1026,6 +959,19 @@ class DepBuilder {
                          return suffix_rank(a->inputs.front()) <
                                 suffix_rank(b->inputs.front());
                        });
+    auto dotless_rank = [&](const auto& rule) {
+      std::string_view input = rule->inputs.front().str();
+      input.remove_prefix(1);  // Remove the implicit-rule percent.
+      if (!input.empty() && input.front() == '.')
+        input.remove_prefix(1);
+      return suffix_rank(Intern(input));
+    };
+    std::stable_sort(dotless_suffix_rules_.begin(), dotless_suffix_rules_.end(),
+                     [&](const auto& a, const auto& b) {
+                       return dotless_rank(a) < dotless_rank(b);
+                     });
+    for (const auto& rule : dotless_suffix_rules_)
+      implicit_rules_->Add(rule->output_patterns.front().str(), rule.get());
     for (auto& p : rules_) {
       auto vars = LookupRuleVars(p.first);
       if (!vars) {
@@ -1070,8 +1016,6 @@ class DepBuilder {
       converted->outputs.clear();
       converted->output_patterns = {Intern("%" + output_suffix)};
       dotless_suffix_rules_.push_back(converted);
-      implicit_rules_->Add(converted->output_patterns.front().str(),
-                           converted.get());
       return true;
     }
 
@@ -1083,7 +1027,6 @@ class DepBuilder {
       converted->outputs.clear();
       converted->output_patterns = {Intern("%")};
       dotless_suffix_rules_.push_back(converted);
-      implicit_rules_->Add("%", converted.get());
       return true;
     }
 
@@ -1493,11 +1436,13 @@ class DepBuilder {
         auto previous = result->find(entry.first);
         if (previous != result->end() && value->TargetAppend()) {
           Var* base = previous->second;
-          Value* base_value;
-          if (const auto* recursive = dynamic_cast<const RecursiveVar*>(base))
-            base_value = recursive->v_;
-          else
-            base_value = Value::NewLiteral(Intern(base->String()).str());
+          Value* base_value = base->TargetAppend();
+          if (!base_value) {
+            if (const auto* recursive = dynamic_cast<const RecursiveVar*>(base))
+              base_value = recursive->v_;
+            else
+              base_value = Value::NewLiteral(Intern(base->String()).str());
+          }
           Value* combined = Value::NewExpr(value->Location(), base_value,
                                            value->TargetAppend());
           if (std::string_view(value->Flavor()) == "simple")
@@ -1507,6 +1452,10 @@ class DepBuilder {
             value = new RecursiveVar(combined, value->Origin(),
                                      value->Definition(), value->Location(),
                                      std::string_view("*pattern append*"));
+          if (base->TargetAppend()) {
+            value->SetAssignOp(AssignOp::PLUS_EQ);
+            value->SetTargetAppend(combined);
+          }
         }
         (*result)[entry.first] = value;
       }
@@ -1837,6 +1786,11 @@ class DepBuilder {
       rule_merger->FillDepNode(output, pattern_rule.get(), n);
     else
       RuleMerger().FillDepNode(output, pattern_rule.get(), n);
+    if (rule_merger || pattern_rule) {
+      const std::string provider = ev_->ResolveVpath(n->output);
+      if (!provider.empty() && provider != n->output.str())
+        n->vpath_provider = Intern(provider);
+    }
 
     if (!normalized_output.empty() && normalized_output != output.str())
       n->output = Intern(normalized_output);
@@ -1938,9 +1892,13 @@ class DepBuilder {
             // TODO: This would be incorrect and has a leak.
             std::shared_ptr<std::string> s = std::make_shared<std::string>();
             old_var->Eval(ev_, s.get());
-            if (!s->empty())
-              *s += ' ';
-            new_var->Eval(ev_, s.get());
+            if (var->TargetAppend()) {
+              var->TargetAppend()->Eval(ev_, s.get());
+            } else {
+              if (!s->empty())
+                *s += ' ';
+              new_var->Eval(ev_, s.get());
+            }
             new_var =
                 new SimpleVar(*s, old_var->Origin(), frame.Current(), n->loc);
           }
@@ -2037,6 +1995,8 @@ class DepBuilder {
           auto& inputs = n->double_colon_group_inputs[group];
           inputs.insert(inputs.end(), n->actual_inputs.begin() + prior_inputs,
                         n->actual_inputs.end());
+          if (inputs.size() > 0)
+            n->double_colon_group_has_prerequisites[group] = true;
         }
       }
     };
@@ -2218,9 +2178,16 @@ class DepBuilder {
       return BuildPlan(input, output, &used_rules);
     };
 
-    for (Symbol input : n->actual_inputs) {
+    for (Symbol& input : n->actual_inputs) {
       DepNode* c = build_prerequisite(input);
       Symbol graph_input = canonical_symbol(input);
+      const std::string provider = ev_->ResolveVpath(input);
+      if (!provider.empty() && c->output == Intern(provider) &&
+          !(c->output == input) && !c->has_rule) {
+        graph_input = canonical_symbol(c->output);
+        if (g_flags.generate_ninja)
+          input = c->output;
+      }
       inherit_rule_vars(c, n);
       n->deps.push_back({graph_input, c});
       if (low_resolution_.exists(input))
@@ -2276,9 +2243,16 @@ class DepBuilder {
     // ordinary prerequisites, while remaining excluded from automatic
     // prerequisite variables.  Add their graph edges before constructing
     // .WAIT barriers so a barrier can reference either kind of prerequisite.
-    for (Symbol input : n->actual_order_only_inputs) {
+    for (Symbol& input : n->actual_order_only_inputs) {
       DepNode* c = build_prerequisite(input);
       Symbol graph_input = canonical_symbol(input);
+      const std::string provider = ev_->ResolveVpath(input);
+      if (!provider.empty() && c->output == Intern(provider) &&
+          !(c->output == input) && !c->has_rule) {
+        graph_input = canonical_symbol(c->output);
+        if (g_flags.generate_ninja)
+          input = c->output;
+      }
       inherit_rule_vars(c, n);
       n->order_onlys.push_back({graph_input, c});
     }

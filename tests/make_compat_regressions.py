@@ -102,6 +102,19 @@ class MakeCompatibilityRegressions(unittest.TestCase):
             refresh_image(compressed, image)
             self.assertEqual(image.read_bytes(), b"current build")
 
+    def test_xorg_verifier_rejects_system_library_fallback(self):
+        from validation.verify_xorg import linked_from_prefix
+
+        with tempfile.TemporaryDirectory(prefix="kati-xorg-check-") as temp:
+            prefix = Path(temp)
+            library = prefix / "lib"
+            library.mkdir()
+            (library / "libX11.so.6").touch()
+            bindings = (f"libX11.so.6 => {library / 'libX11.so.6'} (0x0)\n"
+                        "libXext.so.6 => /usr/lib/libXext.so.6 (0x0)\n")
+            self.assertTrue(linked_from_prefix(bindings, prefix, "libX11.so"))
+            self.assertFalse(linked_from_prefix(bindings, prefix, "libXext.so"))
+
 
 if __name__ == "__main__":
     unittest.main()

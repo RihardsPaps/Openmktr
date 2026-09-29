@@ -245,12 +245,35 @@ void Flags::Parse(int argc, char** argv) {
 
         if (option == 'c' || option == 'd' || option == 'e' || option == 'i' ||
             option == 'n' || option == 'q' || option == 's' || option == 't' ||
-            option == 'k' || option == 'o' || option == 'r' || option == 'w') {
+            option == 'k' || option == 'r' || option == 'w') {
           handled = true;
-          if (option == 'r')
-            no_builtin_rules = true;
-          if (option == 'e')
-            environment_overrides = true;
+          switch (option) {
+            case 'c':
+              is_syntax_check_only = true;
+              break;
+            case 'e':
+              environment_overrides = true;
+              break;
+            case 'i':
+            case 'n':
+              is_dry_run = true;
+              break;
+            case 'q':
+              is_question = true;
+              break;
+            case 's':
+              is_silent_mode = true;
+              break;
+            case 't':
+              is_touch = true;
+              break;
+            case 'k':
+              keep_going = true;
+              break;
+            case 'r':
+              no_builtin_rules = true;
+              break;
+          }
           continue;
         }
 

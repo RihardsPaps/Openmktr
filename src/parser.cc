@@ -103,12 +103,16 @@ class Parser {
         loc_(filename, 0),
         fixed_lineno_(false) {}
 
-  Parser(std::string_view buf, const Loc& loc, std::vector<Stmt*>* stmts)
+  Parser(std::string_view buf,
+         const Loc& loc,
+         std::vector<Stmt*>* stmts,
+         bool argv_assignment = false)
       : buf_(buf),
         stmts_(stmts),
         out_stmts_(stmts),
         loc_(loc),
-        fixed_lineno_(true) {}
+        fixed_lineno_(true),
+        argv_assignment_(argv_assignment) {}
 
   void Parse() {
     l_ = 0;
@@ -312,9 +316,13 @@ class Parser {
     stmt->set_loc(loc_);
     stmt->lhs = ParseExpr(&mutable_loc, lhs);
     stmt->rhs =
-        op == AssignOp::EQ && HasUnterminatedReference(StripRuleComment(rhs))
+        op == AssignOp::EQ &&
+                HasUnterminatedReference(
+                    argv_assignment_ ? std::string(rhs) : StripRuleComment(rhs))
             ? static_cast<Value*>(new DeferredParseError(mutable_loc, rhs))
-            : ParseExpr(&mutable_loc, rhs);
+            : ParseExpr(
+                  &mutable_loc, rhs,
+                  argv_assignment_ ? ParseExprOpt::ARGV : ParseExprOpt::NORMAL);
     stmt->orig_rhs = rhs;
     stmt->op = op;
     stmt->directive = current_directive_;
@@ -655,6 +663,7 @@ class Parser {
 
   Loc loc_;
   bool fixed_lineno_;
+  bool argv_assignment_ = false;
 
   const static DirectiveMap make_directives_;
   const static DirectiveMap else_if_directives_;
@@ -674,6 +683,13 @@ void Parse(std::string_view buf,
            std::vector<Stmt*>* out_stmts) {
   COLLECT_STATS("parse eval time");
   ParseNoStats(buf, loc, out_stmts);
+}
+
+void ParseArgvAssignment(std::string_view buf,
+                         const Loc& loc,
+                         std::vector<Stmt*>* out_stmts) {
+  Parser parser(buf, loc, out_stmts, true);
+  parser.Parse();
 }
 
 void ParseNoStats(std::string_view buf,
