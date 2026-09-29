@@ -180,6 +180,9 @@ class Evaluator {
   const std::unordered_map<Symbol, Vars*>& rule_vars() const {
     return rule_vars_;
   }
+  const std::vector<Symbol>& rule_vars_order() const {
+    return rule_vars_order_;
+  }
   const std::unordered_map<Symbol, bool>& exports() const { return exports_; }
 
   void PrintIncludeStack();
@@ -274,6 +277,7 @@ class Evaluator {
                               size_t separator_pos);
 
   std::unordered_map<Symbol, Vars*> rule_vars_;
+  std::vector<Symbol> rule_vars_order_;
   std::vector<const Rule*> rules_;
   std::unordered_map<Symbol, bool> exports_;
   std::set<Symbol> symbols_for_eval_;

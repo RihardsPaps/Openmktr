@@ -1,0 +1,471 @@
+[
+  {
+    "name": "primary_double_remake",
+    "text": "all:\n\t@echo OK > result\nMakefile::\n\t@touch Makefile\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "OK\n"
+    }
+  },
+  {
+    "name": "primary_phony_remake",
+    "text": ".PHONY: Makefile\nall:\n\t@echo OK > result\nMakefile:\n\t@touch Makefile\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "OK\n"
+    }
+  },
+  {
+    "name": "vpath_transitive",
+    "text": "VPATH=src\nall: generated\n\t@cat $< > result\ngenerated: input\n\t@cp $< $@\ninput: seed\n\t@cp $< $@\n",
+    "files": {
+      "src/generated": "old",
+      "input": "old",
+      "seed": "NEW"
+    },
+    "times": {
+      "src/generated": 200,
+      "input": 100,
+      "seed": 300
+    },
+    "inspect": [
+      "result",
+      "generated",
+      "input"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "NEW",
+      "generated": "NEW",
+      "input": "NEW"
+    }
+  },
+  {
+    "name": "vpath_transitive_ninja",
+    "text": "VPATH=src\nall: generated\n\t@cat $< > result\ngenerated: input\n\t@cp $< $@\ninput: seed\n\t@cp $< $@\n",
+    "files": {
+      "src/generated": "old",
+      "input": "old",
+      "seed": "NEW"
+    },
+    "times": {
+      "src/generated": 200,
+      "input": 100,
+      "seed": 300
+    },
+    "inspect": [
+      "result",
+      "generated",
+      "input"
+    ],
+    "ninja": true,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "NEW",
+      "generated": "NEW",
+      "input": "NEW"
+    }
+  },
+  {
+    "name": "intermediate_transitive",
+    "text": "all: final\n.INTERMEDIATE: middle\nfinal: middle\n\t@cp $< $@\nmiddle: input\n\t@cp $< $@\ninput: seed\n\t@cp $< $@\n",
+    "files": {
+      "final": "old",
+      "input": "old",
+      "seed": "NEW"
+    },
+    "times": {
+      "final": 200,
+      "input": 100,
+      "seed": 300
+    },
+    "inspect": [
+      "final",
+      "input"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "final": "NEW",
+      "input": "NEW"
+    }
+  },
+  {
+    "name": "intermediate_new_sibling",
+    "text": "all: final\n.INTERMEDIATE: middle\nfinal: middle newer\n\t@cat middle newer > final\nmiddle: input\n\t@cp $< $@\n",
+    "files": {
+      "final": "old",
+      "input": "I",
+      "newer": "N"
+    },
+    "times": {
+      "final": 200,
+      "input": 100,
+      "newer": 300
+    },
+    "inspect": [
+      "final"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "final": "IN"
+    }
+  },
+  {
+    "name": "intermediate_whatif",
+    "text": "all: final\n.INTERMEDIATE: middle\nfinal: middle\n\t@cp $< $@\nmiddle: input\n\t@cp $< $@\n",
+    "files": {
+      "final": "old",
+      "input": "NEW"
+    },
+    "times": {
+      "final": 200,
+      "input": 100
+    },
+    "args": [
+      "-W",
+      "input",
+      "all"
+    ],
+    "inspect": [
+      "final"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "final": "NEW"
+    }
+  },
+  {
+    "name": "double_both_newer",
+    "text": "all: a\na:: b\n\t@printf one >> a\na:: c\n\t@printf two >> a\n",
+    "files": {
+      "a": "",
+      "b": "",
+      "c": ""
+    },
+    "times": {
+      "a": 100,
+      "b": 200,
+      "c": 200
+    },
+    "inspect": [
+      "a"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "a": "onetwo"
+    }
+  },
+  {
+    "name": "oneshell_else",
+    "text": ".ONESHELL:\nifeq (1,1)\nall:\n\tif false; then\n\t  echo bad > result\n\telse\n\t  echo good > result\n\tfi\nendif\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "good\n"
+    }
+  },
+  {
+    "name": "commandline_env_append",
+    "text": "all:\n\t@$(MAKE) -f child.mk\n",
+    "files": {
+      "child.mk": "all:\n\t@echo \"$(VAR)\" > result\n"
+    },
+    "args": [
+      "all",
+      "VAR+=second"
+    ],
+    "extra_env": {
+      "VAR": "first"
+    },
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "first second\n"
+    }
+  },
+  {
+    "name": "comment_unterminated",
+    "text": "VAR = good # $(\nall:\n\t@echo \"$(VAR)\" > result\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "good \n"
+    }
+  },
+  {
+    "name": "suffix_order",
+    "text": ".SUFFIXES:\n.SUFFIXES: .b .a .out\n.a.out:\n\t@echo a > $@\n.b.out:\n\t@echo b > $@\nall: x.out\n",
+    "files": {
+      "x.a": "",
+      "x.b": ""
+    },
+    "inspect": [
+      "x.out"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "x.out": "b\n"
+    }
+  },
+  {
+    "name": "target_export_override",
+    "text": "unexport FLAGS\nx: export FLAGS = good\nall: x\nx:\n\t@echo $$FLAGS > result\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "good\n"
+    }
+  },
+  {
+    "name": "pattern_export_override",
+    "text": "unexport FLAGS\n%.o: export FLAGS = good\nall: x.o\nx.o:\n\t@echo $$FLAGS > result\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "good\n"
+    }
+  },
+  {
+    "name": "stdin_restart",
+    "text": "include inc.mk\nall:\n\t@echo $(VALUE) > result\ninc.mk:\n\t@echo VALUE=ok > inc.mk\n",
+    "stdin": true,
+    "inspect": [
+      "result",
+      "inc.mk"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "ok\n",
+      "inc.mk": "VALUE=ok\n"
+    }
+  },
+  {
+    "name": "double_secondary_update",
+    "text": ".SECONDEXPANSION:\nDEPS = b\nall: a\na:: $$(DEPS)\n\t@echo rebuilt >> a\n",
+    "files": {
+      "a": "old",
+      "b": ""
+    },
+    "times": {
+      "a": 100,
+      "b": 200
+    },
+    "inspect": [
+      "a"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "a": "oldrebuilt\n"
+    }
+  },
+  {
+    "name": "double_oneshell_freshness",
+    "text": ".ONESHELL:\nall: a\na:: b\n\t@echo first >> a\na:: c\n\t@echo second >> a\n",
+    "files": {
+      "a": "old",
+      "b": "",
+      "c": ""
+    },
+    "times": {
+      "a": 200,
+      "b": 100,
+      "c": 100
+    },
+    "inspect": [
+      "a"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "a": "old"
+    }
+  },
+  {
+    "name": "double_side_effect",
+    "text": "all: a\na:: b\n\t$(file >side,effect)echo rebuilt >> a\n",
+    "files": {
+      "a": "old",
+      "b": ""
+    },
+    "times": {
+      "a": 200,
+      "b": 100
+    },
+    "inspect": [
+      "a",
+      "side"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "a": "old",
+      "side": null
+    }
+  },
+  {
+    "name": "double_whatif",
+    "text": "all: a\na:: b\n\t@echo rebuilt >> a\n",
+    "files": {
+      "a": "old",
+      "b": ""
+    },
+    "times": {
+      "a": 200,
+      "b": 100
+    },
+    "args": [
+      "-W",
+      "b",
+      "all"
+    ],
+    "inspect": [
+      "a"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "a": "oldrebuilt\n"
+    }
+  },
+  {
+    "name": "pattern_precedence_early_intern",
+    "text": "early := $(a%)\n%b: FLAGS = first\na%: FLAGS = second\nall: ab\nab:\n\t@echo $(FLAGS) > result\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "second\n"
+    }
+  },
+  {
+    "name": "no_builtin_suffix",
+    "text": "all: x.o\n.SUFFIXES: .xyz\n.c.o:\n\t@echo custom > $@\n",
+    "files": {
+      "x.c": ""
+    },
+    "args": [
+      "-r",
+      "all"
+    ],
+    "inspect": [
+      "x.o"
+    ],
+    "expected_status": 1,
+    "expected_files": {
+      "x.o": null
+    }
+  },
+  {
+    "name": "builtin_removed_suffix",
+    "text": ".SUFFIXES:\nall: x\n",
+    "files": {
+      "x.c": "int main(void) { return 0; }\n"
+    },
+    "inspect": [],
+    "expected_status": 1,
+    "expected_files": {}
+  },
+  {
+    "name": "fortran_missing_default",
+    "text": "all: x.o\n",
+    "files": {
+      "x.f": "      program hello\n      end\n"
+    },
+    "inspect": [
+      "x.o"
+    ],
+    "expected_status": 1,
+    "expected_files": {
+      "x.o": null
+    }
+  },
+  {
+    "name": "verbose_undefined_self",
+    "text": "V = $(V)\nall:\n\t@echo good > result\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "good\n"
+    }
+  },
+  {
+    "name": "single_suffix_c_link_after_reset",
+    "text": ".SUFFIXES:\n.SUFFIXES: .c\nall: x\n",
+    "files": {
+      "x.c": "int main(void) { return 0; }\n"
+    },
+    "args": [
+      "-n",
+      "all"
+    ],
+    "expected_status": 0,
+    "expected_files": {}
+  },
+  {
+    "name": "primary_phony_recipe_once",
+    "text": ".PHONY: Makefile\nall:\n\t@echo OK > result\nMakefile:\n\t@echo rebuilt > marker; touch Makefile\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "OK\n",
+      "marker": "rebuilt\n"
+    }
+  },
+  {
+    "name": "included_existing_phony_once",
+    "text": "include inc.mk\n.PHONY: inc.mk\ninc.mk:\n\t@echo \"# rebuilt\" > inc.mk\nall:\n\t@echo OK > result\n",
+    "files": {
+      "inc.mk": "# original\n"
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "result": "OK\n",
+      "inc.mk": "# rebuilt\n"
+    }
+  },
+  {
+    "name": "included_missing_phony_once",
+    "text": "include inc.mk\n.PHONY: inc.mk\ninc.mk:\n\t@echo \"# rebuilt\" > inc.mk\nall:\n\t@echo OK > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "OK\n",
+      "inc.mk": "# rebuilt\n"
+    }
+  },
+  {
+    "name": "included_existing_double_not_remade",
+    "text": "include inc.mk\ninc.mk::\n\t@echo \"# rebuilt\" > inc.mk\nall:\n\t@echo OK > result\n",
+    "files": {
+      "inc.mk": "# original\n"
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "result": "OK\n",
+      "inc.mk": "# original\n"
+    }
+  },
+  {
+    "name": "included_missing_double_not_remade",
+    "text": "include inc.mk\ninc.mk::\n\t@echo \"# rebuilt\" > inc.mk\nall:\n\t@echo OK > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "OK\n",
+      "inc.mk": null
+    }
+  }
+]

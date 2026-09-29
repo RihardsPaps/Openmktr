@@ -174,7 +174,7 @@ class Parser {
     // Conditional directives may be indented with a tab inside a
     // conditional block.  They must close the makefile conditional rather
     // than become a recipe for an earlier expansion-only line.
-    if (line[0] == '\t' && !if_stack_.empty()) {
+    if (line[0] == '\t' && !if_stack_.empty() && !after_rule_) {
       const std::string_view indented = TrimLeftSpace(line);
       const std::string_view directive = GetDirective(indented);
       if (directive == "ifdef" || directive == "ifndef" ||
@@ -312,7 +312,7 @@ class Parser {
     stmt->set_loc(loc_);
     stmt->lhs = ParseExpr(&mutable_loc, lhs);
     stmt->rhs =
-        op == AssignOp::EQ && HasUnterminatedReference(rhs)
+        op == AssignOp::EQ && HasUnterminatedReference(StripRuleComment(rhs))
             ? static_cast<Value*>(new DeferredParseError(mutable_loc, rhs))
             : ParseExpr(&mutable_loc, rhs);
     stmt->orig_rhs = rhs;

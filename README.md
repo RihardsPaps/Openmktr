@@ -105,13 +105,14 @@ Inside Chimera, run the test binaries and self-contained regression snapshots wi
 ninja -f build.ninja -j4 ckati tests
 out/find_test && out/ninja_test && out/strutil_test
 python tests/correctness.py
+python tests/make_compat_regressions.py
 python tests/regression.py
 sh testcase/dump/run.sh
 ```
 
 The snapshot suite covers direct execution, Ninja generation, recursive and parallel builds, and converted POSIX shell tests. It compares against checked-in expected outcomes, without a GNU Make reference executable. Some fixtures intentionally expect a nonzero result. The existing crash cases are listed separately in [`known_crashes.json`](tests/known_crashes.json); recording snapshots rejects new crashes and requires recovered cases to leave that list. Use `python tests/regression.py --case pattern` to inspect matching scenarios. When changing behavior, add or update a fixture in [`testcase/`](testcase/), then run `python tests/regression.py --record` in Chimera and review the resulting snapshot diff.
 
-The focused correctness suite checks incremental rebuilds, failure handling, recipe exports, regeneration, and job limits using output contents and exit codes. To run the compiler sanitizers in a separate output directory, use `python tools/gen_sanitizer_build.py`, build `ckati-sanitized tests` with `ninja -f build.sanitizer.ninja`, then set `KATI_BINARY` to the sanitized binary when running `tests/correctness.py`. The CI image runs these checks on musl.
+The focused correctness suite checks incremental rebuilds, failure handling, recipe exports, regeneration, and job limits using output contents and exit codes. The Make compatibility suite checks observed GNU Make behavior for dependency, rule, variable, and restart edge cases, plus OpenWrt image refresh. To run the compiler sanitizers in a separate output directory, use `python tools/gen_sanitizer_build.py`, build `ckati-sanitized tests` with `ninja -f build.sanitizer.ninja`, then set `KATI_BINARY` to the sanitized binary when running `tests/correctness.py` and `tests/make_compat_regressions.py`. The CI image runs these checks on musl.
 
 To measure conversion, no-op regeneration, parallel execution, peak memory, and binary size:
 

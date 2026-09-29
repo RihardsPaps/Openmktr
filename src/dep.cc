@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 #include <algorithm>
 #include <cstring>
+#include <functional>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -406,6 +407,7 @@ struct RuleMerger {
     }
 
     if (is_double_colon) {
+      n->cmds.clear();
       auto add_group = [&](const Rule* rule) {
         if (!rule)
           return;
@@ -413,13 +415,12 @@ struct RuleMerger {
         n->double_colon_group_inputs.emplace_back();
         ApplyOutputPattern(*rule, output, rule->inputs,
                            &n->double_colon_group_inputs.back());
+        n->cmds.insert(n->cmds.end(), rule->cmds.begin(), rule->cmds.end());
         n->double_colon_group_for_cmd.insert(
             n->double_colon_group_for_cmd.end(), rule->cmds.size(), group);
       };
-      add_group(primary_rule);
       for (const Rule* rule : rules)
-        if (rule != primary_rule)
-          add_group(rule);
+        add_group(rule);
     }
 
     SymbolSet all_outputs = SymbolSet();
@@ -607,14 +608,17 @@ class DepBuilder {
       // GNU make treats an empty .SUFFIXES rule as a reset. Nonempty rules
       // add suffixes to the active list, preserving the order in which the
       // makefile declares them.
-      if (!suffixes_specified_ && !rule->inputs.empty()) {
+      if (!suffixes_specified_ && !rule->inputs.empty() &&
+          !g_flags.no_builtin_rules) {
         for (const char* suffix : kDefaultSuffixes) {
           active_suffixes_.insert(suffix);
           dotted_suffixes_.insert(suffix);
+          active_suffix_order_.emplace_back(suffix);
         }
       }
       if (rule->inputs.empty()) {
         active_suffixes_.clear();
+        active_suffix_order_.clear();
         dotted_suffixes_.clear();
         dotless_suffixes_.clear();
       } else {
@@ -626,7 +630,8 @@ class DepBuilder {
           } else {
             dotless_suffixes_.insert(name);
           }
-          active_suffixes_.insert(std::move(name));  // active GNU suffix
+          if (active_suffixes_.insert(name).second)
+            active_suffix_order_.push_back(name);
         }
       }
       suffixes_specified_ = true;
@@ -875,6 +880,40 @@ class DepBuilder {
   }
 
   void ResolveVpathInputs(std::vector<Symbol>* inputs) {
+    // A VPATH provider is reusable only when none of its buildable
+    // prerequisites will be updated first. Looking at their current mtimes
+    // alone misses changes deeper in the explicit dependency graph.
+    std::function<bool(Symbol, std::unordered_set<Symbol>*)> will_update =
+        [&](Symbol target, std::unordered_set<Symbol>* visiting) {
+          if (phony_.exists(target) || !visiting->insert(target).second)
+            return true;
+          const auto found = rules_.find(target);
+          const std::string provider = ev_->ResolveVpath(target);
+          const double timestamp =
+              provider.empty() ? -2.0 : GetTimestamp(provider);
+          if (timestamp < 0) {
+            visiting->erase(target);
+            return true;
+          }
+          if (found != rules_.end()) {
+            for (const Rule* rule : found->second.rules) {
+              if (rule->secondary_expansion) {
+                visiting->erase(target);
+                return true;
+              }
+              for (Symbol prerequisite : rule->inputs) {
+                const std::string source = ev_->ResolveVpath(prerequisite);
+                if (source.empty() || GetTimestamp(source) > timestamp ||
+                    will_update(prerequisite, visiting)) {
+                  visiting->erase(target);
+                  return true;
+                }
+              }
+            }
+          }
+          visiting->erase(target);
+          return false;
+        };
     for (Symbol& input : *inputs) {
       // A directory can be both a VPATH-visible source directory and a
       // recursive output target. Preserve the target-side spelling when Kati
@@ -918,6 +957,14 @@ class DepBuilder {
               source_is_current = false;
               break;
             }
+            if (can_rebuild_here) {
+              std::unordered_set<Symbol> visiting;
+              visiting.insert(input);
+              if (will_update(prerequisite, &visiting)) {
+                source_is_current = false;
+                break;
+              }
+            }
           }
           if (!source_is_current)
             break;
@@ -959,6 +1006,26 @@ class DepBuilder {
         PopulateExplicitRule(rule);
       }
     }
+    // GNU make tries suffix conversions in .SUFFIXES order, independent of
+    // where their recipes appear in the makefile.
+    auto suffix_rank = [this](Symbol suffix) {
+      const std::string_view name = suffix.str();
+      if (suffixes_specified_) {
+        auto it = std::find(active_suffix_order_.begin(),
+                            active_suffix_order_.end(), name);
+        return static_cast<size_t>(it - active_suffix_order_.begin());
+      }
+      for (size_t i = 0; i < std::size(kDefaultSuffixes); ++i)
+        if (name == kDefaultSuffixes[i])
+          return i;
+      return std::size(kDefaultSuffixes);
+    };
+    for (auto& entry : suffix_rules_)
+      std::stable_sort(entry.second.begin(), entry.second.end(),
+                       [&](const auto& a, const auto& b) {
+                         return suffix_rank(a->inputs.front()) <
+                                suffix_rank(b->inputs.front());
+                       });
     for (auto& p : rules_) {
       auto vars = LookupRuleVars(p.first);
       if (!vars) {
@@ -1403,13 +1470,18 @@ class DepBuilder {
       return vars;
     // Broad patterns form the base for narrower patterns and explicit
     // target assignments. Appends contribute only their local suffix.
+    std::unordered_map<Symbol, size_t> definition_order;
+    const auto& ordered_vars = ev_->rule_vars_order();
+    for (size_t i = 0; i < ordered_vars.size(); ++i)
+      definition_order[ordered_vars[i]] = i;
     std::sort(
         patterns.begin(), patterns.end(),
-        [target](const auto& a, const auto& b) {
+        [target, &definition_order](const auto& a, const auto& b) {
           const size_t a_stem = Pattern(a.first.str()).Stem(target).size();
           const size_t b_stem = Pattern(b.first.str()).Stem(target).size();
           return a_stem != b_stem ? a_stem > b_stem
-                                  : a.first.val() < b.first.val();
+                                  : definition_order.at(a.first) <
+                                        definition_order.at(b.first);
         });
     Vars* result = new Vars;
     auto merge = [&](Vars* additions) {
@@ -1549,7 +1621,8 @@ class DepBuilder {
           }
         }
       }
-      if (names_object) {
+      if (names_object &&
+          (!suffixes_specified_ || active_suffixes_.count("o"))) {
         auto link = std::make_shared<Rule>();
         link->output_patterns.push_back(Intern("%"));
         link->inputs.push_back(Intern("%.o"));
@@ -1576,7 +1649,8 @@ class DepBuilder {
           }
         }
       }
-      if (names_source && Exists(source)) {
+      if (names_source && Exists(source) &&
+          (!suffixes_specified_ || active_suffixes_.count("c"))) {
         auto link = std::make_shared<Rule>();
         link->output_patterns.push_back(Intern("%"));
         link->inputs.push_back(Intern("%.c"));
@@ -1950,9 +2024,21 @@ class DepBuilder {
                           new SimpleVar(item.second, VarOrigin::AUTOMATIC,
                                         frame.Current(), n->loc)));
       }
+      const size_t prior_inputs = n->actual_inputs.size();
       active_merger->FillOneSecondaryInput(
           n->lexical_output, secondary_rule, n, ev_,
           secondary_rule == pattern_rule.get());
+      if (!n->double_colon_group_inputs.empty()) {
+        const auto found_rule =
+            std::find(active_merger->rules.begin(), active_merger->rules.end(),
+                      secondary_rule);
+        if (found_rule != active_merger->rules.end()) {
+          const size_t group = found_rule - active_merger->rules.begin();
+          auto& inputs = n->double_colon_group_inputs[group];
+          inputs.insert(inputs.end(), n->actual_inputs.begin() + prior_inputs,
+                        n->actual_inputs.end());
+        }
+      }
     };
 
     std::unordered_set<const Rule*> expanded_rules;
@@ -2376,6 +2462,7 @@ class DepBuilder {
   SuffixRuleMap suffix_rules_;
   bool suffixes_specified_ = false;
   std::unordered_set<std::string> active_suffixes_;
+  std::vector<std::string> active_suffix_order_;
   std::unordered_set<std::string> dotted_suffixes_;
   std::unordered_set<std::string> dotless_suffixes_;
   std::vector<std::shared_ptr<Rule>> dotless_suffix_rules_;

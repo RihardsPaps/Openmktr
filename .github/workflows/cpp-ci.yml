@@ -40,7 +40,8 @@ jobs:
             ninja -f build.sanitizer.ninja -j4 ckati-sanitized tests &&
             out/sanitized/find_test && out/sanitized/ninja_test &&
             out/sanitized/strutil_test &&
-            KATI_BINARY=/workspace/ckati-sanitized python tests/correctness.py' 2>&1 | tee sanitizer.log
+            KATI_BINARY=/workspace/ckati-sanitized python tests/correctness.py &&
+            KATI_BINARY=/workspace/ckati-sanitized python tests/make_compat_regressions.py' 2>&1 | tee sanitizer.log
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

@@ -136,7 +136,12 @@ static void ExportRecursiveEnvironment(std::string* command, Evaluator* ev) {
     if (IsRecursiveTransportVariable(name_string))
       return;
     auto explicit_export = ev->exports().find(name);
-    if (explicit_export != ev->exports().end() && !explicit_export->second)
+    const Vars* scope = ev->current_scope();
+    const bool scoped_export = scope != nullptr &&
+                               scope->exported().exists(name) &&
+                               scope->IsExported(name);
+    if (explicit_export != ev->exports().end() && !explicit_export->second &&
+        !scoped_export)
       return;
     Var* variable = ev->LookupVar(name);
     if (variable == nullptr || !variable->IsDefined() ||
@@ -525,6 +530,12 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n) {
 
 std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
                                             double target_age) {
+  return Eval(n, target_age, static_cast<size_t>(-1));
+}
+
+std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
+                                            double target_age,
+                                            size_t double_colon_group) {
   std::vector<Command> result;
   target_age_ = target_age;
   ev_->set_loc(n.loc);
@@ -536,12 +547,21 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
   // Keep an invocation-wide command display switch that survives recursive
   // makes without adding a command-line variable override to MAKEFLAGS.
   const char* kati_verbose = std::getenv("KATI_VERBOSE");
-  const bool verbose =
-      ev_->EvalVar(Intern("V")) == "1" ||
-      (kati_verbose != nullptr && std::string_view(kati_verbose) == "1");
+  const bool environment_verbose =
+      kati_verbose != nullptr && std::string_view(kati_verbose) == "1";
+  // Silent recipes do not need a display mode. Avoid expanding an otherwise
+  // unused V definition for them (it may be recursive or have side effects).
+  auto is_verbose = [&](bool echo) {
+    return echo && (environment_verbose || ev_->EvalVar(Intern("V")) == "1");
+  };
   if (n.oneshell) {
     std::string script;
-    for (Value* v : n.cmds) {
+    for (size_t i = 0; i < n.cmds.size(); ++i) {
+      if (double_colon_group != static_cast<size_t>(-1) &&
+          (i >= n.double_colon_group_for_cmd.size() ||
+           n.double_colon_group_for_cmd[i] != double_colon_group))
+        continue;
+      Value* v = n.cmds[i];
       ev_->set_loc(v->Location());
       if (!script.empty())
         script += '\n';
@@ -565,11 +585,11 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
     cmds = TrimLeftSpace(cmds);
     if (!cmds.empty()) {
       Command& command = result.emplace_back(n.output);
-      if (n.double_colon_group_inputs.size() == 1)
-        command.double_colon_group = 0;
+      if (double_colon_group != static_cast<size_t>(-1))
+        command.double_colon_group = double_colon_group;
       command.cmd = std::string(cmds);
       command.display_cmd = command.cmd;
-      command.verbose = verbose;
+      command.verbose = is_verbose(echo && !n.silent);
       command.force_run = force_run;
       // Generated Ninja recipes source env.sh, which is only a snapshot of
       // the process environment taken during graph generation.  Recursive
@@ -585,6 +605,10 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
   } else {
     for (size_t command_index = 0; command_index < n.cmds.size();
          ++command_index) {
+      if (double_colon_group != static_cast<size_t>(-1) &&
+          (command_index >= n.double_colon_group_for_cmd.size() ||
+           n.double_colon_group_for_cmd[command_index] != double_colon_group))
+        continue;
       Value* v = n.cmds[command_index];
       ev_->set_loc(v->Location());
       const std::string cmds_buf = ExpandDeferredAssignments(v->Eval(ev_), ev_);
@@ -616,7 +640,7 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
                 n.double_colon_group_for_cmd[command_index];
           command.cmd = std::string(cmd);
           command.display_cmd = command.cmd;
-          command.verbose = verbose;
+          command.verbose = is_verbose(echo && !n.silent);
           command.force_run = force_run;
           // See the oneshell case above: recursive commands need the current
           // makefile export state even when Ninja defers their execution.

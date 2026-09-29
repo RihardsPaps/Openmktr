@@ -165,6 +165,7 @@ class RecursiveVar : public Var {
 
   Value* v_;
   std::string_view orig_;
+  void SetOriginal(std::string_view original) { orig_ = original; }
 };
 
 class UndefinedVar : public Var {

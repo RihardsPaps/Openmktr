@@ -345,8 +345,14 @@ Var* Evaluator::EvalRHS(Symbol lhs,
         // A command-line += assignment replaces the inherited variable's
         // origin. Recursive makes must still receive the override through
         // MAKEFLAGS, even when the value came from the environment.
-        if (is_commandline_)
+        if (is_commandline_) {
+          if (auto* recursive = dynamic_cast<RecursiveVar*>(result)) {
+            recursive->SetOriginal(Intern(std::string(recursive->String()) +
+                                          " " + std::string(orig_rhs))
+                                       .str());
+          }
           result->SetOrigin(VarOrigin::COMMAND_LINE);
+        }
         *needs_assign = false;
       }
       break;
@@ -551,6 +557,7 @@ void Evaluator::EvalRuleSpecificAssign(const std::vector<Symbol>& targets,
     auto p = rule_vars_.emplace(target, nullptr);
     if (p.second) {
       p.first->second = new Vars;
+      rule_vars_order_.push_back(target);
     }
 
     // ParseRule already stores the complete right-hand side in stmt->rhs.

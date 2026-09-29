@@ -44,6 +44,9 @@ class CommandEvaluator {
   ~CommandEvaluator();
   std::vector<Command> Eval(const DepNode& n);
   std::vector<Command> Eval(const DepNode& n, double target_age);
+  std::vector<Command> Eval(const DepNode& n,
+                            double target_age,
+                            size_t double_colon_group);
   const DepNode* current_dep_node() const { return current_dep_node_; }
   double target_age() const { return target_age_; }
   Evaluator* evaluator() const { return ev_; }

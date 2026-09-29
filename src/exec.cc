@@ -239,34 +239,40 @@ class Executor {
     return jobs;
   }
 
-  bool MissingIntermediateIsOlderThan(const DepNode& node,
-                                      double parent_timestamp,
-                                      std::unordered_set<Symbol>* visited) {
-    if (!visited->insert(node.output).second || node.is_phony ||
-        node.deps.empty())
+  bool DependenciesAreCurrent(const DepNode& node,
+                              double target_timestamp,
+                              std::unordered_set<Symbol>* visiting) {
+    if (!visiting->insert(node.output).second)
       return false;
     for (const auto& dep : node.deps) {
       const DepNode& child = *dep.second;
-      if (child.is_phony)
+      if (child.is_phony || IsWhatIf(child.output))
         return false;
       const double child_timestamp = GetTimestamp(child.output.c_str());
       if (child_timestamp == kNotExist &&
-          (!child.intermediate ||
-           !MissingIntermediateIsOlderThan(child, parent_timestamp, visited)))
+          (!child.intermediate || child.deps.empty() ||
+           !DependenciesAreCurrent(child, target_timestamp, visiting)))
         return false;
-      if (child_timestamp != kNotExist && child_timestamp > parent_timestamp)
+      if (child_timestamp != kNotExist &&
+          (child_timestamp > target_timestamp ||
+           !DependenciesAreCurrent(child, child_timestamp, visiting)))
         return false;
     }
     for (const auto& dep : node.order_onlys) {
-      if (GetTimestamp(dep.second->output.c_str()) == kNotExist)
+      const double order_timestamp = GetTimestamp(dep.second->output.c_str());
+      if (dep.second->is_phony || IsWhatIf(dep.second->output) ||
+          order_timestamp == kNotExist ||
+          !DependenciesAreCurrent(*dep.second, order_timestamp, visiting))
         return false;
     }
+    visiting->erase(node.output);
     return true;
   }
 
   double ExecNode(const DepNode& n,
                   const char* needed_by,
-                  std::shared_ptr<const Ancestry> parent = nullptr) {
+                  std::shared_ptr<const Ancestry> parent = nullptr,
+                  const DepNode* parent_node = nullptr) {
     for (auto path = parent; path != nullptr; path = path->parent) {
       if (path->output == n.output) {
         WARN("Circular %s <- %s dependency dropped.",
@@ -341,11 +347,11 @@ class Executor {
     // because it cleaned that file after an earlier successful build. If an
     // existing parent is newer than every source beneath the intermediate,
     // let the parent use its own timestamp without recreating the chain.
-    if (n.intermediate && output_ts == kNotExist && needed_by) {
+    if (n.intermediate && output_ts == kNotExist && parent_node) {
       const double parent_ts = GetTimestamp(needed_by);
       std::unordered_set<Symbol> visited;
       if (parent_ts != kNotExist &&
-          MissingIntermediateIsOlderThan(n, parent_ts, &visited)) {
+          DependenciesAreCurrent(*parent_node, parent_ts, &visited)) {
         {
           std::lock_guard<std::mutex> lock(state_mu_);
           done_.erase(n.output);
@@ -401,13 +407,13 @@ class Executor {
       if (parallel_ && n.deps.size() + n.order_onlys.size() > 1) {
         children.emplace_back(
             worker_pool_.Submit(
-                [this, child = d.second, output = n.output, ancestry]() {
-                  return ExecNode(*child, output.c_str(), ancestry);
+                [this, child = d.second, output = n.output, ancestry, &n]() {
+                  return ExecNode(*child, output.c_str(), ancestry, &n);
                 }),
             d.second->is_phony, order_only, is_low_resolution(d.first),
             d.second->output);
       } else {
-        double ts = ExecNode(*d.second, n.output.c_str(), ancestry);
+        double ts = ExecNode(*d.second, n.output.c_str(), ancestry, &n);
         if (IsFailed(d.second->output))
           dependency_failed = true;
         // Order-only prerequisites must be built before the recipe, but do
@@ -513,18 +519,22 @@ class Executor {
     // needs to run in that case. Expand recipes only after the fast path;
     // this also keeps expensive variable and shell-function evaluation out of
     // incremental no-op builds.
-    std::vector<Command> commands;
-    {
-      std::lock_guard<std::mutex> lock(eval_mu_);
-      commands = ce_.Eval(n, output_ts);
-    }
     auto double_colon_group_needs_build = [&](size_t group, double target_ts) {
       if (target_ts == kNotExist || n.is_phony ||
           n.double_colon_group_inputs[group].empty())
         return true;
       for (Symbol input : n.double_colon_group_inputs[group]) {
+        if (IsWhatIf(input))
+          return true;
         for (const auto& dep : n.deps) {
-          if (dep.first == input && dep.second->is_phony)
+          if (!(dep.first == input) && !(dep.second->lexical_output == input))
+            continue;
+          if (dep.second->is_phony)
+            return true;
+          std::lock_guard<std::mutex> lock(state_mu_);
+          const auto completed = done_.find(dep.second->output);
+          if (completed != done_.end() &&
+              completed->second.timestamp > target_ts)
             return true;
         }
         if (GetTimestamp(input.c_str()) > target_ts)
@@ -532,6 +542,29 @@ class Executor {
       }
       return false;
     };
+    std::vector<bool> group_needs_build;
+    for (size_t group = 0; group < n.double_colon_group_inputs.size(); ++group)
+      group_needs_build.push_back(
+          double_colon_group_needs_build(group, output_ts));
+
+    // Expand only the recipes of groups that were dirty before any recipe
+    // runs. Expansion itself can invoke $(shell), $(file), or $(error).
+    std::vector<Command> commands;
+    {
+      std::lock_guard<std::mutex> lock(eval_mu_);
+      if (group_needs_build.empty()) {
+        commands = ce_.Eval(n, output_ts);
+      } else {
+        for (size_t group = 0; group < group_needs_build.size(); ++group) {
+          if (!group_needs_build[group])
+            continue;
+          auto group_commands = ce_.Eval(n, output_ts, group);
+          commands.insert(commands.end(),
+                          std::make_move_iterator(group_commands.begin()),
+                          std::make_move_iterator(group_commands.end()));
+        }
+      }
+    }
     // A directory is a normal timestamped target unless its recipe enters a
     // recursive make that may update files inside it without changing the
     // directory timestamp.  Keep that recursive case live, but do not rerun
@@ -559,17 +592,12 @@ class Executor {
                                   : output_ts;
 
     if (g_flags.is_question) {
-      bool group_needs_build = false;
-      for (size_t group = 0; group < n.double_colon_group_inputs.size();
-           ++group) {
-        if (double_colon_group_needs_build(group, output_ts)) {
-          group_needs_build = true;
-          break;
-        }
-      }
+      const bool any_group_needs_build =
+          std::any_of(group_needs_build.begin(), group_needs_build.end(),
+                      [](bool needed) { return needed; });
       if (n.is_phony ||
           (!commands.empty() &&
-           (n.double_colon_group_inputs.empty() || group_needs_build)))
+           (n.double_colon_group_inputs.empty() || any_group_needs_build)))
         needs_build_.store(true, std::memory_order_relaxed);
       {
         std::lock_guard<std::mutex> lock(state_mu_);
@@ -590,17 +618,7 @@ class Executor {
 
     bool node_failed = false;
     bool ran_recipe = false;
-    size_t active_double_colon_group = static_cast<size_t>(-1);
-    bool skip_double_colon_group = false;
     for (const Command& command : commands) {
-      if (command.double_colon_group != static_cast<size_t>(-1) &&
-          command.double_colon_group != active_double_colon_group) {
-        active_double_colon_group = command.double_colon_group;
-        skip_double_colon_group = !double_colon_group_needs_build(
-            active_double_colon_group, GetTimestamp(n.output.c_str()));
-      }
-      if (skip_double_colon_group)
-        continue;
       if (command.double_colon_group != static_cast<size_t>(-1))
         needs_build_.store(true, std::memory_order_relaxed);
       if (cancel_requested_.load(std::memory_order_relaxed)) {

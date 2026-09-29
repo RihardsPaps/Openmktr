@@ -68,6 +68,7 @@ static void ReadBootstrapMakefile(const std::vector<Symbol>& targets,
        "AR?=ar\n"
        "ARFLAGS?=rv\n"
        "CPP?=$(CC) -E\n"
+       "FC?=f77\n"
        "RANLIB?=ranlib\n"
        "RM?=rm -f\n"
        // These are GNU make's default compilation variables. Projects often
@@ -688,9 +689,36 @@ static int Run(const std::vector<Symbol>& targets,
         !ev.included_makefiles().empty()) {
       std::vector<Symbol> include_targets;
 
+      auto is_phony_makefile = [&](std::string_view filename) {
+        filename = TrimLeadingCurdir(filename);
+        for (const Rule* rule : ev.rules()) {
+          if (std::find(rule->outputs.begin(), rule->outputs.end(),
+                        Intern(".PHONY")) != rule->outputs.end()) {
+            for (Symbol input : rule->inputs)
+              if (TrimLeadingCurdir(input.str()) == filename)
+                return true;
+          }
+        }
+        return false;
+      };
+      auto has_unconditional_double_colon = [&](std::string_view filename) {
+        filename = TrimLeadingCurdir(filename);
+        for (const Rule* rule : ev.rules()) {
+          if (!rule->is_double_colon || !rule->inputs.empty() ||
+              !rule->order_only_inputs.empty())
+            continue;
+          for (Symbol output : rule->outputs)
+            if (TrimLeadingCurdir(output.str()) == filename)
+              return true;
+        }
+        return false;
+      };
+
       for (const char* makefile : g_flags.makefiles) {
-        if (std::string_view(makefile) == "-")
+        if (std::string_view(makefile) == "-" ||
+            has_unconditional_double_colon(makefile))
           continue;
+        // Phony makefiles are rebuilt once, but must not trigger a restart.
         // An arbitrary .DEFAULT or catch-all pattern must not try to remake
         // the parser input. Explicit Makefile rules are the common Autotools
         // case and are safe to execute before ordinary goals.
@@ -699,6 +727,8 @@ static int Run(const std::vector<Symbol>& targets,
         for (const Rule* rule : ev.rules()) {
           for (Symbol output : rule->outputs) {
             if (TrimLeadingCurdir(output.str()) == filename &&
+                !(rule->is_double_colon && rule->inputs.empty() &&
+                  rule->order_only_inputs.empty()) &&
                 (!rule->cmds.empty() || !rule->inputs.empty() ||
                  !rule->order_only_inputs.empty())) {
               has_explicit_rule = true;
@@ -713,9 +743,13 @@ static int Run(const std::vector<Symbol>& targets,
       }
 
       for (const auto& include : ev.missing_includes()) {
+        if (has_unconditional_double_colon(include.filename))
+          continue;
         include_targets.push_back(Intern(include.filename));
       }
       for (const auto& include : ev.included_makefiles()) {
+        if (has_unconditional_double_colon(include))
+          continue;
         Symbol target = Intern(include);
         if (std::find(include_targets.begin(), include_targets.end(), target) ==
             include_targets.end()) {
@@ -818,6 +852,8 @@ static int Run(const std::vector<Symbol>& targets,
         // restarting for any recipe in the include graph would loop forever.
         bool includes_changed = false;
         for (size_t i = 0; i < include_remake_nodes.size(); ++i) {
+          if (is_phony_makefile(include_remake_nodes[i].first.str()))
+            continue;
           if (GetTimestamp(include_remake_nodes[i].first.str()) !=
               include_timestamps[i])
             includes_changed = true;
