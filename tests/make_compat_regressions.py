@@ -69,11 +69,73 @@ class MakeCompatibilityRegressions(unittest.TestCase):
             os.utime(source, (1000000200, 1000000200))
             self.assertEqual(build(), "new\n")
             self.assertTrue((directory / "item").is_symlink())
+            # Regeneration must retain the provider identity of the link
+            # created by the previous graph, including its unlink guard.
+            status, output = run([str(KATI), "--ninja", "-j1", "all"],
+                                 directory, environment)
+            self.assertEqual(status, 0, output)
             prerequisite.write_text("changed\n")
             os.utime(prerequisite, (1000000300, 1000000300))
             self.assertEqual(build(), "rebuilt\n")
             self.assertFalse((directory / "item").is_symlink())
             self.assertEqual(source.read_text(), "new\n")
+            source.unlink()
+            self.assertEqual(build(), "rebuilt\n")
+
+    def test_ninja_removed_vpath_provider_rebuilds_dangling_link(self):
+        with tempfile.TemporaryDirectory(prefix="kati-vpath-missing-") as temp:
+            directory = Path(temp)
+            source = directory / "src" / "item"
+            source.parent.mkdir()
+            source.write_text("source\n")
+            (directory / "input").write_text("input\n")
+            os.utime(source, (1000000100, 1000000100))
+            os.utime(directory / "input", (1000000000, 1000000000))
+            (directory / "Makefile").write_text(
+                "VPATH = src\nall: item\n\t@cat $< > result\n"
+                "item: input\n\t@echo rebuilt > $@\n")
+            environment = dict(os.environ)
+            environment.pop("MAKEFLAGS", None)
+            environment.pop("MFLAGS", None)
+            for remove_source in (False, True):
+                if remove_source:
+                    source.unlink()
+                status, output = run([str(KATI), "--ninja", "all"],
+                                     directory, environment)
+                self.assertEqual(status, 0, output)
+                status, output = run(["sh", "ninja.sh"], directory, environment)
+                self.assertEqual(status, 0, output)
+                self.assertEqual((directory / "result").read_text(),
+                                 "rebuilt\n" if remove_source else "source\n")
+            self.assertFalse((directory / "item").is_symlink())
+
+    def test_parallel_intermediate_is_reconsidered_for_waiting_parent(self):
+        with tempfile.TemporaryDirectory(prefix="kati-intermediate-race-") as temp:
+            directory = Path(temp)
+            inputs = [f"deps/d{i}" for i in range(3000)]
+            (directory / "deps").mkdir()
+            for filename in ["source", "a.out", *inputs]:
+                path = directory / filename
+                path.write_text("old\n")
+                os.utime(path, (1000000000, 1000000000))
+            os.utime(directory / "a.out", (1000000100, 1000000100))
+            (directory / "Makefile").write_text(
+                ".INTERMEDIATE: shared.mid\nall: a.out b.out\n"
+                "a.out: shared.mid\n\t@cat shared.mid > $@\n"
+                "b.out: shared.mid | gate\n\t@cat shared.mid > $@\n"
+                "gate:\n\t@sleep 0.003\nshared.mid: source " +
+                " ".join(inputs) + "\n\t@cp $< $@\n")
+            environment = dict(os.environ)
+            environment.pop("MAKEFLAGS", None)
+            environment.pop("MFLAGS", None)
+            for iteration in range(20):
+                with self.subTest(iteration=iteration):
+                    for filename in ("shared.mid", "b.out"):
+                        (directory / filename).unlink(missing_ok=True)
+                    status, output = run([str(KATI), "-j2", "all"],
+                                         directory, environment)
+                    self.assertEqual(status, 0, output)
+                    self.assertEqual((directory / "b.out").read_text(), "old\n")
 
     def test_make_cases(self):
         environment = {

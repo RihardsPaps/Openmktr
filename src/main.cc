@@ -772,6 +772,23 @@ static int Run(const std::vector<Symbol>& targets,
       for (const auto& include : include_nodes) {
         if (!include.second->has_rule)
           continue;
+        const DepNode* makefile_node = include.second;
+        bool unconditional = false;
+        for (size_t group = 0;
+             group < makefile_node->double_colon_group_has_prerequisites.size();
+             ++group) {
+          if (!makefile_node->double_colon_group_has_prerequisites[group] &&
+              std::find(makefile_node->double_colon_group_for_cmd.begin(),
+                        makefile_node->double_colon_group_for_cmd.end(),
+                        group) !=
+                  makefile_node->double_colon_group_for_cmd.end())
+            unconditional = true;
+        }
+        // Secondary expansion can turn a syntactically nonempty list into
+        // an unconditional double-colon recipe. Do not remake parser inputs
+        // with such recipes, just as for a literal empty prerequisite list.
+        if (unconditional)
+          continue;
         // A generated include can introduce rules needed to remake another
         // include. Build resolvable graphs first and restart before treating
         // those temporarily missing prerequisites as fatal (glibc does this

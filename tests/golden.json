@@ -4377,14 +4377,14 @@
   },
   "target_specific_var_append.mk:default:direct": {
     "files": [],
-    "output": "  BUILD   a\n  BUILD   b\n  BUILD   c\n  BUILD   d\n  BUILD   e\n  BUILD   f\n  BUILD   g\n  BUILD   h\nA=PASS_A A\nB=FAIL_B OK\nC=PASS_C\nD=PASS_D\nE= PASS\nF= PASS\nG=X FAIL\nH=X PASS\n",
+    "output": "  BUILD   a\n  BUILD   b\n  BUILD   c\n  BUILD   d\n  BUILD   e\n  BUILD   f\n  BUILD   g\n  BUILD   h\nA=PASS_A A\nB=FAIL_B OK\nC=PASS_C\nD=PASS_D\nE= PASS\nF= PASS\nG=X PASS\nH=X PASS\n",
     "status": 0
   },
   "target_specific_var_append.mk:default:ninja": {
     "files": [
       ".ninja_log"
     ],
-    "output": "[1/8] build a\nA=PASS_A A\n[2/8] build b\nB=FAIL_B OK\n[3/8] build c\nC=PASS_C\n[4/8] build d\nD=PASS_D\n[5/8] build e\nE= PASS\n[6/8] build f\nF= PASS\n[7/8] build g\nG=X FAIL\n[8/8] build h\nH=X PASS\n",
+    "output": "[1/8] build a\nA=PASS_A A\n[2/8] build b\nB=FAIL_B OK\n[3/8] build c\nC=PASS_C\n[4/8] build d\nD=PASS_D\n[5/8] build e\nE= PASS\n[6/8] build f\nF= PASS\n[7/8] build g\nG=X PASS\n[8/8] build h\nH=X PASS\n",
     "status": 0
   },
   "target_specific_var_in_var.mk:default:direct": {

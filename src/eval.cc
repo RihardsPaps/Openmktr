@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <algorithm>
 
 #include "expr.h"
@@ -589,10 +590,12 @@ void Evaluator::EvalRuleSpecificAssign(const std::vector<Symbol>& targets,
       if (inherited->IsDefined()) {
         Var* local;
         if (inherited->Flavor() == std::string("simple")) {
-          local = new SimpleVar(
-              std::string(inherited->String()),
+          // The inherited value is fixed, but this target's new append is
+          // recursive until a target-specific := establishes simple flavor.
+          local = new RecursiveVar(
+              Value::NewLiteral(Intern(inherited->String()).str()),
               is_override ? VarOrigin::OVERRIDE : inherited->Origin(),
-              stack_.back(), loc_);
+              stack_.back(), loc_, inherited->String());
         } else {
           // Recursive variables must retain their complete expression tree
           // when an inherited value is materialized in a target-specific
@@ -999,7 +1002,17 @@ void Evaluator::RefreshVpath() {
 }
 
 std::string Evaluator::ResolveVpath(Symbol target) const {
-  if (Exists(target.str())) {
+  const bool local_exists = Exists(target.str());
+  char link[PATH_MAX];
+  const ssize_t link_size = readlink(target.c_str(), link, sizeof(link));
+  std::string link_path;
+  if (link_size > 0) {
+    std::string destination(link, static_cast<size_t>(link_size));
+    if (destination.front() != '/')
+      destination = ConcatDir(Dirname(target.str()), destination);
+    AbsPath(destination, &link_path);
+  }
+  if (local_exists && link_path.empty()) {
     return target.str();
   }
 
@@ -1012,12 +1025,20 @@ std::string Evaluator::ResolveVpath(Symbol target) const {
         continue;
       for (const std::string& directory : vpath.directories) {
         std::string candidate = ConcatDir(directory, target.str());
-        if (Exists(candidate))
+        if (!link_path.empty()) {
+          std::string absolute;
+          AbsPath(candidate, &absolute);
+          // A local source-following link is still a VPATH output when the
+          // graph is regenerated, including after its provider disappears.
+          if (absolute == link_path)
+            return candidate;
+        }
+        if (!local_exists && Exists(candidate))
           return candidate;
       }
     }
   }
-  return std::string();
+  return local_exists ? std::string(target.str()) : std::string();
 }
 
 void Evaluator::EvalExport(const ExportStmt* stmt) {

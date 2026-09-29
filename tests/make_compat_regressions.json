@@ -1149,5 +1149,215 @@
     "expected_files": {
       "result": "old\n"
     }
+  },
+  {
+    "name": "pattern_matrix_49",
+    "text": "X = global\nY = one\nZ = two\n%.o: X ?= $(Y)\na.o: X += $(Z)\nall: a.o\na.o:\n\t@$(eval Y = changed) $(eval Z = later) printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<global later>\n"
+    }
+  },
+  {
+    "name": "pattern_matrix_49_ninja",
+    "text": "X = global\nY = one\nZ = two\n%.o: X ?= $(Y)\na.o: X += $(Z)\nall: a.o\na.o:\n\t@$(eval Y = changed) $(eval Z = later) printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<global later>\n"
+    },
+    "ninja": true
+  },
+  {
+    "name": "pattern_matrix_50",
+    "text": "X := global\nY = one\nZ = two\n%.o: X ?= $(Y)\na.o: X += $(Z)\nall: a.o\na.o:\n\t@$(eval Y = changed) $(eval Z = later) printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<global later>\n"
+    }
+  },
+  {
+    "name": "pattern_matrix_50_ninja",
+    "text": "X := global\nY = one\nZ = two\n%.o: X ?= $(Y)\na.o: X += $(Z)\nall: a.o\na.o:\n\t@$(eval Y = changed) $(eval Z = later) printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<global later>\n"
+    },
+    "ninja": true
+  },
+  {
+    "name": "pattern_empty_base_54",
+    "text": "%.o: X =\na.o: X += tail\nall: a.o\na.o:\n\t@printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<tail>\n"
+    }
+  },
+  {
+    "name": "pattern_empty_base_54_ninja",
+    "text": "%.o: X =\na.o: X += tail\nall: a.o\na.o:\n\t@printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<tail>\n"
+    },
+    "ninja": true
+  },
+  {
+    "name": "pattern_empty_base_55",
+    "text": "%.o: X :=\na.o: X += tail\nall: a.o\na.o:\n\t@printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<tail>\n"
+    }
+  },
+  {
+    "name": "pattern_empty_base_55_ninja",
+    "text": "%.o: X :=\na.o: X += tail\nall: a.o\na.o:\n\t@printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<tail>\n"
+    },
+    "ninja": true
+  },
+  {
+    "name": "makefile_double_secondary",
+    "text": ".SECONDEXPANSION:\nMakefile:: $$(EMPTY)\n\t@touch Makefile\nall:\n\t@echo ok > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "ok\n"
+    }
+  },
+  {
+    "name": "vpath_touch_current",
+    "text": "VPATH = src\nall: item\n\t@cat $< > result\nitem: input\n\t@echo rebuilt > $@\n",
+    "files": {
+      "src/item": "source\n",
+      "input": "input\n"
+    },
+    "times": {
+      "src/item": 1000000100,
+      "input": 1000000000
+    },
+    "args": [
+      "-t",
+      "all"
+    ],
+    "inspect": [
+      "item",
+      "src/item",
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "item": null,
+      "src/item": "source\n",
+      "result": null
+    }
+  },
+  {
+    "name": "vpath_touch_outdated",
+    "text": "VPATH = src\nall: item\n\t@cat $< > result\nitem: input\n\t@echo rebuilt > $@\n",
+    "files": {
+      "src/item": "source\n",
+      "input": "input\n"
+    },
+    "times": {
+      "src/item": 1000000000,
+      "input": 1000000100
+    },
+    "args": [
+      "-t",
+      "all"
+    ],
+    "inspect": [
+      "item",
+      "src/item",
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "item": "",
+      "src/item": "source\n",
+      "result": null
+    }
+  },
+  {
+    "name": "double_colon_implicit_recipe",
+    "text": "%.x: %.y\n\t@echo implicit > $@\nall: a.x\na.x:: input\n",
+    "files": {
+      "a.y": "",
+      "input": ""
+    },
+    "inspect": [
+      "a.x"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "a.x": "implicit\n"
+    }
+  },
+  {
+    "name": "double_colon_implicit_recipe_ninja",
+    "text": "%.x: %.y\n\t@echo implicit > $@\nall: a.x\na.x:: input\n",
+    "files": {
+      "a.y": "",
+      "input": ""
+    },
+    "inspect": [
+      "a.x"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "a.x": "implicit\n"
+    },
+    "ninja": true
+  },
+  {
+    "name": "builtin_link_cancel_o",
+    "text": "LINK.o = echo linked > result; :\n%: %.o\nall: app\napp: app.o\n",
+    "files": {
+      "app.o": ""
+    },
+    "inspect": [
+      "result",
+      "app"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": null,
+      "app": null
+    }
+  },
+  {
+    "name": "builtin_link_cancel_o_ninja",
+    "text": "LINK.o = echo linked > result; :\n%: %.o\nall: app\napp: app.o\n",
+    "files": {
+      "app.o": ""
+    },
+    "inspect": [
+      "result",
+      "app"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": null,
+      "app": null
+    },
+    "ninja": true
+  },
+  {
+    "name": "vpath_empty_rule_outdated",
+    "text": "VPATH = src\nall: item\n\t@printf \"%s\\n\" \"$<\" > result\nitem: input ;\n",
+    "files": {
+      "src/item": "source\n",
+      "input": "input\n"
+    },
+    "times": {
+      "src/item": 1000000000,
+      "input": 1000000100
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "result": "item\n"
+    }
   }
 ]

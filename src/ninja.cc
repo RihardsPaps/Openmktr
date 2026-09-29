@@ -680,14 +680,23 @@ class NinjaGenerator {
         const std::string provider = ShellQuote(node->vpath_provider.str());
         std::string current = "if { [ ! -e " + output + " ] || [ -L " + output +
                               " ]; } && [ -e " + provider + " ]";
+        std::string local_current =
+            "if [ -e " + output + " ] && [ ! -L " + output + " ]";
         for (const NamedDepNode& dep : node->deps) {
+          // A prerequisite-only rule retains its provider even when a
+          // prerequisite is newer: there is no recipe to replace it.
+          if (node->cmds.empty())
+            break;
           if (dep.second->is_phony) {
             current += " && false";
+            local_current += " && false";
             break;
           }
           const std::string input = ShellQuote(dep.first.str());
           current += " && [ -e " + input + " ] && [ ! " + input + " -nt " +
                      provider + " ]";
+          local_current += " && [ -e " + input + " ] && [ ! " + input +
+                           " -nt " + output + " ]";
         }
         const std::string link_target =
             node->vpath_provider.str().front() == '/'
@@ -698,9 +707,9 @@ class NinjaGenerator {
         const std::string_view parent = Dirname(node->output.str());
         if (!parent.empty() && parent != ".")
           materialize = "mkdir -p " + ShellQuote(parent) + " && " + materialize;
-        cmd_buf = current + "; then " + materialize + "; else " + "if [ -L " +
-                  output + " ]; then rm -f " + output + "; fi; " + cmd_buf +
-                  "; fi";
+        cmd_buf = local_current + "; then :; el" + current + "; then " +
+                  materialize + "; else " + "if [ -L " + output +
+                  " ]; then rm -f " + output + "; fi; " + cmd_buf + "; fi";
       }
       // Ninja has no build-log entry for files that predate a newly emitted
       // graph, and runs their recipes even when make would find them current.
@@ -712,11 +721,13 @@ class NinjaGenerator {
           [](const NamedDepNode& dep) { return dep.second->is_phony; });
       // Order-only prerequisites may run, but they do not make an existing
       // output stale. Ninja has no prior build-log entry for such an output.
-      if (!node->is_phony && node->deps.empty() && node->validations.empty()) {
+      if (!vpath_output && !node->is_phony && node->deps.empty() &&
+          node->validations.empty()) {
         cmd_buf = "if [ -e " + ShellQuote(node->output.str()) +
                   " ]; then :; else " + cmd_buf + "; fi";
-      } else if (!node->is_phony && !node->deps.empty() && !has_phony_input &&
-                 node->validations.empty() && Exists(node->output.str())) {
+      } else if (!vpath_output && !node->is_phony && !node->deps.empty() &&
+                 !has_phony_input && node->validations.empty() &&
+                 Exists(node->output.str())) {
         const std::string output = ShellQuote(node->output.str());
         std::string current = "if [ -e " + output + " ]";
         for (const NamedDepNode& dep : node->deps) {
@@ -1099,6 +1110,24 @@ class NinjaGenerator {
     }
 
     if (!g_flags.generate_empty_ninja) {
+      SymbolSet outputs;
+      for (const auto& node : nodes_) {
+        outputs.insert(node.node->output);
+        for (Symbol output : node.node->implicit_outputs)
+          outputs.insert(output);
+      }
+      SymbolSet providers;
+      for (const auto& node : nodes_) {
+        Symbol provider = node.node->vpath_provider;
+        if (!provider.IsValid() || node.node->is_phony ||
+            outputs.exists(provider) || providers.exists(provider))
+          continue;
+        providers.insert(provider);
+        // A provider is optional once a recipe has produced a local file.
+        // A phony leaf preserves its real timestamp while it exists and
+        // lets the output's runtime guard handle disappearance safely.
+        out << "build " << EscapeBuildTarget(provider) << ": phony\n\n";
+      }
       for (const auto& node : nodes_) {
         EmitNode(node, out);
       }

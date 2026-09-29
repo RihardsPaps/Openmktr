@@ -288,54 +288,59 @@ class Executor {
     auto ancestry = std::make_shared<Ancestry>(Ancestry{n.output, parent});
     {
       std::unique_lock<std::mutex> lock(state_mu_);
-      auto found = done_.find(n.output);
-      if (found != done_.end()) {
-        if (!found->second.processing)
-          return found->second.timestamp;
-        if (found->second.owner == std::this_thread::get_id()) {
-          WARN("Circular %s <- %s dependency dropped.",
-               needed_by ? needed_by : "(null)", n.output.c_str());
-          return kProcessing;
+      for (;;) {
+        auto found = done_.find(n.output);
+        if (found != done_.end()) {
+          if (!found->second.processing)
+            return found->second.timestamp;
+          if (found->second.owner == std::this_thread::get_id()) {
+            WARN("Circular %s <- %s dependency dropped.",
+                 needed_by ? needed_by : "(null)", n.output.c_str());
+            return kProcessing;
+          }
+          // A parallel dependency cycle can span workers: thread A may wait
+          // for a node owned by thread B while B waits for a node owned by A.
+          // The old check handled only the same-thread form, leaving both
+          // workers asleep forever.  Follow the current wait-for chain while
+          // holding state_mu_ and drop the edge if it returns to this thread.
+          const std::thread::id current_thread = std::this_thread::get_id();
+          std::thread::id owner = found->second.owner;
+          bool cross_thread_cycle = false;
+          while (owner != current_thread) {
+            auto waiting = waiting_on_.find(owner);
+            if (waiting == waiting_on_.end())
+              break;
+            auto dependency = done_.find(waiting->second);
+            if (dependency == done_.end() || !dependency->second.processing)
+              break;
+            owner = dependency->second.owner;
+          }
+          if (owner == current_thread)
+            cross_thread_cycle = true;
+          if (cross_thread_cycle) {
+            WARN("Circular %s <- %s dependency dropped.",
+                 needed_by ? needed_by : "(null)", n.output.c_str());
+            return kProcessing;
+          }
+          waiting_on_[current_thread] = n.output;
+          state_cv_.wait(lock, [&] {
+            auto current = done_.find(n.output);
+            return current == done_.end() || !current->second.processing;
+          });
+          waiting_on_.erase(current_thread);
+          // A skipped intermediate is erased because the decision belongs to
+          // one parent. Retry acquisition for this parent's freshness needs.
+          continue;
         }
-        // A parallel dependency cycle can span workers: thread A may wait
-        // for a node owned by thread B while B waits for a node owned by A.
-        // The old check handled only the same-thread form, leaving both
-        // workers asleep forever.  Follow the current wait-for chain while
-        // holding state_mu_ and drop the edge if it returns to this thread.
-        const std::thread::id current_thread = std::this_thread::get_id();
-        std::thread::id owner = found->second.owner;
-        bool cross_thread_cycle = false;
-        while (owner != current_thread) {
-          auto waiting = waiting_on_.find(owner);
-          if (waiting == waiting_on_.end())
-            break;
-          auto dependency = done_.find(waiting->second);
-          if (dependency == done_.end() || !dependency->second.processing)
-            break;
-          owner = dependency->second.owner;
+        if (cancel_requested_.load(std::memory_order_relaxed)) {
+          done_[n.output] =
+              NodeState{false, kNotExist, true, std::thread::id()};
+          return kNotExist;
         }
-        if (owner == current_thread)
-          cross_thread_cycle = true;
-        if (cross_thread_cycle) {
-          WARN("Circular %s <- %s dependency dropped.",
-               needed_by ? needed_by : "(null)", n.output.c_str());
-          return kProcessing;
-        }
-        waiting_on_[current_thread] = n.output;
-        state_cv_.wait(lock, [&] {
-          auto current = done_.find(n.output);
-          return current == done_.end() || !current->second.processing;
-        });
-        waiting_on_.erase(current_thread);
-        auto current = done_.find(n.output);
-        return current == done_.end() ? kNotExist : current->second.timestamp;
+        done_[n.output] =
+            NodeState{true, kProcessing, false, std::this_thread::get_id()};
+        break;
       }
-      if (cancel_requested_.load(std::memory_order_relaxed)) {
-        done_[n.output] = NodeState{false, kNotExist, true, std::thread::id()};
-        return kNotExist;
-      }
-      done_[n.output] =
-          NodeState{true, kProcessing, false, std::this_thread::get_id()};
     }
     // Evaluator tracing uses one process-global stack.  Parallel workers
     // cannot push/pop that stack concurrently; doing so corrupts the stack
@@ -485,10 +490,8 @@ class Executor {
       return output_ts;
     }
 
-    // GNU make's touch mode does not run recipes for phony targets, and
-    // updates existing rule outputs without running their recipes. Missing
-    // non-phony outputs still follow the normal build path so touch mode
-    // cannot fabricate a target that has no file yet.
+    // Touch mode skips phony recipes. Real files are touched below, after
+    // checking whether their prerequisites actually require an update.
     if (g_flags.is_touch && n.is_phony) {
       {
         std::lock_guard<std::mutex> lock(state_mu_);
@@ -497,20 +500,6 @@ class Executor {
       }
       state_cv_.notify_all();
       return output_ts;
-    }
-
-    if (g_flags.is_touch && output_ts != kNotExist && n.has_rule &&
-        !output_is_directory) {
-      if (utimensat(AT_FDCWD, n.output.c_str(), nullptr, 0) < 0)
-        PERROR("touch %s", n.output.c_str());
-      const double touched_ts = GetTimestamp(n.output.c_str());
-      {
-        std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] =
-            NodeState{false, touched_ts, false, std::thread::id()};
-      }
-      state_cv_.notify_all();
-      return touched_ts;
     }
 
     if (output_ts != kNotExist && output_ts >= latest && !n.is_phony &&
@@ -555,6 +544,31 @@ class Executor {
       group_needs_build.push_back(
           double_colon_group_needs_build(group, output_ts));
 
+    if (g_flags.is_touch && !n.cmds.empty() && !output_is_directory &&
+        (group_needs_build.empty() ||
+         std::any_of(group_needs_build.begin(), group_needs_build.end(),
+                     [](bool dirty) { return dirty; }))) {
+      if (n.vpath_provider.IsValid()) {
+        n.vpath_discarded.store(true, std::memory_order_release);
+        struct stat st;
+        if (lstat(n.output.c_str(), &st) == 0 && S_ISLNK(st.st_mode) &&
+            unlink(n.output.c_str()) != 0)
+          PERROR("unlink %s", n.output.c_str());
+      }
+      const int fd = open(n.output.c_str(), O_WRONLY | O_CREAT, 0666);
+      if (fd < 0 || close(fd) != 0 ||
+          utimensat(AT_FDCWD, n.output.c_str(), nullptr, 0) < 0)
+        PERROR("touch %s", n.output.c_str());
+      const double touched_ts = GetTimestamp(n.output.c_str());
+      {
+        std::lock_guard<std::mutex> lock(state_mu_);
+        done_[n.output] =
+            NodeState{false, touched_ts, false, std::thread::id()};
+      }
+      state_cv_.notify_all();
+      return touched_ts;
+    }
+
     // Expand only the recipes of groups that were dirty before any recipe
     // runs. Expansion itself can invoke $(shell), $(file), or $(error).
     std::vector<Command> commands;
@@ -594,13 +608,22 @@ class Executor {
     // updated for this invocation, even though no file was created.  Its
     // dependents must therefore rebuild on every invocation.
     const bool missing_empty_rule =
-        n.has_rule && output_ts == kNotExist && commands.empty();
+        n.has_rule && commands.empty() &&
+        (output_ts == kNotExist ||
+         (n.vpath_provider.IsValid() && !n.cmds.empty() &&
+          GetTimestamp(n.output.c_str()) == kNotExist));
     const double logical_ts = missing_empty_rule
                                   ? std::numeric_limits<double>::infinity()
                                   : output_ts;
 
-    if (n.vpath_provider.IsValid() && (n.is_phony || !commands.empty()))
+    if (n.vpath_provider.IsValid() && (n.is_phony || !n.cmds.empty())) {
       n.vpath_discarded.store(true, std::memory_order_release);
+      struct stat st;
+      if (!g_flags.is_dry_run && !g_flags.is_question &&
+          lstat(n.output.c_str(), &st) == 0 && S_ISLNK(st.st_mode) &&
+          unlink(n.output.c_str()) != 0)
+        PERROR("unlink %s", n.output.c_str());
+    }
 
     if (g_flags.is_question) {
       const bool any_group_needs_build =

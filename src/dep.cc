@@ -464,9 +464,18 @@ struct RuleMerger {
         n->double_colon_group_has_prerequisites.push_back(normal || order_only);
         ApplyOutputPattern(*rule, output, first_inputs,
                            &n->double_colon_group_inputs.back());
-        n->cmds.insert(n->cmds.end(), rule->cmds.begin(), rule->cmds.end());
+        const Rule* recipe = rule;
+        if (rule->cmds.empty() && pattern_rule) {
+          recipe = pattern_rule;
+          ApplyOutputPattern(*pattern_rule, output, pattern_rule->inputs,
+                             &n->double_colon_group_inputs.back());
+          if (!pattern_rule->inputs.empty() ||
+              !pattern_rule->order_only_inputs.empty())
+            n->double_colon_group_has_prerequisites.back() = true;
+        }
+        n->cmds.insert(n->cmds.end(), recipe->cmds.begin(), recipe->cmds.end());
         n->double_colon_group_for_cmd.insert(
-            n->double_colon_group_for_cmd.end(), rule->cmds.size(), group);
+            n->double_colon_group_for_cmd.end(), recipe->cmds.size(), group);
       };
       for (const Rule* rule : rules)
         add_group(rule);
@@ -1496,6 +1505,9 @@ class DepBuilder {
       result->MergeExportStateFrom(*additions);
       for (const auto& entry : *additions) {
         Var* value = entry.second;
+        if (value->op() == AssignOp::QUESTION_EQ &&
+            ev_->LookupVar(entry.first)->IsDefined())
+          continue;
         auto previous = result->find(entry.first);
         if (previous != result->end() && value->TargetAppend()) {
           Var* base = previous->second;
@@ -1506,8 +1518,8 @@ class DepBuilder {
             else
               base_value = Value::NewLiteral(Intern(base->String()).str());
           }
-          Value* combined = Value::NewExpr(value->Location(), base_value,
-                                           value->TargetAppend());
+          Value* combined = new TargetAppendValue(value->Location(), base_value,
+                                                  value->TargetAppend());
           // Evaluating a SimpleVar here would freeze references before the
           // target's own variable scope is installed. Resolve the complete
           // append at BuildPlan/recipe time instead.
@@ -1633,7 +1645,12 @@ class DepBuilder {
         }
       }
       if (names_object &&
-          (!suffixes_specified_ || active_suffixes_.count("o"))) {
+          (!suffixes_specified_ || active_suffixes_.count("o")) &&
+          std::none_of(irules.begin(), irules.end(), [](const Rule* rule) {
+            return rule->output_patterns == std::vector<Symbol>{Intern("%")} &&
+                   rule->inputs == std::vector<Symbol>{Intern("%.o")} &&
+                   rule->order_only_inputs.empty() && !HasRuleRecipe(rule);
+          })) {
         auto link = std::make_shared<Rule>();
         link->output_patterns.push_back(Intern("%"));
         link->inputs.push_back(Intern("%.o"));
@@ -1956,13 +1973,9 @@ class DepBuilder {
             if (var->TargetAppend()) {
               Value* appended = new TargetAppendValue(var->Location(), old_var,
                                                       var->TargetAppend());
-              if (std::string_view(old_var->Flavor()) == "simple")
-                new_var = new SimpleVar(old_var->Origin(), frame.Current(),
-                                        n->loc, ev_, appended);
-              else
-                new_var = new RecursiveVar(appended, old_var->Origin(),
-                                           frame.Current(), n->loc,
-                                           std::string_view("*target append*"));
+              new_var =
+                  new RecursiveVar(appended, old_var->Origin(), frame.Current(),
+                                   n->loc, std::string_view("*target append*"));
             } else {
               old_var->Eval(ev_, s.get());
               if (!s->empty())
