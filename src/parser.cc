@@ -19,6 +19,7 @@
 #include <stack>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 #include "expr.h"
 #include "file.h"
@@ -29,6 +30,43 @@
 #include "strutil.h"
 
 namespace {
+
+class DeferredParseError : public Value {
+ public:
+  DeferredParseError(const Loc& loc, std::string_view source)
+      : Value(loc), source_(source) {}
+
+  void Eval(Evaluator*, std::string*) const override {
+    ERROR_LOC(Location(), "*** unterminated variable reference.");
+  }
+
+  bool IsFunc(Evaluator*) const override { return false; }
+
+ protected:
+  std::string DebugString_() const override { return source_; }
+
+ private:
+  std::string source_;
+};
+
+bool HasUnterminatedReference(std::string_view value) {
+  std::vector<char> closers;
+  for (size_t i = 0; i < value.size(); ++i) {
+    if (value[i] == '$' && i + 1 < value.size()) {
+      if (value[i + 1] == '(' || value[i + 1] == '{') {
+        closers.push_back(value[i + 1] == '(' ? ')' : '}');
+        ++i;
+      } else if (value[i + 1] == '$') {
+        ++i;
+      }
+    } else if (!closers.empty() && value[i] == '(' && closers.back() == ')') {
+      closers.push_back(')');
+    } else if (!closers.empty() && value[i] == closers.back()) {
+      closers.pop_back();
+    }
+  }
+  return !closers.empty();
+}
 
 std::string StripRuleComment(std::string_view line) {
   bool escaped = false;
@@ -65,12 +103,16 @@ class Parser {
         loc_(filename, 0),
         fixed_lineno_(false) {}
 
-  Parser(std::string_view buf, const Loc& loc, std::vector<Stmt*>* stmts)
+  Parser(std::string_view buf,
+         const Loc& loc,
+         std::vector<Stmt*>* stmts,
+         bool argv_assignment = false)
       : buf_(buf),
         stmts_(stmts),
         out_stmts_(stmts),
         loc_(loc),
-        fixed_lineno_(true) {}
+        fixed_lineno_(true),
+        argv_assignment_(argv_assignment) {}
 
   void Parse() {
     l_ = 0;
@@ -133,6 +175,20 @@ class Parser {
 
     current_directive_ = AssignDirective::NONE;
 
+    // Conditional directives may be indented with a tab inside a
+    // conditional block.  They must close the makefile conditional rather
+    // than become a recipe for an earlier expansion-only line.
+    if (line[0] == '\t' && !if_stack_.empty() && !after_rule_) {
+      const std::string_view indented = TrimLeftSpace(line);
+      const std::string_view directive = GetDirective(indented);
+      if (directive == "ifdef" || directive == "ifndef" ||
+          directive == "ifeq" || directive == "ifneq" || directive == "else" ||
+          directive == "endif") {
+        HandleDirective(indented, make_directives_);
+        return;
+      }
+    }
+
     if (line[0] == '\t' && after_rule_) {
       CommandStmt* stmt = new CommandStmt();
       stmt->set_loc(loc_);
@@ -146,7 +202,7 @@ class Parser {
 
     line = TrimLeftSpace(line);
 
-    if (line[0] == '#')
+    if (line.empty() || line[0] == '#')
       return;
 
     if (HandleDirective(line, make_directives_)) {
@@ -191,6 +247,7 @@ class Parser {
     }
 
     RuleStmt* rule_stmt = new RuleStmt();
+    rule_stmt->has_literal_colon = sep != std::string::npos && line[sep] == ':';
     rule_stmt->set_loc(loc_);
 
     std::string rule_without_comment = StripRuleComment(line);
@@ -224,7 +281,30 @@ class Parser {
       rule_stmt->rhs = NULL;
     }
     out_stmts_->push_back(rule_stmt);
-    after_rule_ = true;
+    // Standalone diagnostic functions are expanded while reading a makefile
+    // and never define a rule whose following tab-indented line is a recipe.
+    // TF-A uses $(error ...) in a conditional immediately before a tabbed
+    // endif; treating that expression as a rule swallows the endif.
+    const bool standalone_diagnostic = [&] {
+      for (std::string_view name : {"error", "warning", "info"}) {
+        const std::string prefix = "$(" + std::string(name) + " ";
+        if (line.substr(0, prefix.size()) != prefix)
+          continue;
+        // The whole line must be a diagnostic call.  A variable named
+        // $(info_target), or $(info text) followed by a target, is a rule.
+        size_t depth = 1;
+        for (size_t i = 2; i < line.size(); ++i) {
+          if (line[i] == '$' && i + 1 < line.size() && line[i + 1] == '(') {
+            ++depth;
+            ++i;
+          } else if (line[i] == ')' && --depth == 0) {
+            return TrimSpace(line.substr(i + 1)).empty();
+          }
+        }
+      }
+      return false;
+    }();
+    after_rule_ = !standalone_diagnostic;
   }
 
   void ParseAssign(std::string_view line, size_t separator_pos) {
@@ -251,7 +331,14 @@ class Parser {
     Loc mutable_loc(loc_);
     stmt->set_loc(loc_);
     stmt->lhs = ParseExpr(&mutable_loc, lhs);
-    stmt->rhs = ParseExpr(&mutable_loc, rhs);
+    stmt->rhs =
+        op == AssignOp::EQ &&
+                HasUnterminatedReference(
+                    argv_assignment_ ? std::string(rhs) : StripRuleComment(rhs))
+            ? static_cast<Value*>(new DeferredParseError(mutable_loc, rhs))
+            : ParseExpr(
+                  &mutable_loc, rhs,
+                  argv_assignment_ ? ParseExprOpt::ARGV : ParseExprOpt::NORMAL);
     stmt->orig_rhs = rhs;
     stmt->op = op;
     stmt->directive = current_directive_;
@@ -276,9 +363,10 @@ class Parser {
     // deliberately does not embed or require GNU's extension ABI. Reject it
     // explicitly rather than treating the line as a malformed rule and
     // risking a silently incomplete graph.
-    Error("*** load: dynamic make extensions are unsupported by parallel Kati; "
-          "translate the extension's makefile effects into ordinary make "
-          "syntax");
+    Error(
+        "*** load: dynamic make extensions are unsupported by parallel Kati; "
+        "translate the extension's makefile effects into ordinary make "
+        "syntax");
     after_rule_ = false;
   }
 
@@ -301,11 +389,35 @@ class Parser {
   }
 
   void ParseDefine(std::string_view line, std::string_view) {
+    line = TrimSpace(line);
     if (line.empty()) {
       Error("*** empty variable name.");
       return;
     }
-    define_name_ = line;
+    const size_t separator = FindThreeOutsideParen(line, ':', '=', ';');
+    define_op_ = AssignOp::EQ;
+    const size_t equals =
+        separator != std::string_view::npos && line[separator] == '='
+            ? separator
+        : separator != std::string_view::npos && separator + 1 < line.size() &&
+                line[separator + 1] == '='
+            ? separator + 1
+            : std::string_view::npos;
+    if (equals != std::string_view::npos) {
+      std::string_view rhs;
+      ParseAssignStatement(line, equals, &define_name_, &rhs, &define_op_);
+      if (!rhs.empty()) {
+        // GNU make warns about trailing text but still consumes the body
+        // through endef and assigns it to the parsed variable name.
+        WARN_LOC(loc_, "extraneous text after 'define' directive");
+      }
+    } else {
+      define_name_ = line;
+    }
+    if (define_name_.empty()) {
+      Error("*** empty variable name.");
+      return;
+    }
     num_define_nest_ = 1;
     define_start_ = 0;
     define_start_line_ = loc_.lineno;
@@ -341,7 +453,7 @@ class Parser {
       rhs = buf_.substr(define_start_, l_ - define_start_ - 1);
     stmt->rhs = ParseExpr(&mutable_loc, rhs, ParseExprOpt::DEFINE);
     stmt->orig_rhs = rhs;
-    stmt->op = AssignOp::EQ;
+    stmt->op = define_op_;
     stmt->directive = current_directive_;
     out_stmts_->push_back(stmt);
     define_name_ = std::string_view();
@@ -379,7 +491,7 @@ class Parser {
       size_t n;
       stmt->lhs =
           ParseExprImpl(&mutable_loc, s, terms, ParseExprOpt::NORMAL, &n, true);
-      if (s[n] != ',')
+      if (n >= s.size() || s[n] != ',')
         return false;
       s = TrimLeftSpace(s.substr(n + 1));
       stmt->rhs =
@@ -555,6 +667,7 @@ class Parser {
   std::vector<Stmt*>* out_stmts_;
 
   std::string_view define_name_;
+  AssignOp define_op_ = AssignOp::EQ;
   int num_define_nest_ = 0;
   size_t define_start_;
   int define_start_line_;
@@ -567,6 +680,7 @@ class Parser {
 
   Loc loc_;
   bool fixed_lineno_;
+  bool argv_assignment_ = false;
 
   const static DirectiveMap make_directives_;
   const static DirectiveMap else_if_directives_;
@@ -588,6 +702,13 @@ void Parse(std::string_view buf,
   ParseNoStats(buf, loc, out_stmts);
 }
 
+void ParseArgvAssignment(std::string_view buf,
+                         const Loc& loc,
+                         std::vector<Stmt*>* out_stmts) {
+  Parser parser(buf, loc, out_stmts, true);
+  parser.Parse();
+}
+
 void ParseNoStats(std::string_view buf,
                   const Loc& loc,
                   std::vector<Stmt*>* out_stmts) {
@@ -598,14 +719,12 @@ void ParseNoStats(std::string_view buf,
 const Parser::DirectiveMap Parser::make_directives_ = {
     {"include", &Parser::ParseInclude},   {"-include", &Parser::ParseInclude},
     {"sinclude", &Parser::ParseInclude},  {"define", &Parser::ParseDefine},
-    {"load", &Parser::ParseLoad},
-    {"vpath", &Parser::ParseVpath},
-    {"undefine", &Parser::ParseUndefine},
-    {"ifdef", &Parser::ParseIfdef},       {"ifndef", &Parser::ParseIfdef},
-    {"ifeq", &Parser::ParseIfeq},         {"ifneq", &Parser::ParseIfeq},
-    {"else", &Parser::ParseElse},         {"endif", &Parser::ParseEndif},
-    {"override", &Parser::ParseOverride}, {"export", &Parser::ParseExport},
-    {"unexport", &Parser::ParseUnexport}};
+    {"load", &Parser::ParseLoad},         {"vpath", &Parser::ParseVpath},
+    {"undefine", &Parser::ParseUndefine}, {"ifdef", &Parser::ParseIfdef},
+    {"ifndef", &Parser::ParseIfdef},      {"ifeq", &Parser::ParseIfeq},
+    {"ifneq", &Parser::ParseIfeq},        {"else", &Parser::ParseElse},
+    {"endif", &Parser::ParseEndif},       {"override", &Parser::ParseOverride},
+    {"export", &Parser::ParseExport},     {"unexport", &Parser::ParseUnexport}};
 
 const Parser::DirectiveMap Parser::else_if_directives_ = {
     {"ifdef", &Parser::ParseIfdef},

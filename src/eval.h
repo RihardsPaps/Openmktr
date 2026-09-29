@@ -134,8 +134,10 @@ class Evaluator {
   void EvalIf(const IfStmt* stmt);
   void EvalInclude(const IncludeStmt* stmt);
   void EvalVpath(const Value* expr);
-  void SetVpath(std::string_view pattern, std::string_view directories,
-                bool append = false, bool from_vpath = false);
+  void SetVpath(std::string_view pattern,
+                std::string_view directories,
+                bool append = false,
+                bool from_vpath = false);
 
   struct Vpath {
     std::string pattern;
@@ -144,6 +146,7 @@ class Evaluator {
   };
 
   const std::vector<Vpath>& vpaths() const { return vpaths_; }
+  void RefreshVpath();
   std::string ResolveVpath(Symbol target) const;
 
   struct MissingInclude {
@@ -176,6 +179,9 @@ class Evaluator {
   const std::vector<const Rule*>& rules() const { return rules_; }
   const std::unordered_map<Symbol, Vars*>& rule_vars() const {
     return rule_vars_;
+  }
+  const std::vector<Symbol>& rule_vars_order() const {
+    return rule_vars_order_;
   }
   const std::unordered_map<Symbol, bool>& exports() const { return exports_; }
 
@@ -271,6 +277,7 @@ class Evaluator {
                               size_t separator_pos);
 
   std::unordered_map<Symbol, Vars*> rule_vars_;
+  std::vector<Symbol> rule_vars_order_;
   std::vector<const Rule*> rules_;
   std::unordered_map<Symbol, bool> exports_;
   std::set<Symbol> symbols_for_eval_;

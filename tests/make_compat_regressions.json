@@ -1,0 +1,1363 @@
+[
+  {
+    "name": "primary_double_remake",
+    "text": "all:\n\t@echo OK > result\nMakefile::\n\t@touch Makefile\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "OK\n"
+    }
+  },
+  {
+    "name": "primary_phony_remake",
+    "text": ".PHONY: Makefile\nall:\n\t@echo OK > result\nMakefile:\n\t@touch Makefile\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "OK\n"
+    }
+  },
+  {
+    "name": "vpath_transitive",
+    "text": "VPATH=src\nall: generated\n\t@cat $< > result\ngenerated: input\n\t@cp $< $@\ninput: seed\n\t@cp $< $@\n",
+    "files": {
+      "src/generated": "old",
+      "input": "old",
+      "seed": "NEW"
+    },
+    "times": {
+      "src/generated": 200,
+      "input": 100,
+      "seed": 300
+    },
+    "inspect": [
+      "result",
+      "generated",
+      "input"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "NEW",
+      "generated": "NEW",
+      "input": "NEW"
+    }
+  },
+  {
+    "name": "vpath_transitive_ninja",
+    "text": "VPATH=src\nall: generated\n\t@cat $< > result\ngenerated: input\n\t@cp $< $@\ninput: seed\n\t@cp $< $@\n",
+    "files": {
+      "src/generated": "old",
+      "input": "old",
+      "seed": "NEW"
+    },
+    "times": {
+      "src/generated": 200,
+      "input": 100,
+      "seed": 300
+    },
+    "inspect": [
+      "result",
+      "generated",
+      "input"
+    ],
+    "ninja": true,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "NEW",
+      "generated": "NEW",
+      "input": "NEW"
+    }
+  },
+  {
+    "name": "intermediate_transitive",
+    "text": "all: final\n.INTERMEDIATE: middle\nfinal: middle\n\t@cp $< $@\nmiddle: input\n\t@cp $< $@\ninput: seed\n\t@cp $< $@\n",
+    "files": {
+      "final": "old",
+      "input": "old",
+      "seed": "NEW"
+    },
+    "times": {
+      "final": 200,
+      "input": 100,
+      "seed": 300
+    },
+    "inspect": [
+      "final",
+      "input"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "final": "NEW",
+      "input": "NEW"
+    }
+  },
+  {
+    "name": "intermediate_new_sibling",
+    "text": "all: final\n.INTERMEDIATE: middle\nfinal: middle newer\n\t@cat middle newer > final\nmiddle: input\n\t@cp $< $@\n",
+    "files": {
+      "final": "old",
+      "input": "I",
+      "newer": "N"
+    },
+    "times": {
+      "final": 200,
+      "input": 100,
+      "newer": 300
+    },
+    "inspect": [
+      "final"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "final": "IN"
+    }
+  },
+  {
+    "name": "intermediate_whatif",
+    "text": "all: final\n.INTERMEDIATE: middle\nfinal: middle\n\t@cp $< $@\nmiddle: input\n\t@cp $< $@\n",
+    "files": {
+      "final": "old",
+      "input": "NEW"
+    },
+    "times": {
+      "final": 200,
+      "input": 100
+    },
+    "args": [
+      "-W",
+      "input",
+      "all"
+    ],
+    "inspect": [
+      "final"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "final": "NEW"
+    }
+  },
+  {
+    "name": "double_both_newer",
+    "text": "all: a\na:: b\n\t@printf one >> a\na:: c\n\t@printf two >> a\n",
+    "files": {
+      "a": "",
+      "b": "",
+      "c": ""
+    },
+    "times": {
+      "a": 100,
+      "b": 200,
+      "c": 200
+    },
+    "inspect": [
+      "a"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "a": "onetwo"
+    }
+  },
+  {
+    "name": "oneshell_else",
+    "text": ".ONESHELL:\nifeq (1,1)\nall:\n\tif false; then\n\t  echo bad > result\n\telse\n\t  echo good > result\n\tfi\nendif\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "good\n"
+    }
+  },
+  {
+    "name": "commandline_env_append",
+    "text": "all:\n\t@$(MAKE) -f child.mk\n",
+    "files": {
+      "child.mk": "all:\n\t@echo \"$(VAR)\" > result\n"
+    },
+    "args": [
+      "all",
+      "VAR+=second"
+    ],
+    "extra_env": {
+      "VAR": "first"
+    },
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "first second\n"
+    }
+  },
+  {
+    "name": "comment_unterminated",
+    "text": "VAR = good # $(\nall:\n\t@echo \"$(VAR)\" > result\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "good \n"
+    }
+  },
+  {
+    "name": "suffix_order",
+    "text": ".SUFFIXES:\n.SUFFIXES: .b .a .out\n.a.out:\n\t@echo a > $@\n.b.out:\n\t@echo b > $@\nall: x.out\n",
+    "files": {
+      "x.a": "",
+      "x.b": ""
+    },
+    "inspect": [
+      "x.out"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "x.out": "b\n"
+    }
+  },
+  {
+    "name": "target_export_override",
+    "text": "unexport FLAGS\nx: export FLAGS = good\nall: x\nx:\n\t@echo $$FLAGS > result\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "good\n"
+    }
+  },
+  {
+    "name": "pattern_export_override",
+    "text": "unexport FLAGS\n%.o: export FLAGS = good\nall: x.o\nx.o:\n\t@echo $$FLAGS > result\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "good\n"
+    }
+  },
+  {
+    "name": "stdin_restart",
+    "text": "include inc.mk\nall:\n\t@echo $(VALUE) > result\ninc.mk:\n\t@echo VALUE=ok > inc.mk\n",
+    "stdin": true,
+    "inspect": [
+      "result",
+      "inc.mk"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "ok\n",
+      "inc.mk": "VALUE=ok\n"
+    }
+  },
+  {
+    "name": "double_secondary_update",
+    "text": ".SECONDEXPANSION:\nDEPS = b\nall: a\na:: $$(DEPS)\n\t@echo rebuilt >> a\n",
+    "files": {
+      "a": "old",
+      "b": ""
+    },
+    "times": {
+      "a": 100,
+      "b": 200
+    },
+    "inspect": [
+      "a"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "a": "oldrebuilt\n"
+    }
+  },
+  {
+    "name": "double_oneshell_freshness",
+    "text": ".ONESHELL:\nall: a\na:: b\n\t@echo first >> a\na:: c\n\t@echo second >> a\n",
+    "files": {
+      "a": "old",
+      "b": "",
+      "c": ""
+    },
+    "times": {
+      "a": 200,
+      "b": 100,
+      "c": 100
+    },
+    "inspect": [
+      "a"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "a": "old"
+    }
+  },
+  {
+    "name": "double_side_effect",
+    "text": "all: a\na:: b\n\t$(file >side,effect)echo rebuilt >> a\n",
+    "files": {
+      "a": "old",
+      "b": ""
+    },
+    "times": {
+      "a": 200,
+      "b": 100
+    },
+    "inspect": [
+      "a",
+      "side"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "a": "old",
+      "side": null
+    }
+  },
+  {
+    "name": "double_whatif",
+    "text": "all: a\na:: b\n\t@echo rebuilt >> a\n",
+    "files": {
+      "a": "old",
+      "b": ""
+    },
+    "times": {
+      "a": 200,
+      "b": 100
+    },
+    "args": [
+      "-W",
+      "b",
+      "all"
+    ],
+    "inspect": [
+      "a"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "a": "oldrebuilt\n"
+    }
+  },
+  {
+    "name": "pattern_precedence_early_intern",
+    "text": "early := $(a%)\n%b: FLAGS = first\na%: FLAGS = second\nall: ab\nab:\n\t@echo $(FLAGS) > result\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "second\n"
+    }
+  },
+  {
+    "name": "no_builtin_suffix",
+    "text": "all: x.o\n.SUFFIXES: .xyz\n.c.o:\n\t@echo custom > $@\n",
+    "files": {
+      "x.c": ""
+    },
+    "args": [
+      "-r",
+      "all"
+    ],
+    "inspect": [
+      "x.o"
+    ],
+    "expected_status": 1,
+    "expected_files": {
+      "x.o": null
+    }
+  },
+  {
+    "name": "builtin_removed_suffix",
+    "text": ".SUFFIXES:\nall: x\n",
+    "files": {
+      "x.c": "int main(void) { return 0; }\n"
+    },
+    "inspect": [],
+    "expected_status": 1,
+    "expected_files": {}
+  },
+  {
+    "name": "fortran_missing_default",
+    "text": "all: x.o\n",
+    "files": {
+      "x.f": "      program hello\n      end\n"
+    },
+    "inspect": [
+      "x.o"
+    ],
+    "expected_status": 1,
+    "expected_files": {
+      "x.o": null
+    }
+  },
+  {
+    "name": "verbose_undefined_self",
+    "text": "V = $(V)\nall:\n\t@echo good > result\n",
+    "inspect": [
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "good\n"
+    }
+  },
+  {
+    "name": "single_suffix_c_link_after_reset",
+    "text": ".SUFFIXES:\n.SUFFIXES: .c\nall: x\n",
+    "files": {
+      "x.c": "int main(void) { return 0; }\n"
+    },
+    "args": [
+      "-n",
+      "all"
+    ],
+    "expected_status": 0,
+    "expected_files": {}
+  },
+  {
+    "name": "primary_phony_recipe_once",
+    "text": ".PHONY: Makefile\nall:\n\t@echo OK > result\nMakefile:\n\t@echo rebuilt > marker; touch Makefile\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "OK\n",
+      "marker": "rebuilt\n"
+    }
+  },
+  {
+    "name": "included_existing_phony_once",
+    "text": "include inc.mk\n.PHONY: inc.mk\ninc.mk:\n\t@echo \"# rebuilt\" > inc.mk\nall:\n\t@echo OK > result\n",
+    "files": {
+      "inc.mk": "# original\n"
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "result": "OK\n",
+      "inc.mk": "# rebuilt\n"
+    }
+  },
+  {
+    "name": "included_missing_phony_once",
+    "text": "include inc.mk\n.PHONY: inc.mk\ninc.mk:\n\t@echo \"# rebuilt\" > inc.mk\nall:\n\t@echo OK > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "OK\n",
+      "inc.mk": "# rebuilt\n"
+    }
+  },
+  {
+    "name": "included_existing_double_not_remade",
+    "text": "include inc.mk\ninc.mk::\n\t@echo \"# rebuilt\" > inc.mk\nall:\n\t@echo OK > result\n",
+    "files": {
+      "inc.mk": "# original\n"
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "result": "OK\n",
+      "inc.mk": "# original\n"
+    }
+  },
+  {
+    "name": "included_missing_double_not_remade",
+    "text": "include inc.mk\ninc.mk::\n\t@echo \"# rebuilt\" > inc.mk\nall:\n\t@echo OK > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "OK\n",
+      "inc.mk": null
+    }
+  },
+  {
+    "name": "cluster_en",
+    "text": "all:\n\t@echo RAN > result\n",
+    "args": [
+      "-en",
+      "all"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": null
+    }
+  },
+  {
+    "name": "stdin_recursive",
+    "text": "all:\n\t@printf 'child:\\n\\t@echo child > result\\n' | $(MAKE) -f - child\n",
+    "stdin": true,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "child\n"
+    }
+  },
+  {
+    "name": "included_empty_double_stub",
+    "text": "include inc.mk\ninc.mk::\ninc.mk:: source\n\t@cp source inc.mk\nall:\n\t@echo '$(V)' > result\n",
+    "files": {
+      "inc.mk": "V=old\n",
+      "source": "V=new\n"
+    },
+    "times": {
+      "inc.mk": 100,
+      "source": 200
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "result": "new\n"
+    }
+  },
+  {
+    "name": "single_suffix_no_builtin",
+    "text": ".c:\n\t@echo unexpected > $@\nall: result\n",
+    "files": {
+      "result.c": "source"
+    },
+    "args": [
+      "-r",
+      "all"
+    ],
+    "expected_status": 1,
+    "expected_files": {
+      "result": null
+    }
+  },
+  {
+    "name": "verbose_unused_nonsilent",
+    "text": "V = $(V)\nall:\n\techo good > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "good\n"
+    }
+  },
+  {
+    "name": "commandline_backslash_hash",
+    "text": "all:\n\t@printf '%s\\n' '$(VALUE)' > direct\n\t@$(MAKE) -f child.mk\n",
+    "files": {
+      "child.mk": "all:\n\t@printf '%s\\n' '$(VALUE)' > result\n"
+    },
+    "inspect": [
+      "direct",
+      "result"
+    ],
+    "args": [
+      "VALUE:=\\#literal",
+      "all"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "direct": "\\#literal\n",
+      "result": "\\#literal\n"
+    }
+  },
+  {
+    "name": "simple_override_recursion",
+    "text": "all:\n\t@$(MAKE) -f child.mk\n",
+    "files": {
+      "child.mk": "override VALUE += $(LATE)\nLATE=late\nall:\n\t@printf '%s|%s\\n' '$(flavor VALUE)' '$(VALUE)' > result\n"
+    },
+    "args": [
+      "VALUE:=start",
+      "all"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "simple|start\n"
+    }
+  },
+  {
+    "name": "vpath_whatif",
+    "text": "VPATH=src\nall: generated\n\t@cat $< > result\ngenerated: input\n\t@cp $< $@\ninput: seed\n\t@cp $< $@\n",
+    "files": {
+      "src/generated": "old",
+      "input": "old",
+      "seed": "NEW"
+    },
+    "times": {
+      "src/generated": 300,
+      "input": 200,
+      "seed": 100
+    },
+    "inspect": [
+      "result",
+      "input",
+      "generated"
+    ],
+    "args": [
+      "-W",
+      "seed",
+      "all"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "NEW",
+      "input": "NEW",
+      "generated": "NEW"
+    }
+  },
+  {
+    "name": "vpath_order_only",
+    "text": "VPATH=src\nall: generated\n\t@cat $< > result\ngenerated: input | setup\n\t@cp input $@\n.PHONY: setup\nsetup:\n\t@echo visited > marker\n",
+    "files": {
+      "src/generated": "old",
+      "input": "old"
+    },
+    "times": {
+      "src/generated": 200,
+      "input": 100
+    },
+    "inspect": [
+      "result",
+      "marker"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "old",
+      "marker": "visited\n"
+    }
+  },
+  {
+    "name": "vpath_implicit_transitive",
+    "text": "VPATH=src\nall: generated\n\t@cat $< > result\ngenerated: input\n\t@cp $< $@\n%: %.seed\n\t@cp $< $@\n",
+    "files": {
+      "src/generated": "old",
+      "input": "old",
+      "input.seed": "NEW"
+    },
+    "times": {
+      "src/generated": 200,
+      "input": 100,
+      "input.seed": 300
+    },
+    "inspect": [
+      "result",
+      "input",
+      "generated"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "NEW",
+      "input": "NEW",
+      "generated": "NEW"
+    }
+  },
+  {
+    "name": "vpath_double_always",
+    "text": "VPATH=src\nall: generated\n\t@cat $< > result\ngenerated::\n\t@echo NEW > $@\n",
+    "files": {
+      "src/generated": "old"
+    },
+    "times": {
+      "src/generated": 200
+    },
+    "inspect": [
+      "result",
+      "generated"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "NEW\n",
+      "generated": "NEW\n"
+    }
+  },
+  {
+    "name": "vpath_scope_lost",
+    "text": "VPATH=src\nall: generated\n\t@cat $< > result\ngenerated: export V=target\ngenerated: input | setup\n\t@cp input $@\n.PHONY: setup\nsetup:\n\t@echo $$V > marker\n",
+    "files": {
+      "src/generated": "old",
+      "input": "old"
+    },
+    "times": {
+      "src/generated": 200,
+      "input": 100
+    },
+    "inspect": [
+      "result",
+      "marker"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "old",
+      "marker": "target\n"
+    }
+  },
+  {
+    "name": "intermediate_phony_parent",
+    "text": ".PHONY: final\n.INTERMEDIATE: middle\nall: final\nfinal: middle\n\t@cp middle final\nmiddle: input\n\t@cp input middle\n",
+    "files": {
+      "final": "old",
+      "input": "NEW"
+    },
+    "times": {
+      "final": 200,
+      "input": 100
+    },
+    "inspect": [
+      "final"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "final": "NEW"
+    }
+  },
+  {
+    "name": "intermediate_parent_changed_sibling",
+    "text": "all: final\n.INTERMEDIATE: middle\nfinal: middle trigger\n\t@cat middle trigger > final\nmiddle: input\n\t@cp input middle\ntrigger::\n\t@echo changed > trigger\n",
+    "files": {
+      "final": "old",
+      "input": "NEW",
+      "trigger": "old"
+    },
+    "times": {
+      "final": 200,
+      "input": 100,
+      "trigger": 100
+    },
+    "inspect": [
+      "final"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "final": "NEWchanged\n"
+    }
+  },
+  {
+    "name": "double_order_only_current",
+    "text": "all: a\na:: | input\n\t@echo ran > result\n",
+    "files": {
+      "a": "",
+      "input": ""
+    },
+    "times": {
+      "a": 200,
+      "input": 100
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "result": null
+    }
+  },
+  {
+    "name": "single_suffix_rule_order",
+    "text": ".SUFFIXES:\n.SUFFIXES: .a .b\n.b:\n\t@echo b > $@\n.a:\n\t@echo a > $@\nall: result\n",
+    "files": {
+      "result.a": "",
+      "result.b": ""
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "result": "a\n"
+    }
+  },
+  {
+    "name": "pattern_parent_append",
+    "text": "all: V=parent\nall: x.o\n%.o: V+=pattern\nx.o: V+=exact\nx.o:\n\t@echo '$(V)' > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "parent pattern exact\n"
+    }
+  },
+  {
+    "name": "commandline_nonposix_shell",
+    "text": "SHELL=/usr/bin/python3\nall:\n\t@open('result','w').write('ok')\n",
+    "args": [
+      "VALUE=foo",
+      "all"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "ok"
+    }
+  },
+  {
+    "name": "vpath_order_only_ninja",
+    "text": "VPATH=src\nall: generated\n\t@cat $< > result\ngenerated: input | setup\n\t@cp input $@\n.PHONY: setup\nsetup:\n\t@echo visited > marker\n",
+    "files": {
+      "src/generated": "old",
+      "input": "old"
+    },
+    "times": {
+      "src/generated": 200,
+      "input": 100
+    },
+    "inspect": [
+      "result",
+      "marker"
+    ],
+    "ninja": true,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "old",
+      "marker": "visited\n"
+    }
+  },
+  {
+    "name": "vpath_implicit_transitive_ninja",
+    "text": "VPATH=src\nall: generated\n\t@cat $< > result\ngenerated: input\n\t@cp $< $@\n%: %.seed\n\t@cp $< $@\n",
+    "files": {
+      "src/generated": "old",
+      "input": "old",
+      "input.seed": "NEW"
+    },
+    "times": {
+      "src/generated": 200,
+      "input": 100,
+      "input.seed": 300
+    },
+    "inspect": [
+      "result",
+      "input",
+      "generated"
+    ],
+    "ninja": true,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "NEW",
+      "input": "NEW",
+      "generated": "NEW"
+    }
+  },
+  {
+    "name": "single_suffix_rule_order_ninja",
+    "text": ".SUFFIXES:\n.SUFFIXES: .a .b\n.b:\n\t@echo b > $@\n.a:\n\t@echo a > $@\nall: result\n",
+    "files": {
+      "result.a": "",
+      "result.b": ""
+    },
+    "ninja": true,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "a\n"
+    }
+  },
+  {
+    "name": "pattern_parent_append_ninja",
+    "text": "all: V=parent\nall: x.o\n%.o: V+=pattern\nx.o: V+=exact\nx.o:\n\t@echo '$(V)' > result\n",
+    "ninja": true,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "parent pattern exact\n"
+    }
+  },
+  {
+    "name": "verbose_unused_nonsilent_ninja",
+    "text": "V = $(V)\nall:\n\techo good > result\n",
+    "ninja": true,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "good\n"
+    }
+  },
+  {
+    "name": "commandline_backslash_hash_ninja",
+    "text": "all:\n\t@printf '%s\\n' '$(VALUE)' > direct\n\t@$(MAKE) -f child.mk\n",
+    "files": {
+      "child.mk": "all:\n\t@printf '%s\\n' '$(VALUE)' > result\n"
+    },
+    "inspect": [
+      "direct",
+      "result"
+    ],
+    "args": [
+      "VALUE:=\\#literal",
+      "all"
+    ],
+    "ninja": true,
+    "expected_status": 0,
+    "expected_files": {
+      "direct": "\\#literal\n",
+      "result": "\\#literal\n"
+    }
+  },
+  {
+    "name": "vpath_implicit_provider_only",
+    "text": "VPATH=src\nall: input\n\t@cat $< > result\n%: %.seed\n\t@cp $< $@\n",
+    "files": {
+      "src/input": "old",
+      "src/input.seed": "NEW"
+    },
+    "times": {
+      "src/input": 100,
+      "src/input.seed": 200
+    },
+    "inspect": [
+      "result",
+      "input"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": "NEW",
+      "input": "NEW"
+    }
+  },
+  {
+    "name": "vpath_implicit_provider_only_ninja",
+    "text": "VPATH=src\nall: input\n\t@cat $< > result\n%: %.seed\n\t@cp $< $@\n",
+    "files": {
+      "src/input": "old",
+      "src/input.seed": "NEW"
+    },
+    "times": {
+      "src/input": 100,
+      "src/input.seed": 200
+    },
+    "inspect": [
+      "result",
+      "input"
+    ],
+    "ninja": true,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "NEW",
+      "input": "NEW"
+    }
+  },
+  {
+    "name": "pattern_append_no_global",
+    "text": "%.o: X += pattern\na.o: X += exact\nall: a.o\na.o:\n\t@printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<pattern exact>\n"
+    }
+  },
+  {
+    "name": "pattern_append_empty_global",
+    "text": "X =\n%.o: X += pattern\na.o: X += exact\nall: a.o\na.o:\n\t@printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<pattern exact>\n"
+    }
+  },
+  {
+    "name": "pattern_append_deferred",
+    "text": "X = $(Y)\nY = global\n%.o: X += pattern\na.o: X += exact\na.o: Y = local\nall: a.o\na.o:\n\t@printf \"<%s>:%s\\n\" \"$(X)\" \"$(flavor X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<local pattern exact>:recursive\n"
+    }
+  },
+  {
+    "name": "pattern_append_child",
+    "text": "X = $(Y)\nY = global\n%.o: X += pattern\na.o: X += exact\na.o: Y = local\nall: a.o\na.o: child\n\t@echo \"$(X)\" >> result\nchild: Y = child\nchild:\n\t@echo \"$(X)\" >> result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "child pattern exact\nlocal pattern exact\n"
+    }
+  },
+  {
+    "name": "pattern_append_after_eval",
+    "text": "X = $(Y)\nY = global\n%.o: X += pattern\na.o: X += exact\nall: a.o\na.o:\n\t@$(eval Y = changed) echo \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "changed pattern exact\n"
+    }
+  },
+  {
+    "name": "double_secondary_empty",
+    "text": ".SECONDEXPANSION:\nall: out\nout:: $$(EMPTY)\n\t@echo rebuilt > result\n",
+    "files": {
+      "out": "old"
+    },
+    "times": {
+      "out": 1000000000
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "result": "rebuilt\n"
+    }
+  },
+  {
+    "name": "double_secondary_orderonly_empty",
+    "text": ".SECONDEXPANSION:\nall: out\nout:: | $$(EMPTY)\n\t@echo rebuilt > result\n",
+    "files": {
+      "out": "old"
+    },
+    "times": {
+      "out": 1000000000
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "result": "rebuilt\n"
+    }
+  },
+  {
+    "name": "vpath_phony",
+    "text": "VPATH = src\n.PHONY: item\nall: item\n\t@printf \"%s\\n\" \"$<\" > result\nitem:\n\t@true\n",
+    "files": {
+      "src/item": "old\n"
+    },
+    "ninja": false,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "item\n"
+    }
+  },
+  {
+    "name": "vpath_no_output_recipe",
+    "text": "VPATH = src\nall: item\n\t@echo \"$<\" > result\nitem: force\n\t@true\n.PHONY: force\n",
+    "files": {
+      "src/item": "old"
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "result": "item\n",
+      "item": null
+    }
+  },
+  {
+    "name": "vpath_current_ninja",
+    "text": "VPATH = src\nall: item\n\t@cat $< > result\nitem: input\n\t@echo rebuilt > $@\n",
+    "files": {
+      "src/item": "old\n",
+      "input": "input\n"
+    },
+    "times": {
+      "src/item": 1000000100,
+      "input": 1000000000
+    },
+    "ninja": true,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "old\n"
+    }
+  },
+  {
+    "name": "vpath_empty_rule_ninja",
+    "text": "VPATH = src\nall: item\n\t@cat $< > result\nitem: input\n",
+    "files": {
+      "src/item": "old\n",
+      "input": "input"
+    },
+    "times": {
+      "src/item": 1000000100,
+      "input": 1000000000
+    },
+    "ninja": true,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "old\n"
+    }
+  },
+  {
+    "name": "single_suffix_empty_cancel",
+    "text": ".SUFFIXES: .pre\n.pre:\n\t@echo suffix > $@\n%: %.pre\n\t@echo pattern > $@\nall: item\n",
+    "files": {
+      "item.pre": ""
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "item": "pattern\n"
+    }
+  },
+  {
+    "name": "suffix_empty_pattern_cancel",
+    "text": ".SUFFIXES: .pre\n.pre:\n\t@echo suffix > $@\n%: %.pre\nall: item\n",
+    "files": {
+      "item.pre": ""
+    },
+    "expected_status": 1,
+    "expected_files": {
+      "item": null
+    }
+  },
+  {
+    "name": "self_implicit_existing",
+    "text": "%.o: %.o input\n\t@echo first > $@\nall: foo.o\n",
+    "files": {
+      "foo.o": "old",
+      "input": ""
+    },
+    "times": {
+      "foo.o": 1000000000,
+      "input": 1000000100
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "foo.o": "first\n"
+    }
+  },
+  {
+    "name": "self_orderonly_existing",
+    "text": "%.o: input | %.o\n\t@echo first > $@\nall: foo.o\n",
+    "files": {
+      "foo.o": "old",
+      "input": ""
+    },
+    "times": {
+      "foo.o": 1000000000,
+      "input": 1000000100
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "foo.o": "first\n"
+    }
+  },
+  {
+    "name": "diagnostic_variable_target",
+    "text": "info_target = all\n$(info_target):\n\t@echo ok > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "ok\n"
+    }
+  },
+  {
+    "name": "diagnostic_real_rule",
+    "text": "$(info hello)all:\n\t@echo ok > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "ok\n"
+    }
+  },
+  {
+    "name": "define_operator_rhs",
+    "text": "define X = ignored\nvalue\nendef\nall:\n\t@echo \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "value\n"
+    }
+  },
+  {
+    "name": "define_equals_name",
+    "text": "define a=b\nvalue\nendef\nall:\n\t@echo \"$(a=b)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "\n"
+    }
+  },
+  {
+    "name": "single_suffix_redefinition",
+    "text": ".SUFFIXES:\n.SUFFIXES: .pre\n.pre:\n\t@echo first > $@\n.pre:\n\t@echo second > $@\nall: item\n",
+    "files": {
+      "item.pre": "old"
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "item": "second\n"
+    }
+  },
+  {
+    "name": "vpath_subdir_current_ninja",
+    "text": "VPATH = src\nall: locale/item\n\t@cat $< > result\nlocale/item: input\n\t@echo rebuilt > $@\n",
+    "files": {
+      "src/locale/item": "old\n",
+      "input": "input\n"
+    },
+    "times": {
+      "src/locale/item": 1000000100,
+      "input": 1000000000
+    },
+    "ninja": true,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "old\n"
+    }
+  },
+  {
+    "name": "pattern_matrix_49",
+    "text": "X = global\nY = one\nZ = two\n%.o: X ?= $(Y)\na.o: X += $(Z)\nall: a.o\na.o:\n\t@$(eval Y = changed) $(eval Z = later) printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<global later>\n"
+    }
+  },
+  {
+    "name": "pattern_matrix_49_ninja",
+    "text": "X = global\nY = one\nZ = two\n%.o: X ?= $(Y)\na.o: X += $(Z)\nall: a.o\na.o:\n\t@$(eval Y = changed) $(eval Z = later) printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<global later>\n"
+    },
+    "ninja": true
+  },
+  {
+    "name": "pattern_matrix_50",
+    "text": "X := global\nY = one\nZ = two\n%.o: X ?= $(Y)\na.o: X += $(Z)\nall: a.o\na.o:\n\t@$(eval Y = changed) $(eval Z = later) printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<global later>\n"
+    }
+  },
+  {
+    "name": "pattern_matrix_50_ninja",
+    "text": "X := global\nY = one\nZ = two\n%.o: X ?= $(Y)\na.o: X += $(Z)\nall: a.o\na.o:\n\t@$(eval Y = changed) $(eval Z = later) printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<global later>\n"
+    },
+    "ninja": true
+  },
+  {
+    "name": "pattern_empty_base_54",
+    "text": "%.o: X =\na.o: X += tail\nall: a.o\na.o:\n\t@printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<tail>\n"
+    }
+  },
+  {
+    "name": "pattern_empty_base_54_ninja",
+    "text": "%.o: X =\na.o: X += tail\nall: a.o\na.o:\n\t@printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<tail>\n"
+    },
+    "ninja": true
+  },
+  {
+    "name": "pattern_empty_base_55",
+    "text": "%.o: X :=\na.o: X += tail\nall: a.o\na.o:\n\t@printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<tail>\n"
+    }
+  },
+  {
+    "name": "pattern_empty_base_55_ninja",
+    "text": "%.o: X :=\na.o: X += tail\nall: a.o\na.o:\n\t@printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<tail>\n"
+    },
+    "ninja": true
+  },
+  {
+    "name": "makefile_double_secondary",
+    "text": ".SECONDEXPANSION:\nMakefile:: $$(EMPTY)\n\t@touch Makefile\nall:\n\t@echo ok > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "ok\n"
+    }
+  },
+  {
+    "name": "vpath_touch_current",
+    "text": "VPATH = src\nall: item\n\t@cat $< > result\nitem: input\n\t@echo rebuilt > $@\n",
+    "files": {
+      "src/item": "source\n",
+      "input": "input\n"
+    },
+    "times": {
+      "src/item": 1000000100,
+      "input": 1000000000
+    },
+    "args": [
+      "-t",
+      "all"
+    ],
+    "inspect": [
+      "item",
+      "src/item",
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "item": null,
+      "src/item": "source\n",
+      "result": null
+    }
+  },
+  {
+    "name": "vpath_touch_outdated",
+    "text": "VPATH = src\nall: item\n\t@cat $< > result\nitem: input\n\t@echo rebuilt > $@\n",
+    "files": {
+      "src/item": "source\n",
+      "input": "input\n"
+    },
+    "times": {
+      "src/item": 1000000000,
+      "input": 1000000100
+    },
+    "args": [
+      "-t",
+      "all"
+    ],
+    "inspect": [
+      "item",
+      "src/item",
+      "result"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "item": "",
+      "src/item": "source\n",
+      "result": null
+    }
+  },
+  {
+    "name": "double_colon_implicit_recipe",
+    "text": "%.x: %.y\n\t@echo implicit > $@\nall: a.x\na.x:: input\n",
+    "files": {
+      "a.y": "",
+      "input": ""
+    },
+    "inspect": [
+      "a.x"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "a.x": "implicit\n"
+    }
+  },
+  {
+    "name": "double_colon_implicit_recipe_ninja",
+    "text": "%.x: %.y\n\t@echo implicit > $@\nall: a.x\na.x:: input\n",
+    "files": {
+      "a.y": "",
+      "input": ""
+    },
+    "inspect": [
+      "a.x"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "a.x": "implicit\n"
+    },
+    "ninja": true
+  },
+  {
+    "name": "builtin_link_cancel_o",
+    "text": "LINK.o = echo linked > result; :\n%: %.o\nall: app\napp: app.o\n",
+    "files": {
+      "app.o": ""
+    },
+    "inspect": [
+      "result",
+      "app"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": null,
+      "app": null
+    }
+  },
+  {
+    "name": "builtin_link_cancel_o_ninja",
+    "text": "LINK.o = echo linked > result; :\n%: %.o\nall: app\napp: app.o\n",
+    "files": {
+      "app.o": ""
+    },
+    "inspect": [
+      "result",
+      "app"
+    ],
+    "expected_status": 0,
+    "expected_files": {
+      "result": null,
+      "app": null
+    },
+    "ninja": true
+  },
+  {
+    "name": "vpath_empty_rule_outdated",
+    "text": "VPATH = src\nall: item\n\t@printf \"%s\\n\" \"$<\" > result\nitem: input ;\n",
+    "files": {
+      "src/item": "source\n",
+      "input": "input\n"
+    },
+    "times": {
+      "src/item": 1000000000,
+      "input": 1000000100
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "result": "item\n"
+    }
+  }
+]

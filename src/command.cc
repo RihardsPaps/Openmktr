@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -119,14 +120,14 @@ static bool IsShellIdentifierCommand(std::string_view name) {
 // and can override assignments made by the recipe immediately before the
 // child is started.
 static bool IsRecursiveTransportVariable(std::string_view name) {
-  return name == "MAKEFLAGS" || name == "MAKEOVERRIDES";
+  return name == "MAKEFLAGS" || name == "MAKEOVERRIDES" || name == "MAKELEVEL";
 }
 
 // Recursive commands executed directly by Kati do not pass through the
 // Ninja emitter.  Export the effective values at this command boundary so a
 // child sees directory-local modifications just as it would under make.
-static void ExportRecursiveEnvironment(std::string* command, Evaluator* ev) {
-  const bool recursive = IsRecursiveKatiCommand(*command);
+static void ExportRecursiveEnvironment(Command* command, Evaluator* ev) {
+  const bool recursive = IsRecursiveKatiCommand(command->cmd);
 
   std::string exports;
   std::unordered_set<std::string> emitted;
@@ -134,14 +135,45 @@ static void ExportRecursiveEnvironment(std::string* command, Evaluator* ev) {
     const std::string name_string(name.str());
     if (IsRecursiveTransportVariable(name_string))
       return;
+    auto explicit_export = ev->exports().find(name);
+    const Vars* scope = ev->current_scope();
+    const bool scoped_export = scope != nullptr &&
+                               scope->exported().exists(name) &&
+                               scope->IsExported(name);
+    if (explicit_export != ev->exports().end() && !explicit_export->second &&
+        !scoped_export)
+      return;
     Var* variable = ev->LookupVar(name);
     if (variable == nullptr || !variable->IsDefined() ||
         !IsShellIdentifierCommand(name_string) ||
         !emitted.insert(name_string).second)
       return;
     const std::string value = ev->EvalVar(name);
-    exports += "export " + name_string + "=" + ShellQuoteCommand(value) + "; ";
+    if (g_flags.generate_ninja)
+      exports +=
+          "export " + name_string + "=" + ShellQuoteCommand(value) + "; ";
+    else
+      command->environment.push_back(name_string + "=" + value);
   };
+
+  // GNU make exports command-line assignments to every directly executed
+  // recipe. Ninja's deferred environment is materialized separately; adding
+  // these prefixes to generated commands changes their shell semantics.
+  if (!g_flags.generate_ninja) {
+    for (std::string_view assignment : g_flags.cl_vars) {
+      size_t equal = assignment.find('=');
+      if (equal == std::string_view::npos || equal == 0)
+        continue;
+      std::string_view name = TrimSpace(assignment.substr(0, equal));
+      if (!name.empty() &&
+          (name.back() == ':' || name.back() == '+' || name.back() == '?'))
+        name.remove_suffix(1);
+      // GNU make treats SHELL specially on Unix: a command-line SHELL
+      // selects the recipe interpreter but is not exported automatically.
+      if (!name.empty() && name != "SHELL")
+        emit(Intern(name));
+    }
+  }
 
   if (!recursive) {
     if (ev->current_scope() != nullptr) {
@@ -149,7 +181,8 @@ static void ExportRecursiveEnvironment(std::string* command, Evaluator* ev) {
         if (ev->current_scope()->IsExported(name))
           emit(name);
     }
-    command->insert(0, exports);
+    if (g_flags.generate_ninja)
+      command->cmd.insert(0, exports);
     return;
   }
 
@@ -186,35 +219,48 @@ static void ExportRecursiveEnvironment(std::string* command, Evaluator* ev) {
   // makefile may assign CC=... itself, so command-line values such as
   // CC=clang must remain command-line overrides in the child.
   Var* makeflags = ev->LookupVar(Intern("MAKEFLAGS"));
+  if (!g_flags.generate_ninja) {
+    if (makeflags != nullptr && makeflags->IsDefined())
+      command->environment.push_back("MAKEFLAGS=" + makeflags->Eval(ev));
+    else
+      command->unset_environment.push_back("MAKEFLAGS");
+    command->unset_environment.push_back("MAKEOVERRIDES");
+    return;
+  }
   if (makeflags != nullptr && makeflags->IsDefined()) {
     exports = "export MAKEFLAGS=" + ShellQuoteCommand(makeflags->Eval(ev)) +
               "; unset MAKEOVERRIDES; " + exports;
   } else {
     exports = "unset MAKEFLAGS MAKEOVERRIDES; " + exports;
   }
-  command->insert(0, exports);
+  command->cmd.insert(0, exports);
 }
 
 // .EXPORT_ALL_VARIABLES makes every make variable whose name can be passed
 // through a POSIX environment visible to every recipe.  Keep this at the
 // recipe boundary rather than changing Kati's own process environment: the
 // latter would leak target-local values between parallel recipes.
-static void ExportAllVariables(std::string* command, Evaluator* ev) {
+static void ExportAllVariables(Command* command, Evaluator* ev) {
   std::string exports;
   std::unordered_set<std::string> emitted;
   for (std::string_view name_view : GetSymbolNames(
            [](Var* var) { return var->IsDefined() && !var->Obsolete(); })) {
-    if (!IsShellIdentifierCommand(name_view) ||
+    if (name_view == "MAKELEVEL" || !IsShellIdentifierCommand(name_view) ||
         !emitted.insert(std::string(name_view)).second)
       continue;
     Symbol name = Intern(name_view);
     Var* variable = ev->LookupVar(name);
     if (variable == nullptr || !variable->IsDefined())
       continue;
-    exports += "export " + std::string(name_view) + "=" +
-               ShellQuoteCommand(ev->EvalVar(name)) + "; ";
+    const std::string value = ev->EvalVar(name);
+    if (g_flags.generate_ninja)
+      exports += "export " + std::string(name_view) + "=" +
+                 ShellQuoteCommand(value) + "; ";
+    else
+      command->environment.push_back(std::string(name_view) + "=" + value);
   }
-  command->insert(0, exports);
+  if (g_flags.generate_ninja)
+    command->cmd.insert(0, exports);
 }
 
 class AutoVar : public Var {
@@ -289,33 +335,73 @@ void AutoAtVar::Eval(Evaluator*, std::string* s) const {
     *s += n->lexical_output.str();
 }
 
-void AutoLessVar::Eval(Evaluator*, std::string* s) const {
+static Symbol EffectivePrerequisite(Evaluator* ev,
+                                    const DepNode* node,
+                                    Symbol input) {
+  if (g_flags.generate_ninja || Exists(input.str()))
+    return input;
+  auto find_provider = [ev,
+                        input](const std::vector<NamedDepNode>& dependencies) {
+    for (const NamedDepNode& dependency : dependencies) {
+      const DepNode* child = dependency.second;
+      if (!(dependency.first == input) && !(child->lexical_output == input))
+        continue;
+      if (child->is_phony ||
+          child->vpath_discarded.load(std::memory_order_acquire))
+        return input;
+      if (child->vpath_provider.IsValid())
+        return child->vpath_provider;
+      if (!(child->output == input) && !child->has_rule)
+        return child->output;
+      const std::string resolved = ev->ResolveVpath(input);
+      if (!resolved.empty())
+        return Intern(resolved);
+      return input;
+    }
+    return Symbol();
+  };
+  Symbol provider = find_provider(node->deps);
+  if (!provider.IsValid())
+    provider = find_provider(node->order_onlys);
+  if (provider.IsValid())
+    return provider;
+  // Implicit suffix prerequisites can be materialized without a named
+  // dependency edge. They still use their VPATH source for automatic vars.
+  const std::string resolved = ev->ResolveVpath(input);
+  if (!resolved.empty())
+    return Intern(resolved);
+  return input;
+}
+
+void AutoLessVar::Eval(Evaluator* ev, std::string* s) const {
   const DepNode* n = ce_->current_dep_node();
   if (!n)
     return;
   auto& ai = n->actual_inputs;
   if (!ai.empty())
-    *s += ai[0].str();
+    *s += EffectivePrerequisite(ev, n, ai[0]).str();
 }
 
-void AutoHatVar::Eval(Evaluator*, std::string* s) const {
+void AutoHatVar::Eval(Evaluator* ev, std::string* s) const {
   const DepNode* n = ce_->current_dep_node();
   if (!n)
     return;
   std::unordered_set<std::string_view> seen;
   WordWriter ww(s);
   for (Symbol ai : n->actual_inputs) {
+    ai = EffectivePrerequisite(ev, n, ai);
     if (seen.insert(ai.str()).second)
       ww.Write(ai.str());
   }
 }
 
-void AutoPlusVar::Eval(Evaluator*, std::string* s) const {
+void AutoPlusVar::Eval(Evaluator* ev, std::string* s) const {
   const DepNode* n = ce_->current_dep_node();
   if (!n)
     return;
   WordWriter ww(s);
   for (Symbol ai : n->actual_inputs) {
+    ai = EffectivePrerequisite(ev, n, ai);
     ww.Write(ai.str());
   }
 }
@@ -384,8 +470,13 @@ void AutoQuestionVar::Eval(Evaluator* ev, std::string* s) const {
     }
   } else {
     WordWriter ww(s);
-    double target_age = GetTimestamp(n->output.str());
+    // GNU make computes $? against the target timestamp observed before
+    // updating prerequisites. A prerequisite recipe may also rewrite the
+    // target as a side effect; restating it here would erase the original
+    // newer-prerequisite list used by generated makefile refresh recipes.
+    double target_age = ce_->target_age();
     for (Symbol ai : n->actual_inputs) {
+      ai = EffectivePrerequisite(ev, n, ai);
       double input_age = GetTimestamp(ai.str());
       if (std::find(n->low_resolution_inputs.begin(),
                     n->low_resolution_inputs.end(),
@@ -410,13 +501,13 @@ void AutoPercentVar::Eval(Evaluator*, std::string* s) const {
   }
 }
 
-void AutoPipeVar::Eval(Evaluator*, std::string* s) const {
+void AutoPipeVar::Eval(Evaluator* ev, std::string* s) const {
   const DepNode* n = ce_->current_dep_node();
   if (!n)
     return;
   WordWriter ww(s);
   for (Symbol input : n->actual_order_only_inputs)
-    ww.Write(input.str());
+    ww.Write(EffectivePrerequisite(ev, n, input).str());
 }
 
 void AutoSuffixDVar::Eval(Evaluator* ev, std::string* s) const {
@@ -437,7 +528,10 @@ void AutoSuffixFVar::Eval(Evaluator* ev, std::string* s) const {
   }
 }
 
-void ParseCommandPrefixes(std::string_view* s, bool* echo, bool* ignore_error) {
+void ParseCommandPrefixes(std::string_view* s,
+                          bool* echo,
+                          bool* ignore_error,
+                          bool* force_run) {
   *s = TrimLeftSpace(*s);
   while (true) {
     char c = s->empty() ? 0 : s->front();
@@ -446,7 +540,7 @@ void ParseCommandPrefixes(std::string_view* s, bool* echo, bool* ignore_error) {
     } else if (c == '-') {
       *ignore_error = true;
     } else if (c == '+') {
-      // ignore recursion marker
+      *force_run = true;
     } else {
       break;
     }
@@ -490,15 +584,49 @@ CommandEvaluator::~CommandEvaluator() {
 }
 
 std::vector<Command> CommandEvaluator::Eval(const DepNode& n) {
+  return Eval(n, GetTimestamp(n.output.str()));
+}
+
+std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
+                                            double target_age) {
+  return Eval(n, target_age, static_cast<size_t>(-1));
+}
+
+std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
+                                            double target_age,
+                                            size_t double_colon_group) {
   std::vector<Command> result;
+  target_age_ = target_age;
   ev_->set_loc(n.loc);
   ev_->set_current_scope(n.rule_vars);
   ev_->SetEvaluatingCommand(true);
   current_dep_node_ = &n;
   found_new_inputs_ = false;
+  // Test harnesses may clear V while checking GNU make's printed recipes.
+  // Keep an invocation-wide command display switch that survives recursive
+  // makes without adding a command-line variable override to MAKEFLAGS.
+  const char* kati_verbose = std::getenv("KATI_VERBOSE");
+  const bool environment_verbose =
+      kati_verbose != nullptr && std::string_view(kati_verbose) == "1";
+  // Silent recipes do not need a display mode. Avoid expanding an otherwise
+  // unused V definition for them (it may be recursive or have side effects).
+  auto is_verbose = [&](bool echo) {
+    if (!echo)
+      return false;
+    Var* verbosity = ev_->LookupVar(Intern("V"));
+    // V is a display extension, not a make variable used by this recipe.
+    // Expanding a deferred definition here can run shell functions or fail.
+    return environment_verbose ||
+           (verbosity->IsDefined() && verbosity->String() == "1");
+  };
   if (n.oneshell) {
     std::string script;
-    for (Value* v : n.cmds) {
+    for (size_t i = 0; i < n.cmds.size(); ++i) {
+      if (double_colon_group != static_cast<size_t>(-1) &&
+          (i >= n.double_colon_group_for_cmd.size() ||
+           n.double_colon_group_for_cmd[i] != double_colon_group))
+        continue;
+      Value* v = n.cmds[i];
       ev_->set_loc(v->Location());
       if (!script.empty())
         script += '\n';
@@ -507,7 +635,9 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n) {
         std::string_view remaining = line;
         bool ignored_echo = true;
         bool ignored_error = false;
-        ParseCommandPrefixes(&remaining, &ignored_echo, &ignored_error);
+        bool ignored_force_run = false;
+        ParseCommandPrefixes(&remaining, &ignored_echo, &ignored_error,
+                             &ignored_force_run);
         line = std::string(remaining);
       }
       script += line;
@@ -515,30 +645,44 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n) {
     std::string_view cmds = script;
     bool echo = !g_flags.is_silent_mode;
     bool ignore_error = false;
-    ParseCommandPrefixes(&cmds, &echo, &ignore_error);
+    bool force_run = false;
+    ParseCommandPrefixes(&cmds, &echo, &ignore_error, &force_run);
     cmds = TrimLeftSpace(cmds);
     if (!cmds.empty()) {
       Command& command = result.emplace_back(n.output);
+      if (double_colon_group != static_cast<size_t>(-1))
+        command.double_colon_group = double_colon_group;
       command.cmd = std::string(cmds);
+      command.display_cmd = command.cmd;
+      command.verbose = is_verbose(echo && !n.silent);
+      command.force_run = force_run;
       // Generated Ninja recipes source env.sh, which is only a snapshot of
       // the process environment taken during graph generation.  Recursive
       // make commands must receive the effective exported make variables at
       // this recipe boundary as well; otherwise makefile assignments made
       // after the snapshot are lost in the child.
-      ExportRecursiveEnvironment(&command.cmd, ev_);
+      ExportRecursiveEnvironment(&command, ev_);
       if (n.export_all_variables)
-        ExportAllVariables(&command.cmd, ev_);
+        ExportAllVariables(&command, ev_);
       command.echo = echo && !n.silent;
       command.ignore_error = ignore_error || n.ignore_errors;
     }
   } else {
-    for (Value* v : n.cmds) {
+    for (size_t command_index = 0; command_index < n.cmds.size();
+         ++command_index) {
+      if (double_colon_group != static_cast<size_t>(-1) &&
+          (command_index >= n.double_colon_group_for_cmd.size() ||
+           n.double_colon_group_for_cmd[command_index] != double_colon_group))
+        continue;
+      Value* v = n.cmds[command_index];
       ev_->set_loc(v->Location());
       const std::string cmds_buf = ExpandDeferredAssignments(v->Eval(ev_), ev_);
       std::string_view cmds = cmds_buf;
       bool global_echo = !g_flags.is_silent_mode;
       bool global_ignore_error = false;
-      ParseCommandPrefixes(&cmds, &global_echo, &global_ignore_error);
+      bool global_force_run = false;
+      ParseCommandPrefixes(&cmds, &global_echo, &global_ignore_error,
+                           &global_force_run);
       if (cmds == "")
         continue;
       while (true) {
@@ -551,16 +695,23 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n) {
 
         bool echo = global_echo;
         bool ignore_error = global_ignore_error;
-        ParseCommandPrefixes(&cmd, &echo, &ignore_error);
+        bool force_run = global_force_run;
+        ParseCommandPrefixes(&cmd, &echo, &ignore_error, &force_run);
 
         if (!cmd.empty()) {
           Command& command = result.emplace_back(n.output);
+          if (command_index < n.double_colon_group_for_cmd.size())
+            command.double_colon_group =
+                n.double_colon_group_for_cmd[command_index];
           command.cmd = std::string(cmd);
+          command.display_cmd = command.cmd;
+          command.verbose = is_verbose(echo && !n.silent);
+          command.force_run = force_run;
           // See the oneshell case above: recursive commands need the current
           // makefile export state even when Ninja defers their execution.
-          ExportRecursiveEnvironment(&command.cmd, ev_);
+          ExportRecursiveEnvironment(&command, ev_);
           if (n.export_all_variables)
-            ExportAllVariables(&command.cmd, ev_);
+            ExportAllVariables(&command, ev_);
           command.echo = echo && !n.silent;
           command.ignore_error = ignore_error || n.ignore_errors;
         }

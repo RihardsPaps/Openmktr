@@ -615,7 +615,19 @@ class NinjaGenerator {
 
   void EmitNode(const NinjaNode& nn, std::ostream& out) {
     const DepNode* node = nn.node;
-    const std::vector<Command>& commands = nn.commands;
+    // Ninja needs a concrete local output for a rule-bearing VPATH target.
+    // Materialize a local link to the source only while its ordinary
+    // prerequisites are older. This keeps the rule's edges reachable and
+    // gives parent recipes a usable logical filename. The link follows later
+    // source updates without copying stale contents into the build tree.
+    std::vector<Command> commands = nn.commands;
+    const bool vpath_output = node->vpath_provider.IsValid() && !node->is_phony;
+    if (vpath_output && commands.empty()) {
+      Command materialize(node->output);
+      materialize.cmd = ":";
+      materialize.echo = false;
+      commands.push_back(std::move(materialize));
+    }
 
     // Make distinguishes "doc" from "doc/", but Ninja normalizes both to
     // the same path.  If the directory already exists and "doc" is another
@@ -663,6 +675,42 @@ class NinjaGenerator {
       // valid shell no-op, including when the leaf-output guard is added.
       if (cmd_buf.empty())
         cmd_buf = ":";
+      if (vpath_output) {
+        const std::string output = ShellQuote(node->output.str());
+        const std::string provider = ShellQuote(node->vpath_provider.str());
+        std::string current = "if { [ ! -e " + output + " ] || [ -L " + output +
+                              " ]; } && [ -e " + provider + " ]";
+        std::string local_current =
+            "if [ -e " + output + " ] && [ ! -L " + output + " ]";
+        for (const NamedDepNode& dep : node->deps) {
+          // A prerequisite-only rule retains its provider even when a
+          // prerequisite is newer: there is no recipe to replace it.
+          if (node->cmds.empty())
+            break;
+          if (dep.second->is_phony) {
+            current += " && false";
+            local_current += " && false";
+            break;
+          }
+          const std::string input = ShellQuote(dep.first.str());
+          current += " && [ -e " + input + " ] && [ ! " + input + " -nt " +
+                     provider + " ]";
+          local_current += " && [ -e " + input + " ] && [ ! " + input +
+                           " -nt " + output + " ]";
+        }
+        const std::string link_target =
+            node->vpath_provider.str().front() == '/'
+                ? std::string(node->vpath_provider.str())
+                : working_dir_ + "/" + node->vpath_provider.str();
+        std::string materialize = "rm -f " + output + " && ln -s " +
+                                  ShellQuote(link_target) + " " + output;
+        const std::string_view parent = Dirname(node->output.str());
+        if (!parent.empty() && parent != ".")
+          materialize = "mkdir -p " + ShellQuote(parent) + " && " + materialize;
+        cmd_buf = local_current + "; then :; el" + current + "; then " +
+                  materialize + "; else " + "if [ -L " + output +
+                  " ]; then rm -f " + output + "; fi; " + cmd_buf + "; fi";
+      }
       // Ninja has no build-log entry for files that predate a newly emitted
       // graph, and runs their recipes even when make would find them current.
       // OpenSSL's configdata.pm recipe deliberately fails after reconfiguring,
@@ -673,11 +721,13 @@ class NinjaGenerator {
           [](const NamedDepNode& dep) { return dep.second->is_phony; });
       // Order-only prerequisites may run, but they do not make an existing
       // output stale. Ninja has no prior build-log entry for such an output.
-      if (!node->is_phony && node->deps.empty() && node->validations.empty()) {
+      if (!vpath_output && !node->is_phony && node->deps.empty() &&
+          node->validations.empty()) {
         cmd_buf = "if [ -e " + ShellQuote(node->output.str()) +
                   " ]; then :; else " + cmd_buf + "; fi";
-      } else if (!node->is_phony && !node->deps.empty() && !has_phony_input &&
-                 node->validations.empty() && Exists(node->output.str())) {
+      } else if (!vpath_output && !node->is_phony && !node->deps.empty() &&
+                 !has_phony_input && node->validations.empty() &&
+                 Exists(node->output.str())) {
         const std::string output = ShellQuote(node->output.str());
         std::string current = "if [ -e " + output + " ]";
         for (const NamedDepNode& dep : node->deps) {
@@ -886,6 +936,8 @@ class NinjaGenerator {
         continue;
       out << " " << EscapeBuildTarget(d.first).c_str();
     }
+    if (node->vpath_provider.IsValid() && !node->is_phony)
+      out << " " << EscapeBuildTarget(node->vpath_provider);
     bool has_order_only = false;
     for (auto const& d : node->order_onlys) {
       if (IsCycleEdge(node->output, d.first) ||
@@ -1058,6 +1110,24 @@ class NinjaGenerator {
     }
 
     if (!g_flags.generate_empty_ninja) {
+      SymbolSet outputs;
+      for (const auto& node : nodes_) {
+        outputs.insert(node.node->output);
+        for (Symbol output : node.node->implicit_outputs)
+          outputs.insert(output);
+      }
+      SymbolSet providers;
+      for (const auto& node : nodes_) {
+        Symbol provider = node.node->vpath_provider;
+        if (!provider.IsValid() || node.node->is_phony ||
+            outputs.exists(provider) || providers.exists(provider))
+          continue;
+        providers.insert(provider);
+        // A provider is optional once a recipe has produced a local file.
+        // A phony leaf preserves its real timestamp while it exists and
+        // lets the output's runtime guard handle disappearance safely.
+        out << "build " << EscapeBuildTarget(provider) << ": phony\n\n";
+      }
       for (const auto& node : nodes_) {
         EmitNode(node, out);
       }
@@ -1130,7 +1200,11 @@ class NinjaGenerator {
     fprintf(fp, "\n");
 
     std::unordered_set<std::string> emitted_exports;
+    emitted_exports.insert("MAKELEVEL");
+    fprintf(fp, "export MAKELEVEL=%d\n", g_flags.make_level + 1);
     for (const auto& [symbol, is_exported] : ev_->exports()) {
+      if (symbol.str() == "MAKELEVEL")
+        continue;
       if (!IsShellIdentifier(symbol.str())) {
         continue;
       }

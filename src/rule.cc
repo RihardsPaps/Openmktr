@@ -16,6 +16,8 @@
 
 #include "rule.h"
 
+#include <cctype>
+
 #include "eval.h"
 #include "expr.h"
 #include "fileutil.h"
@@ -24,6 +26,47 @@
 #include "stringprintf.h"
 #include "strutil.h"
 #include "symtab.h"
+
+namespace {
+
+// Escaped references survive the first expansion as make expressions. Their
+// argument whitespace must not split the expression into file names.
+std::vector<std::string_view> PrerequisiteWords(std::string_view text,
+                                                bool deferred) {
+  std::vector<std::string_view> words;
+  if (!deferred) {
+    for (std::string_view word : WordScanner(text))
+      words.push_back(word);
+    return words;
+  }
+  std::vector<char> closing;
+  size_t start = std::string_view::npos;
+  for (size_t i = 0; i < text.size(); ++i) {
+    char c = text[i];
+    if (closing.empty() && isspace(static_cast<unsigned char>(c))) {
+      if (start != std::string_view::npos)
+        words.push_back(text.substr(start, i - start));
+      start = std::string_view::npos;
+      continue;
+    }
+    if (start == std::string_view::npos)
+      start = i;
+    if (c == '$' && i + 1 < text.size() &&
+        (text[i + 1] == '(' || text[i + 1] == '{')) {
+      closing.push_back(text[++i] == '(' ? ')' : '}');
+    } else if (!closing.empty()) {
+      if (c == '(' || c == '{')
+        closing.push_back(c == '(' ? ')' : '}');
+      else if (c == closing.back())
+        closing.pop_back();
+    }
+  }
+  if (start != std::string_view::npos)
+    words.push_back(text.substr(start));
+  return words;
+}
+
+}  // namespace
 
 Rule::Rule()
     : is_double_colon(false),
@@ -58,7 +101,7 @@ void Rule::ParseSecondaryInputs(
       wait_groups_out->push_back(std::move(wait_group));
     wait_group.clear();
   };
-  for (std::string_view input : WordScanner(prerequisites)) {
+  for (std::string_view input : PrerequisiteWords(prerequisites, true)) {
     if (input == "|") {
       is_order_only = true;
       continue;
@@ -122,7 +165,7 @@ void Rule::ParseInputs(const std::string_view& inputs_str) {
     (is_order_only ? order_only_inputs : inputs).push_back(input);
     wait_group.push_back(input);
   };
-  for (auto const& input : WordScanner(inputs_str)) {
+  for (auto const& input : PrerequisiteWords(inputs_str, secondary_expansion)) {
     if (input == "|") {
       is_order_only = true;
       continue;
@@ -142,7 +185,8 @@ void Rule::ParseInputs(const std::string_view& inputs_str) {
     // "obj/../../../src/foo.o" to "src/foo.o" can change which rule applies.
     // In particular, it would turn an output-relative prerequisite into a
     // built-in .c.o fallback.  Ordinary paths are still canonicalized.
-    if (trimmed.find("../") == std::string::npos && trimmed != "..")
+    if (!(secondary_expansion && input.find('$') != std::string_view::npos) &&
+        trimmed.find("../") == std::string::npos && trimmed != "..")
       NormalizeMakePath(&trimmed);
     // Keep a standalone current-directory prerequisite distinct from an
     // empty prerequisite. Recursive makefiles may use '.' as the dependency

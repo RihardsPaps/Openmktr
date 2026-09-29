@@ -83,7 +83,8 @@ void Symbol::SetGlobalVar(Var* v, bool is_override, bool* readonly) const {
     *readonly = false;
   }
   if (!is_override && (orig->Origin() == VarOrigin::OVERRIDE ||
-                       orig->Origin() == VarOrigin::ENVIRONMENT_OVERRIDE)) {
+                       (orig->Origin() == VarOrigin::ENVIRONMENT_OVERRIDE &&
+                        v->Origin() != VarOrigin::COMMAND_LINE))) {
     return;
   }
   if (orig->Origin() == VarOrigin::COMMAND_LINE &&
@@ -147,9 +148,7 @@ class Symtab {
                                  false, nullptr);
   }
 
-  ~Symtab() {
-    LOG_STAT("%zu symbols", symbols_.size());
-  }
+  ~Symtab() { LOG_STAT("%zu symbols", symbols_.size()); }
 
   Symbol InternImpl(std::string_view s) {
     auto found = symtab_.find(s);

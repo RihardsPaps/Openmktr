@@ -85,6 +85,15 @@ static bool IsRecursiveKatiCommandMarker(const std::string& command) {
 
   size_t pos = command.find(executable);
   while (pos != std::string::npos) {
+    // Exported MAKE=/path/to/ckati is data, not a recursive invocation.
+    // Recipe environment prefixes are common, and treating one as a command
+    // would execute an ordinary recipe even during a recursive dry run.
+    size_t value_start = pos;
+    if (value_start > 0 &&
+        (command[value_start - 1] == '\'' || command[value_start - 1] == '"'))
+      --value_start;
+    const bool assignment_value =
+        value_start > 0 && command[value_start - 1] == '=';
     const bool start = pos == 0 || isspace(command[pos - 1]) ||
                        command[pos - 1] == '\'' || command[pos - 1] == '"' ||
                        command[pos - 1] == '=' || command[pos - 1] == ';';
@@ -92,7 +101,7 @@ static bool IsRecursiveKatiCommandMarker(const std::string& command) {
     const bool finish = end == command.size() || isspace(command[end]) ||
                         command[end] == '\'' || command[end] == '"' ||
                         command[end] == ';';
-    if (start && finish)
+    if (start && finish && !assignment_value)
       return true;
     pos = command.find(executable, pos + 1);
   }
@@ -230,9 +239,45 @@ class Executor {
     return jobs;
   }
 
+  bool DependenciesAreCurrent(const DepNode& node,
+                              double target_timestamp,
+                              std::unordered_set<Symbol>* visiting) {
+    if (!visiting->insert(node.output).second)
+      return false;
+    if (node.is_phony ||
+        std::find(node.double_colon_group_has_prerequisites.begin(),
+                  node.double_colon_group_has_prerequisites.end(),
+                  false) != node.double_colon_group_has_prerequisites.end())
+      return false;
+    for (const auto& dep : node.deps) {
+      const DepNode& child = *dep.second;
+      if (child.is_phony || IsWhatIf(child.output))
+        return false;
+      const double child_timestamp = GetTimestamp(child.output.c_str());
+      if (child_timestamp == kNotExist &&
+          (!child.intermediate || child.deps.empty() ||
+           !DependenciesAreCurrent(child, target_timestamp, visiting)))
+        return false;
+      if (child_timestamp != kNotExist &&
+          (child_timestamp > target_timestamp ||
+           !DependenciesAreCurrent(child, child_timestamp, visiting)))
+        return false;
+    }
+    for (const auto& dep : node.order_onlys) {
+      const double order_timestamp = GetTimestamp(dep.second->output.c_str());
+      if (dep.second->is_phony || IsWhatIf(dep.second->output) ||
+          order_timestamp == kNotExist ||
+          !DependenciesAreCurrent(*dep.second, order_timestamp, visiting))
+        return false;
+    }
+    visiting->erase(node.output);
+    return true;
+  }
+
   double ExecNode(const DepNode& n,
                   const char* needed_by,
-                  std::shared_ptr<const Ancestry> parent = nullptr) {
+                  std::shared_ptr<const Ancestry> parent = nullptr,
+                  const DepNode* parent_node = nullptr) {
     for (auto path = parent; path != nullptr; path = path->parent) {
       if (path->output == n.output) {
         WARN("Circular %s <- %s dependency dropped.",
@@ -243,54 +288,59 @@ class Executor {
     auto ancestry = std::make_shared<Ancestry>(Ancestry{n.output, parent});
     {
       std::unique_lock<std::mutex> lock(state_mu_);
-      auto found = done_.find(n.output);
-      if (found != done_.end()) {
-        if (!found->second.processing)
-          return found->second.timestamp;
-        if (found->second.owner == std::this_thread::get_id()) {
-          WARN("Circular %s <- %s dependency dropped.",
-               needed_by ? needed_by : "(null)", n.output.c_str());
-          return kProcessing;
+      for (;;) {
+        auto found = done_.find(n.output);
+        if (found != done_.end()) {
+          if (!found->second.processing)
+            return found->second.timestamp;
+          if (found->second.owner == std::this_thread::get_id()) {
+            WARN("Circular %s <- %s dependency dropped.",
+                 needed_by ? needed_by : "(null)", n.output.c_str());
+            return kProcessing;
+          }
+          // A parallel dependency cycle can span workers: thread A may wait
+          // for a node owned by thread B while B waits for a node owned by A.
+          // The old check handled only the same-thread form, leaving both
+          // workers asleep forever.  Follow the current wait-for chain while
+          // holding state_mu_ and drop the edge if it returns to this thread.
+          const std::thread::id current_thread = std::this_thread::get_id();
+          std::thread::id owner = found->second.owner;
+          bool cross_thread_cycle = false;
+          while (owner != current_thread) {
+            auto waiting = waiting_on_.find(owner);
+            if (waiting == waiting_on_.end())
+              break;
+            auto dependency = done_.find(waiting->second);
+            if (dependency == done_.end() || !dependency->second.processing)
+              break;
+            owner = dependency->second.owner;
+          }
+          if (owner == current_thread)
+            cross_thread_cycle = true;
+          if (cross_thread_cycle) {
+            WARN("Circular %s <- %s dependency dropped.",
+                 needed_by ? needed_by : "(null)", n.output.c_str());
+            return kProcessing;
+          }
+          waiting_on_[current_thread] = n.output;
+          state_cv_.wait(lock, [&] {
+            auto current = done_.find(n.output);
+            return current == done_.end() || !current->second.processing;
+          });
+          waiting_on_.erase(current_thread);
+          // A skipped intermediate is erased because the decision belongs to
+          // one parent. Retry acquisition for this parent's freshness needs.
+          continue;
         }
-        // A parallel dependency cycle can span workers: thread A may wait
-        // for a node owned by thread B while B waits for a node owned by A.
-        // The old check handled only the same-thread form, leaving both
-        // workers asleep forever.  Follow the current wait-for chain while
-        // holding state_mu_ and drop the edge if it returns to this thread.
-        const std::thread::id current_thread = std::this_thread::get_id();
-        std::thread::id owner = found->second.owner;
-        bool cross_thread_cycle = false;
-        while (owner != current_thread) {
-          auto waiting = waiting_on_.find(owner);
-          if (waiting == waiting_on_.end())
-            break;
-          auto dependency = done_.find(waiting->second);
-          if (dependency == done_.end() || !dependency->second.processing)
-            break;
-          owner = dependency->second.owner;
+        if (cancel_requested_.load(std::memory_order_relaxed)) {
+          done_[n.output] =
+              NodeState{false, kNotExist, true, std::thread::id()};
+          return kNotExist;
         }
-        if (owner == current_thread)
-          cross_thread_cycle = true;
-        if (cross_thread_cycle) {
-          WARN("Circular %s <- %s dependency dropped.",
-               needed_by ? needed_by : "(null)", n.output.c_str());
-          return kProcessing;
-        }
-        waiting_on_[current_thread] = n.output;
-        state_cv_.wait(lock, [&] {
-          auto current = done_.find(n.output);
-          return current == done_.end() || !current->second.processing;
-        });
-        waiting_on_.erase(current_thread);
-        auto current = done_.find(n.output);
-        return current == done_.end() ? kNotExist : current->second.timestamp;
+        done_[n.output] =
+            NodeState{true, kProcessing, false, std::this_thread::get_id()};
+        break;
       }
-      if (cancel_requested_.load(std::memory_order_relaxed)) {
-        done_[n.output] = NodeState{false, kNotExist, true, std::thread::id()};
-        return kNotExist;
-      }
-      done_[n.output] =
-          NodeState{true, kProcessing, false, std::this_thread::get_id()};
     }
     // Evaluator tracing uses one process-global stack.  Parallel workers
     // cannot push/pop that stack concurrently; doing so corrupts the stack
@@ -302,6 +352,27 @@ class Executor {
           ce_.evaluator()->Enter(FrameType::EXEC, n.output.c_str(), n.loc));
     }
     double output_ts = GetTimestamp(n.output.c_str());
+    if (output_ts == kNotExist && n.vpath_provider.IsValid())
+      output_ts = GetTimestamp(n.vpath_provider.c_str());
+
+    // GNU make does not regenerate a missing implicit intermediate merely
+    // because it cleaned that file after an earlier successful build. If an
+    // existing parent is newer than every source beneath the intermediate,
+    // let the parent use its own timestamp without recreating the chain.
+    if (n.intermediate && output_ts == kNotExist && parent_node &&
+        !parent_node->is_phony) {
+      const double parent_ts = GetTimestamp(needed_by);
+      std::unordered_set<Symbol> visited;
+      if (parent_ts != kNotExist &&
+          DependenciesAreCurrent(*parent_node, parent_ts, &visited)) {
+        {
+          std::lock_guard<std::mutex> lock(state_mu_);
+          done_.erase(n.output);
+        }
+        state_cv_.notify_all();
+        return parent_ts;
+      }
+    }
 
     LOG("ExecNode: %s for %s", n.output.c_str(),
         needed_by ? needed_by : "(null)");
@@ -349,13 +420,13 @@ class Executor {
       if (parallel_ && n.deps.size() + n.order_onlys.size() > 1) {
         children.emplace_back(
             worker_pool_.Submit(
-                [this, child = d.second, output = n.output, ancestry]() {
-                  return ExecNode(*child, output.c_str(), ancestry);
+                [this, child = d.second, output = n.output, ancestry, &n]() {
+                  return ExecNode(*child, output.c_str(), ancestry, &n);
                 }),
             d.second->is_phony, order_only, is_low_resolution(d.first),
             d.second->output);
       } else {
-        double ts = ExecNode(*d.second, n.output.c_str(), ancestry);
+        double ts = ExecNode(*d.second, n.output.c_str(), ancestry, &n);
         if (IsFailed(d.second->output))
           dependency_failed = true;
         // Order-only prerequisites must be built before the recipe, but do
@@ -419,10 +490,8 @@ class Executor {
       return output_ts;
     }
 
-    // GNU make's touch mode does not run recipes for phony targets, and
-    // updates existing rule outputs without running their recipes. Missing
-    // non-phony outputs still follow the normal build path so touch mode
-    // cannot fabricate a target that has no file yet.
+    // Touch mode skips phony recipes. Real files are touched below, after
+    // checking whether their prerequisites actually require an update.
     if (g_flags.is_touch && n.is_phony) {
       {
         std::lock_guard<std::mutex> lock(state_mu_);
@@ -433,22 +502,8 @@ class Executor {
       return output_ts;
     }
 
-    if (g_flags.is_touch && output_ts != kNotExist && n.has_rule &&
-        !output_is_directory) {
-      if (utimensat(AT_FDCWD, n.output.c_str(), nullptr, 0) < 0)
-        PERROR("touch %s", n.output.c_str());
-      const double touched_ts = GetTimestamp(n.output.c_str());
-      {
-        std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] =
-            NodeState{false, touched_ts, false, std::thread::id()};
-      }
-      state_cv_.notify_all();
-      return touched_ts;
-    }
-
     if (output_ts != kNotExist && output_ts >= latest && !n.is_phony &&
-        !output_is_directory) {
+        !output_is_directory && n.double_colon_group_inputs.empty()) {
       {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] = NodeState{false, output_ts, false, std::thread::id()};
@@ -461,15 +516,87 @@ class Executor {
     // needs to run in that case. Expand recipes only after the fast path;
     // this also keeps expensive variable and shell-function evaluation out of
     // incremental no-op builds.
+    auto double_colon_group_needs_build = [&](size_t group, double target_ts) {
+      if (target_ts == kNotExist || n.is_phony ||
+          !n.double_colon_group_has_prerequisites[group])
+        return true;
+      for (Symbol input : n.double_colon_group_inputs[group]) {
+        if (IsWhatIf(input))
+          return true;
+        for (const auto& dep : n.deps) {
+          if (!(dep.first == input) && !(dep.second->lexical_output == input))
+            continue;
+          if (dep.second->is_phony)
+            return true;
+          std::lock_guard<std::mutex> lock(state_mu_);
+          const auto completed = done_.find(dep.second->output);
+          if (completed != done_.end() &&
+              completed->second.timestamp > target_ts)
+            return true;
+        }
+        if (GetTimestamp(input.c_str()) > target_ts)
+          return true;
+      }
+      return false;
+    };
+    std::vector<bool> group_needs_build;
+    for (size_t group = 0; group < n.double_colon_group_inputs.size(); ++group)
+      group_needs_build.push_back(
+          double_colon_group_needs_build(group, output_ts));
+
+    if (g_flags.is_touch && !n.cmds.empty() && !output_is_directory &&
+        (group_needs_build.empty() ||
+         std::any_of(group_needs_build.begin(), group_needs_build.end(),
+                     [](bool dirty) { return dirty; }))) {
+      if (n.vpath_provider.IsValid()) {
+        n.vpath_discarded.store(true, std::memory_order_release);
+        struct stat st;
+        if (lstat(n.output.c_str(), &st) == 0 && S_ISLNK(st.st_mode) &&
+            unlink(n.output.c_str()) != 0)
+          PERROR("unlink %s", n.output.c_str());
+      }
+      const int fd = open(n.output.c_str(), O_WRONLY | O_CREAT, 0666);
+      if (fd < 0 || close(fd) != 0 ||
+          utimensat(AT_FDCWD, n.output.c_str(), nullptr, 0) < 0)
+        PERROR("touch %s", n.output.c_str());
+      const double touched_ts = GetTimestamp(n.output.c_str());
+      {
+        std::lock_guard<std::mutex> lock(state_mu_);
+        done_[n.output] =
+            NodeState{false, touched_ts, false, std::thread::id()};
+      }
+      state_cv_.notify_all();
+      return touched_ts;
+    }
+
+    // Expand only the recipes of groups that were dirty before any recipe
+    // runs. Expansion itself can invoke $(shell), $(file), or $(error).
     std::vector<Command> commands;
     {
       std::lock_guard<std::mutex> lock(eval_mu_);
-      commands = ce_.Eval(n);
+      if (group_needs_build.empty()) {
+        commands = ce_.Eval(n, output_ts);
+      } else {
+        for (size_t group = 0; group < group_needs_build.size(); ++group) {
+          if (!group_needs_build[group])
+            continue;
+          auto group_commands = ce_.Eval(n, output_ts, group);
+          commands.insert(commands.end(),
+                          std::make_move_iterator(group_commands.begin()),
+                          std::make_move_iterator(group_commands.end()));
+        }
+      }
     }
-
-    if (g_flags.is_question) {
-      if (n.is_phony || !commands.empty())
-        needs_build_.store(true, std::memory_order_relaxed);
+    // A directory is a normal timestamped target unless its recipe enters a
+    // recursive make that may update files inside it without changing the
+    // directory timestamp.  Keep that recursive case live, but do not rerun
+    // ordinary directory-creation recipes such as `mkdir ../lib` on every
+    // invocation.
+    if (output_is_directory && n.double_colon_group_inputs.empty() &&
+        output_ts != kNotExist && output_ts >= latest && !n.is_phony &&
+        std::none_of(commands.begin(), commands.end(), [](const Command& c) {
+          return IsRecursiveKatiCommand(c.cmd);
+        })) {
       {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] = NodeState{false, output_ts, false, std::thread::id()};
@@ -477,18 +604,57 @@ class Executor {
       state_cv_.notify_all();
       return output_ts;
     }
+    // GNU make considers a missing target with an explicit empty rule
+    // updated for this invocation, even though no file was created.  Its
+    // dependents must therefore rebuild on every invocation.
+    const bool missing_empty_rule =
+        n.has_rule && commands.empty() &&
+        (output_ts == kNotExist ||
+         (n.vpath_provider.IsValid() && !n.cmds.empty() &&
+          GetTimestamp(n.output.c_str()) == kNotExist));
+    const double logical_ts = missing_empty_rule
+                                  ? std::numeric_limits<double>::infinity()
+                                  : output_ts;
+
+    if (n.vpath_provider.IsValid() && (n.is_phony || !n.cmds.empty())) {
+      n.vpath_discarded.store(true, std::memory_order_release);
+      struct stat st;
+      if (!g_flags.is_dry_run && !g_flags.is_question &&
+          lstat(n.output.c_str(), &st) == 0 && S_ISLNK(st.st_mode) &&
+          unlink(n.output.c_str()) != 0)
+        PERROR("unlink %s", n.output.c_str());
+    }
+
+    if (g_flags.is_question) {
+      const bool any_group_needs_build =
+          std::any_of(group_needs_build.begin(), group_needs_build.end(),
+                      [](bool needed) { return needed; });
+      if (n.is_phony ||
+          (!commands.empty() &&
+           (n.double_colon_group_inputs.empty() || any_group_needs_build)))
+        needs_build_.store(true, std::memory_order_relaxed);
+      {
+        std::lock_guard<std::mutex> lock(state_mu_);
+        done_[n.output] =
+            NodeState{false, logical_ts, false, std::thread::id()};
+      }
+      state_cv_.notify_all();
+      return logical_ts;
+    }
 
     // Record that an out-of-date target is being rebuilt.  This is also
     // needed by the included-makefile bootstrap pass: an existing included
     // file may have a rule and be rebuilt even though it was not missing.
     // The caller uses this result to decide whether GNU make-style
     // re-evaluation is required.
-    if (!commands.empty())
+    if (!commands.empty() && n.double_colon_group_inputs.empty())
       needs_build_.store(true, std::memory_order_relaxed);
 
     bool node_failed = false;
     bool ran_recipe = false;
     for (const Command& command : commands) {
+      if (command.double_colon_group != static_cast<size_t>(-1))
+        needs_build_.store(true, std::memory_order_relaxed);
       if (cancel_requested_.load(std::memory_order_relaxed)) {
         node_failed = true;
         break;
@@ -498,7 +664,10 @@ class Executor {
         num_commands_ += 1;
       }
       if (command.echo && !command.cmd.empty() && command.cmd != ":") {
-        printf("  BUILD   %s\n", command.output.c_str());
+        if (command.verbose)
+          printf("%s\n", command.display_cmd.c_str());
+        else
+          printf("  BUILD   %s\n", command.output.c_str());
         fflush(stdout);
       }
       if (g_flags.is_dry_run) {
@@ -513,7 +682,7 @@ class Executor {
         // child can print the recipes it would execute. Ordinary recipes
         // remain unexecuted. The normalized MAKEFLAGS installed by
         // UpdateMakeFlags carries -n into the child Kati process.
-        if (recursive) {
+        if (recursive || command.force_run) {
           // A recursive make is an opaque operation from this executor's
           // point of view.  Its child may update the make state, included
           // files, or directory layout that another recursive child is
@@ -527,7 +696,8 @@ class Executor {
               command.shellflag.empty() ? shellflag_ : command.shellflag;
           AcquireJob();
           const int result =
-              RunRecipe(command_shell, command_shellflag, command.cmd, false);
+              RunRecipe(command_shell, command_shellflag, command.cmd, false,
+                        command.environment, command.unset_environment);
           ReleaseJob();
           if (result != 0 && !command.ignore_error) {
             node_failed = true;
@@ -567,7 +737,8 @@ class Executor {
             command.shellflag.empty() ? shellflag_ : command.shellflag;
         AcquireJob();
         int result = RunRecipe(command_shell, command_shellflag, command_text,
-                               !recursive);
+                               !recursive, command.environment,
+                               command.unset_environment);
         ReleaseJob();
         ran_recipe = true;
         if (result != 0) {
@@ -589,8 +760,13 @@ class Executor {
       }
     }
 
-    const double completed_ts =
-        ran_recipe ? GetTimestamp(n.output.c_str()) : output_ts;
+    double completed_ts =
+        ran_recipe ? GetTimestamp(n.output.c_str()) : logical_ts;
+    // A successful recipe counts as updating its target for this invocation,
+    // even if it deliberately leaves no file behind (Automake's force rules
+    // are a common example).  Dependents must observe that logical update.
+    if (ran_recipe && !node_failed && completed_ts == kNotExist)
+      completed_ts = std::numeric_limits<double>::infinity();
     {
       std::lock_guard<std::mutex> lock(state_mu_);
       if (ran_recipe && !node_failed)
@@ -607,16 +783,20 @@ class Executor {
   int RunRecipe(const std::string& shell,
                 const std::string& shellflag,
                 const std::string& command,
-                bool acquire_job_token) {
+                bool acquire_job_token,
+                const std::vector<std::string>& environment,
+                const std::vector<std::string>& unset_environment) {
     std::string unused;
     if (g_flags.output_sync == Flags::OutputSync::kNone) {
-      return RunCommand(shell, shellflag, command, RedirectStderr::STDOUT,
-                        &unused, acquire_job_token,
-                        [this](std::string_view data) {
-                          std::lock_guard<std::mutex> lock(output_mu_);
-                          fwrite(data.data(), 1, data.size(), stdout);
-                          fflush(stdout);
-                        });
+      return RunCommand(
+          shell, shellflag, command, RedirectStderr::NONE, &unused,
+          acquire_job_token,
+          [this](std::string_view data) {
+            std::lock_guard<std::mutex> lock(output_mu_);
+            fwrite(data.data(), 1, data.size(), stdout);
+            fflush(stdout);
+          },
+          g_flags.make_level + 1, &environment, &unset_environment);
     }
     if (g_flags.output_sync == Flags::OutputSync::kLine) {
       std::string pending;
@@ -625,20 +805,22 @@ class Executor {
         fwrite(data.data(), 1, data.size(), stdout);
         fflush(stdout);
       };
-      const int status =
-          RunCommand(shell, shellflag, command, RedirectStderr::STDOUT, &unused,
-                     acquire_job_token, [&](std::string_view data) {
-                       pending.append(data);
-                       size_t end;
-                       while ((end = pending.find('\n')) != std::string::npos) {
-                         emit(std::string_view(pending).substr(0, end + 1));
-                         pending.erase(0, end + 1);
-                       }
-                       if (pending.size() > 65536) {
-                         emit(pending);
-                         pending.clear();
-                       }
-                     });
+      const int status = RunCommand(
+          shell, shellflag, command, RedirectStderr::STDOUT, &unused,
+          acquire_job_token,
+          [&](std::string_view data) {
+            pending.append(data);
+            size_t end;
+            while ((end = pending.find('\n')) != std::string::npos) {
+              emit(std::string_view(pending).substr(0, end + 1));
+              pending.erase(0, end + 1);
+            }
+            if (pending.size() > 65536) {
+              emit(pending);
+              pending.clear();
+            }
+          },
+          g_flags.make_level + 1, &environment, &unset_environment);
       if (!pending.empty())
         emit(pending);
       return status;
@@ -648,7 +830,8 @@ class Executor {
     std::string buffered;
     const int status = RunCommand(
         shell, shellflag, command, RedirectStderr::STDOUT, &unused,
-        acquire_job_token, [&](std::string_view data) {
+        acquire_job_token,
+        [&](std::string_view data) {
           if (spool == nullptr &&
               buffered.size() + data.size() <= kMemoryLimit) {
             buffered.append(data);
@@ -665,7 +848,8 @@ class Executor {
           }
           if (fwrite(data.data(), 1, data.size(), spool) != data.size())
             PERROR("spool write failed");
-        });
+        },
+        g_flags.make_level + 1, &environment, &unset_environment);
     if (spool != nullptr && fseek(spool, 0, SEEK_SET) != 0)
       PERROR("spool rewind failed");
     {
@@ -829,7 +1013,9 @@ ExecResult Exec(const std::vector<NamedDepNode>& roots,
     for (const auto& dep : node->validations)
       pending.push_back(dep.second);
   }
-  if (executor.Count() == 0) {
+  const char* kati_verbose = getenv("KATI_VERBOSE");
+  if (executor.Count() == 0 && !g_flags.is_silent_mode &&
+      !(kati_verbose != nullptr && std::string_view(kati_verbose) == "1")) {
     for (auto const& root : roots) {
       printf("kati: Nothing to be done for `%s'.\n", root.first.c_str());
     }

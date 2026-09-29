@@ -42,7 +42,7 @@ struct Flags {
   bool is_question;
   bool keep_going;
   bool is_touch;
-  OutputSync output_sync = OutputSync::kTarget;
+  OutputSync output_sync = OutputSync::kNone;
   bool is_silent_mode;
   bool is_syntax_check_only;
   bool regen;
@@ -51,6 +51,7 @@ struct Flags {
   bool use_find_emulator;
   bool color_warnings;
   bool no_builtin_rules;
+  bool environment_overrides;
   bool no_ninja_prelude;
   bool use_ninja_phony_output;
   bool use_ninja_validations;
@@ -83,6 +84,7 @@ struct Flags {
   const char* working_dir;  // -C <dir>
   int num_cpus;
   int num_jobs;
+  int make_level = 0;
   int remote_num_jobs;
   std::string executable_path;
   std::vector<const char*> subkati_args;

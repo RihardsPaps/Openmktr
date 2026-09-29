@@ -55,17 +55,6 @@ class WordWriter {
   bool needs_space_;
 };
 
-// Temporary modifies s[s.size()] to '\0'.
-class ScopedTerminator {
- public:
-  explicit ScopedTerminator(std::string_view s);
-  ~ScopedTerminator();
-
- private:
-  std::string_view s_;
-  char c_;
-};
-
 template <class String>
 inline std::string JoinStrings(std::vector<String> v, const char* sep) {
   std::string r;

@@ -20,6 +20,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <algorithm>
 
 #include "log.h"
 #include "strutil.h"
@@ -97,6 +98,12 @@ void Flags::Parse(int argc, char** argv) {
   executable_path = GetExecutablePath();
   subkati_args.push_back(executable_path.c_str());
   num_jobs = num_cpus = sysconf(_SC_NPROCESSORS_ONLN);
+  if (const char* inherited_level = getenv("MAKELEVEL")) {
+    char* end = nullptr;
+    long level = strtol(inherited_level, &end, 10);
+    if (end != inherited_level && *end == '\0' && level >= 0 && level < INT_MAX)
+      make_level = static_cast<int>(level);
+  }
   const char* num_jobs_str;
   const char* old_file;
   const char* what_if_file;
@@ -156,21 +163,54 @@ void Flags::Parse(int argc, char** argv) {
 
     for (size_t i = 0; i < makeflags_tokens.size(); ++i) {
       const std::string& tok = makeflags_tokens[i];
-      // GNU make carries -r in MAKEFLAGS so recursive makes also disable
-      // built-in implicit rules.  Kati's long spelling is accepted below,
-      // but recursive GNU make invocations use this short form.
-      if (tok == "-r") {
-        no_builtin_rules = true;
-      } else if (tok.size() > 2 && tok[0] == '-' && tok[1] != '-') {
+      // Execution modes in MAKEFLAGS apply to recursive invocations too.
+      // In particular, a child of `make -n` must print its recipes without
+      // executing them.  GNU make may combine short flags into one word.
+      if (tok.size() > 1 && tok[0] == '-' && tok[1] != '-') {
         for (size_t j = 1; j < tok.size(); ++j) {
           if (tok[j] == 'C' || tok[j] == 'f' || tok[j] == 'I' ||
               tok[j] == 'j' || tok[j] == 'o' || tok[j] == 'W')
             break;
-          if (tok[j] == 'r')
-            no_builtin_rules = true;
+          switch (tok[j]) {
+            case 'r':
+              no_builtin_rules = true;
+              break;
+            case 'e':
+              environment_overrides = true;
+              break;
+            case 'n':
+              is_dry_run = true;
+              break;
+            case 'q':
+              is_question = true;
+              break;
+            case 'k':
+              keep_going = true;
+              break;
+            case 's':
+              is_silent_mode = true;
+              break;
+            case 't':
+              is_touch = true;
+              break;
+          }
         }
       }
-      if (tok == "-I" || tok == "--include-dir") {
+      if (tok == "--dry-run" || tok == "--just-print")
+        is_dry_run = true;
+      else if (tok == "--question")
+        is_question = true;
+      else if (tok == "--keep-going")
+        keep_going = true;
+      else if (tok == "--silent" || tok == "--quiet")
+        is_silent_mode = true;
+      else if (tok == "--touch")
+        is_touch = true;
+      else if (tok == "--no-builtin-rules")
+        no_builtin_rules = true;
+      else if (tok == "--environment-overrides")
+        environment_overrides = true;
+      if (tok == "-I" || tok == "--include-dir" || tok == "--include") {
         if (i + 1 < makeflags_tokens.size())
           include_dirs.push_back(makeflags_tokens[++i]);
       } else if (HasPrefix(tok, "--include-dir=")) {
@@ -189,7 +229,7 @@ void Flags::Parse(int argc, char** argv) {
 
   for (int i = 1; i < argc; i++) {
     const char* arg = argv[i];
-    if (strcmp(arg, "--version") == 0) {
+    if (strcmp(arg, "--version") == 0 || strcmp(arg, "-v") == 0) {
       printf("GNU Make 4.2.1\nckati %s\n", kGitVersion);
       exit(0);
     }
@@ -203,12 +243,37 @@ void Flags::Parse(int argc, char** argv) {
       for (size_t pos = 1; arg[pos] != '\0'; pos++) {
         char option = arg[pos];
 
-        if (option == 'c' || option == 'd' || option == 'i' || option == 'n' ||
-            option == 'q' || option == 's' || option == 't' || option == 'k' ||
-            option == 'o' || option == 'r') {
+        if (option == 'c' || option == 'd' || option == 'e' || option == 'i' ||
+            option == 'n' || option == 'q' || option == 's' || option == 't' ||
+            option == 'k' || option == 'r' || option == 'w') {
           handled = true;
-          if (option == 'r')
-            no_builtin_rules = true;
+          switch (option) {
+            case 'c':
+              is_syntax_check_only = true;
+              break;
+            case 'e':
+              environment_overrides = true;
+              break;
+            case 'i':
+            case 'n':
+              is_dry_run = true;
+              break;
+            case 'q':
+              is_question = true;
+              break;
+            case 's':
+              is_silent_mode = true;
+              break;
+            case 't':
+              is_touch = true;
+              break;
+            case 'k':
+              keep_going = true;
+              break;
+            case 'r':
+              no_builtin_rules = true;
+              break;
+          }
           continue;
         }
 
@@ -217,6 +282,12 @@ void Flags::Parse(int argc, char** argv) {
 
           const char* value = arg + pos + 1;
           if (*value == '\0') {
+            if (option == 'j' &&
+                (i + 1 >= argc ||
+                 !isdigit(static_cast<unsigned char>(argv[i + 1][0])))) {
+              num_jobs = std::max(1, num_cpus);
+              break;
+            }
             if (i + 1 >= argc) {
               valid_cluster = false;
               break;
@@ -286,6 +357,11 @@ void Flags::Parse(int argc, char** argv) {
     } else if (!strcmp(arg, "-s") || !strcmp(arg, "--silent") ||
                !strcmp(arg, "--quiet")) {
       is_silent_mode = true;
+    } else if (!strcmp(arg, "-w") || !strcmp(arg, "--print-directory")) {
+      // Accepted for GNU make command-line compatibility. Directory changes
+      // are already handled by -C and recursive recipes.
+    } else if (!strcmp(arg, "-e") || !strcmp(arg, "--environment-overrides")) {
+      environment_overrides = true;
     } else if (!strcmp(arg, "--output-sync")) {
       output_sync = OutputSync::kTarget;
     } else if (HasPrefix(arg, "--output-sync=")) {
@@ -301,7 +377,8 @@ void Flags::Parse(int argc, char** argv) {
       enable_kati_warnings = true;
     } else if (!strcmp(arg, "--ninja")) {
       generate_ninja = true;
-    } else if (!strcmp(arg, "--no-print-directory")) {
+    } else if (!strcmp(arg, "--no-print-directory") ||
+               !strcmp(arg, "--no-print-dir")) {
       // GNU make exposes this command-line option through MAKEFLAGS.
       // Recursive makefiles use $(MAKEFLAGS) to decide whether another
       // bootstrap invocation is necessary.
@@ -378,6 +455,8 @@ void Flags::Parse(int argc, char** argv) {
       should_propagate = false;
     } else if (ParseCommandLineOptionWithArg("-I", argv, &i, &include_dir) ||
                ParseCommandLineOptionWithArg("--include-dir", argv, &i,
+                                             &include_dir) ||
+               ParseCommandLineOptionWithArg("--include", argv, &i,
                                              &include_dir)) {
       include_dirs.emplace_back(include_dir);
       command_line_include_dirs.emplace_back(include_dir);
@@ -392,6 +471,17 @@ void Flags::Parse(int argc, char** argv) {
       for (std::string_view pat :
            WordScanner(variable_assignment_trace_filter)) {
         traced_variables_pattern.push_back(Pattern(pat));
+      }
+    } else if (!strcmp(arg, "-j")) {
+      if (i + 1 < argc && isdigit(static_cast<unsigned char>(argv[i + 1][0]))) {
+        num_jobs_str = argv[++i];
+        char* end = nullptr;
+        long parsed = strtol(num_jobs_str, &end, 10);
+        if (*end != '\0' || parsed <= 0 || parsed > INT_MAX)
+          ERROR("Invalid -j flag: %s", num_jobs_str);
+        num_jobs = static_cast<int>(parsed);
+      } else {
+        num_jobs = std::max(1, num_cpus);
       }
     } else if (ParseCommandLineOptionWithArg("-j", argv, &i, &num_jobs_str)) {
       char* end = nullptr;

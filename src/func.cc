@@ -25,8 +25,8 @@
 #include <unistd.h>
 
 #include <algorithm>
-#include <cerrno>
 #include <cctype>
+#include <cerrno>
 #include <iterator>
 #include <memory>
 #include <sstream>
@@ -434,10 +434,11 @@ void RealpathFunc(const std::vector<Value*>& args,
   }
 
   WordWriter ww(s);
+  std::string path;
   for (std::string_view tok : WordScanner(text)) {
-    ScopedTerminator st(tok);
+    path.assign(tok);
     char buf[PATH_MAX];
-    if (realpath(tok.data(), buf))
+    if (realpath(path.c_str(), buf))
       ww.Write(buf);
   }
 }
@@ -757,6 +758,11 @@ void CallFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
         args[i]->Eval(ev), VarOrigin::AUTOMATIC, nullptr, Loc()));
   }
   std::vector<std::unique_ptr<ScopedGlobalVar>> sv;
+  // $(0) names the function being called. Forwarding wrappers use it to
+  // select another function, and nested calls must restore the outer name.
+  SimpleVar called_name(std::string(func_sym.str()), VarOrigin::AUTOMATIC,
+                        nullptr, Loc());
+  ScopedGlobalVar zero(tmpvar_names[0], &called_name);
   for (size_t i = 1;; i++) {
     std::string s;
     Symbol tmpvar_name_sym;
@@ -844,8 +850,8 @@ void LetFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
         ++value_it;
       }
     }
-    vars.emplace_back(std::make_unique<SimpleVar>(
-        value, VarOrigin::AUTOMATIC, nullptr, Loc()));
+    vars.emplace_back(std::make_unique<SimpleVar>(value, VarOrigin::AUTOMATIC,
+                                                  nullptr, Loc()));
     if (ev->current_scope()) {
       scoped.emplace_back(std::make_unique<ScopedVar>(
           ev->current_scope(), symbols[i], vars.back().get()));
@@ -1006,7 +1012,8 @@ static void FileWriteFunc_(Evaluator* ev,
                            bool rerun) {
   FILE* f = fopen(filename.c_str(), append ? "ab" : "wb");
   if (f == NULL) {
-    ev->Error("*** fopen failed.");
+    ev->Error(StringPrintf("*** fopen %s failed: %s.", filename.c_str(),
+                           strerror(errno)));
   }
 
   if (fwrite(&text[0], text.size(), 1, f) != 1) {
@@ -1052,7 +1059,8 @@ void FileFunc_(const std::vector<Value*>& args,
 
       if (rerun && ShouldStoreCommandResult(filename_str)) {
         CommandResult* cr = new CommandResult();
-        cr->op = Exists(filename_str) ? CommandOp::READ : CommandOp::READ_MISSING;
+        cr->op =
+            Exists(filename_str) ? CommandOp::READ : CommandOp::READ_MISSING;
         cr->cmd = filename_str;
         cr->loc = ev->loc();
         g_command_results.push_back(cr);
@@ -1327,9 +1335,9 @@ class GuileReader {
 
  private:
   [[noreturn]] void Fail(Evaluator* ev, std::string_view reason) {
-    ev->Error(StringPrintf(
-        "*** guile: unsupported or invalid pure expression (%s)",
-        std::string(reason).c_str()));
+    ev->Error(
+        StringPrintf("*** guile: unsupported or invalid pure expression (%s)",
+                     std::string(reason).c_str()));
     abort();
   }
 
@@ -1457,9 +1465,9 @@ static std::string EvalGuileExpr(const GuileExpr& expr, Evaluator* ev) {
     return expr.items.size() == 4 ? EvalGuileExpr(expr.items[3], ev) : "";
   }
 
-  ev->Error(StringPrintf(
-      "*** guile: procedure `%s' is unsupported without Guile",
-      function.c_str()));
+  ev->Error(
+      StringPrintf("*** guile: procedure `%s' is unsupported without Guile",
+                   function.c_str()));
   return "";
 }
 

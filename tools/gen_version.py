@@ -3,6 +3,7 @@
 
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -10,7 +11,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 revision = os.environ.get("KATI_SOURCE_REVISION", "")
-if not revision:
+if not revision and shutil.which("git"):
     result = subprocess.run(
         ["git", "rev-parse", "--verify", "--short=12", "HEAD"],
         cwd=ROOT, text=True, capture_output=True, check=False,
