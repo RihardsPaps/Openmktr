@@ -34,6 +34,47 @@ def run(command, directory, environment, stdin=None):
 
 
 class MakeCompatibilityRegressions(unittest.TestCase):
+    def test_ninja_vpath_provider_tracks_later_source_and_prerequisite_changes(self):
+        with tempfile.TemporaryDirectory(prefix="kati-vpath-ninja-") as temp:
+            directory = Path(temp)
+            source = directory / "src" / "item"
+            source.parent.mkdir()
+            source.write_text("old\n")
+            prerequisite = directory / "input"
+            prerequisite.write_text("input\n")
+            os.utime(source, (1000000100, 1000000100))
+            os.utime(prerequisite, (1000000000, 1000000000))
+            (directory / "Makefile").write_text(
+                "VPATH = src\n"
+                "all: item\n\t@cat $< > result\n"
+                "item: input\n\t@echo rebuilt > $@\n"
+            )
+            environment = dict(os.environ)
+            environment.pop("MAKEFLAGS", None)
+            environment.pop("MFLAGS", None)
+
+            status, output = run([str(KATI), "--ninja", "-j1", "all"],
+                                 directory, environment)
+            self.assertEqual(status, 0, output)
+
+            def build():
+                status, output = run(["sh", "ninja.sh", "-j1"], directory,
+                                     environment)
+                self.assertEqual(status, 0, output)
+                return (directory / "result").read_text()
+
+            self.assertEqual(build(), "old\n")
+            self.assertTrue((directory / "item").is_symlink())
+            source.write_text("new\n")
+            os.utime(source, (1000000200, 1000000200))
+            self.assertEqual(build(), "new\n")
+            self.assertTrue((directory / "item").is_symlink())
+            prerequisite.write_text("changed\n")
+            os.utime(prerequisite, (1000000300, 1000000300))
+            self.assertEqual(build(), "rebuilt\n")
+            self.assertFalse((directory / "item").is_symlink())
+            self.assertEqual(source.read_text(), "new\n")
+
     def test_make_cases(self):
         environment = {
             key: value for key, value in os.environ.items()

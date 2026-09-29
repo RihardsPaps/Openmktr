@@ -615,7 +615,19 @@ class NinjaGenerator {
 
   void EmitNode(const NinjaNode& nn, std::ostream& out) {
     const DepNode* node = nn.node;
-    const std::vector<Command>& commands = nn.commands;
+    // Ninja needs a concrete local output for a rule-bearing VPATH target.
+    // Materialize a local link to the source only while its ordinary
+    // prerequisites are older. This keeps the rule's edges reachable and
+    // gives parent recipes a usable logical filename. The link follows later
+    // source updates without copying stale contents into the build tree.
+    std::vector<Command> commands = nn.commands;
+    const bool vpath_output = node->vpath_provider.IsValid() && !node->is_phony;
+    if (vpath_output && commands.empty()) {
+      Command materialize(node->output);
+      materialize.cmd = ":";
+      materialize.echo = false;
+      commands.push_back(std::move(materialize));
+    }
 
     // Make distinguishes "doc" from "doc/", but Ninja normalizes both to
     // the same path.  If the directory already exists and "doc" is another
@@ -663,6 +675,33 @@ class NinjaGenerator {
       // valid shell no-op, including when the leaf-output guard is added.
       if (cmd_buf.empty())
         cmd_buf = ":";
+      if (vpath_output) {
+        const std::string output = ShellQuote(node->output.str());
+        const std::string provider = ShellQuote(node->vpath_provider.str());
+        std::string current = "if { [ ! -e " + output + " ] || [ -L " + output +
+                              " ]; } && [ -e " + provider + " ]";
+        for (const NamedDepNode& dep : node->deps) {
+          if (dep.second->is_phony) {
+            current += " && false";
+            break;
+          }
+          const std::string input = ShellQuote(dep.first.str());
+          current += " && [ -e " + input + " ] && [ ! " + input + " -nt " +
+                     provider + " ]";
+        }
+        const std::string link_target =
+            node->vpath_provider.str().front() == '/'
+                ? std::string(node->vpath_provider.str())
+                : working_dir_ + "/" + node->vpath_provider.str();
+        std::string materialize = "rm -f " + output + " && ln -s " +
+                                  ShellQuote(link_target) + " " + output;
+        const std::string_view parent = Dirname(node->output.str());
+        if (!parent.empty() && parent != ".")
+          materialize = "mkdir -p " + ShellQuote(parent) + " && " + materialize;
+        cmd_buf = current + "; then " + materialize + "; else " + "if [ -L " +
+                  output + " ]; then rm -f " + output + "; fi; " + cmd_buf +
+                  "; fi";
+      }
       // Ninja has no build-log entry for files that predate a newly emitted
       // graph, and runs their recipes even when make would find them current.
       // OpenSSL's configdata.pm recipe deliberately fails after reconfiguring,
@@ -886,6 +925,8 @@ class NinjaGenerator {
         continue;
       out << " " << EscapeBuildTarget(d.first).c_str();
     }
+    if (node->vpath_provider.IsValid() && !node->is_phony)
+      out << " " << EscapeBuildTarget(node->vpath_provider);
     bool has_order_only = false;
     for (auto const& d : node->order_onlys) {
       if (IsCycleEdge(node->output, d.first) ||

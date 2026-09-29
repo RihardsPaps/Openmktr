@@ -9,6 +9,7 @@ mountpoint -q "$root/report" || mount --bind "$workspace/validation" "$root/repo
 cp -R "$workspace/src/." "$root/workspace/src/"
 for file in tests/correctness.py tests/make_compat_regressions.py \
             tests/make_compat_regressions.json validation/boot_openwrt.py \
+            validation/verify_xorg.py \
             tests/golden.json tests/known_crashes.json \
             tests/version_generator.py tools/gen_version.py; do
     cp "$workspace/$file" "$root/workspace/$file"

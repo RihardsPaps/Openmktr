@@ -42,6 +42,38 @@ bool IsSuffixRule(Symbol output);
 
 namespace {
 
+// A target-specific += suffix starts with a separator so it can be joined to
+// an inherited value. When that value expands to empty, GNU make omits the
+// separator. Keep the inherited expression live until the consuming recipe.
+class TargetAppendValue : public Value {
+ public:
+  TargetAppendValue(const Loc& loc, const Evaluable* base, Value* suffix)
+      : Value(loc), base_(base), suffix_(suffix) {}
+
+  void Eval(Evaluator* ev, std::string* out) const override {
+    std::string prefix;
+    if (base_)
+      base_->Eval(ev, &prefix);
+    std::string suffix;
+    suffix_->Eval(ev, &suffix);
+    if (prefix.empty() && !suffix.empty() && suffix.front() == ' ')
+      suffix.erase(suffix.begin());
+    *out += prefix;
+    *out += suffix;
+  }
+
+  bool IsFunc(Evaluator* ev) const override {
+    return (base_ && base_->IsFunc(ev)) || suffix_->IsFunc(ev);
+  }
+
+ protected:
+  std::string DebugString_() const override { return "target append"; }
+
+ private:
+  const Evaluable* base_;
+  Value* suffix_;
+};
+
 static constexpr const char* kDefaultSuffixes[] = {
     "out",  "a",      "ln",  "o",   "c",   "cc",   "C",   "cpp", "p",
     "f",    "F",      "m",   "r",   "y",   "l",    "ym",  "lm",  "s",
@@ -159,7 +191,7 @@ class RuleTrie {
       delete p.second;
   }
 
-  void Add(std::string_view name, const Rule* rule) {
+  void Add(std::string_view name, const Rule* rule, bool replace = true) {
     if (name.empty() || name[0] == '%') {
       // GNU make keeps distinct implicit rules in definition order, but a
       // later rule with the same target and prerequisites replaces the
@@ -175,7 +207,8 @@ class RuleTrie {
             previous->secondary_expansion == rule->secondary_expansion &&
             previous->secondary_prerequisites ==
                 rule->secondary_prerequisites) {
-          entry.rule = rule;
+          if (replace)
+            entry.rule = rule;
           return;
         }
       }
@@ -187,7 +220,7 @@ class RuleTrie {
     if (p.second) {
       p.first->second = new RuleTrie();
     }
-    p.first->second->Add(name.substr(1), rule);
+    p.first->second->Add(name.substr(1), rule, replace);
   }
 
   void Get(std::string_view name, std::vector<const Rule*>* rules) const {
@@ -413,10 +446,23 @@ struct RuleMerger {
           return;
         const size_t group = n->double_colon_group_inputs.size();
         n->double_colon_group_inputs.emplace_back();
-        n->double_colon_group_has_prerequisites.push_back(
-            !rule->inputs.empty() || !rule->order_only_inputs.empty() ||
-            rule->secondary_expansion);
-        ApplyOutputPattern(*rule, output, rule->inputs,
+        std::vector<Symbol> first_inputs;
+        auto has_first_pass_input = [&](const std::vector<Symbol>& inputs) {
+          bool any = false;
+          for (Symbol input : inputs) {
+            if (!rule->secondary_expansion ||
+                input.str().find('$') == std::string_view::npos) {
+              any = true;
+              if (&inputs == &rule->inputs)
+                first_inputs.push_back(input);
+            }
+          }
+          return any;
+        };
+        const bool normal = has_first_pass_input(rule->inputs);
+        const bool order_only = has_first_pass_input(rule->order_only_inputs);
+        n->double_colon_group_has_prerequisites.push_back(normal || order_only);
+        ApplyOutputPattern(*rule, output, first_inputs,
                            &n->double_colon_group_inputs.back());
         n->cmds.insert(n->cmds.end(), rule->cmds.begin(), rule->cmds.end());
         n->double_colon_group_for_cmd.insert(
@@ -971,7 +1017,10 @@ class DepBuilder {
                        return dotless_rank(a) < dotless_rank(b);
                      });
     for (const auto& rule : dotless_suffix_rules_)
-      implicit_rules_->Add(rule->output_patterns.front().str(), rule.get());
+      // A suffix conversion is a fallback. An equivalent explicit pattern
+      // already in the trie keeps its recipe or cancellation.
+      implicit_rules_->Add(rule->output_patterns.front().str(), rule.get(),
+                           false);
     for (auto& p : rules_) {
       auto vars = LookupRuleVars(p.first);
       if (!vars) {
@@ -1002,6 +1051,20 @@ class DepBuilder {
     }
   }
 
+  void StoreDotlessSuffixRule(std::shared_ptr<Rule> rule) {
+    // Repeating the same suffix conversion replaces its recipe without
+    // changing the conversion's position in .SUFFIXES precedence.
+    for (std::shared_ptr<Rule>& candidate : dotless_suffix_rules_) {
+      if (candidate->output_patterns == rule->output_patterns &&
+          candidate->inputs == rule->inputs &&
+          candidate->order_only_inputs == rule->order_only_inputs) {
+        candidate = std::move(rule);
+        return;
+      }
+    }
+    dotless_suffix_rules_.push_back(std::move(rule));
+  }
+
   bool PopulateSuffixRule(const Rule* rule, Symbol output) {
     if (!IsActiveSuffixRule(output))
       return false;
@@ -1015,7 +1078,7 @@ class DepBuilder {
       converted->inputs = {Intern("%" + input_suffix)};
       converted->outputs.clear();
       converted->output_patterns = {Intern("%" + output_suffix)};
-      dotless_suffix_rules_.push_back(converted);
+      StoreDotlessSuffixRule(std::move(converted));
       return true;
     }
 
@@ -1026,7 +1089,7 @@ class DepBuilder {
       converted->inputs = {Intern("%" + std::string(output_name))};
       converted->outputs.clear();
       converted->output_patterns = {Intern("%")};
-      dotless_suffix_rules_.push_back(converted);
+      StoreDotlessSuffixRule(std::move(converted));
       return true;
     }
 
@@ -1283,7 +1346,7 @@ class DepBuilder {
                                                input.str());
 
           for (Symbol prerequisite : ExpandImplicitPrerequisite(buf)) {
-            if (prerequisite == output) {
+            if (prerequisite == output && !Exists(prerequisite)) {
               ok = false;
               break;
             }
@@ -1309,7 +1372,7 @@ class DepBuilder {
             std::string buf = SubstituteImplicitPrerequisite(
                 output, output_pattern, input.str());
             for (Symbol prerequisite : ExpandImplicitPrerequisite(buf)) {
-              if (prerequisite == output) {
+              if (prerequisite == output && !Exists(prerequisite)) {
                 ok = false;
                 break;
               }
@@ -1445,13 +1508,12 @@ class DepBuilder {
           }
           Value* combined = Value::NewExpr(value->Location(), base_value,
                                            value->TargetAppend());
-          if (std::string_view(value->Flavor()) == "simple")
-            value = new SimpleVar(value->Origin(), value->Definition(),
-                                  value->Location(), ev_, combined);
-          else
-            value = new RecursiveVar(combined, value->Origin(),
-                                     value->Definition(), value->Location(),
-                                     std::string_view("*pattern append*"));
+          // Evaluating a SimpleVar here would freeze references before the
+          // target's own variable scope is installed. Resolve the complete
+          // append at BuildPlan/recipe time instead.
+          value = new RecursiveVar(combined, value->Origin(),
+                                   value->Definition(), value->Location(),
+                                   std::string_view("*pattern append*"));
           if (base->TargetAppend()) {
             value->SetAssignOp(AssignOp::PLUS_EQ);
             value->SetTargetAppend(combined);
@@ -1891,16 +1953,30 @@ class DepBuilder {
           if (old_var->IsDefined()) {
             // TODO: This would be incorrect and has a leak.
             std::shared_ptr<std::string> s = std::make_shared<std::string>();
-            old_var->Eval(ev_, s.get());
             if (var->TargetAppend()) {
-              var->TargetAppend()->Eval(ev_, s.get());
+              Value* appended = new TargetAppendValue(var->Location(), old_var,
+                                                      var->TargetAppend());
+              if (std::string_view(old_var->Flavor()) == "simple")
+                new_var = new SimpleVar(old_var->Origin(), frame.Current(),
+                                        n->loc, ev_, appended);
+              else
+                new_var = new RecursiveVar(appended, old_var->Origin(),
+                                           frame.Current(), n->loc,
+                                           std::string_view("*target append*"));
             } else {
+              old_var->Eval(ev_, s.get());
               if (!s->empty())
                 *s += ' ';
               new_var->Eval(ev_, s.get());
+              new_var =
+                  new SimpleVar(*s, old_var->Origin(), frame.Current(), n->loc);
             }
+          } else if (var->TargetAppend()) {
+            Value* appended = new TargetAppendValue(var->Location(), nullptr,
+                                                    var->TargetAppend());
             new_var =
-                new SimpleVar(*s, old_var->Origin(), frame.Current(), n->loc);
+                new RecursiveVar(appended, var->Origin(), frame.Current(),
+                                 n->loc, std::string_view("*target append*"));
           }
         } else if (var->op() == AssignOp::QUESTION_EQ) {
           Var* old_var = ev_->LookupVar(name);
@@ -1983,6 +2059,7 @@ class DepBuilder {
                                         frame.Current(), n->loc)));
       }
       const size_t prior_inputs = n->actual_inputs.size();
+      const size_t prior_order_only = n->actual_order_only_inputs.size();
       active_merger->FillOneSecondaryInput(
           n->lexical_output, secondary_rule, n, ev_,
           secondary_rule == pattern_rule.get());
@@ -1995,7 +2072,8 @@ class DepBuilder {
           auto& inputs = n->double_colon_group_inputs[group];
           inputs.insert(inputs.end(), n->actual_inputs.begin() + prior_inputs,
                         n->actual_inputs.end());
-          if (inputs.size() > 0)
+          if (!inputs.empty() ||
+              n->actual_order_only_inputs.size() > prior_order_only)
             n->double_colon_group_has_prerequisites[group] = true;
         }
       }

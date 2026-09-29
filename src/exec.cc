@@ -599,6 +599,9 @@ class Executor {
                                   ? std::numeric_limits<double>::infinity()
                                   : output_ts;
 
+    if (n.vpath_provider.IsValid() && (n.is_phony || !commands.empty()))
+      n.vpath_discarded.store(true, std::memory_order_release);
+
     if (g_flags.is_question) {
       const bool any_group_needs_build =
           std::any_of(group_needs_build.begin(), group_needs_build.end(),

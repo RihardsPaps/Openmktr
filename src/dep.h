@@ -15,6 +15,7 @@
 #ifndef DEP_H_
 #define DEP_H_
 
+#include <atomic>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -45,6 +46,9 @@ struct DepNode {
   // Existing source-tree copy of a rule-bearing logical target. The rule and
   // its prerequisites remain in the graph until execution decides freshness.
   Symbol vpath_provider;
+  // Direct execution sets this when a rule discards a previously usable
+  // VPATH copy. Automatic variables must then retain the logical filename.
+  mutable std::atomic<bool> vpath_discarded{false};
   std::vector<Value*> cmds;
   std::vector<NamedDepNode> deps;
   std::vector<NamedDepNode> order_onlys;

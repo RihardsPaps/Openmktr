@@ -909,5 +909,245 @@
       "result": "NEW",
       "input": "NEW"
     }
+  },
+  {
+    "name": "pattern_append_no_global",
+    "text": "%.o: X += pattern\na.o: X += exact\nall: a.o\na.o:\n\t@printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<pattern exact>\n"
+    }
+  },
+  {
+    "name": "pattern_append_empty_global",
+    "text": "X =\n%.o: X += pattern\na.o: X += exact\nall: a.o\na.o:\n\t@printf \"<%s>\\n\" \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<pattern exact>\n"
+    }
+  },
+  {
+    "name": "pattern_append_deferred",
+    "text": "X = $(Y)\nY = global\n%.o: X += pattern\na.o: X += exact\na.o: Y = local\nall: a.o\na.o:\n\t@printf \"<%s>:%s\\n\" \"$(X)\" \"$(flavor X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<local pattern exact>:recursive\n"
+    }
+  },
+  {
+    "name": "pattern_append_child",
+    "text": "X = $(Y)\nY = global\n%.o: X += pattern\na.o: X += exact\na.o: Y = local\nall: a.o\na.o: child\n\t@echo \"$(X)\" >> result\nchild: Y = child\nchild:\n\t@echo \"$(X)\" >> result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "child pattern exact\nlocal pattern exact\n"
+    }
+  },
+  {
+    "name": "pattern_append_after_eval",
+    "text": "X = $(Y)\nY = global\n%.o: X += pattern\na.o: X += exact\nall: a.o\na.o:\n\t@$(eval Y = changed) echo \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "changed pattern exact\n"
+    }
+  },
+  {
+    "name": "double_secondary_empty",
+    "text": ".SECONDEXPANSION:\nall: out\nout:: $$(EMPTY)\n\t@echo rebuilt > result\n",
+    "files": {
+      "out": "old"
+    },
+    "times": {
+      "out": 1000000000
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "result": "rebuilt\n"
+    }
+  },
+  {
+    "name": "double_secondary_orderonly_empty",
+    "text": ".SECONDEXPANSION:\nall: out\nout:: | $$(EMPTY)\n\t@echo rebuilt > result\n",
+    "files": {
+      "out": "old"
+    },
+    "times": {
+      "out": 1000000000
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "result": "rebuilt\n"
+    }
+  },
+  {
+    "name": "vpath_phony",
+    "text": "VPATH = src\n.PHONY: item\nall: item\n\t@printf \"%s\\n\" \"$<\" > result\nitem:\n\t@true\n",
+    "files": {
+      "src/item": "old\n"
+    },
+    "ninja": false,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "item\n"
+    }
+  },
+  {
+    "name": "vpath_no_output_recipe",
+    "text": "VPATH = src\nall: item\n\t@echo \"$<\" > result\nitem: force\n\t@true\n.PHONY: force\n",
+    "files": {
+      "src/item": "old"
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "result": "item\n",
+      "item": null
+    }
+  },
+  {
+    "name": "vpath_current_ninja",
+    "text": "VPATH = src\nall: item\n\t@cat $< > result\nitem: input\n\t@echo rebuilt > $@\n",
+    "files": {
+      "src/item": "old\n",
+      "input": "input\n"
+    },
+    "times": {
+      "src/item": 1000000100,
+      "input": 1000000000
+    },
+    "ninja": true,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "old\n"
+    }
+  },
+  {
+    "name": "vpath_empty_rule_ninja",
+    "text": "VPATH = src\nall: item\n\t@cat $< > result\nitem: input\n",
+    "files": {
+      "src/item": "old\n",
+      "input": "input"
+    },
+    "times": {
+      "src/item": 1000000100,
+      "input": 1000000000
+    },
+    "ninja": true,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "old\n"
+    }
+  },
+  {
+    "name": "single_suffix_empty_cancel",
+    "text": ".SUFFIXES: .pre\n.pre:\n\t@echo suffix > $@\n%: %.pre\n\t@echo pattern > $@\nall: item\n",
+    "files": {
+      "item.pre": ""
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "item": "pattern\n"
+    }
+  },
+  {
+    "name": "suffix_empty_pattern_cancel",
+    "text": ".SUFFIXES: .pre\n.pre:\n\t@echo suffix > $@\n%: %.pre\nall: item\n",
+    "files": {
+      "item.pre": ""
+    },
+    "expected_status": 1,
+    "expected_files": {
+      "item": null
+    }
+  },
+  {
+    "name": "self_implicit_existing",
+    "text": "%.o: %.o input\n\t@echo first > $@\nall: foo.o\n",
+    "files": {
+      "foo.o": "old",
+      "input": ""
+    },
+    "times": {
+      "foo.o": 1000000000,
+      "input": 1000000100
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "foo.o": "first\n"
+    }
+  },
+  {
+    "name": "self_orderonly_existing",
+    "text": "%.o: input | %.o\n\t@echo first > $@\nall: foo.o\n",
+    "files": {
+      "foo.o": "old",
+      "input": ""
+    },
+    "times": {
+      "foo.o": 1000000000,
+      "input": 1000000100
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "foo.o": "first\n"
+    }
+  },
+  {
+    "name": "diagnostic_variable_target",
+    "text": "info_target = all\n$(info_target):\n\t@echo ok > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "ok\n"
+    }
+  },
+  {
+    "name": "diagnostic_real_rule",
+    "text": "$(info hello)all:\n\t@echo ok > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "ok\n"
+    }
+  },
+  {
+    "name": "define_operator_rhs",
+    "text": "define X = ignored\nvalue\nendef\nall:\n\t@echo \"$(X)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "value\n"
+    }
+  },
+  {
+    "name": "define_equals_name",
+    "text": "define a=b\nvalue\nendef\nall:\n\t@echo \"$(a=b)\" > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "\n"
+    }
+  },
+  {
+    "name": "single_suffix_redefinition",
+    "text": ".SUFFIXES:\n.SUFFIXES: .pre\n.pre:\n\t@echo first > $@\n.pre:\n\t@echo second > $@\nall: item\n",
+    "files": {
+      "item.pre": "old"
+    },
+    "expected_status": 0,
+    "expected_files": {
+      "item": "second\n"
+    }
+  },
+  {
+    "name": "vpath_subdir_current_ninja",
+    "text": "VPATH = src\nall: locale/item\n\t@cat $< > result\nlocale/item: input\n\t@echo rebuilt > $@\n",
+    "files": {
+      "src/locale/item": "old\n",
+      "input": "input\n"
+    },
+    "times": {
+      "src/locale/item": 1000000100,
+      "input": 1000000000
+    },
+    "ninja": true,
+    "expected_status": 0,
+    "expected_files": {
+      "result": "old\n"
+    }
   }
 ]

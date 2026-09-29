@@ -335,12 +335,41 @@ void AutoAtVar::Eval(Evaluator*, std::string* s) const {
     *s += n->lexical_output.str();
 }
 
-static Symbol EffectivePrerequisite(Evaluator* ev, Symbol input) {
-  if (!g_flags.generate_ninja && !Exists(input.str())) {
-    const std::string provider = ev->ResolveVpath(input);
-    if (!provider.empty())
-      return Intern(provider);
-  }
+static Symbol EffectivePrerequisite(Evaluator* ev,
+                                    const DepNode* node,
+                                    Symbol input) {
+  if (g_flags.generate_ninja || Exists(input.str()))
+    return input;
+  auto find_provider = [ev,
+                        input](const std::vector<NamedDepNode>& dependencies) {
+    for (const NamedDepNode& dependency : dependencies) {
+      const DepNode* child = dependency.second;
+      if (!(dependency.first == input) && !(child->lexical_output == input))
+        continue;
+      if (child->is_phony ||
+          child->vpath_discarded.load(std::memory_order_acquire))
+        return input;
+      if (child->vpath_provider.IsValid())
+        return child->vpath_provider;
+      if (!(child->output == input) && !child->has_rule)
+        return child->output;
+      const std::string resolved = ev->ResolveVpath(input);
+      if (!resolved.empty())
+        return Intern(resolved);
+      return input;
+    }
+    return Symbol();
+  };
+  Symbol provider = find_provider(node->deps);
+  if (!provider.IsValid())
+    provider = find_provider(node->order_onlys);
+  if (provider.IsValid())
+    return provider;
+  // Implicit suffix prerequisites can be materialized without a named
+  // dependency edge. They still use their VPATH source for automatic vars.
+  const std::string resolved = ev->ResolveVpath(input);
+  if (!resolved.empty())
+    return Intern(resolved);
   return input;
 }
 
@@ -350,7 +379,7 @@ void AutoLessVar::Eval(Evaluator* ev, std::string* s) const {
     return;
   auto& ai = n->actual_inputs;
   if (!ai.empty())
-    *s += EffectivePrerequisite(ev, ai[0]).str();
+    *s += EffectivePrerequisite(ev, n, ai[0]).str();
 }
 
 void AutoHatVar::Eval(Evaluator* ev, std::string* s) const {
@@ -360,7 +389,7 @@ void AutoHatVar::Eval(Evaluator* ev, std::string* s) const {
   std::unordered_set<std::string_view> seen;
   WordWriter ww(s);
   for (Symbol ai : n->actual_inputs) {
-    ai = EffectivePrerequisite(ev, ai);
+    ai = EffectivePrerequisite(ev, n, ai);
     if (seen.insert(ai.str()).second)
       ww.Write(ai.str());
   }
@@ -372,7 +401,7 @@ void AutoPlusVar::Eval(Evaluator* ev, std::string* s) const {
     return;
   WordWriter ww(s);
   for (Symbol ai : n->actual_inputs) {
-    ai = EffectivePrerequisite(ev, ai);
+    ai = EffectivePrerequisite(ev, n, ai);
     ww.Write(ai.str());
   }
 }
@@ -447,7 +476,7 @@ void AutoQuestionVar::Eval(Evaluator* ev, std::string* s) const {
     // newer-prerequisite list used by generated makefile refresh recipes.
     double target_age = ce_->target_age();
     for (Symbol ai : n->actual_inputs) {
-      ai = EffectivePrerequisite(ev, ai);
+      ai = EffectivePrerequisite(ev, n, ai);
       double input_age = GetTimestamp(ai.str());
       if (std::find(n->low_resolution_inputs.begin(),
                     n->low_resolution_inputs.end(),
@@ -478,7 +507,7 @@ void AutoPipeVar::Eval(Evaluator* ev, std::string* s) const {
     return;
   WordWriter ww(s);
   for (Symbol input : n->actual_order_only_inputs)
-    ww.Write(EffectivePrerequisite(ev, input).str());
+    ww.Write(EffectivePrerequisite(ev, n, input).str());
 }
 
 void AutoSuffixDVar::Eval(Evaluator* ev, std::string* s) const {

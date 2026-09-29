@@ -285,9 +285,25 @@ class Parser {
     // and never define a rule whose following tab-indented line is a recipe.
     // TF-A uses $(error ...) in a conditional immediately before a tabbed
     // endif; treating that expression as a rule swallows the endif.
-    const bool standalone_diagnostic = line.substr(0, 7) == "$(error" ||
-                                       line.substr(0, 9) == "$(warning" ||
-                                       line.substr(0, 6) == "$(info";
+    const bool standalone_diagnostic = [&] {
+      for (std::string_view name : {"error", "warning", "info"}) {
+        const std::string prefix = "$(" + std::string(name) + " ";
+        if (line.substr(0, prefix.size()) != prefix)
+          continue;
+        // The whole line must be a diagnostic call.  A variable named
+        // $(info_target), or $(info text) followed by a target, is a rule.
+        size_t depth = 1;
+        for (size_t i = 2; i < line.size(); ++i) {
+          if (line[i] == '$' && i + 1 < line.size() && line[i + 1] == '(') {
+            ++depth;
+            ++i;
+          } else if (line[i] == ')' && --depth == 0) {
+            return TrimSpace(line.substr(i + 1)).empty();
+          }
+        }
+      }
+      return false;
+    }();
     after_rule_ = !standalone_diagnostic;
   }
 
@@ -391,8 +407,9 @@ class Parser {
       std::string_view rhs;
       ParseAssignStatement(line, equals, &define_name_, &rhs, &define_op_);
       if (!rhs.empty()) {
-        Error("*** extraneous text after `define' variable name.");
-        return;
+        // GNU make warns about trailing text but still consumes the body
+        // through endef and assigns it to the parsed variable name.
+        WARN_LOC(loc_, "extraneous text after 'define' directive");
       }
     } else {
       define_name_ = line;
