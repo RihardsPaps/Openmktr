@@ -96,15 +96,6 @@ void WordWriter::Write(std::string_view s) {
   out_->append(s);
 }
 
-ScopedTerminator::ScopedTerminator(std::string_view s)
-    : s_(s), c_(s[s.size()]) {
-  const_cast<char*>(s_.data())[s_.size()] = '\0';
-}
-
-ScopedTerminator::~ScopedTerminator() {
-  const_cast<char*>(s_.data())[s_.size()] = c_;
-}
-
 bool HasPrefix(std::string_view str, std::string_view prefix) {
   ssize_t size_diff = str.size() - prefix.size();
   return size_diff >= 0 && str.substr(0, prefix.size()) == prefix;
@@ -329,8 +320,10 @@ void NormalizePath(std::string* o) {
         }
         if (std::string_view(o->data() + j, 3) == "../") {
           j = orig_j;
-          (*o)[j] = c;
-          j++;
+          if (c) {
+            (*o)[j] = c;
+            j++;
+          }
         }
       }
     } else if (!prev_dir.empty()) {
@@ -463,13 +456,28 @@ size_t FindEndOfLine(std::string_view s, size_t e, size_t* lf_cnt) {
 }
 
 std::string_view TrimLeadingCurdir(std::string_view s) {
-  while (s.substr(0, 2) == "./")
+  bool trimmed = false;
+  while (s.substr(0, 2) == "./") {
     s = s.substr(2);
+    trimmed = true;
+  }
+  // ".//file" is still relative.  Removing only "./" would turn it into
+  // "/file", silently changing the prerequisite into an absolute path.
+  if (trimmed) {
+    while (!s.empty() && s.front() == '/')
+      s.remove_prefix(1);
+  }
   return s;
 }
 
 void FormatForCommandSubstitution(std::string* s) {
-  while ((*s)[s->size() - 1] == '\n')
+  // GNU make stops reading shell-function output at the first NUL. Keeping
+  // an embedded NUL would silently truncate the eventual shell -c argument
+  // while leaving the rest of the recipe in our in-memory string.
+  const size_t nul = s->find('\0');
+  if (nul != std::string::npos)
+    s->resize(nul);
+  while (!s->empty() && s->back() == '\n')
     s->pop_back();
   for (size_t i = 0; i < s->size(); i++) {
     if ((*s)[i] == '\n')

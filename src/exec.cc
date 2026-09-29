@@ -85,6 +85,15 @@ static bool IsRecursiveKatiCommandMarker(const std::string& command) {
 
   size_t pos = command.find(executable);
   while (pos != std::string::npos) {
+    // Exported MAKE=/path/to/ckati is data, not a recursive invocation.
+    // Recipe environment prefixes are common, and treating one as a command
+    // would execute an ordinary recipe even during a recursive dry run.
+    size_t value_start = pos;
+    if (value_start > 0 &&
+        (command[value_start - 1] == '\'' || command[value_start - 1] == '"'))
+      --value_start;
+    const bool assignment_value =
+        value_start > 0 && command[value_start - 1] == '=';
     const bool start = pos == 0 || isspace(command[pos - 1]) ||
                        command[pos - 1] == '\'' || command[pos - 1] == '"' ||
                        command[pos - 1] == '=' || command[pos - 1] == ';';
@@ -92,7 +101,7 @@ static bool IsRecursiveKatiCommandMarker(const std::string& command) {
     const bool finish = end == command.size() || isspace(command[end]) ||
                         command[end] == '\'' || command[end] == '"' ||
                         command[end] == ';';
-    if (start && finish)
+    if (start && finish && !assignment_value)
       return true;
     pos = command.find(executable, pos + 1);
   }
@@ -230,6 +239,31 @@ class Executor {
     return jobs;
   }
 
+  bool MissingIntermediateIsOlderThan(const DepNode& node,
+                                      double parent_timestamp,
+                                      std::unordered_set<Symbol>* visited) {
+    if (!visited->insert(node.output).second || node.is_phony ||
+        node.deps.empty())
+      return false;
+    for (const auto& dep : node.deps) {
+      const DepNode& child = *dep.second;
+      if (child.is_phony)
+        return false;
+      const double child_timestamp = GetTimestamp(child.output.c_str());
+      if (child_timestamp == kNotExist &&
+          (!child.intermediate ||
+           !MissingIntermediateIsOlderThan(child, parent_timestamp, visited)))
+        return false;
+      if (child_timestamp != kNotExist && child_timestamp > parent_timestamp)
+        return false;
+    }
+    for (const auto& dep : node.order_onlys) {
+      if (GetTimestamp(dep.second->output.c_str()) == kNotExist)
+        return false;
+    }
+    return true;
+  }
+
   double ExecNode(const DepNode& n,
                   const char* needed_by,
                   std::shared_ptr<const Ancestry> parent = nullptr) {
@@ -302,6 +336,24 @@ class Executor {
           ce_.evaluator()->Enter(FrameType::EXEC, n.output.c_str(), n.loc));
     }
     double output_ts = GetTimestamp(n.output.c_str());
+
+    // GNU make does not regenerate a missing implicit intermediate merely
+    // because it cleaned that file after an earlier successful build. If an
+    // existing parent is newer than every source beneath the intermediate,
+    // let the parent use its own timestamp without recreating the chain.
+    if (n.intermediate && output_ts == kNotExist && needed_by) {
+      const double parent_ts = GetTimestamp(needed_by);
+      std::unordered_set<Symbol> visited;
+      if (parent_ts != kNotExist &&
+          MissingIntermediateIsOlderThan(n, parent_ts, &visited)) {
+        {
+          std::lock_guard<std::mutex> lock(state_mu_);
+          done_.erase(n.output);
+        }
+        state_cv_.notify_all();
+        return parent_ts;
+      }
+    }
 
     LOG("ExecNode: %s for %s", n.output.c_str(),
         needed_by ? needed_by : "(null)");
@@ -448,7 +500,7 @@ class Executor {
     }
 
     if (output_ts != kNotExist && output_ts >= latest && !n.is_phony &&
-        !output_is_directory) {
+        !output_is_directory && n.double_colon_group_inputs.empty()) {
       {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] = NodeState{false, output_ts, false, std::thread::id()};
@@ -464,12 +516,32 @@ class Executor {
     std::vector<Command> commands;
     {
       std::lock_guard<std::mutex> lock(eval_mu_);
-      commands = ce_.Eval(n);
+      commands = ce_.Eval(n, output_ts);
     }
-
-    if (g_flags.is_question) {
-      if (n.is_phony || !commands.empty())
-        needs_build_.store(true, std::memory_order_relaxed);
+    auto double_colon_group_needs_build = [&](size_t group, double target_ts) {
+      if (target_ts == kNotExist || n.is_phony ||
+          n.double_colon_group_inputs[group].empty())
+        return true;
+      for (Symbol input : n.double_colon_group_inputs[group]) {
+        for (const auto& dep : n.deps) {
+          if (dep.first == input && dep.second->is_phony)
+            return true;
+        }
+        if (GetTimestamp(input.c_str()) > target_ts)
+          return true;
+      }
+      return false;
+    };
+    // A directory is a normal timestamped target unless its recipe enters a
+    // recursive make that may update files inside it without changing the
+    // directory timestamp.  Keep that recursive case live, but do not rerun
+    // ordinary directory-creation recipes such as `mkdir ../lib` on every
+    // invocation.
+    if (output_is_directory && n.double_colon_group_inputs.empty() &&
+        output_ts != kNotExist && output_ts >= latest && !n.is_phony &&
+        std::none_of(commands.begin(), commands.end(), [](const Command& c) {
+          return IsRecursiveKatiCommand(c.cmd);
+        })) {
       {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] = NodeState{false, output_ts, false, std::thread::id()};
@@ -477,18 +549,60 @@ class Executor {
       state_cv_.notify_all();
       return output_ts;
     }
+    // GNU make considers a missing target with an explicit empty rule
+    // updated for this invocation, even though no file was created.  Its
+    // dependents must therefore rebuild on every invocation.
+    const bool missing_empty_rule =
+        n.has_rule && output_ts == kNotExist && commands.empty();
+    const double logical_ts = missing_empty_rule
+                                  ? std::numeric_limits<double>::infinity()
+                                  : output_ts;
+
+    if (g_flags.is_question) {
+      bool group_needs_build = false;
+      for (size_t group = 0; group < n.double_colon_group_inputs.size();
+           ++group) {
+        if (double_colon_group_needs_build(group, output_ts)) {
+          group_needs_build = true;
+          break;
+        }
+      }
+      if (n.is_phony ||
+          (!commands.empty() &&
+           (n.double_colon_group_inputs.empty() || group_needs_build)))
+        needs_build_.store(true, std::memory_order_relaxed);
+      {
+        std::lock_guard<std::mutex> lock(state_mu_);
+        done_[n.output] =
+            NodeState{false, logical_ts, false, std::thread::id()};
+      }
+      state_cv_.notify_all();
+      return logical_ts;
+    }
 
     // Record that an out-of-date target is being rebuilt.  This is also
     // needed by the included-makefile bootstrap pass: an existing included
     // file may have a rule and be rebuilt even though it was not missing.
     // The caller uses this result to decide whether GNU make-style
     // re-evaluation is required.
-    if (!commands.empty())
+    if (!commands.empty() && n.double_colon_group_inputs.empty())
       needs_build_.store(true, std::memory_order_relaxed);
 
     bool node_failed = false;
     bool ran_recipe = false;
+    size_t active_double_colon_group = static_cast<size_t>(-1);
+    bool skip_double_colon_group = false;
     for (const Command& command : commands) {
+      if (command.double_colon_group != static_cast<size_t>(-1) &&
+          command.double_colon_group != active_double_colon_group) {
+        active_double_colon_group = command.double_colon_group;
+        skip_double_colon_group = !double_colon_group_needs_build(
+            active_double_colon_group, GetTimestamp(n.output.c_str()));
+      }
+      if (skip_double_colon_group)
+        continue;
+      if (command.double_colon_group != static_cast<size_t>(-1))
+        needs_build_.store(true, std::memory_order_relaxed);
       if (cancel_requested_.load(std::memory_order_relaxed)) {
         node_failed = true;
         break;
@@ -498,7 +612,10 @@ class Executor {
         num_commands_ += 1;
       }
       if (command.echo && !command.cmd.empty() && command.cmd != ":") {
-        printf("  BUILD   %s\n", command.output.c_str());
+        if (command.verbose)
+          printf("%s\n", command.display_cmd.c_str());
+        else
+          printf("  BUILD   %s\n", command.output.c_str());
         fflush(stdout);
       }
       if (g_flags.is_dry_run) {
@@ -513,7 +630,7 @@ class Executor {
         // child can print the recipes it would execute. Ordinary recipes
         // remain unexecuted. The normalized MAKEFLAGS installed by
         // UpdateMakeFlags carries -n into the child Kati process.
-        if (recursive) {
+        if (recursive || command.force_run) {
           // A recursive make is an opaque operation from this executor's
           // point of view.  Its child may update the make state, included
           // files, or directory layout that another recursive child is
@@ -589,8 +706,13 @@ class Executor {
       }
     }
 
-    const double completed_ts =
-        ran_recipe ? GetTimestamp(n.output.c_str()) : output_ts;
+    double completed_ts =
+        ran_recipe ? GetTimestamp(n.output.c_str()) : logical_ts;
+    // A successful recipe counts as updating its target for this invocation,
+    // even if it deliberately leaves no file behind (Automake's force rules
+    // are a common example).  Dependents must observe that logical update.
+    if (ran_recipe && !node_failed && completed_ts == kNotExist)
+      completed_ts = std::numeric_limits<double>::infinity();
     {
       std::lock_guard<std::mutex> lock(state_mu_);
       if (ran_recipe && !node_failed)
@@ -610,13 +732,15 @@ class Executor {
                 bool acquire_job_token) {
     std::string unused;
     if (g_flags.output_sync == Flags::OutputSync::kNone) {
-      return RunCommand(shell, shellflag, command, RedirectStderr::STDOUT,
-                        &unused, acquire_job_token,
-                        [this](std::string_view data) {
-                          std::lock_guard<std::mutex> lock(output_mu_);
-                          fwrite(data.data(), 1, data.size(), stdout);
-                          fflush(stdout);
-                        });
+      return RunCommand(
+          shell, shellflag, command, RedirectStderr::NONE, &unused,
+          acquire_job_token,
+          [this](std::string_view data) {
+            std::lock_guard<std::mutex> lock(output_mu_);
+            fwrite(data.data(), 1, data.size(), stdout);
+            fflush(stdout);
+          },
+          g_flags.make_level + 1);
     }
     if (g_flags.output_sync == Flags::OutputSync::kLine) {
       std::string pending;
@@ -625,20 +749,22 @@ class Executor {
         fwrite(data.data(), 1, data.size(), stdout);
         fflush(stdout);
       };
-      const int status =
-          RunCommand(shell, shellflag, command, RedirectStderr::STDOUT, &unused,
-                     acquire_job_token, [&](std::string_view data) {
-                       pending.append(data);
-                       size_t end;
-                       while ((end = pending.find('\n')) != std::string::npos) {
-                         emit(std::string_view(pending).substr(0, end + 1));
-                         pending.erase(0, end + 1);
-                       }
-                       if (pending.size() > 65536) {
-                         emit(pending);
-                         pending.clear();
-                       }
-                     });
+      const int status = RunCommand(
+          shell, shellflag, command, RedirectStderr::STDOUT, &unused,
+          acquire_job_token,
+          [&](std::string_view data) {
+            pending.append(data);
+            size_t end;
+            while ((end = pending.find('\n')) != std::string::npos) {
+              emit(std::string_view(pending).substr(0, end + 1));
+              pending.erase(0, end + 1);
+            }
+            if (pending.size() > 65536) {
+              emit(pending);
+              pending.clear();
+            }
+          },
+          g_flags.make_level + 1);
       if (!pending.empty())
         emit(pending);
       return status;
@@ -648,7 +774,8 @@ class Executor {
     std::string buffered;
     const int status = RunCommand(
         shell, shellflag, command, RedirectStderr::STDOUT, &unused,
-        acquire_job_token, [&](std::string_view data) {
+        acquire_job_token,
+        [&](std::string_view data) {
           if (spool == nullptr &&
               buffered.size() + data.size() <= kMemoryLimit) {
             buffered.append(data);
@@ -665,7 +792,8 @@ class Executor {
           }
           if (fwrite(data.data(), 1, data.size(), spool) != data.size())
             PERROR("spool write failed");
-        });
+        },
+        g_flags.make_level + 1);
     if (spool != nullptr && fseek(spool, 0, SEEK_SET) != 0)
       PERROR("spool rewind failed");
     {
@@ -829,7 +957,9 @@ ExecResult Exec(const std::vector<NamedDepNode>& roots,
     for (const auto& dep : node->validations)
       pending.push_back(dep.second);
   }
-  if (executor.Count() == 0) {
+  const char* kati_verbose = getenv("KATI_VERBOSE");
+  if (executor.Count() == 0 && !g_flags.is_silent_mode &&
+      !(kati_verbose != nullptr && std::string_view(kati_verbose) == "1")) {
     for (auto const& root : roots) {
       printf("kati: Nothing to be done for `%s'.\n", root.first.c_str());
     }

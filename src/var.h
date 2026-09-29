@@ -51,6 +51,7 @@ class Var : public Evaluable {
   virtual const char* Flavor() const = 0;
 
   VarOrigin Origin() const { return origin_; }
+  void SetOrigin(VarOrigin origin) { origin_ = origin; }
   Frame* Definition() const { return definition_; }
 
   virtual bool IsDefined() const { return true; }
@@ -87,6 +88,8 @@ class Var : public Evaluable {
 
   AssignOp op() const { return assign_op_; }
   void SetAssignOp(AssignOp op) { assign_op_ = op; }
+  Value* TargetAppend() const { return target_append_; }
+  void SetTargetAppend(Value* value) { target_append_ = value; }
 
   static Var* Undefined();
 
@@ -97,9 +100,10 @@ class Var : public Evaluable {
   Frame* definition_;
 
  private:
-  const VarOrigin origin_;
+  VarOrigin origin_;
 
   AssignOp assign_op_;
+  Value* target_append_ = nullptr;
   bool readonly_ : 1;
   bool deprecated_ : 1;
   bool obsolete_ : 1;

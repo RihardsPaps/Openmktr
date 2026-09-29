@@ -1130,7 +1130,11 @@ class NinjaGenerator {
     fprintf(fp, "\n");
 
     std::unordered_set<std::string> emitted_exports;
+    emitted_exports.insert("MAKELEVEL");
+    fprintf(fp, "export MAKELEVEL=%d\n", g_flags.make_level + 1);
     for (const auto& [symbol, is_exported] : ev_->exports()) {
+      if (symbol.str() == "MAKELEVEL")
+        continue;
       if (!IsShellIdentifier(symbol.str())) {
         continue;
       }

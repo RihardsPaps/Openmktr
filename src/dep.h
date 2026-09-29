@@ -65,6 +65,10 @@ struct DepNode {
   std::vector<Symbol> implicit_inputs;
   std::vector<Symbol> actual_inputs;
   std::vector<Symbol> actual_order_only_inputs;
+  // Double-colon rules retain independent prerequisite freshness and recipe
+  // groups. Their recipes must not be merged into one always-run sequence.
+  std::vector<std::vector<Symbol>> double_colon_group_inputs;
+  std::vector<size_t> double_colon_group_for_cmd;
   std::vector<Symbol> low_resolution_inputs;
   std::vector<std::vector<Symbol>> wait_groups;
   std::vector<Symbol> actual_validations;
@@ -80,7 +84,8 @@ void MakeDep(Evaluator* ev,
              const std::vector<const Rule*>& rules,
              const std::unordered_map<Symbol, Vars*>& rule_vars,
              const std::vector<Symbol>& targets,
-             std::vector<NamedDepNode>* nodes);
+             std::vector<NamedDepNode>* nodes,
+             bool add_parent_directory_edges = true);
 
 bool IsSpecialTarget(Symbol output);
 

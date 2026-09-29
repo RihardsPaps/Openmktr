@@ -28,6 +28,20 @@
 
 Makefile::Makefile(const std::string& filename)
     : mtime_(0), filename_(filename), exists_(false) {
+  if (filename == "-") {
+    exists_ = true;
+    char chunk[8192];
+    while (true) {
+      ssize_t count = HANDLE_EINTR(read(STDIN_FILENO, chunk, sizeof(chunk)));
+      if (count < 0)
+        PERROR("read failed for standard input");
+      if (count == 0)
+        break;
+      buf_.append(chunk, static_cast<size_t>(count));
+    }
+    Parse(this);
+    return;
+  }
   int fd = open(filename.c_str(), O_RDONLY);
   if (fd < 0) {
     return;

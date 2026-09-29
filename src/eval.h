@@ -134,8 +134,10 @@ class Evaluator {
   void EvalIf(const IfStmt* stmt);
   void EvalInclude(const IncludeStmt* stmt);
   void EvalVpath(const Value* expr);
-  void SetVpath(std::string_view pattern, std::string_view directories,
-                bool append = false, bool from_vpath = false);
+  void SetVpath(std::string_view pattern,
+                std::string_view directories,
+                bool append = false,
+                bool from_vpath = false);
 
   struct Vpath {
     std::string pattern;
@@ -144,6 +146,7 @@ class Evaluator {
   };
 
   const std::vector<Vpath>& vpaths() const { return vpaths_; }
+  void RefreshVpath();
   std::string ResolveVpath(Symbol target) const;
 
   struct MissingInclude {

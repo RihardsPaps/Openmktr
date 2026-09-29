@@ -27,6 +27,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <algorithm>
 #include <atomic>
 #include <vector>
 
@@ -146,7 +147,8 @@ int RunCommand(const std::string& shell,
                RedirectStderr redirect_stderr,
                std::string* s,
                bool acquire_job_token,
-               const std::function<void(std::string_view)>& on_output) {
+               const std::function<void(std::string_view)>& on_output,
+               int make_level) {
   // A recipe owns one jobserver slot while its shell runs. Pass that slot to
   // nested Kati processes started indirectly by scripts or configure tests.
   // An explicitly recursive boundary can pass along an inherited reservation
@@ -161,18 +163,51 @@ int RunCommand(const std::string& shell,
                          (job_token == -1 ? "0" : "1")
                    : "";
   std::vector<char*> child_env;
-  if (forward_slot) {
+  const std::string level_env = "MAKELEVEL=" + std::to_string(make_level);
+  const bool custom_env = forward_slot || make_level >= 0;
+  if (custom_env) {
     for (char** entry = environ; *entry != nullptr; ++entry) {
-      if (strncmp(*entry, "KATI_JOBSERVER_RESERVED=", 24) != 0)
-        child_env.push_back(*entry);
+      if (forward_slot && strncmp(*entry, "KATI_JOBSERVER_RESERVED=", 24) == 0)
+        continue;
+      if (make_level >= 0 && strncmp(*entry, "MAKELEVEL=", 10) == 0)
+        continue;
+      child_env.push_back(*entry);
     }
-    child_env.push_back(const_cast<char*>(reserved_env.c_str()));
+    if (forward_slot)
+      child_env.push_back(const_cast<char*>(reserved_env.c_str()));
+    if (make_level >= 0)
+      child_env.push_back(const_cast<char*>(level_env.c_str()));
     child_env.push_back(nullptr);
   }
+  // Linux also limits each individual argument (MAX_ARG_STRLEN), even when
+  // the complete argv and environment fit within ARG_MAX.  Generated recipes
+  // can exceed that limit.  Source a private temporary file inside the same
+  // shell so flags, variables, and control flow retain their usual meaning.
+  std::string recipe_path;
+  std::string recipe_command;
+  if (cmd.size() > 120000) {
+    char path[] = "/tmp/ckati-recipe-XXXXXX";
+    int fd = mkstemp(path);
+    if (fd < 0)
+      PERROR("mkstemp failed");
+    recipe_path = path;
+    size_t written = 0;
+    while (written < cmd.size()) {
+      ssize_t count =
+          HANDLE_EINTR(write(fd, cmd.data() + written, cmd.size() - written));
+      if (count <= 0)
+        PERROR("write recipe failed");
+      written += count;
+    }
+    if (close(fd) != 0)
+      PERROR("close recipe failed");
+    recipe_command = ". " + recipe_path;
+  }
+  const std::string& shell_command = recipe_path.empty() ? cmd : recipe_command;
   const char* argv[] = {NULL, NULL, NULL, NULL};
   std::string cmd_with_shell;
   if (shell[0] != '/' || shell.find_first_of(" $") != std::string::npos) {
-    std::string cmd_escaped = cmd;
+    std::string cmd_escaped = shell_command;
     EscapeShell(&cmd_escaped);
     cmd_with_shell = shell + " " + shellflag + " \"" + cmd_escaped + "\"";
     argv[0] = "/bin/sh";
@@ -182,7 +217,7 @@ int RunCommand(const std::string& shell,
     // If the shell isn't complicated, we don't need to wrap in /bin/sh
     argv[0] = shell.c_str();
     argv[1] = shellflag.c_str();
-    argv[2] = cmd.c_str();
+    argv[2] = shell_command.c_str();
   }
 
   int pipefd[2];
@@ -242,8 +277,29 @@ int RunCommand(const std::string& shell,
 
   pid_t pid;
   err = posix_spawn(&pid, argv[0], &action, &attr, const_cast<char**>(argv),
-                    forward_slot ? child_env.data() : environ);
+                    custom_env ? child_env.data() : environ);
   if (err != 0) {
+    if (!recipe_path.empty())
+      unlink(recipe_path.c_str());
+    if (err == E2BIG) {
+      size_t argument_bytes = 0;
+      for (const char* argument : argv)
+        if (argument != nullptr)
+          argument_bytes += strlen(argument) + 1;
+      size_t environment_bytes = 0;
+      size_t largest_environment_entry = 0;
+      char* const* environment = custom_env ? child_env.data() : environ;
+      for (char* const* entry = environment; *entry != nullptr; ++entry) {
+        const size_t length = strlen(*entry) + 1;
+        environment_bytes += length;
+        largest_environment_entry = std::max(largest_environment_entry, length);
+      }
+      ERROR(
+          "posix_spawn: %s (arguments %zu bytes, environment %zu bytes, "
+          "largest environment entry %zu bytes)",
+          strerror(err), argument_bytes, environment_bytes,
+          largest_environment_entry);
+    }
     ERROR("posix_spawn: %s", strerror(err));
   }
 
@@ -273,6 +329,8 @@ int RunCommand(const std::string& shell,
   close(pipefd[0]);
   if (HANDLE_EINTR(waitpid(pid, &status, 0)) < 0)
     PERROR("waitpid failed");
+  if (!recipe_path.empty() && unlink(recipe_path.c_str()) != 0)
+    PERROR("unlink recipe failed");
 
   ReleaseKatiJobToken(job_token);
   return status;

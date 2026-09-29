@@ -15,4 +15,4 @@ ENV KATI_SOURCE_REVISION=$KATI_SOURCE_REVISION
 RUN ninja -f build.ninja -j 4 ckati tests
 RUN if ldd ckati | grep -E 'libstdc\+\+|libgcc|libc\.so\.6'; then exit 1; fi
 
-CMD ["/bin/sh", "-c", "out/find_test && out/ninja_test && out/strutil_test && python tests/correctness.py && python tests/regression.py && sh testcase/dump/run.sh"]
+CMD ["/bin/sh", "-c", "out/find_test && out/ninja_test && out/strutil_test && python tests/version_generator.py && python tests/correctness.py && python tests/regression.py && sh testcase/dump/run.sh"]

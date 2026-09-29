@@ -27,11 +27,15 @@ struct Command {
       : output(o), echo(true), ignore_error(false), force_no_subshell(false) {}
   Symbol output;
   std::string cmd;
+  std::string display_cmd;
   std::string shell;
   std::string shellflag;
   bool echo;
+  bool verbose = false;
+  bool force_run = false;
   bool ignore_error;
   bool force_no_subshell;
+  size_t double_colon_group = static_cast<size_t>(-1);
 };
 
 class CommandEvaluator {
@@ -39,7 +43,9 @@ class CommandEvaluator {
   explicit CommandEvaluator(Evaluator* ev);
   ~CommandEvaluator();
   std::vector<Command> Eval(const DepNode& n);
+  std::vector<Command> Eval(const DepNode& n, double target_age);
   const DepNode* current_dep_node() const { return current_dep_node_; }
+  double target_age() const { return target_age_; }
   Evaluator* evaluator() const { return ev_; }
   bool found_new_inputs() const { return found_new_inputs_; }
   void set_found_new_inputs(bool val) { found_new_inputs_ = val; }
@@ -47,6 +53,7 @@ class CommandEvaluator {
  private:
   Evaluator* ev_;
   const DepNode* current_dep_node_;
+  double target_age_;
   bool found_new_inputs_;
 };
 

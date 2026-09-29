@@ -427,7 +427,7 @@ Value* ParseDollar(Loc* loc, std::string_view s, size_t* index_out) {
     return new SymRef(start_loc, Intern(s.substr(1, 1)));
   }
 
-  char terms[] = {cp, ':', ' ', '\t', 0};
+  char terms[] = {cp, ':', ' ', '\t', '\n', '\r', 0};
   for (size_t i = 2;;) {
     size_t n;
     Value* vname =
@@ -456,7 +456,8 @@ Value* ParseDollar(Loc* loc, std::string_view s, size_t* index_out) {
       return new VarRef(start_loc, vname);
     }
 
-    if (s[i] == ' ' || s[i] == '\t' || s[i] == '\\') {
+    if (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r' ||
+        s[i] == '\\') {
       // ${func ...}
       if (vname->IsLiteral()) {
         Literal* lit = static_cast<Literal*>(vname);

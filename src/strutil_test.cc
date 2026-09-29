@@ -115,6 +115,9 @@ static std::string NormalizeMakePath(std::string s) {
 }
 
 void TestNormalizePath() {
+  ASSERT_EQ(TrimLeadingCurdir(".//ltmain.sh"), "ltmain.sh");
+  ASSERT_EQ(TrimLeadingCurdir("././file"), "file");
+  ASSERT_EQ(TrimLeadingCurdir("/absolute"), "/absolute");
   ASSERT_EQ(NormalizePath(""), "");
   ASSERT_EQ(NormalizePath("."), "");
   ASSERT_EQ(NormalizePath("/"), "/");
@@ -124,6 +127,8 @@ void TestNormalizePath() {
   ASSERT_EQ(NormalizePath("a//.//b"), "a/b");
   ASSERT_EQ(NormalizePath("a////b//../c/////"), "a/c");
   ASSERT_EQ(NormalizePath("../foo"), "../foo");
+  ASSERT_EQ(NormalizePath("../.."), "../..");
+  ASSERT_EQ(NormalizePath("../../"), "../..");
   ASSERT_EQ(NormalizePath("./foo"), "foo");
   ASSERT_EQ(NormalizePath("x/y/..//../foo"), "foo");
   ASSERT_EQ(NormalizePath("x/../../foo"), "../foo");
@@ -221,6 +226,7 @@ void TestConcatDir() {
   ASSERT_EQ(ConcatDir("a", ".."), "");
   ASSERT_EQ(ConcatDir("a", "../b"), "b");
   ASSERT_EQ(ConcatDir("a", "../../b"), "../b");
+  ASSERT_EQ(ConcatDir("../..", "foo.c"), "../../foo.c");
 }
 
 void TestIsInteger() {
@@ -231,6 +237,20 @@ void TestIsInteger() {
   ASSERT_BOOL(IsInteger("a234"), false);
   ASSERT_BOOL(IsInteger("123a"), false);
   ASSERT_BOOL(IsInteger("12a4"), false);
+}
+
+void TestCommandSubstitution() {
+  for (auto [input, expected] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"", ""},
+           {"\n", ""},
+           {"\n\n", ""},
+           {"one\ntwo\n\n", "one two"},
+           {std::string("one\0two", 7), "one"},
+           {"one", "one"}}) {
+    FormatForCommandSubstitution(&input);
+    ASSERT_EQ(input, expected);
+  }
 }
 
 }  // namespace
@@ -251,5 +271,6 @@ int main() {
   TestFindEndOfLineInvalidAccess();
   TestConcatDir();
   TestIsInteger();
+  TestCommandSubstitution();
   assert(!g_failed);
 }

@@ -295,10 +295,11 @@ Var* Evaluator::EvalRHS(Symbol lhs,
   Var* prev = NULL;
   *needs_assign = true;
 
-  // A command-line variable has higher precedence than ordinary makefile
-  // assignments.  In particular, a later "VAR += value" must not mutate the
-  // command-line Var in place before Vars::Assign() gets a chance to reject
-  // the replacement.  The makefile can explicitly opt in with "override".
+  // A command-line variable (or an environment variable under -e) has higher
+  // precedence than ordinary makefile assignments.  In particular, a later
+  // "VAR += value" must not mutate the higher-priority Var in place before
+  // Vars::Assign() gets a chance to reject it. A makefile can opt in with
+  // "override".
   // MAKEFLAGS is maintained by make itself and may be extended by a
   // makefile (Kbuild adds its source include directory this way).  The
   // normalized transport value installed before parsing must not turn it
@@ -307,7 +308,8 @@ Var* Evaluator::EvalRHS(Symbol lhs,
       !(lhs == Intern("MAKEFLAGS"))) {
     Var* command_line_var = PeekVarInCurrentScope(lhs);
     if (command_line_var->IsDefined() &&
-        command_line_var->Origin() == VarOrigin::COMMAND_LINE) {
+        (command_line_var->Origin() == VarOrigin::COMMAND_LINE ||
+         command_line_var->Origin() == VarOrigin::ENVIRONMENT_OVERRIDE)) {
       command_line_var->Used(this, lhs);
       *needs_assign = false;
       return command_line_var;
@@ -326,6 +328,12 @@ Var* Evaluator::EvalRHS(Symbol lhs,
       break;
     case AssignOp::PLUS_EQ: {
       prev = LookupVarInCurrentScope(lhs);
+      // A plain $(eval VAR += ...) inside a recipe is still a global
+      // assignment. The recipe's target scope may not define VAR even when
+      // the global scope does; append to that existing value rather than
+      // replacing it with only the new fragment.
+      if (!prev->IsDefined() && current_scope_ != nullptr)
+        prev = LookupVarGlobal(lhs);
       if (!prev->IsDefined()) {
         result = new RecursiveVar(rhs_v, origin, current_frame, loc_, orig_rhs);
       } else if (prev->ReadOnly()) {
@@ -334,6 +342,11 @@ Var* Evaluator::EvalRHS(Symbol lhs,
       } else {
         result = prev;
         result->AppendVar(this, rhs_v);
+        // A command-line += assignment replaces the inherited variable's
+        // origin. Recursive makes must still receive the override through
+        // MAKEFLAGS, even when the value came from the environment.
+        if (is_commandline_)
+          result->SetOrigin(VarOrigin::COMMAND_LINE);
         *needs_assign = false;
       }
       break;
@@ -413,13 +426,14 @@ void Evaluator::EvalAssign(const AssignStmt* stmt) {
     bool readonly;
     lhs.SetGlobalVar(var, stmt->directive == AssignDirective::OVERRIDE,
                      &readonly);
-    if (lhs == Intern("VPATH"))
-      SetVpath("%", var->Eval(this));
     if (readonly) {
       Error(StringPrintf("*** cannot assign to readonly variable: %s",
                          lhs.c_str()));
     }
   }
+
+  // A recursive VPATH may refer to a variable assigned later in the file.
+  // Refresh it after makefile evaluation, before dependency analysis.
 
   if (stmt->is_final) {
     var->SetReadOnly();
@@ -545,7 +559,7 @@ void Evaluator::EvalRuleSpecificAssign(const std::vector<Symbol>& targets,
     // GNU make's target-specific assignment semantics.
     Value* rhs = stmt->rhs;
     if (!rhs)
-      rhs = Value::NewLiteral(rhs_string);
+      rhs = Value::NewLiteral(Intern(rhs_string).str());
 
     Vars* target_scope = p.first->second;
     Vars* enclosing_scope = current_scope_;
@@ -588,6 +602,7 @@ void Evaluator::EvalRuleSpecificAssign(const std::vector<Symbol>& targets,
               stack_.back(), loc_, inherited->String());
         }
         bool readonly;
+        local->SetTargetAppend(Value::NewLiteral(""));
         target_scope->Assign(var_sym, local, &readonly);
         if (readonly)
           Error(StringPrintf("*** cannot assign to readonly variable: %s",
@@ -610,6 +625,9 @@ void Evaluator::EvalRuleSpecificAssign(const std::vector<Symbol>& targets,
       if (needs_assign) {
         bool readonly;
         rhs_var->SetAssignOp(assign_op);
+        if (assign_op == AssignOp::PLUS_EQ)
+          rhs_var->SetTargetAppend(
+              Value::NewExpr(loc_, Value::NewLiteral(" "), rhs));
         target_scope->Assign(var_sym, rhs_var, &readonly);
         if (readonly) {
           Error(StringPrintf("*** cannot assign to readonly variable: %s",
@@ -636,6 +654,10 @@ void Evaluator::EvalRule(const RuleStmt* stmt) {
   if (before_term.find_first_not_of(" \t\n;") == std::string::npos) {
     if (stmt->sep == RuleStmt::SEP_SEMICOLON)
       Error("*** missing rule before commands.");
+    // $(eval ...) may create rules while expanding this otherwise empty
+    // line. A following tabbed line belongs to the outer makefile, not the
+    // last rule produced inside eval.
+    last_rule_ = NULL;
     return;
   }
 
@@ -661,13 +683,20 @@ void Evaluator::EvalRule(const RuleStmt* stmt) {
   // It is an assignment when either after_targets contains an assignment token
   // or separator is an assignment token, but only if there is no ';' before the
   // first assignment token.
-  size_t separator_pos = after_targets.find_first_of("=;");
+  // Assignment operators must appear in the unexpanded rule. An '=' in a
+  // prerequisite produced by $(shell), $(wildcard), or a variable is a file
+  // name character, not a target-specific assignment (LibreOffice's icon
+  // list contains such paths).
+  const bool is_assignment =
+      stmt->sep == RuleStmt::SEP_EQ || stmt->sep == RuleStmt::SEP_FINALEQ;
+  // A whole rule expanded from a variable can introduce its colon and
+  // assignment together, so retain assignment recognition for that case.
+  size_t separator_pos = after_targets.find_first_of(
+      is_assignment || !stmt->has_literal_colon ? "=;" : ";");
   char separator = '\0';
   if (separator_pos != std::string::npos) {
     separator = after_targets[separator_pos];
-  } else if (separator_pos == std::string::npos &&
-             (stmt->sep == RuleStmt::SEP_EQ ||
-              stmt->sep == RuleStmt::SEP_FINALEQ)) {
+  } else if (separator_pos == std::string::npos && is_assignment) {
     separator_pos = after_targets.size();
     separator = '=';
   }
@@ -916,10 +945,12 @@ void Evaluator::SetVpath(std::string_view pattern,
                          bool append,
                          bool from_vpath) {
   if (!append) {
-    vpaths_.erase(
-        std::remove_if(vpaths_.begin(), vpaths_.end(),
-                       [&](const Vpath& v) { return v.pattern == pattern; }),
-        vpaths_.end());
+    vpaths_.erase(std::remove_if(vpaths_.begin(), vpaths_.end(),
+                                 [&](const Vpath& v) {
+                                   return v.pattern == pattern &&
+                                          v.from_vpath == from_vpath;
+                                 }),
+                  vpaths_.end());
   }
   if (directories.empty())
     return;
@@ -954,6 +985,10 @@ void Evaluator::SetVpath(std::string_view pattern,
     }
     vpaths_.push_back(std::move(vpath));
   }
+}
+
+void Evaluator::RefreshVpath() {
+  SetVpath("%", LookupVar(Intern("VPATH"))->Eval(this));
 }
 
 std::string Evaluator::ResolveVpath(Symbol target) const {

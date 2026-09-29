@@ -52,6 +52,7 @@ Var::Var(VarOrigin origin, Frame* definition, Loc loc)
     : Evaluable(loc),
       definition_(definition),
       origin_(origin),
+      assign_op_(AssignOp::EQ),
       readonly_(false),
       deprecated_(false),
       obsolete_(false),
@@ -169,6 +170,10 @@ void SimpleVar::Eval(Evaluator* ev, std::string* s) const {
 void SimpleVar::AppendVar(Evaluator* ev, Value* v) {
   std::string buf;
   v->Eval(ev, &buf);
+  if (TargetAppend())
+    SetTargetAppend(Value::NewExpr(v->Location(), TargetAppend(),
+                                   Value::NewLiteral(" "),
+                                   Value::NewLiteral(Intern(buf).str())));
   v_.push_back(' ');
   v_ += buf;
   definition_ = ev->CurrentFrame();
@@ -201,6 +206,9 @@ void RecursiveVar::Eval(Evaluator* ev, std::string* s) const {
 
 void RecursiveVar::AppendVar(Evaluator* ev, Value* v) {
   ev->CheckStack();
+  if (TargetAppend())
+    SetTargetAppend(Value::NewExpr(v->Location(), TargetAppend(),
+                                   Value::NewLiteral(" "), v));
   v_ = Value::NewExpr(v->Location(), v_, Value::NewLiteral(" "), v);
   definition_ = ev->CurrentFrame();
 }
@@ -380,7 +388,8 @@ void Vars::Assign(Symbol name, Var* v, bool* readonly) {
          v->Origin() != VarOrigin::OVERRIDE) ||
         (orig->Origin() == VarOrigin::ENVIRONMENT_OVERRIDE &&
          v->Origin() != VarOrigin::OVERRIDE &&
-         v->Origin() != VarOrigin::ENVIRONMENT_OVERRIDE)) {
+         v->Origin() != VarOrigin::ENVIRONMENT_OVERRIDE &&
+         v->Origin() != VarOrigin::COMMAND_LINE)) {
       return;
     }
     if (orig->Origin() == VarOrigin::COMMAND_LINE &&

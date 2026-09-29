@@ -75,6 +75,7 @@ struct Stmt {
  */
 struct RuleStmt : public Stmt {
   Value* lhs;
+  bool has_literal_colon = false;
   enum { SEP_NULL, SEP_SEMICOLON, SEP_EQ, SEP_FINALEQ } sep;
   Value* rhs;
 

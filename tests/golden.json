@@ -976,13 +976,15 @@
   },
   "equal_in_target.mk:test:direct": {
     "files": [],
-    "output": "*** No rule to make target 'test'.\nkati: Nothing to be done for `test'.\n",
-    "status": 1
+    "output": "  BUILD   A=B\nPASS\n",
+    "status": 0
   },
   "equal_in_target.mk:test:ninja": {
-    "files": [],
-    "output": "ninja: error: ./build.ninja:9: unknown target 'test'\ndefault test\n            ^ near here\n",
-    "status": 1
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build 'A=B'\nPASS\n",
+    "status": 0
   },
   "err_both_colon.mk:test:direct": {
     "files": [],
@@ -1892,6 +1894,18 @@
     "output": "[1/1] build test1\nFAILED: [code=1] test1 \n/bin/sh -c 'cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''test1'\\'' ]; then :; else (mkdir testdir ) && (touch testdir/file1 ) && (touch testdir/file2 ) && (mkdir testdir/dir1 ) && (touch testdir/dir1/file1 ) && (touch testdir/dir1/file2 ) && (touch testdir/dir1/file3 ) && (mkdir testdir/dir2 ) && (touch testdir/dir2/file1 ) && (touch testdir/dir2/file2 ) && (touch testdir/dir2/file3 ) && (ln -s ../dir1/file1 testdir/dir2/link1 ) && (ln -s ../../testdir/dir1 testdir/dir2/link2 ) && (ln -s broken testdir/dir2/link3 ) && (mkdir -p build/tools ) && (cp ../../../testcase/tools/findleaves.py build/tools ) && (mkdir -p testdir3/b/c/d ) && (ln -s b testdir3/a ) && (touch testdir3/b/c/d/e ) && (mkdir -p testdir4/a/b ) && (ln -s self testdir4/self ) && (ln -s .. testdir4/a/b/c ) && (ln -s b testdir4/a/l ) && (mkdir -p testdir5 ) && (ln -s a testdir5/a ) && (ln -s b testdir5/c ) && (ln -s c testdir5/b ); fi'\ncp: ../../../testcase/tools/findleaves.py: No such file or directory\nninja: build stopped: subcommand failed.\n",
     "status": 1
   },
+  "find_command.mk:test2:direct": {
+    "files": [],
+    "output": "Makefile:51: FindEmulator: find: `testdir': No such file or directory\nMakefile:60: FindEmulator: find: `testdir': No such file or directory\nMakefile:62: FindEmulator: find: `testdir': No such file or directory\nMakefile:64: FindEmulator: find: `testdir': No such file or directory\nMakefile:65: FindEmulator: find: `testdir': No such file or directory\nMakefile:66: FindEmulator: find: `testdir': No such file or directory\nMakefile:67: FindEmulator: find: `testdir': No such file or directory\nMakefile:68: FindEmulator: find: `testdir': No such file or directory\nMakefile:69: FindEmulator: find: `testdir': No such file or directory\nMakefile:70: FindEmulator: find: `testdir': No such file or directory\nMakefile:71: FindEmulator: find: `testdir': No such file or directory\nMakefile:72: FindEmulator: find: `testdir': No such file or directory\nMakefile:73: FindEmulator: find: `testdir': No such file or directory\nMakefile:74: FindEmulator: find: `testdir': No such file or directory\nMakefile:75: FindEmulator: find: `testdir': No such file or directory\nMakefile:76: FindEmulator: find: `testdir': No such file or directory\nMakefile:77: FindEmulator: find: `testdir': No such file or directory\nMakefile:78: FindEmulator: find: `testdir': No such file or directory\nMakefile:79: FindEmulator: find: `testdir': No such file or directory\nMakefile:81: FindEmulator: cd: testdir: No such file or directory\nMakefile:82: FindEmulator: cd: testdir: No such file or directory\nMakefile:83: FindEmulator: cd: testdir/dir1: No such file or directory\nMakefile:84: FindEmulator: cd: testdir: No such file or directory\nMakefile:93: FindEmulator: find: `testdir': No such file or directory\nMakefile:95: FindEmulator: find: `testdir': No such file or directory\nMakefile:95: FindEmulator: find: `testdir': No such file or directory\nMakefile:97: FindEmulator: find: `testdir': No such file or directory\nMakefile:98: FindEmulator: find: `testdir': No such file or directory\nMakefile:99: FindEmulator: find: `testdir': No such file or directory\nMakefile:100: FindEmulator: cd: testdir: No such file or directory\nMakefile:101: FindEmulator: cd: testdir: No such file or directory\nMakefile:102: FindEmulator: cd: testdir: No such file or directory\nMakefile:104: FindEmulator: find: `testdir': No such file or directory\nMakefile:105: FindEmulator: find: `testdir': No such file or directory\nMakefile:106: FindEmulator: find: `testdir': No such file or directory\nfind: -maxdepth: hoge: illegal numeric value\nfind: -maxdepth: 1hoge: illegal trailing character\nfind: -maxdepth: -1: value must be positive\nMakefile:111: FindEmulator: find: `testdir': No such file or directory\nMakefile:112: FindEmulator: find: `testdir': No such file or directory\nMakefile:113: FindEmulator: find: `testdir': No such file or directory\nMakefile:114: FindEmulator: find: `testdir': No such file or directory\nMakefile:115: FindEmulator: find: `testdir': No such file or directory\nMakefile:116: FindEmulator: find: `testdir': No such file or directory\nMakefile:117: FindEmulator: find: `testdir': No such file or directory\nMakefile:118: FindEmulator: find: `testdir': No such file or directory\nMakefile:119: FindEmulator: find: `testdir': No such file or directory\nMakefile:120: FindEmulator: find: `testdir': No such file or directory\nMakefile:122: FindEmulator: cd: xxx: No such file or directory\nno options\n$ find testdir\n\n$ find .\n. ./Makefile ./submake\n$ find ./\n./ ./Makefile ./submake\n$ find .///\n./// .///Makefile .///submake\n$ find\n. ./Makefile ./submake\n$ find ./.\n./. ././Makefile ././submake\n$ find ././\n././ ././Makefile ././submake\n$ find testdir/../testdir\n\nprint\n$ find testdir -print\n\nconditiions\n$ find testdir -name foo\n\n$ find testdir -name file1\n\n$ find testdir -name \"file1\"\n\n$ find testdir -name \"file1\"\n\n$ find testdir -name \"*1\"\n\n$ find testdir -name \"*1\" -name \"file*\"\n\n$ find testdir -name \"*1\" -and -name \"file*\"\n\n$ find testdir -name \"*1\" -or -name \"file*\"\n\n$ find testdir -name \"*1\" -or -type f\n\n$ find testdir -name \"*1\" -or -not -type f\n\n$ find testdir -name \"*1\" -or \\! -type f\n\n$ find testdir -name \"*1\" -or -type d\n\n$ find testdir -name \"*1\" -or -type l\n\n$ find testdir -name \"*1\" -a -type l -o -name \"dir*\"\n\n$ find testdir -name \"dir*\" -o -name \"*1\" -a -type l\n\n$ find testdir \\( -name \"dir*\" -o -name \"*1\" \\) -a -type f\n\ncd\n$ cd testdir && find\n\n$ cd testdir/// && find .\n\n$ cd testdir///dir1// && find .///\n\n$ cd testdir && find ../testdir\n\ntest\n$ test -d testdir && find testdir\n\n$ if [ -d testdir ] ; then find testdir ; fi\n\n$ if [ -d testdir ]; then find testdir; fi\n\n$ if [ -d testdir ]; then cd testdir && find .; fi\n\n$ test -d testdir//dir1/// && find testdir///dir1///\n\n$ test -d testdir//.///dir1/// && find testdir//.///dir1///\n\nprune\n$ find testdir -name dir2 -prune -o -name file1\n\nmulti\n$ find testdir testdir\n\nsymlink\n$ find -L testdir -type f\n\n$ find -L testdir -type d\n\n$ find -L testdir -type l\n\n$ cd testdir; find -L . -type f\n\n$ cd testdir; find -L . -type d\n\n$ cd testdir; find -L . -type l\n\nmaxdepth\n$ find testdir -maxdepth 1\n\n$ find testdir -maxdepth 2\n\n$ find testdir -maxdepth 0\n\n$ find testdir -maxdepth hoge\n\n$ find testdir -maxdepth 1hoge\n\n$ find testdir -maxdepth -1\n\nfindleaves\n$ build/tools/findleaves.py testdir file1\n\n$ build/tools/findleaves.py testdir file3\n\n$ build/tools/findleaves.py --prune=dir1 testdir file3\n\n$ build/tools/findleaves.py --prune=dir1 --prune=dir2 testdir file3\n\n$ build/tools/findleaves.py --mindepth=1 testdir file1\n\n$ build/tools/findleaves.py --mindepth=2 testdir file1\n\n$ build/tools/findleaves.py --mindepth=3 testdir file1\n\n$ build/tools/findleaves.py --mindepth=2 testdir file1\n\n$ build/tools/findleaves.py --prune=dir1 --dir=testdir file1\n\n$ build/tools/findleaves.py --prune=dir1 --dir=testdir file3 link3\n\nmissing chdir / testdir\n$ cd xxx && find .\n\n$ if [ -d xxx ]; then find .; fi\n\n",
+    "status": 0
+  },
+  "find_command.mk:test2:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "Makefile:51: FindEmulator: find: `testdir': No such file or directory\nMakefile:60: FindEmulator: find: `testdir': No such file or directory\nMakefile:62: FindEmulator: find: `testdir': No such file or directory\nMakefile:64: FindEmulator: find: `testdir': No such file or directory\nMakefile:65: FindEmulator: find: `testdir': No such file or directory\nMakefile:66: FindEmulator: find: `testdir': No such file or directory\nMakefile:67: FindEmulator: find: `testdir': No such file or directory\nMakefile:68: FindEmulator: find: `testdir': No such file or directory\nMakefile:69: FindEmulator: find: `testdir': No such file or directory\nMakefile:70: FindEmulator: find: `testdir': No such file or directory\nMakefile:71: FindEmulator: find: `testdir': No such file or directory\nMakefile:72: FindEmulator: find: `testdir': No such file or directory\nMakefile:73: FindEmulator: find: `testdir': No such file or directory\nMakefile:74: FindEmulator: find: `testdir': No such file or directory\nMakefile:75: FindEmulator: find: `testdir': No such file or directory\nMakefile:76: FindEmulator: find: `testdir': No such file or directory\nMakefile:77: FindEmulator: find: `testdir': No such file or directory\nMakefile:78: FindEmulator: find: `testdir': No such file or directory\nMakefile:79: FindEmulator: find: `testdir': No such file or directory\nMakefile:81: FindEmulator: cd: testdir: No such file or directory\nMakefile:82: FindEmulator: cd: testdir: No such file or directory\nMakefile:83: FindEmulator: cd: testdir/dir1: No such file or directory\nMakefile:84: FindEmulator: cd: testdir: No such file or directory\nMakefile:93: FindEmulator: find: `testdir': No such file or directory\nMakefile:95: FindEmulator: find: `testdir': No such file or directory\nMakefile:95: FindEmulator: find: `testdir': No such file or directory\nMakefile:97: FindEmulator: find: `testdir': No such file or directory\nMakefile:98: FindEmulator: find: `testdir': No such file or directory\nMakefile:99: FindEmulator: find: `testdir': No such file or directory\nMakefile:100: FindEmulator: cd: testdir: No such file or directory\nMakefile:101: FindEmulator: cd: testdir: No such file or directory\nMakefile:102: FindEmulator: cd: testdir: No such file or directory\nMakefile:104: FindEmulator: find: `testdir': No such file or directory\nMakefile:105: FindEmulator: find: `testdir': No such file or directory\nMakefile:106: FindEmulator: find: `testdir': No such file or directory\nfind: -maxdepth: hoge: illegal numeric value\nfind: -maxdepth: 1hoge: illegal trailing character\nfind: -maxdepth: -1: value must be positive\nMakefile:111: FindEmulator: find: `testdir': No such file or directory\nMakefile:112: FindEmulator: find: `testdir': No such file or directory\nMakefile:113: FindEmulator: find: `testdir': No such file or directory\nMakefile:114: FindEmulator: find: `testdir': No such file or directory\nMakefile:115: FindEmulator: find: `testdir': No such file or directory\nMakefile:116: FindEmulator: find: `testdir': No such file or directory\nMakefile:117: FindEmulator: find: `testdir': No such file or directory\nMakefile:118: FindEmulator: find: `testdir': No such file or directory\nMakefile:119: FindEmulator: find: `testdir': No such file or directory\nMakefile:120: FindEmulator: find: `testdir': No such file or directory\nMakefile:122: FindEmulator: cd: xxx: No such file or directory\n[1/1] build test2\nno options\n$ find testdir\n\n$ find .\n. ./Makefile ./submake\n$ find ./\n./ ./Makefile ./submake\n$ find .///\n./// .///Makefile .///submake\n$ find\n. ./Makefile ./submake\n$ find ./.\n./. ././Makefile ././submake\n$ find ././\n././ ././Makefile ././submake\n$ find testdir/../testdir\n\nprint\n$ find testdir -print\n\nconditiions\n$ find testdir -name foo\n\n$ find testdir -name file1\n\n$ find testdir -name \"file1\"\n\n$ find testdir -name \"file1\"\n\n$ find testdir -name \"*1\"\n\n$ find testdir -name \"*1\" -name \"file*\"\n\n$ find testdir -name \"*1\" -and -name \"file*\"\n\n$ find testdir -name \"*1\" -or -name \"file*\"\n\n$ find testdir -name \"*1\" -or -type f\n\n$ find testdir -name \"*1\" -or -not -type f\n\n$ find testdir -name \"*1\" -or \\! -type f\n\n$ find testdir -name \"*1\" -or -type d\n\n$ find testdir -name \"*1\" -or -type l\n\n$ find testdir -name \"*1\" -a -type l -o -name \"dir*\"\n\n$ find testdir -name \"dir*\" -o -name \"*1\" -a -type l\n\n$ find testdir \\( -name \"dir*\" -o -name \"*1\" \\) -a -type f\n\ncd\n$ cd testdir && find\n\n$ cd testdir/// && find .\n\n$ cd testdir///dir1// && find .///\n\n$ cd testdir && find ../testdir\n\ntest\n$ test -d testdir && find testdir\n\n$ if [ -d testdir ] ; then find testdir ; fi\n\n$ if [ -d testdir ]; then find testdir; fi\n\n$ if [ -d testdir ]; then cd testdir && find .; fi\n\n$ test -d testdir//dir1/// && find testdir///dir1///\n\n$ test -d testdir//.///dir1/// && find testdir//.///dir1///\n\nprune\n$ find testdir -name dir2 -prune -o -name file1\n\nmulti\n$ find testdir testdir\n\nsymlink\n$ find -L testdir -type f\n\n$ find -L testdir -type d\n\n$ find -L testdir -type l\n\n$ cd testdir; find -L . -type f\n\n$ cd testdir; find -L . -type d\n\n$ cd testdir; find -L . -type l\n\nmaxdepth\n$ find testdir -maxdepth 1\n\n$ find testdir -maxdepth 2\n\n$ find testdir -maxdepth 0\n\n$ find testdir -maxdepth hoge\n\n$ find testdir -maxdepth 1hoge\n\n$ find testdir -maxdepth -1\n\nfindleaves\n$ build/tools/findleaves.py testdir file1\n\n$ build/tools/findleaves.py testdir file3\n\n$ build/tools/findleaves.py --prune=dir1 testdir file3\n\n$ build/tools/findleaves.py --prune=dir1 --prune=dir2 testdir file3\n\n$ build/tools/findleaves.py --mindepth=1 testdir file1\n\n$ build/tools/findleaves.py --mindepth=2 testdir file1\n\n$ build/tools/findleaves.py --mindepth=3 testdir file1\n\n$ build/tools/findleaves.py --mindepth=2 testdir file1\n\n$ build/tools/findleaves.py --prune=dir1 --dir=testdir file1\n\n$ build/tools/findleaves.py --prune=dir1 --dir=testdir file3 link3\n\nmissing chdir / testdir\n$ cd xxx && find .\n\n$ if [ -d xxx ]; then find .; fi\n\n",
+    "status": 0
+  },
   "find_command.mk:test3:direct": {
     "files": [],
     "output": "Makefile:126: FindEmulator: find: `testdir3/a/c': No such file or directory\nMakefile:128: FindEmulator: cd: testdir3/a/c: No such file or directory\nMakefile:129: FindEmulator: find: `testdir3': No such file or directory\n$ find testdir3/a/c\n\n$ if [ -d testdir3/a/c ]; then find testdir3/a/c; fi\n\n$ cd testdir3/a/c && find .\n\n$ build/tools/findleaves.py testdir3 e\n\n",
@@ -2053,6 +2067,20 @@
     "files": [],
     "output": "",
     "status": 0
+  },
+  "hash_in_var.mk:test1:direct": {
+    "files": [
+      "tmp"
+    ],
+    "output": "*** No rule to make target 'tmp/test', needed by 'test1'.\nkati: Nothing to be done for `test1'.\n",
+    "status": 1
+  },
+  "hash_in_var.mk:test1:ninja": {
+    "files": [
+      "tmp"
+    ],
+    "output": "ninja: error: 'tmp/test', needed by 'test1', missing and no known rule to make it\n",
+    "status": 1
   },
   "if.mk:test:direct": {
     "files": [],
@@ -2430,6 +2458,26 @@
     "output": "ninja: error: 'foo', needed by 'test2', missing and no known rule to make it\n",
     "status": 1
   },
+  "include_glob_order.mk:test1:direct": {
+    "files": [],
+    "output": "Makefile:4: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "include_glob_order.mk:test1:ninja": {
+    "files": [],
+    "output": "Makefile:4: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "include_glob_order.mk:test2:direct": {
+    "files": [],
+    "output": "Makefile:4: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "include_glob_order.mk:test2:ninja": {
+    "files": [],
+    "output": "Makefile:4: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
   "include_var.mk:test1:direct": {
     "files": [
       "foo.d"
@@ -2711,6 +2759,16 @@
     ],
     "output": "[1/3] build xya\n3 xya\n[2/3] build ayz\n3 ayz\n[3/3] build xyz\n1 yz\n2 yz\n",
     "status": 0
+  },
+  "multi_implicit_output_patterns.mk:default:direct": {
+    "files": [],
+    "output": "Makefile:17: *** invalid syntax in conditional.\n",
+    "status": 1
+  },
+  "multi_implicit_output_patterns.mk:default:ninja": {
+    "files": [],
+    "output": "Makefile:17: *** invalid syntax in conditional.\n",
+    "status": 1
   },
   "multi_outputs.mk:test:direct": {
     "files": [],
@@ -3661,6 +3719,18 @@
     "output": "Makefile:3: warning: real file \"foo\" depends on PHONY target \"bar\"\nEND\nMakefile:3: *** real file \"foo\" depends on PHONY target \"bar\"\n",
     "status": 1
   },
+  "realpath.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n/tmp/foo\n  BUILD   test\n\n  BUILD   test\n/tmp/foo /tmp/foo\n  BUILD   test\n/tmp/foo\n",
+    "status": 0
+  },
+  "realpath.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n/tmp/foo\n\n/tmp/foo /tmp/foo\n/tmp/foo\n",
+    "status": 0
+  },
   "recipe_continuation.sh:script": {
     "files": [],
     "output": "",
@@ -3740,7 +3810,7 @@
   "recursive_modes.sh:script": {
     "files": [],
     "output": "",
-    "status": 1
+    "status": 0
   },
   "recursive_self_reference.mk:default:direct": {
     "files": [],
@@ -3830,6 +3900,18 @@
     "output": "[1/1] build test\nPASS\n",
     "status": 0
   },
+  "shell.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\n/tmp\n  BUILD   test\n\n  BUILD   test\nna n b n\n  BUILD   test\nna n b n X\n  BUILD   test\nX-e nnY\n  BUILD   test\nX-e annY\n  BUILD   test\nX-e nnbY\n  BUILD   test\nX-e nnbY\n  BUILD   test\nX-e nnnbY\n  BUILD   test\nX-e bY\n  BUILD   test\nX-e b Y\n",
+    "status": 0
+  },
+  "shell.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\n/tmp\n\nna n b n\nna n b n X\nX-e nnY\nX-e annY\nX-e nnbY\nX-e nnbY\nX-e nnnbY\nX-e bY\nX-e b Y\n",
+    "status": 0
+  },
   "shell_arith_in_recipe.mk:test:direct": {
     "files": [],
     "output": "  BUILD   test\n0\n",
@@ -3840,6 +3922,18 @@
       ".ninja_log"
     ],
     "output": "[1/1] build test\n0\n",
+    "status": 0
+  },
+  "shell_stderr.mk:test:direct": {
+    "files": [],
+    "output": "SHOULD_NOT_BE_AFTER_ECHO\n  BUILD   test\n\n",
+    "status": 0
+  },
+  "shell_stderr.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "SHOULD_NOT_BE_AFTER_ECHO\n[1/1] build test\n\n",
     "status": 0
   },
   "shell_var.mk:test:direct": {
@@ -3875,6 +3969,62 @@
     "files": [],
     "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -ec 'cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''test'\\'' ]; then :; else (echo \"flags=-ec\" ) && (false ); fi'\nflags=-ec\nninja: build stopped: subcommand failed.\n",
     "status": 1
+  },
+  "shellstatus.mk:test:direct": {
+    "files": [
+      "nested.mk"
+    ],
+    "output": "3\n  BUILD   test\n0 1 2 simple\n",
+    "status": 0
+  },
+  "shellstatus.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "nested.mk"
+    ],
+    "output": "[1/2] build ruletest\n3\n[2/2] build test\n0 1 2 simple\n",
+    "status": 0
+  },
+  "shellstatus_direct.mk:default:direct": {
+    "files": [],
+    "output": "shellstatus-direct=1\n",
+    "status": 0
+  },
+  "shellstatus_direct.mk:default:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build all\nshellstatus-direct=1\n",
+    "status": 0
+  },
+  "shellstatus_in_rule.mk:test:direct": {
+    "files": [],
+    "output": "\n7\n",
+    "status": 0
+  },
+  "shellstatus_in_rule.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/2] build testTargetWithShellCommand\n\n7\n[2/2] build test\n",
+    "status": 0
+  },
+  "shellstatus_in_rule_in_eval.mk:test:direct": {
+    "files": [],
+    "output": "Makefile:13: 7\n\n\nRule ran!\n",
+    "status": 0
+  },
+  "shellstatus_in_rule_in_eval.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "Makefile:13: 7\n[1/2] build testTargetWithShellCommand\n\n\nRule ran!\n[2/2] build test\n",
+    "status": 0
+  },
+  "shellstatus_ninja.sh:script": {
+    "files": [],
+    "output": "",
+    "status": 0
   },
   "shellstatus_readonly.mk:test:direct": {
     "files": [],
@@ -4165,6 +4315,18 @@
     "status": 0
   },
   "tab_comment.mk:test:ninja": {
+    "files": [
+      ".ninja_log"
+    ],
+    "output": "[1/1] build test\nPASS\n",
+    "status": 0
+  },
+  "tab_only_line.mk:test:direct": {
+    "files": [],
+    "output": "  BUILD   test\nPASS\n",
+    "status": 0
+  },
+  "tab_only_line.mk:test:ninja": {
     "files": [
       ".ninja_log"
     ],
@@ -4787,6 +4949,59 @@
       ".ninja_log"
     ],
     "output": "[1/1] build test\nfoo\nbar\n",
+    "status": 0
+  },
+  "wildcard.mk:test1:direct": {
+    "files": [
+      "A",
+      "B",
+      "C",
+      "tmp"
+    ],
+    "output": "  BUILD   test1\n",
+    "status": 0
+  },
+  "wildcard.mk:test1:ninja": {
+    "files": [
+      ".ninja_log",
+      "A",
+      "B",
+      "C",
+      "tmp"
+    ],
+    "output": "[1/1] build test1\n",
+    "status": 0
+  },
+  "wildcard.mk:test2:direct": {
+    "files": [
+      "tmp"
+    ],
+    "output": "  BUILD   test2\nMakefile tmp/../Makefile tmp/../Makefile tmp/../Makefile\n",
+    "status": 0
+  },
+  "wildcard.mk:test2:ninja": {
+    "files": [
+      ".ninja_log",
+      "tmp"
+    ],
+    "output": "[1/1] build test2\nMakefile tmp/../Makefile tmp/../Makefile tmp/../Makefile\n",
+    "status": 0
+  },
+  "wildcard_cache.mk:test:direct": {
+    "files": [
+      "dir",
+      "foo,bar"
+    ],
+    "output": "\ndir/file\n  BUILD   foo,bar\n\n  BUILD   foo,bar\n  BUILD   foo,bar\n\n  BUILD   test\n\n  BUILD   test\nfoo,bar\n",
+    "status": 0
+  },
+  "wildcard_cache.mk:test:ninja": {
+    "files": [
+      ".ninja_log",
+      "dir",
+      "foo,bar"
+    ],
+    "output": "\ndir/file\n[1/2] build 'foo,bar'\n\n\n[2/2] build test\n\n\n",
     "status": 0
   },
   "wildcard_multi.mk:test1:direct": {

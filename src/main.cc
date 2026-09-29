@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <string_view>
+#include <unordered_set>
 
 #include "eval.h"
 #include "exec.h"
@@ -39,6 +40,7 @@
 #include "parser.h"
 #include "regen.h"
 #include "regen_dump.h"
+#include "rule.h"
 #include "stats.h"
 #include "stmt.h"
 #include "stringprintf.h"
@@ -65,19 +67,21 @@ static void ReadBootstrapMakefile(const std::vector<Symbol>& targets,
 #endif
        "AR?=ar\n"
        "ARFLAGS?=rv\n"
+       "CPP?=$(CC) -E\n"
        "RANLIB?=ranlib\n"
        "RM?=rm -f\n"
        // These are GNU make's default compilation variables. Projects often
        // reuse them in explicit pattern rules rather than spelling out the
        // compiler command, even when they provide their own dependency flags.
        "COMPILE.c = $(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c\n"
+       "COMPILE.f = $(FC) $(FFLAGS) $(TARGET_ARCH) -c\n"
        "COMPILE.S = $(CC) $(ASFLAGS) $(CPPFLAGS) $(TARGET_MACH) -c\n"
        "LINK.c = $(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) $(TARGET_ARCH)\n"
        "LINK.o = $(CC) $(LDFLAGS) $(TARGET_ARCH)\n"
        "OUTPUT_OPTION = -o $@\n"
        // Pretend to be GNU make 4.2.1, for compatibility.
        "MAKE_VERSION?=4.2.1\n"
-       ".FEATURES?=output-sync\n"
+       ".FEATURES?=output-sync undefine\n"
        "KATI?=ckati\n"
        // Overwrite $SHELL environment variable.
        "SHELL=/bin/sh\n"
@@ -93,6 +97,8 @@ static void ReadBootstrapMakefile(const std::vector<Symbol>& targets,
         "\t$(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<\n"
         ".cc.o:\n"
         "\t$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<\n"
+        ".f.o:\n"
+        "\t$(COMPILE.f) $(OUTPUT_OPTION) $<\n"
         // TODO: Add more builtin rules.
     );
   }
@@ -138,6 +144,7 @@ static void ReadBootstrapMakefile(const std::vector<Symbol>& targets,
 
   bootstrap += StringPrintf("MAKECMDGOALS?=%s\n",
                             JoinSymbols(makecmdgoals, " ").c_str());
+  bootstrap += StringPrintf("MAKELEVEL:=%d\n", g_flags.make_level);
 
   char cwd[PATH_MAX];
   if (!getcwd(cwd, PATH_MAX)) {
@@ -171,6 +178,20 @@ static std::string EscapeMakeOverrideValue(std::string_view value) {
     result += c;
   }
 
+  return result;
+}
+
+static std::string RemoveParserHashEscapes(std::string_view value) {
+  std::string result;
+  result.reserve(value.size());
+  for (char c : value) {
+    // Command-line assignments are fed through the makefile parser with an
+    // extra backslash before each literal '#'. The backslash belongs to that
+    // parser invocation, not to the value forwarded through MAKEFLAGS.
+    if (c == '#' && !result.empty() && result.back() == '\\')
+      result.pop_back();
+    result += c;
+  }
   return result;
 }
 
@@ -239,11 +260,13 @@ static std::string BuildMakeOverrides(Evaluator* ev) {
       if (!result.empty())
         result += ' ';
 
-      // Keep the assignment operator and escape only its value. This retains
-      // the semantics of += and ?= while still making whitespace safe in
-      // MAKEFLAGS.
-      result.append(assignment.substr(0, equal + 1));
-      result += EscapeMakeOverrideValue(assignment.substr(equal + 1));
+      // GNU make transports the resulting unevaluated value as an ordinary
+      // override. Replaying += in a child would append to the already
+      // exported environment value (and may evaluate a deferred expression
+      // before the child's makefile has defined its variables).
+      result += name.str();
+      result += '=';
+      result += EscapeMakeOverrideValue(RemoveParserHashEscapes(var->String()));
       break;
     }
   }
@@ -252,26 +275,26 @@ static std::string BuildMakeOverrides(Evaluator* ev) {
 }
 
 static void UpdateMakeFlags(Evaluator* ev) {
-  if (g_flags.cl_vars.empty() && !g_flags.no_print_directory &&
-      g_flags.command_line_include_dirs.empty() && !g_flags.no_builtin_rules) {
-    // MAKEOVERRIDES is an inherited transport variable.  If this recursive
-    // invocation has no effective command-line assignments, retaining the
-    // parent's value would promote stale assignments back to command-line
-    // precedence in the next child.
-    SetVar("MAKEOVERRIDES=", VarOrigin::COMMAND_LINE, nullptr,
-           Loc("*bootstrap*", 0));
-    setenv("MAKEOVERRIDES", "", 1);
-    return;
-  }
-
-  const std::string overrides = BuildMakeOverrides(ev);
+  // MAKEOVERRIDES is special in GNU make: a makefile may clear it to stop
+  // command-line assignments from propagating to recursive makes.  The
+  // automatically generated value must therefore have default origin, so a
+  // later makefile assignment can replace it.
+  Var* existing_overrides = ev->LookupVar(Intern("MAKEOVERRIDES"));
+  const bool explicit_overrides =
+      existing_overrides->IsDefined() &&
+      (existing_overrides->Origin() == VarOrigin::FILE ||
+       existing_overrides->Origin() == VarOrigin::OVERRIDE ||
+       existing_overrides->Origin() == VarOrigin::COMMAND_LINE);
+  const std::string overrides = explicit_overrides
+                                    ? existing_overrides->Eval(ev)
+                                    : BuildMakeOverrides(ev);
 
   if (!overrides.empty()) {
-    SetVar("MAKEOVERRIDES=" + overrides, VarOrigin::COMMAND_LINE, nullptr,
+    SetVar("MAKEOVERRIDES=" + overrides, VarOrigin::DEFAULT, nullptr,
            Loc("*bootstrap*", 0));
     setenv("MAKEOVERRIDES", overrides.c_str(), 1);
   } else {
-    SetVar("MAKEOVERRIDES=", VarOrigin::COMMAND_LINE, nullptr,
+    SetVar("MAKEOVERRIDES=", VarOrigin::DEFAULT, nullptr,
            Loc("*bootstrap*", 0));
     setenv("MAKEOVERRIDES", "", 1);
   }
@@ -370,6 +393,32 @@ static void UpdateMakeFlags(Evaluator* ev) {
     append_option("-s");
   if (g_flags.no_builtin_rules)
     append_option("-r");
+  if (g_flags.environment_overrides)
+    append_option("-e");
+
+  // Wrappers such as QEMU's Makefile forward this option to Ninja. Replace
+  // inherited job limits with the effective limit selected for this process.
+  std::string without_jobs;
+  bool skip_job_count = false;
+  for (std::string_view token : WordScanner(makeflags_value)) {
+    if (skip_job_count) {
+      skip_job_count = false;
+      if (!token.empty() && isdigit(static_cast<unsigned char>(token[0])))
+        continue;
+    }
+    if (token == "-j" || token == "--jobs") {
+      skip_job_count = true;
+      continue;
+    }
+    if (HasPrefix(token, "-j") || HasPrefix(token, "--jobs="))
+      continue;
+    if (!without_jobs.empty())
+      without_jobs += ' ';
+    without_jobs += token;
+  }
+  makeflags_value = std::move(without_jobs);
+  const std::string jobs_option = "-j" + std::to_string(g_flags.num_jobs);
+  append_option(jobs_option.c_str());
 
   // Options inherited from MAKEFLAGS are already present in makeflags_value.
   // Add only directories supplied on this command line, preserving their
@@ -395,6 +444,14 @@ static void UpdateMakeFlags(Evaluator* ev) {
     makeflags_value += overrides;
   }
 
+  // Older Automake recipes inspect MFLAGS when MAKE_VERSION is defined.
+  // GNU make exports the options there, without command-line assignments.
+  const size_t overrides_separator = makeflags_value.find(" -- ");
+  const std::string mflags_value =
+      overrides_separator == std::string::npos
+          ? makeflags_value
+          : makeflags_value.substr(0, overrides_separator);
+  setenv("MFLAGS", mflags_value.c_str(), 1);
   SetVar("MAKEFLAGS=" + makeflags_value, VarOrigin::COMMAND_LINE, nullptr,
          Loc("*bootstrap*", 0));
   setenv("MAKEFLAGS", makeflags_value.c_str(), 1);
@@ -529,7 +586,18 @@ static int Run(const std::vector<Symbol>& targets,
                                     ev.loc()));
 
     for (char** p = environ; *p; p++) {
-      SetVar(*p, VarOrigin::ENVIRONMENT, nullptr, Loc());
+      const std::string_view entry(*p);
+      const size_t equal_pos = entry.find('=');
+      const std::string_view name = entry.substr(0, equal_pos);
+      const bool internal_make_variable =
+          name == "MAKEFLAGS" || name == "MAKEOVERRIDES" ||
+          name == "MAKELEVEL" || name == "MFLAGS" || name == "SHELL" ||
+          name == "CURDIR" || name == "MAKECMDGOALS" || name == "MAKEFILE_LIST";
+      SetVar(*p,
+             g_flags.environment_overrides && !internal_make_variable
+                 ? VarOrigin::ENVIRONMENT_OVERRIDE
+                 : VarOrigin::ENVIRONMENT,
+             nullptr, Loc());
       const char* equal = strchr(*p, '=');
       if (equal != nullptr && strncmp(*p, "VPATH=", 6) == 0)
         ev.SetVpath("%", equal + 1);
@@ -553,7 +621,17 @@ static int Run(const std::vector<Symbol>& targets,
 
       for (std::string_view l : cl_vars) {
         std::vector<Stmt*> asts;
-        Parse(Intern(l).str(), Loc("*bootstrap*", 0), &asts);
+        // A # in an argv assignment is literal. Parsing argv as makefile
+        // syntax would otherwise turn the rest of the value into a comment
+        // (and break Automake's TAP stderr-prefix option on recursion).
+        std::string assignment;
+        assignment.reserve(l.size());
+        for (char c : l) {
+          if (c == '#')
+            assignment += '\\';
+          assignment += c;
+        }
+        Parse(Intern(assignment).str(), Loc("*bootstrap*", 0), &asts);
         CHECK(asts.size() == 1);
         asts[0]->Eval(&ev);
       }
@@ -603,11 +681,36 @@ static int Run(const std::vector<Symbol>& targets,
     /*
      * GNU make compatibility:
      *
-     * If a required include file did not exist during parsing, GNU make
-     * tries to build it and then restarts the entire makefile evaluation.
+     * Makefiles named directly or reached by include are remade before
+     * ordinary goals. If one changes, restart the entire evaluation.
      */
-    if (!ev.missing_includes().empty() || !ev.included_makefiles().empty()) {
+    if (!g_flags.makefiles.empty() || !ev.missing_includes().empty() ||
+        !ev.included_makefiles().empty()) {
       std::vector<Symbol> include_targets;
+
+      for (const char* makefile : g_flags.makefiles) {
+        if (std::string_view(makefile) == "-")
+          continue;
+        // An arbitrary .DEFAULT or catch-all pattern must not try to remake
+        // the parser input. Explicit Makefile rules are the common Autotools
+        // case and are safe to execute before ordinary goals.
+        const std::string_view filename = TrimLeadingCurdir(makefile);
+        bool has_explicit_rule = false;
+        for (const Rule* rule : ev.rules()) {
+          for (Symbol output : rule->outputs) {
+            if (TrimLeadingCurdir(output.str()) == filename &&
+                (!rule->cmds.empty() || !rule->inputs.empty() ||
+                 !rule->order_only_inputs.empty())) {
+              has_explicit_rule = true;
+              break;
+            }
+          }
+          if (has_explicit_rule)
+            break;
+        }
+        if (has_explicit_rule)
+          include_targets.push_back(Intern(makefile));
+      }
 
       for (const auto& include : ev.missing_includes()) {
         include_targets.push_back(Intern(include.filename));
@@ -620,6 +723,9 @@ static int Run(const std::vector<Symbol>& targets,
         }
       }
 
+      if (include_targets.empty())
+        goto includes_done;
+
       std::vector<NamedDepNode> include_nodes;
 
       {
@@ -628,8 +734,12 @@ static int Run(const std::vector<Symbol>& targets,
 
         ScopedTimeReporter tr("remake included makefiles time");
 
+        // Included makefiles may create their own parent directories. Adding
+        // synthetic directory edges here can introduce a cycle through a
+        // project's prepare target before the include has been generated.
+        ev.RefreshVpath();
         MakeDep(&ev, ev.rules(), ev.rule_vars(), include_targets,
-                &include_nodes);
+                &include_nodes, false);
       }
 
       // Optional includes without a producing rule are valid and must remain
@@ -638,12 +748,47 @@ static int Run(const std::vector<Symbol>& targets,
       // Restarting in that case re-enters the same missing-include path
       // forever (U-Boot's generated config headers expose this readily).
       std::vector<NamedDepNode> include_remake_nodes;
+      std::vector<NamedDepNode> deferred_include_nodes;
       for (const auto& include : include_nodes) {
-        if (include.second->has_rule)
-          include_remake_nodes.push_back(include);
+        if (!include.second->has_rule)
+          continue;
+        // A generated include can introduce rules needed to remake another
+        // include. Build resolvable graphs first and restart before treating
+        // those temporarily missing prerequisites as fatal (glibc does this
+        // with soversions.mk and libc-modules.stmp).
+        std::vector<const DepNode*> pending{include.second};
+        std::unordered_set<const DepNode*> visited;
+        bool ready = true;
+        while (!pending.empty()) {
+          const DepNode* node = pending.back();
+          pending.pop_back();
+          if (!visited.insert(node).second)
+            continue;
+          if (!node->has_rule && !node->is_phony &&
+              !Exists(node->output.c_str())) {
+            ready = false;
+            break;
+          }
+          for (const auto& dep : node->deps)
+            pending.push_back(dep.second);
+          for (const auto& dep : node->order_onlys)
+            pending.push_back(dep.second);
+          for (const auto& dep : node->validations)
+            pending.push_back(dep.second);
+        }
+        (ready ? include_remake_nodes : deferred_include_nodes)
+            .push_back(include);
       }
 
+      // If no include can make progress, preserve the normal missing-rule
+      // diagnosis instead of silently ignoring a broken remake recipe.
+      if (include_remake_nodes.empty())
+        include_remake_nodes.swap(deferred_include_nodes);
+
       if (!include_remake_nodes.empty()) {
+        std::vector<double> include_timestamps;
+        for (const auto& include : include_remake_nodes)
+          include_timestamps.push_back(GetTimestamp(include.first.str()));
         ExecResult include_result{false, false, false};
         {
           ScopedFrame frame(ev.Enter(FrameType::PHASE,
@@ -651,10 +796,16 @@ static int Run(const std::vector<Symbol>& targets,
 
           ScopedTimeReporter tr("execute included makefiles time");
 
-          // Include remakes happen while the evaluator is being restarted.
-          // Keep that bootstrap phase serial; ordinary recipe execution uses
-          // the bounded executor parallelism.
-          include_result = Exec(include_remake_nodes, &ev, false);
+          // Remaking dependency includes can compile the entire project.
+          // Use the same bounded scheduler as ordinary targets; evaluation
+          // is serialized by the executor and graph edges enforce ordering.
+          // GNU make runs included-makefile remaking normally under -t.
+          // Touching Makefile itself on every evaluation would otherwise
+          // restart this process forever, even when it is up to date.
+          const bool touch_mode = g_flags.is_touch;
+          g_flags.is_touch = false;
+          include_result = Exec(include_remake_nodes, &ev);
+          g_flags.is_touch = touch_mode;
           if (include_result.failed && !g_flags.keep_going) {
             ev.Finish();
             return 1;
@@ -665,7 +816,24 @@ static int Run(const std::vector<Symbol>& targets,
         // A prerequisite may run without rebuilding the included makefile.
         // Directory prerequisites in particular may run on every pass, so
         // restarting for any recipe in the include graph would loop forever.
-        if (!include_result.roots_built) {
+        bool includes_changed = false;
+        for (size_t i = 0; i < include_remake_nodes.size(); ++i) {
+          if (GetTimestamp(include_remake_nodes[i].first.str()) !=
+              include_timestamps[i])
+            includes_changed = true;
+        }
+        if (!includes_changed) {
+          if (!deferred_include_nodes.empty()) {
+            const bool touch_mode = g_flags.is_touch;
+            g_flags.is_touch = false;
+            const ExecResult deferred_result =
+                Exec(deferred_include_nodes, &ev);
+            g_flags.is_touch = touch_mode;
+            if (deferred_result.failed && !g_flags.keep_going) {
+              ev.Finish();
+              return 1;
+            }
+          }
           ev.Finish();
           goto includes_done;
         }
@@ -715,6 +883,7 @@ static int Run(const std::vector<Symbol>& targets,
 
       ScopedTimeReporter tr("make dep time");
 
+      ev.RefreshVpath();
       MakeDep(&ev, ev.rules(), ev.rule_vars(), targets, &nodes);
     }
 
@@ -784,7 +953,7 @@ static int Run(const std::vector<Symbol>& targets,
         for (Stmt* stmt : bootstrap_asts)
           delete stmt;
 
-        return execution.needs_build ? 1 : 0;
+        return execution.failed ? 2 : execution.needs_build ? 1 : 0;
       }
 
       if (execution.failed) {
@@ -907,6 +1076,11 @@ int main(int argc, char* argv[]) {
     PERROR("getcwd");
   const std::string invocation_dir(invocation_dir_buf);
   g_flags.Parse(argc, argv);
+  // Direct recursive invocations must inherit the effective local job limit,
+  // including a command-line -j override. Ninja's launcher supplies its own
+  // shared jobserver; KATI_JOBS also bounds children launched by configure.
+  const std::string job_limit = std::to_string(g_flags.num_jobs);
+  setenv("KATI_JOBS", job_limit.c_str(), 1);
   if (g_flags.working_dir) {
     int ret = chdir(g_flags.working_dir);
     if (ret != 0)
