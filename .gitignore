@@ -14,3 +14,4 @@ foo
 testcase/.kati_stamp
 testcase/build.ninja
 testcase/dump/include_smoke/nop
+validation/logs/
