@@ -1,3 +1,11 @@
+// FORK MODIFICATION NOTICE (2026)
+// Changed by the GNU-free Kati fork, maintained by Rihards Paps and
+// Haralds Paps.
+// Changed build execution, evaluation, or portability for this fork.
+// Upstream material retains its Apache-2.0 terms. Fork modifications are
+// covered by PolyForm Perimeter 1.0.1; see docs/LICENSING.md and NOTICE
+// at the repository root. Original notices below remain applicable.
+
 // Copyright 2016 Google Inc. All rights reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");

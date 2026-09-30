@@ -1,3 +1,11 @@
+// FORK MODIFICATION NOTICE (2026)
+// Changed by the GNU-free Kati fork, maintained by Rihards Paps and
+// Haralds Paps.
+// Changed build execution, evaluation, or portability for this fork.
+// Upstream material retains its Apache-2.0 terms. Fork modifications are
+// covered by PolyForm Perimeter 1.0.1; see docs/LICENSING.md and NOTICE
+// at the repository root. Original notices below remain applicable.
+
 // Copyright 2015 Google Inc. All rights reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,11 +49,11 @@ class Rule {
 
   // Expand prerequisites that were escaped for .SECONDEXPANSION.  The
   // result is parsed with the same word/path rules as ordinary prerequisites.
-  void ParseSecondaryInputs(Evaluator* ev,
-                            std::vector<Symbol>* inputs,
-                            std::vector<Symbol>* order_only_inputs,
-                            std::vector<std::vector<Symbol>>*
-                                wait_groups = nullptr) const;
+  void ParseSecondaryInputs(
+      Evaluator* ev,
+      std::vector<Symbol>* inputs,
+      std::vector<Symbol>* order_only_inputs,
+      std::vector<std::vector<Symbol>>* wait_groups = nullptr) const;
 
   void ParsePrerequisites(const std::string_view& line,
                           size_t pos,
