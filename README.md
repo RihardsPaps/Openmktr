@@ -1,36 +1,102 @@
 > FORK MODIFICATION NOTICE (2026)
 > Changed by the GNU-free Kati fork, maintained by Rihards Paps and
-> Haralds Paps. Rewritten documentation for the GNU-free fork and its licensing.
+> Haralds Paps. Rewritten and expanded the fork's overview, build instructions,
+> usage examples, architecture, compatibility guidance, and troubleshooting.
 > Upstream material retains its Apache-2.0 terms. Fork modifications are
 > covered by PolyForm Perimeter 1.0.1; see docs/LICENSING.md and NOTICE
 > at the repository root. Original notices below remain applicable.
 
 # GNU-free Kati
 
-**Read Makefiles. Build targets directly or generate Ninja. Use a GNU-free toolchain.**
+**Read Makefiles. Build targets in parallel. Generate Ninja graphs.**
 
-This repository maintains a C++ fork of [Google Kati](https://github.com/google/kati). Its `ckati` executable understands Makefile syntax and supports two workflows: parallel direct execution and Makefile-to-Ninja conversion. The supported platform is Linux with musl; other platforms are best effort.
+GNU-free Kati is a C++17 fork of [Google Kati](https://github.com/google/kati).
+Its `ckati` executable parses and evaluates Makefiles, resolves dependencies,
+and either runs recipes directly or writes a build graph for Ninja to execute.
+Both workflows start with your existing Makefile.
 
-| Capability | What it does |
+The supported platform is **Linux with musl**, using Clang/LLVM and libc++.
+[Chimera Linux](https://chimera-linux.org/about/) supplies the repository's
+build and test environment. Other platforms are best effort.
+
+| Capability | What you can do |
 | --- | --- |
-| Direct builds | Executes requested targets, with independent work running in parallel under `-j`. |
-| Ninja conversion | Emits a Ninja graph and a `ninja.sh` launcher from a Makefile. |
-| Fast regeneration | `--ninja --regen` checks whether the generated graph needs updating. |
-| GNU-free project path | Builds and tests with Ninja, Clang/LLVM, musl, libc++, and POSIX shell tools in Chimera Linux. |
+| Direct execution | Build requested Makefile targets with parallel recipe scheduling. |
+| Ninja generation | Turn evaluated Makefile rules into a Ninja graph and generated launcher. |
+| Regeneration checks | Reuse a generated graph when its recorded inputs remain current. |
+| Recursive builds | Run child Kati builds with shared job limits. |
+| GNU-free project toolchain | Build, test, and run Kati with LLVM, musl, libc++, Ninja, Python, and POSIX shell tools. |
 
-## Quick start
+Kati implements a subset of GNU Make syntax. Compatibility depends on the
+Makefile and the selected build mode; see [compatibility](#compatibility-and-scope)
+before adopting it for an existing project.
 
-Build on [Chimera Linux](https://chimera-linux.org/about/) with `clang`, `ninja`, `python`, and `chimerautils` installed:
+## Contents
+
+- [Build Kati](#build-kati)
+- [Try it in five steps](#try-it-in-five-steps)
+- [Choose a build mode](#choose-a-build-mode)
+- [Everyday usage](#everyday-usage)
+- [How it works](#how-it-works)
+- [Compatibility and scope](#compatibility-and-scope)
+- [Validation and performance](#validation-and-performance)
+- [Troubleshooting](#troubleshooting)
+- [Contributing and documentation](#contributing-and-documentation)
+- [Maintainers, credits, and licensing](#maintainers-credits-and-licensing)
+
+## Build Kati
+
+### On Chimera Linux
+
+Install the supported packages, then build from the repository root:
 
 ```sh
+apk add clang ninja python chimerautils
 ninja -f build.ninja -j4 ckati
+./ckati --version
 ```
 
-Run the following example **in a separate directory**. Conversion writes a `build.ninja` file, so running it in the repository root would replace the project's own build file.
+Installing packages requires the appropriate system privileges. The executable
+is written to `./ckati`; intermediate build files go into `out/`.
+
+The checked-in [build graph](build.ninja) uses C++17, Clang++, libc++, LLVM's
+lld linker, and ThinLTO. Ninja's `deps = gcc` setting names a compiler depfile
+format; it does not invoke GCC.
+
+### Build and test in a container
+
+With Docker available, run these commands from the repository root:
 
 ```sh
-mkdir demo
-cd demo
+docker build -t kati-test .
+docker run --rm kati-test
+```
+
+The [Dockerfile](Dockerfile) uses a pinned Chimera image, builds `ckati` and the
+C++ test binaries, checks for unwanted GNU dependencies, and runs the standard
+suites when the container starts. The executable stays inside the image; this
+workflow does not install it on the host.
+
+Docker and the CI host are external infrastructure. The project-controlled
+build and tests execute inside Chimera.
+
+## Try it in five steps
+
+After building `ckati`, start in the repository root and run the five steps
+below in the same POSIX shell. The example creates a disposable workspace so
+conversion cannot replace the repository's own build graph.
+
+**1. Save the executable path and enter a temporary directory.**
+
+```sh
+kati_binary="$(pwd)/ckati"
+demo_dir="$(mktemp -d)"
+cd "$demo_dir"
+```
+
+**2. Create a small Makefile.** The recipe line begins with a literal tab.
+
+```sh
 cat > Makefile <<'EOF'
 .PHONY: all
 all: hello.txt
@@ -38,113 +104,283 @@ all: hello.txt
 hello.txt:
 	printf 'hello from ckati\n' > $@
 EOF
+```
 
-# Execute the Makefile directly.
-../ckati -f Makefile -j4 all
+**3. Build the target directly.**
 
-# Generate a Ninja graph, then use its generated launcher.
-../ckati --ninja --regen -f Makefile all
+```sh
+"$kati_binary" -f Makefile -j4 all
+cat hello.txt
+```
+
+The file contains `hello from ckati`.
+
+**4. Remove the result and build it through Ninja.**
+
+```sh
+rm hello.txt
+"$kati_binary" --ninja --regen -f Makefile all
+sh ./ninja.sh -j4
+cat hello.txt
+```
+
+You get the same file through the generated graph.
+
+**5. Run the launcher again.**
+
+```sh
 sh ./ninja.sh -j4
 ```
 
-`ninja.sh` is generated by `ckati`; it is not a checked-in script. The second build above should find `hello.txt` up to date. After changing the Makefile, rerun `ckati --ninja --regen` before using the generated Ninja graph.
+Ninja should report that there is no work to do. The demo remains in
+`$demo_dir` for inspection.
 
-For a full clean build and test run in the supported environment:
+> **Conversion writes `build.ninja` by default.** Run conversion examples in a
+> disposable directory. Running them at this repository's root can overwrite
+> the checked-in graph used to build Kati itself.
+
+## Choose a build mode
+
+| Behavior | Direct execution | Generated Ninja |
+| --- | --- | --- |
+| Invocation | `ckati -f Makefile -j4 all` | `ckati --ninja --regen -f Makefile all`, then `sh ninja.sh -j4` |
+| Makefile evaluation | Reads and evaluates Makefiles on each invocation. | Evaluates Makefiles when generating the graph. |
+| Recipe scheduling | Kati schedules work under its job limit. | Ninja schedules the generated edges. |
+| Exported variables | Captured at recipe boundaries. | Recorded during generation and restored by generated recipes. |
+| Recursive builds | Child Kati processes read their own Makefiles. | Recursive commands remain recipes; child graphs are not flattened into the parent graph. |
+| Input changes | Handled on the next Kati invocation. | Check regeneration with Kati before running the graph. |
+
+Use direct execution to start evaluating an existing project, especially when
+its dependencies can change while recipes run. Use Ninja generation when the
+evaluated dependency graph suits your workflow and you want Ninja to schedule
+subsequent builds.
+
+### Keep a generated graph current
+
+Treat generation and execution as two separate steps. Before a Ninja build,
+rerun the same generation command, including its targets and variable
+assignments:
 
 ```sh
-docker build -t kati-test .
-docker run --rm kati-test
+ckati --ninja --regen -f Makefile all MODE=release
+sh ./ninja.sh -j4
 ```
 
-The Docker image uses Chimera Linux and runs the C++ unit binaries, regression suite, and converted shell tests. The CI workflow builds and tests that same image.
+`--regen` checks recorded inputs and command results, reusing the graph when
+they are current. Standard-input Makefiles always regenerate. Ninja itself
+does not re-evaluate Makefiles.
+
+Use the generated `ninja.sh` launcher to load the recorded environment and
+coordinate job limits with recursive Kati builds. Set runtime concurrency on
+that launcher; generation-time `-j` is not the Ninja build's runtime limit.
+Run the launcher from the same working directory used for generation.
+
+## Everyday usage
+
+These examples assume `ckati` is on your `PATH` and you are in the project you
+want to build. Otherwise, use the executable's absolute path.
+
+```sh
+# Build a named target with four jobs.
+ckati -f Makefile -j4 all
+
+# Supply a command-line variable assignment.
+ckati -f Makefile -j4 all MODE=release
+
+# Build in a different working directory.
+ckati -C path/to/project -f Makefile -j4 all
+
+# Inspect the recipes for a direct build.
+ckati -n -f Makefile all
+
+# Generate files in a separate directory, then run the launcher.
+ckati --ninja --regen --ninja_dir .kati -f Makefile all
+sh ./.kati/ninja.sh -j4
+```
+
+`--ninja_dir` changes where generated files are written. It does not change
+the working directory for the build's recipes.
+
+### Common options
+
+| Option | Purpose |
+| --- | --- |
+| `-f FILE` | Read a Makefile; `-f -` reads standard input. |
+| `-C DIR` | Change the working directory before processing the build. |
+| `-jN` | Set direct execution concurrency. For Ninja builds, pass `-jN` to the launcher. |
+| `-k` | Continue independent work after recipe failures. |
+| `-n` | Print ordinary recipes without executing them. Recursive Make commands and recipes marked `+` can still run. |
+| `-q` | Check whether targets need building. |
+| `-t` | Update target timestamps instead of running ordinary recipes. |
+| `--ninja` | Generate a Ninja graph, environment script, and launcher. |
+| `--regen` | Check recorded inputs before reusing a generated graph. |
+| `--regen_debug` | Enable diagnostics for regeneration checks. |
+| `--ninja_dir DIR` | Write generated files into the specified directory. |
+| `--version` | Print a Make compatibility banner and the Kati source revision. |
+
+### Identify the binary
+
+Git builds include the source revision and a `+dirty` suffix when the checkout
+has uncommitted changes. `KATI_SOURCE_REVISION` can supply an explicit build
+revision; source archives without Git metadata or an explicit revision report
+`unversioned`.
+
+The `GNU Make 4.2.1` line in `--version` is a compatibility banner. The following
+`ckati` line identifies the Kati build; the banner does not establish complete
+GNU Make compatibility.
 
 ## How it works
+
+Both modes share the same parser, evaluator, and dependency resolver. The
+execution path branches after Kati has interpreted the Makefile's rules.
 
 ```mermaid
 flowchart LR
     A[Makefile and included files] --> B[Parse and evaluate]
     B --> C[Resolve rules and dependencies]
-    C --> D{Choose mode}
-    D -->|Direct| E[Parallel recipe executor]
-    D -->|--ninja| F[Ninja graph and launcher]
-    F --> G[Ninja executes recipes]
+    C --> D{Build mode}
+    D -->|Direct| E[Kati schedules recipes]
+    D -->|Ninja| F[Generate graph and launcher]
+    F --> G[Ninja schedules recipes]
 ```
 
-The C++ code is organized around that path:
+| Stage | Main implementation |
+| --- | --- |
+| Parse statements and expressions | [parser.cc](src/parser.cc), [expr.cc](src/expr.cc) |
+| Cache parsed includes | [file_cache.cc](src/file_cache.cc) |
+| Evaluate variables, directives, functions, and rules | [eval.cc](src/eval.cc), [stmt.cc](src/stmt.cc), [func.cc](src/func.cc) |
+| Resolve rules and dependencies | [dep.cc](src/dep.cc) |
+| Expand recipes and execute direct builds | [command.cc](src/command.cc), [exec.cc](src/exec.cc) |
+| Generate Ninja files and check regeneration | [ninja.cc](src/ninja.cc), [regen.cc](src/regen.cc) |
 
-| Stage | Main files | Responsibility |
-| --- | --- | --- |
-| Parse | [`parser.cc`](src/parser.cc), [`expr.cc`](src/expr.cc), [`file_cache.cc`](src/file_cache.cc) | Parse statements and expressions; reuse parsed includes. |
-| Evaluate | [`eval.cc`](src/eval.cc), [`stmt.cc`](src/stmt.cc), [`func.cc`](src/func.cc) | Expand variables, directives, functions, and rules. |
-| Resolve | [`dep.cc`](src/dep.cc) | Build the requested target's dependency graph. |
-| Execute | [`command.cc`](src/command.cc), [`exec.cc`](src/exec.cc) | Expand recipes and schedule direct builds. |
-| Convert | [`ninja.cc`](src/ninja.cc), [`regen.cc`](src/regen.cc) | Write Ninja files and check whether they need regeneration. |
+Recursive recipes using `$(MAKE)` invoke Kati through its executable path.
+Child builds evaluate their own Makefiles at execution time. In Ninja mode,
+the generated launcher supplies the shared Kati jobserver for those children.
 
-Both modes use the same parsing and rule resolution. Some Makefile constructs have no exact Ninja equivalent; changes to conversion behavior need coverage in both modes.
+## Compatibility and scope
 
-## Modes and compatibility
+### Makefile support
 
-| Behavior | Direct execution | Generated Ninja |
-| --- | --- | --- |
-| Dependency scheduling | Runs recipes with a bounded `-j` job limit. | Ninja schedules the emitted graph. |
-| Makefile changes | Parsed on each invocation. | Rerun `ckati --ninja --regen` before invoking the generated graph. |
-| Exported variables | Captured at each recipe boundary. | Captured during graph generation and restored by generated recipes. |
-| Recursive builds | Child Kati processes evaluate their own Makefiles. | Recursive commands are opaque Ninja edges and share a Kati jobserver. |
-| Dynamic Makefile features | Evaluated by Kati when supported. | Features without an exact Ninja equivalent may be resolved during graph generation. |
+Kati supports a subset of GNU Make syntax and behavior. The dynamic-extension
+`load` directive is unsupported, and BSD Make dialect support is incomplete.
+Some dynamic Makefile features have no exact Ninja equivalent.
 
-Kati implements a subset of GNU Make syntax. The `load` directive for dynamic Make extensions is unsupported. If a Makefile relies on side effects from parse-time `$(shell ...)`, generated graphs need particular care: regeneration rechecks recorded inputs and command results, but Ninja itself does not re-evaluate the Makefile. Prefer direct mode for workflows whose dependencies can change while recipes run.
+Pay particular attention to parse-time `$(shell ...)` expressions when
+converting a build: evaluation and regeneration checks can run shell commands
+before Ninja executes any recipes. Check their side effects and verify both
+the first build and subsequent incremental builds.
 
-Common options are `-f FILE` for the Makefile, `-jN` for direct execution concurrency, `-k` to continue after recipe failures, `-n` for a dry run, `-q` to ask whether targets need building, and `-t` to update existing targets without recipes. `--ninja` writes a Ninja graph; add `--regen` to reuse it when its recorded inputs are current. `--ninja_dir DIR` places generated files in another directory. `--version` prints the source revision built into `ckati`; local builds with uncommitted changes have a `+dirty` suffix.
+### The GNU-free boundary
 
-## GNU-free boundary
+The project-controlled build, tests, and runtime use Clang/LLVM, musl, libc++,
+Ninja, Python, and POSIX shell tools. They do not require GNU Make, GCC, glibc,
+Bash, or GNU utilities. Kati implements Makefile compatibility itself.
 
-The supported build and test path is the Chimera Linux environment in [`Dockerfile`](Dockerfile). It uses Clang/LLVM, musl, libc++, Ninja, Python, and POSIX shell tools. The project does not require GNU Make, GCC, glibc, Bash, or GNU utilities to build, test, or run `ckati`. Makefile syntax compatibility is implemented in this project; it does not execute GNU Make.
+Commands in user-supplied recipes and `$(shell ...)` expressions can invoke
+other tools. Those commands are outside this guarantee, as are external
+campaign infrastructure and third-party build requirements. Converting a
+Makefile does not replace the tools that its recipes call.
 
-Recipes and `$(shell ...)` expressions supplied by a **user's Makefile** can invoke any external command the user chooses. That input is outside the project's GNU-free guarantee. Likewise, Docker and the GitHub Actions host are external infrastructure; the build and tests run inside the Chimera image.
+### Recorded compatibility evidence
 
-`deps = gcc` in [`build.ninja`](build.ninja) is Ninja's name for a compiler depfile format. It does not run GCC.
+The [campaign results](validation/PROGRESS.md) record passes for selected,
+pinned releases and configurations, along with skips, unresolved gaps, and
+coverage limits. They do not establish compatibility for every version or
+target, or prove that the current checkout passes those builds.
 
-## Testing and performance
+Read the [campaign guide](validation/README.md) before using its tools or
+citing a result. The helpers target a specific recorded environment and do
+not replace the portable CI checks.
 
-Inside Chimera, run the test binaries and self-contained regression snapshots with:
+## Validation and performance
+
+The portable pull-request gate is defined in
+[cpp-ci.yml](.github/workflows/cpp-ci.yml). It builds and tests the Chimera
+image, checks changed C++ formatting, and runs a separate sanitizer build.
+
+Inside Chimera, run the standard checks with:
 
 ```sh
 ninja -f build.ninja -j4 ckati tests
 out/find_test && out/ninja_test && out/strutil_test
+python tests/version_generator.py
 python tests/correctness.py
 python tests/make_compat_regressions.py
 python tests/regression.py
 sh testcase/dump/run.sh
 ```
 
-The snapshot suite covers direct execution, Ninja generation, recursive and parallel builds, and converted POSIX shell tests. It compares against checked-in expected outcomes, without a GNU Make reference executable. Some fixtures intentionally expect a nonzero result. The existing crash cases are listed separately in [`known_crashes.json`](tests/known_crashes.json); recording snapshots rejects new crashes and requires recovered cases to leave that list. Use `python tests/regression.py --case pattern` to inspect matching scenarios. When changing behavior, add or update a fixture in [`testcase/`](testcase/), then run `python tests/regression.py --record` in Chimera and review the resulting snapshot diff.
+The suites cover C++ helpers, revision generation, incremental builds,
+failures, exports, regeneration, dependency and variable semantics, recursive
+builds, and parallel execution. They use self-contained expectations and
+checked-in snapshots, without requiring a GNU Make reference executable.
+Some fixtures intentionally expect a nonzero exit status.
 
-The focused correctness suite checks incremental rebuilds, failure handling, recipe exports, regeneration, and job limits using output contents and exit codes. The Make compatibility suite checks observed GNU Make behavior for dependency, rule, variable, and restart edge cases, plus OpenWrt image refresh. To run the compiler sanitizers in a separate output directory, use `python tools/gen_sanitizer_build.py`, build `ckati-sanitized tests` with `ninja -f build.sanitizer.ninja`, then set `KATI_BINARY` to the sanitized binary when running `tests/correctness.py` and `tests/make_compat_regressions.py`. The CI image runs these checks on musl.
+For a focused snapshot run:
 
-To measure conversion, no-op regeneration, parallel execution, peak memory, and binary size:
+```sh
+python tests/regression.py --case automake_stdin_recursive
+```
+
+To measure conversion, regeneration, direct execution, peak memory, and binary
+size, build baseline and candidate binaries with the same toolchain and run:
 
 ```sh
 python tests/bench.py ./ckati
 python tests/bench.py ./ckati --baseline /path/to/baseline/ckati
 ```
 
-The benchmark covers conversion, no-op regeneration, flat and nested parallel execution, incremental no-op builds, peak memory, and binary size. Build both binaries with the same toolchain for a useful comparison. [PR #1](https://github.com/RihardsPaps/UNIVERSAL_GNUMAKE_TO_NINJA_TOOL/pull/1) records the original C++ comparison, test results, and GNU dependency audit. On those fixed workloads, the refactor showed no material runtime or peak-memory regression and reduced the binary from 894,896 to 836,960 bytes.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for formatting checks, snapshot updates,
+sanitizer commands, and benchmark guidance.
 
-## Contributing
+## Troubleshooting
 
-Open issues and pull requests in [this repository](https://github.com/RihardsPaps/UNIVERSAL_GNUMAKE_TO_NINJA_TOOL). Keep the project-controlled build, tests, CI image, and runtime free of GNU dependencies. Follow the [licensing and contribution guidance](docs/LICENSING.md): submit original contributions under PolyForm Perimeter 1.0.1, preserve existing copyright and license notices, and add prominent change notices to modified upstream files. For behavior changes, include a regression fixture; for performance changes, include same-toolchain benchmark results. Run the Chimera test image before submitting a pull request.
+| Symptom | What to check |
+| --- | --- |
+| The native build cannot find libc++ or lld. | Use the supported Chimera packages or the container workflow. Other platforms are best effort. |
+| Ninja uses an old rule or variable value. | Rerun the generation command with `--regen`, preserving targets and variable assignments, before invoking the launcher. |
+| Recursive Ninja builds have unexpected environment or concurrency behavior. | Use the generated `ninja.sh` launcher and set its runtime `-j` limit. |
+| A recursive edge fails without an obvious cause. | Inspect the child command's output and exit status; the parent edge names the failed recipe. See the [recursive-build diagnosis guide](validation/README.md#diagnose-recursive-ninja-failures). |
+| Shell commands run during conversion. | Check parse-time `$(shell ...)` expressions and regeneration checks. |
+| A Makefile fails on BSD directives or `load`. | Check the syntax limits above; changing the scheduler does not add support for those constructs. |
+| A project still invokes GNU tools after conversion. | Inspect its recipes and shell expressions. Those commands retain their external tool requirements. |
 
-## Credits and license
+## Contributing and documentation
 
-**Current project:** [Rihards Paps](https://github.com/RihardsPaps) designed the GNU-free direction, owns the repository, and maintains the fork. [Haralds Paps](https://github.com/HarryMidnight) is a contributor. Rihards is listed in [`CODEOWNERS`](CODEOWNERS).
+Open issues and pull requests in the
+[project repository](https://github.com/RihardsPaps/UNIVERSAL_GNUMAKE_TO_NINJA_TOOL).
+For a useful bug report, include a minimal Makefile, the command, `ckati --version` output, platform, expected result, and actual output. For Ninja
+issues, include both the generation command and the launcher command.
 
-**License:** This source-available fork is licensed as a whole under [PolyForm Perimeter 1.0.1](LICENSE), with upstream material retaining its [Apache License 2.0](LICENSES/Apache-2.0.txt) terms. PolyForm Perimeter restricts providing competing products to others, including free products, as defined in the license. Rihards Paps and Haralds Paps provide the fork terms for their respective contributions. Existing rights in the Apache material remain in effect. See [licensing and provenance](docs/LICENSING.md) and [NOTICE](NOTICE) for the scope and redistribution requirements.
+For code changes, keep fixes focused and add a regression test. Changes to
+shared semantics need coverage in both direct and Ninja modes. Preserve the
+GNU-free toolchain and all applicable copyright and license notices.
 
-**Source project:** This work derives from [Google Kati](https://github.com/google/kati). The original copyright author record names Delilah Hoare, Google Inc., Koichi Shiraishi, Kouhei Sutou, and Po Hu. The original [author](LICENSES/upstream-AUTHORS.txt) and [contributor](LICENSES/upstream-CONTRIBUTORS.txt) records are preserved, alongside existing source notices. Historical contributor credit is retained below. These credits do not change copyright ownership.
+| Guide | What you will find |
+| --- | --- |
+| [Contributing](CONTRIBUTING.md) | Validation commands, fixtures, formatting, sanitizers, benchmarks, and source layout. |
+| [Compatibility validation](validation/README.md) | Campaign workflow, evidence requirements, and recursive-build diagnosis. |
+| [Campaign results](validation/PROGRESS.md) | Recorded configurations, outcomes, and known limits. |
+| [Licensing and provenance](docs/LICENSING.md) | License scope, attribution, contributions, and redistribution requirements. |
+| [Agent guidance](AGENTS.md) | Repository rules and the GitHub issue workflow for automated agents. |
 
-<details>
-<summary>Historical upstream contributors</summary>
+## Maintainers, credits, and licensing
 
-Colin Cross · Dan Willemsen · Delilah Hoare · Fumitoshi Ukai · Koichi Shiraishi · Kouhei Sutou · Po Hu · Ryo Hashimoto · Shinichiro Hamaji · Stefan Becker · Steve McKay · Taiju Tsuiki
+[Rihards Paps](https://github.com/RihardsPaps) designed the GNU-free direction.
+Rihards and [Haralds Paps](https://github.com/HarryMidnight) jointly own the
+repository and maintain the fork.
 
-</details>
+This project derives from [Google Kati](https://github.com/google/kati). The
+original upstream [author record](LICENSES/upstream-AUTHORS.txt) and
+[contributor record](LICENSES/upstream-CONTRIBUTORS.txt) are preserved alongside
+existing source notices.
+
+The combined fork is **source-available under
+[PolyForm Perimeter 1.0.1](LICENSE)**. Original upstream material retains its
+[Apache License 2.0](LICENSES/Apache-2.0.txt) terms and existing rights. See
+[licensing and provenance](docs/LICENSING.md) and [NOTICE](NOTICE) for the scope
+of each license and the notices required for redistribution.
+
+Original fork contributions use PolyForm Perimeter 1.0.1 unless different
+terms are explicitly identified and accepted. Preserve upstream notices and
+identify changes to upstream-derived files as described in the licensing guide.
