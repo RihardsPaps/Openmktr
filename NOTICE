@@ -1,0 +1,24 @@
+GNU-free Kati
+
+This software derives from Google Kati (https://github.com/google/kati).
+Original Google Kati material is licensed under the Apache License, Version 2.0.
+The full text is included in LICENSES/Apache-2.0.txt.
+
+The upstream copyright author record names Delilah Hoare, Google Inc.,
+Koichi Shiraishi, Kouhei Sutou, and Po Hu. The original author and contributor
+records are preserved in LICENSES/upstream-AUTHORS.txt and
+LICENSES/upstream-CONTRIBUTORS.txt. Individual source notices also apply.
+
+Required Notice: Copyright 2026 Rihards Paps and Haralds Paps, for their respective GNU-free Kati fork contributions.
+Required Notice: GNU-free Kati derives from Google Kati; retain its applicable Apache 2.0 licence and attribution notices.
+
+Fork modifications include GNU-free build and test infrastructure, direct and
+recursive execution, Makefile evaluation and compatibility, Ninja generation
+and regeneration, and project documentation. Modified upstream files carry
+separate fork change notices.
+
+The fork as a whole is distributed under PolyForm Perimeter 1.0.1 (LICENSE).
+See docs/LICENSING.md for scope. Upstream copyright ownership and Apache rights
+are preserved. This change prepares the fork's first external distribution;
+it does not revoke existing Apache grants in the underlying material.
+This attribution notice does not modify the terms of either licence.

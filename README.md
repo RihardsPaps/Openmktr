@@ -1,3 +1,10 @@
+> FORK MODIFICATION NOTICE (2026)
+> Changed by the GNU-free Kati fork, maintained by Rihards Paps and
+> Haralds Paps. Rewritten documentation for the GNU-free fork and its licensing.
+> Upstream material retains its Apache-2.0 terms. Fork modifications are
+> covered by PolyForm Perimeter 1.0.1; see docs/LICENSING.md and NOTICE
+> at the repository root. Original notices below remain applicable.
+
 # GNU-free Kati
 
 **Read Makefiles. Build targets directly or generate Ninja. Use a GNU-free toolchain.**
@@ -125,13 +132,15 @@ The benchmark covers conversion, no-op regeneration, flat and nested parallel ex
 
 ## Contributing
 
-Open issues and pull requests in [this repository](https://github.com/RihardsPaps/UNIVERSAL_GNUMAKE_TO_NINJA_TOOL). Keep the project-controlled build, tests, CI image, and runtime free of GNU dependencies. Preserve existing copyright and license notices in source files. For behavior changes, include a regression fixture; for performance changes, include same-toolchain benchmark results. Run the Chimera test image before submitting a pull request.
+Open issues and pull requests in [this repository](https://github.com/RihardsPaps/UNIVERSAL_GNUMAKE_TO_NINJA_TOOL). Keep the project-controlled build, tests, CI image, and runtime free of GNU dependencies. Follow the [licensing and contribution guidance](docs/LICENSING.md): submit original contributions under PolyForm Perimeter 1.0.1, preserve existing copyright and license notices, and add prominent change notices to modified upstream files. For behavior changes, include a regression fixture; for performance changes, include same-toolchain benchmark results. Run the Chimera test image before submitting a pull request.
 
 ## Credits and license
 
 **Current project:** [Rihards Paps](https://github.com/RihardsPaps) designed the GNU-free direction, owns the repository, and maintains the fork. [Haralds Paps](https://github.com/HarryMidnight) is a contributor. Rihards is listed in [`CODEOWNERS`](CODEOWNERS).
 
-**Source project:** This work derives from [Google Kati](https://github.com/google/kati). The original copyright author record names Delilah Hoare, Google Inc., Koichi Shiraishi, Kouhei Sutou, and Po Hu. Historical contributor credit is retained below. This project preserves upstream source notices and the [Apache License 2.0](LICENSE); the credits here do not change copyright ownership.
+**License:** This source-available fork is licensed as a whole under [PolyForm Perimeter 1.0.1](LICENSE), with upstream material retaining its [Apache License 2.0](LICENSES/Apache-2.0.txt) terms. PolyForm Perimeter restricts providing competing products to others, including free products, as defined in the license. Rihards Paps and Haralds Paps provide the fork terms for their respective contributions. Existing rights in the Apache material remain in effect. See [licensing and provenance](docs/LICENSING.md) and [NOTICE](NOTICE) for the scope and redistribution requirements.
+
+**Source project:** This work derives from [Google Kati](https://github.com/google/kati). The original copyright author record names Delilah Hoare, Google Inc., Koichi Shiraishi, Kouhei Sutou, and Po Hu. The original [author](LICENSES/upstream-AUTHORS.txt) and [contributor](LICENSES/upstream-CONTRIBUTORS.txt) records are preserved, alongside existing source notices. Historical contributor credit is retained below. These credits do not change copyright ownership.
 
 <details>
 <summary>Historical upstream contributors</summary>

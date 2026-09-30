@@ -13,6 +13,9 @@ changing build or runtime behavior.
   user-supplied Makefiles are outside this guarantee.
 - Preserve upstream copyright and license notices. Follow `.clang-format`
   (Chromium style) for C++ changes, and keep fixes focused on the reported issue.
+- Follow `docs/LICENSING.md`: original fork contributions use PolyForm Perimeter
+  1.0.1; upstream Apache material retains its terms. Add or update prominent
+  fork change notices in modified upstream files and preserve fixture semantics.
 - Parsing and evaluation live in `src/parser.cc`, `src/expr.cc`, `src/eval.cc`,
   `src/stmt.cc`, and `src/func.cc`; dependency resolution in `src/dep.cc`;
   direct execution in `src/command.cc` and `src/exec.cc`; Ninja generation and
