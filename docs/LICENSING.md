@@ -1,102 +1,111 @@
 # Licensing and provenance
 
-The GNU-free Kati fork is distributed as a derivative work under the
-[PolyForm Perimeter License 1.0.1](../LICENSE). Rihards Paps and Haralds Paps
-provide these terms for their respective fork contributions. This does not
-assign them ownership of upstream work or of one another's contributions.
+The combined GNU-free Kati fork is distributed under
+[PolyForm Perimeter 1.0.1](../LICENSE). Original Google Kati material retains
+its [Apache License 2.0](../LICENSES/Apache-2.0.txt) terms and existing rights.
+Rihards Paps and Haralds Paps provide the fork terms for their respective
+contributions; neither gains ownership of upstream work or the other's work.
 
-The maintainers report that this repository has remained private and has not
-been shared externally. This licensing change prepares the first external
-distribution; it does not imply that earlier fork revisions were published.
+This guide explains the repository's licensing layout. It does not add to or
+replace either license. The combined fork is source-available. PolyForm
+Perimeter restricts providing competing products to others, including free
+products, services, libraries, and plug-ins as defined in that license.
 
 ## Which terms apply
 
-| Material | Applicable terms |
+| Material | Terms |
 | --- | --- |
-| Combined GNU-free Kati fork distributed from this licensing change onward | PolyForm Perimeter 1.0.1, with the retained upstream licences and notices below. |
-| Original Google Kati material, including unchanged files and original portions of modified files | Apache License 2.0; see the preserved text in `LICENSES/Apache-2.0.txt`. |
-| Fork modifications and original new fork code, tests, build/configuration files, and documentation | PolyForm Perimeter 1.0.1, except where a retained third-party notice applies. |
-| Third-party material, including material subsequently imported | Its own applicable licence and notices; the repository's default does not override them. |
-| Historical Apache declarations and existing Apache rights | Preserved; this change does not revoke existing grants or restrict rights in the underlying Apache material. |
+| Combined fork distributed from the licensing change onward | PolyForm Perimeter 1.0.1, with retained upstream licenses and notices. |
+| Original Google Kati files and original portions of modified files | Apache License 2.0. |
+| Fork modifications and new fork code, tests, build files, configuration, and documentation | PolyForm Perimeter 1.0.1, except where a retained third-party notice applies. |
+| Third-party imports | Their own licenses and notices. |
+| Historical Apache declarations and grants | Preserved; existing rights in the underlying Apache material remain in effect. |
 
-Both licences accompany mixed files. An upstream Apache header describes the
-upstream material; the separate fork modification notice identifies the fork's
-changes and points here for their terms. The two licences are not an optional
-dual-licence offer for the combined fork. Recipients retain their Apache rights
-to the underlying Apache material independently of this distribution.
+Mixed files carry both licenses through their notices. The upstream Apache
+header covers the original material; the separate fork notice identifies the
+changes and points here for their terms. This is not an optional dual-license
+offer for the combined fork. Do not describe that fork as Apache-only or as
+unrestricted open-source software.
 
-PolyForm Perimeter permits use for purposes other than providing a competing
-product to others, as defined by the licence. The restriction can include free
-products, services, libraries, and plug-ins. This fork is **source-available**;
-do not describe the combined fork as Apache-only or as unrestricted open-source
-software. These explanations do not add to or replace either licence's terms.
+At the licensing change, the maintainers reported that the repository had
+remained private and had not been shared externally. That change prepared the
+first external distribution; it did not imply publication of earlier fork revisions.
 
-## Attribution and modification notices
+## Preserve attribution and change notices
 
-[NOTICE](../NOTICE) identifies the source project and the fork. The original
-[upstream author record](../LICENSES/upstream-AUTHORS.txt) and
-[upstream contributor record](../LICENSES/upstream-CONTRIBUTORS.txt) are retained
-verbatim as historical records. Authors and contributors are distinct: those
-records do not say that every contributor owns the copyright in their work.
-Their historical CLA instructions are not the contribution policy of this fork.
+[NOTICE](../NOTICE) identifies the source project and fork. The original
+[author record](../LICENSES/upstream-AUTHORS.txt) and
+[contributor record](../LICENSES/upstream-CONTRIBUTORS.txt) are retained verbatim.
+They distinguish copyright authors from contributors; contributor credit alone
+does not establish copyright ownership. Their historical CLA instructions are
+not this fork's contribution policy.
 
-Modified upstream files carry an explicit `FORK MODIFICATION NOTICE (2026)`.
-Makefile fixture notices appear at the end of the file to preserve diagnostic
-line numbers and parsing tests. Existing copyright and licence headers remain
-intact. A modification notice identifies the fork's changes; it is not a claim
-of authorship of the original file or of joint ownership of every change.
+Modified upstream files carry a prominent `FORK MODIFICATION NOTICE (2026)`.
+Keep original copyright and license headers intact. Fixture notices appear at
+the end of Makefiles to preserve parsing behavior and diagnostic line numbers.
+A change notice identifies the fork's modifications without claiming authorship
+of the original file or joint ownership of every change.
 
-The [provenance inventory](licensing-inventory.tsv) covers all 566 tracked files
-at fork revision `b77175358599c6550015bc121d38c1c9ff6a6aa5`, compared with upstream
-`12685f9a31b7bd30e20a0cd9b939ea3eb0640d45`, the parent of the initial fork snapshot.
-It distinguishes 91 modified upstream files from unchanged upstream and added
-fork files. It is an audit snapshot, not an alternative licence grant. The root
-Apache `LICENSE` from that snapshot is preserved in `LICENSES/Apache-2.0.txt`;
-the root `LICENSE` now holds PolyForm. New licensing documentation and the
-inventory are fork documentation; reproduced licence texts and historical
-records retain their original provenance.
+## Redistribute source or binaries
 
-The baseline includes no `NOTICE` file. Its separate author and contributor
-records are preserved here rather than discarded during documentation
-consolidation. The audit found no separate non-Apache licence in the retained
-upstream files and no removed copyright/licence header in surviving modified
-source or fixture files. Git copy/rename detection found no additional copied
-upstream files among the fork additions. This inventory does not cover external
-dependencies, downloaded compatibility-campaign source trees, or user-supplied
-Makefiles; those retain their own terms.
+Include these files with source and binary distributions:
 
-## Redistribution
+- [LICENSE](../LICENSE)
+- [LICENSES/Apache-2.0.txt](../LICENSES/Apache-2.0.txt)
+- [NOTICE](../NOTICE)
+- [LICENSES/upstream-AUTHORS.txt](../LICENSES/upstream-AUTHORS.txt)
+- [LICENSES/upstream-CONTRIBUTORS.txt](../LICENSES/upstream-CONTRIBUTORS.txt)
+- This licensing guide, so the scope of each license remains clear.
 
-Include `LICENSE`, `LICENSES/Apache-2.0.txt`, `NOTICE`, and the preserved upstream
-attribution records with source and binary distributions, and retain relevant
-file notices in source distributions. Carry the licensing guide with them so
-that the scope of each licence remains clear. In particular, a standalone
-`ckati` executable needs accompanying licence and notice files; embedding them
-in the executable is not required by this repository's distribution layout.
+Retain applicable file notices in source distributions. A standalone `ckati`
+executable needs accompanying license and notice files; this repository's
+distribution layout does not require embedding them in the executable.
 
-The existing Dockerfile uses `COPY . .`, and `.dockerignore` does not exclude
-these files, so the test image includes them under `/workspace`. A future
-minimal runtime image or binary archive must copy them explicitly. External
-runtime libraries and base-image components retain their own distribution
-requirements.
+[Dockerfile](../Dockerfile) uses `COPY . .`, and
+[.dockerignore](../.dockerignore) does not exclude these files, so the test image
+contains them under `/workspace`.
+A minimal runtime image or binary archive must copy them explicitly.
+External libraries and base-image components retain their own distribution requirements.
 
-## Contributions
+## License contributions and imports
 
 Submit original contributions under PolyForm Perimeter 1.0.1 unless a different
-licence is explicitly identified and accepted. Only contribute material you
-have the right to license. Preserve upstream copyright, licence, patent,
-trademark, and attribution notices; do not replace an upstream licence with the
-fork's default. Add or update a prominent change notice when modifying an
-upstream-derived file, and keep the scope of mixed-file licensing clear.
+license is explicitly identified and accepted. Contribute only material you
+have the right to license. Preserve upstream copyright, license, patent,
+trademark, and attribution notices, and add or update a prominent change notice
+when modifying an upstream-derived file. Keep mixed-file licensing clear.
 
-For any future format that cannot carry comments, include an adjacent notice
-listing the exact path, provenance, and changes, and document the exception
-here. Do not alter parser-sensitive fixture bytes merely to insert a header.
-Review new third-party imports and include their applicable licences and
-notices. Update the provenance inventory when carrying out a new licensing
-audit, recording its upstream and fork revisions.
+For a format that cannot carry comments, provide an adjacent notice identifying
+the exact path, provenance, and changes, and document the exception here.
+Do not alter parser-sensitive fixture bytes merely to insert a header.
+Review third-party imports and include their applicable licenses and notices.
 
-## Licence text sources
+## Read the provenance audit
 
-- [Official PolyForm Perimeter 1.0.1 text](https://github.com/polyformproject/polyform-licenses/blob/1.0.0/PolyForm-Perimeter-1.0.1.md), Git blob `088231fb5ec6ed13bdcd3e67f4c2b0f404eb0568`.
-- [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0), preserved from this repository's original `LICENSE` without editing.
+[licensing-inventory.tsv](licensing-inventory.tsv) is an audit snapshot of
+566 tracked files at fork revision `b77175358599c6550015bc121d38c1c9ff6a6aa5`,
+compared with upstream `12685f9a31b7bd30e20a0cd9b939ea3eb0640d45`, the parent
+of the initial fork snapshot. It identifies 91 modified upstream files and
+distinguishes unchanged upstream files from fork additions. It is not a
+current file inventory or an alternative license grant.
+
+The audit found no separate non-Apache license in retained upstream files,
+no removed copyright or license header in surviving modified sources or
+fixtures, and no additional upstream copies among fork additions using Git
+copy/rename detection. The upstream baseline had no `NOTICE` file. Its root
+Apache `LICENSE` is preserved in `LICENSES/Apache-2.0.txt`; the fork's root
+`LICENSE` holds PolyForm. Reproduced license texts and historical records
+retain their original provenance; the inventory and licensing guide are fork
+documentation.
+
+The snapshot excludes external dependencies, downloaded campaign sources,
+and user-supplied Makefiles, which retain their own terms. Update it when
+performing a new licensing audit, recording both upstream and fork revisions.
+
+## License text sources
+
+- [PolyForm Perimeter 1.0.1 source
+  text](https://github.com/polyformproject/polyform-licenses/blob/1.0.0/PolyForm-Perimeter-1.0.1.md),
+  Git blob `088231fb5ec6ed13bdcd3e67f4c2b0f404eb0568`.
+- [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0), preserved from the
+  repository's original `LICENSE` without editing.
