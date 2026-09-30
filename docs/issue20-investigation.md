@@ -70,3 +70,86 @@ sh ninja.sh -j12 all
 
 `FORCE_UNSAFE_CONFIGURE` was needed because the test root filesystem runs as root.
 The external tar sources and build recipes are outside Kati's GNU-free boundary.
+
+## Follow-up on merged main
+
+Fresh checks of `c2ff318561675caa4c82d7916dcc81254d47972e` in the pinned
+Chimera root filesystem also passed. Kati was rebuilt with Clang, musl,
+libc++, and Ninja. Separate extractions of the unmodified tar 1.35 release
+archive were used for in-source and out-of-source builds, with dependency
+tracking enabled and `MAKE` set to the rebuilt Kati during configuration.
+Inherited Make flags and Kati jobserver state were cleared for these checks.
+
+Archive: `tar-1.35.tar.gz`
+
+SHA256: `14d55e32063ea9526e057fbf35fcabd53378e769787eff7919c3755b02d2b57e`
+
+| Check | In-source | Out-of-source |
+| --- | --- | --- |
+| Configure with Clang and Kati dependency bootstrap | Pass | Pass |
+| Issue's `--ninja --regen` conversion command | Pass | Pass |
+| First `sh ninja.sh -j12 all` | Pass | Pass |
+| Repeat `sh ninja.sh -j12 all` | Pass | Pass |
+| Delete `src/tar`, then relink at `-j1` | Pass | Pass |
+| Touch extracted `src/tar.c`, then rebuild at `-j12` | Pass | Pass |
+| Rerun the conversion with `--regen` | Pass | Pass |
+| Remove `po/Makefile`, then build | Expected failure | Expected failure |
+| Restore `po/Makefile`, then build | Pass | Pass |
+
+Both produced executables reported `tar (GNU tar) 1.35`. The original reported
+failure remains unreproduced with a completely configured source tree.
+
+Removing `po/Makefile` reproduced the same top-level failure shape in both
+layouts. Ninja printed `FAILED: [code=1] all` and the recursive Kati command;
+the child output identified the actual failure:
+
+```text
+Making all in po
+*** No targets specified and no makefile found.
+*** [all-recursive] Error 1
+```
+
+This is a controlled diagnostic example, not proof that the reporter's tree
+had a missing Makefile. It shows why the top-level Ninja failure alone does
+not establish a graph generation defect. Arbitrary recursive shell loops
+continue to run as recipes; flattening them would require a separate design
+and cannot be inferred from this failure message.
+
+The repeatable check is now saved in `validation/reproduce_issue20.py`:
+
+```sh
+python3 validation/reproduce_issue20.py /path/to/tar-1.35.tar.gz /path/to/ckati
+```
+
+Run it in Linux with Python 3.12 or newer, Clang, Ninja, and tar's configure
+prerequisites available. It creates disposable source/build trees and retains
+every command's combined stdout/stderr, exit status, Kati revision, and archive
+hash. It does not download sources or modify existing release trees. The
+controlled missing-file check restores the file before testing recovery.
+
+Local follow-up validation also passed all three C++ unit binaries, the
+Automake stdin/recursive fixture, 106 correctness tests, and six Make
+compatibility tests. The compatibility suite initially lacked two auxiliary
+validation modules in the copied test tree; after copying them, all six passed.
+Docker was unavailable locally; these checks used the existing pinned Chimera
+chroot. The PR's portable Docker and sanitizer checks remain the CI gate.
+
+After review, the reproducer also passed both layouts with `PYTHONOPTIMIZE=1`
+and an inherited `KATI_JOBSERVER_RESERVED=1`. It now clears that marker, checks
+that touching `src/tar.c` advances `src/tar.o`'s timestamp, and uses explicit
+exceptions for checks that must remain active under optimized Python. Local
+fault-injection checks under `python3 -O` rejected an unchanged object,
+unexpected missing-Makefile success, unrelated failure output, and a wrong
+tar version.
+
+To diagnose the reporter's failure, obtain the failing binary's `ckati --version`
+output, the full configure output and exit status, and the complete build log:
+
+```sh
+ckati --version
+sh ninja.sh -j12 all > tar-build.log 2>&1
+```
+
+Also establish whether `po/Makefile` exists and whether `MAKE`, `MAKEFLAGS`, or
+`MAKEOVERRIDES` was overridden. No new runtime fix or issue closure is justified
+by the current evidence; PR #21 already contains the confirmed stdin fixes.
