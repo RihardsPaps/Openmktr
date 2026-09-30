@@ -134,6 +134,14 @@ validation modules in the copied test tree; after copying them, all six passed.
 Docker was unavailable locally; these checks used the existing pinned Chimera
 chroot. The PR's portable Docker and sanitizer checks remain the CI gate.
 
+After review, the reproducer also passed both layouts with `PYTHONOPTIMIZE=1`
+and an inherited `KATI_JOBSERVER_RESERVED=1`. It now clears that marker, checks
+that touching `src/tar.c` advances `src/tar.o`'s timestamp, and uses explicit
+exceptions for checks that must remain active under optimized Python. Local
+fault-injection checks under `python3 -O` rejected an unchanged object,
+unexpected missing-Makefile success, unrelated failure output, and a wrong
+tar version.
+
 To diagnose the reporter's failure, obtain the failing binary's `ckati --version`
 output, the full configure output and exit status, and the complete build log:
 
