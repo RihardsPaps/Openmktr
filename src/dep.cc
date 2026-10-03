@@ -1645,12 +1645,11 @@ class DepBuilder {
         std::vector<Symbol> expanded_order_only_inputs;
         ApplyOutputPattern(*prereq_rule, output, prereq_rule->inputs,
                            &expanded_inputs);
-        ApplyOutputPattern(*prereq_rule, output,
-                           prereq_rule->order_only_inputs,
+        ApplyOutputPattern(*prereq_rule, output, prereq_rule->order_only_inputs,
                            &expanded_order_only_inputs);
         pattern_rule->get()->inputs.insert(pattern_rule->get()->inputs.end(),
-                                            expanded_inputs.begin(),
-                                            expanded_inputs.end());
+                                           expanded_inputs.begin(),
+                                           expanded_inputs.end());
         pattern_rule->get()->order_only_inputs.insert(
             pattern_rule->get()->order_only_inputs.end(),
             expanded_order_only_inputs.begin(),

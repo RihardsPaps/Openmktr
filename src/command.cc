@@ -371,19 +371,19 @@ static Symbol EffectivePrerequisite(Evaluator* ev,
     // that provider so the consuming recipe can open it. Rule-bearing VPATH
     // targets, on the other hand, have a local Ninja output and must retain
     // their logical spelling so consumers follow that output after rebuilds.
-    auto find_source_alias = [input](
-                                 const std::vector<NamedDepNode>& dependencies) {
-      for (const NamedDepNode& dependency : dependencies) {
-        const DepNode* child = dependency.second;
-        if (!(dependency.first == input) &&
-            !(child->lexical_output == input))
-          continue;
-        if (!child->is_phony && IsVpathSourceAlias(child) &&
-            child->vpath_provider.IsValid())
-          return child->vpath_provider;
-      }
-      return Symbol();
-    };
+    auto find_source_alias =
+        [input](const std::vector<NamedDepNode>& dependencies) {
+          for (const NamedDepNode& dependency : dependencies) {
+            const DepNode* child = dependency.second;
+            if (!(dependency.first == input) &&
+                !(child->lexical_output == input))
+              continue;
+            if (!child->is_phony && IsVpathSourceAlias(child) &&
+                child->vpath_provider.IsValid())
+              return child->vpath_provider;
+          }
+          return Symbol();
+        };
     Symbol provider = find_source_alias(node->deps);
     if (!provider.IsValid())
       provider = find_source_alias(node->order_onlys);

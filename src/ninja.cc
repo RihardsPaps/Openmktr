@@ -636,15 +636,14 @@ class NinjaGenerator {
     // phony edge to the provider preserves VPATH lookup without changing the
     // filesystem view seen by compiler commands.
     const bool source_only_rule =
-        commands.empty() ||
-        (commands.size() == 1 && !commands.front().echo &&
-         commands.front().cmd == ":");
-    const bool vpath_source_alias = node->vpath_provider.IsValid() &&
-                                   !node->is_phony && source_only_rule;
+        commands.empty() || (commands.size() == 1 && !commands.front().echo &&
+                             commands.front().cmd == ":");
+    const bool vpath_source_alias =
+        node->vpath_provider.IsValid() && !node->is_phony && source_only_rule;
     if (vpath_source_alias)
       commands.clear();
-    const bool vpath_output = node->vpath_provider.IsValid() && !node->is_phony &&
-                              !vpath_source_alias;
+    const bool vpath_output = node->vpath_provider.IsValid() &&
+                              !node->is_phony && !vpath_source_alias;
     if (vpath_output && commands.empty()) {
       Command materialize(node->output);
       materialize.cmd = ":";
