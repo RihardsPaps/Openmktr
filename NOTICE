@@ -9,16 +9,26 @@ Koichi Shiraishi, Kouhei Sutou, and Po Hu. The original author and contributor
 records are preserved in LICENSES/upstream-AUTHORS.txt and
 LICENSES/upstream-CONTRIBUTORS.txt. Individual source notices also apply.
 
-Required Notice: Copyright 2026 Rihards Paps and Haralds Paps, for their respective GNU-free Kati fork contributions.
-Required Notice: GNU-free Kati derives from Google Kati; retain its applicable Apache 2.0 licence and attribution notices.
+Copyright 2026 Rihards Paps and Haralds Paps, for their respective GNU-free Kati fork contributions.
+GNU-free Kati derives from Google Kati; retain its applicable Apache 2.0 licence and attribution notices.
 
 Fork modifications include GNU-free build and test infrastructure, direct and
 recursive execution, Makefile evaluation and compatibility, Ninja generation
 and regeneration, and project documentation. Modified upstream files carry
 separate fork change notices.
 
-The fork as a whole is distributed under PolyForm Perimeter 1.0.1 (LICENSE).
+Fork contributions are distributed under Mozilla Public License 2.0 (LICENSE).
+The following notice applies to fork modifications and new fork files, except
+where a different retained third-party notice applies:
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 See docs/LICENSING.md for scope. Upstream copyright ownership and Apache rights
-are preserved. This change prepares the fork's first external distribution;
-it does not revoke existing Apache grants in the underlying material.
+are preserved. This change does not revoke existing grants in earlier versions.
+
+An Apache License 2.0 option for fork contributions is available by negotiation.
+Interested parties can email rihardspaps6@gmail.com. A separate agreement is
+required; the repository does not automatically grant this alternative.
 This attribution notice does not modify the terms of either licence.

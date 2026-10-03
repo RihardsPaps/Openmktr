@@ -3,7 +3,7 @@
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
-// covered by PolyForm Perimeter 1.0.1; see docs/LICENSING.md and NOTICE
+// covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
 
 // Copyright 2016 Google Inc. All rights reserved

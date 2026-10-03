@@ -10,7 +10,7 @@ Automated agents must also follow [AGENTS.md](AGENTS.md).
 
 Read the [README](README.md) for build modes and compatibility limits, and
 follow the [licensing guide](docs/LICENSING.md). Original fork contributions
-use PolyForm Perimeter 1.0.1. Preserve upstream copyright and license notices;
+use Mozilla Public License 2.0. Preserve upstream copyright and license notices;
 add or update a prominent fork change notice in modified upstream files.
 Keep parser-sensitive fixture bytes and diagnostic line numbers intact.
 

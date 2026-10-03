@@ -15,7 +15,7 @@ commands and source layout.
 - Follow `.clang-format` (Chromium style) for C++ and keep fixes focused on the reported
   issue.
 - Follow [docs/LICENSING.md](docs/LICENSING.md). Original fork contributions use
-  PolyForm Perimeter 1.0.1; upstream Apache material retains its terms. Preserve
+  Mozilla Public License 2.0; upstream Apache material retains its terms. Preserve
   copyright and license notices, update prominent fork change notices in modified
   upstream files, and preserve fixture semantics.
 - Parsing and evaluation live in `src/parser.cc`, `src/expr.cc`, `src/eval.cc`,
