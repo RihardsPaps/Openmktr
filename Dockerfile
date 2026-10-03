@@ -2,7 +2,7 @@
 # Changed by the GNU-free Kati fork, maintained by Rihards Paps and
 # Haralds Paps. Adapted build, CI, or repository configuration for the GNU-free fork.
 # Upstream material retains its Apache-2.0 terms. Fork modifications are
-# covered by PolyForm Perimeter 1.0.1; see docs/LICENSING.md and NOTICE
+# covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 # at the repository root. Original notices below remain applicable.
 
 FROM docker.io/chimeralinux/chimera@sha256:29102d7e12a1f464707d7aba19ce53e652d277861838ed4129178d0655444b1a

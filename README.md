@@ -3,7 +3,7 @@
 > Haralds Paps. Rewritten and expanded the fork's overview, build instructions,
 > usage examples, architecture, compatibility guidance, and troubleshooting.
 > Upstream material retains its Apache-2.0 terms. Fork modifications are
-> covered by PolyForm Perimeter 1.0.1; see docs/LICENSING.md and NOTICE
+> covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 > at the repository root. Original notices below remain applicable.
 
 # GNU-free Kati
@@ -375,12 +375,17 @@ original upstream [author record](LICENSES/upstream-AUTHORS.txt) and
 [contributor record](LICENSES/upstream-CONTRIBUTORS.txt) are preserved alongside
 existing source notices.
 
-The combined fork is **source-available under
-[PolyForm Perimeter 1.0.1](LICENSE)**. Original upstream material retains its
-[Apache License 2.0](LICENSES/Apache-2.0.txt) terms and existing rights. See
+The fork is licensed under the **[Mozilla Public License 2.0 (MPL 2.0)](LICENSE)**.
+Original upstream material retains its [Apache License 2.0](LICENSES/Apache-2.0.txt)
+terms and existing rights. See
 [licensing and provenance](docs/LICENSING.md) and [NOTICE](NOTICE) for the scope
 of each license and the notices required for redistribution.
 
-Original fork contributions use PolyForm Perimeter 1.0.1 unless different
+Original fork contributions use Mozilla Public License 2.0 unless different
 terms are explicitly identified and accepted. Preserve upstream notices and
 identify changes to upstream-derived files as described in the licensing guide.
+
+An **Apache License 2.0 option is available by negotiation**. Interested parties
+can email [rihardspaps6@gmail.com](mailto:rihardspaps6@gmail.com). The Apache
+option for fork contributions requires a separate agreement; it is not an
+automatic alternative to MPL 2.0.

@@ -3,7 +3,7 @@
 // Haralds Paps.
 // Updated regression coverage for fork behavior.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
-// covered by PolyForm Perimeter 1.0.1; see docs/LICENSING.md and NOTICE
+// covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
 
 // Copyright 2015 Google Inc. All rights reserved
