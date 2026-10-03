@@ -629,7 +629,22 @@ class NinjaGenerator {
     // gives parent recipes a usable logical filename. The link follows later
     // source updates without copying stale contents into the build tree.
     std::vector<Command> commands = nn.commands;
-    const bool vpath_output = node->vpath_provider.IsValid() && !node->is_phony;
+    // A no-recipe VPATH target is an alias for an existing source file, not
+    // a request to copy that file into the build tree.  Materializing a local
+    // symlink changes include lookup for headers with sibling includes (the
+    // build-tree alias shadows the source-tree header directory).  A Ninja
+    // phony edge to the provider preserves VPATH lookup without changing the
+    // filesystem view seen by compiler commands.
+    const bool source_only_rule =
+        commands.empty() ||
+        (commands.size() == 1 && !commands.front().echo &&
+         commands.front().cmd == ":");
+    const bool vpath_source_alias = node->vpath_provider.IsValid() &&
+                                   !node->is_phony && source_only_rule;
+    if (vpath_source_alias)
+      commands.clear();
+    const bool vpath_output = node->vpath_provider.IsValid() && !node->is_phony &&
+                              !vpath_source_alias;
     if (vpath_output && commands.empty()) {
       Command materialize(node->output);
       materialize.cmd = ":";

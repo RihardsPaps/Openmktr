@@ -343,10 +343,53 @@ void AutoAtVar::Eval(Evaluator*, std::string* s) const {
     *s += n->lexical_output.str();
 }
 
+static void ParseCommandPrefixes(std::string_view* s,
+                                 bool* echo,
+                                 bool* ignore_error,
+                                 bool* force_run);
+
+static bool IsVpathSourceAlias(const DepNode* node) {
+  if (node->cmds.empty())
+    return true;
+  if (node->cmds.size() != 1 || !node->cmds.front()->IsLiteral())
+    return false;
+
+  std::string_view recipe = node->cmds.front()->GetLiteralValueUnsafe();
+  bool echo = true;
+  bool ignore_error = false;
+  bool force_run = false;
+  ParseCommandPrefixes(&recipe, &echo, &ignore_error, &force_run);
+  return !echo && TrimLeftSpace(recipe) == ":";
+}
+
 static Symbol EffectivePrerequisite(Evaluator* ev,
                                     const DepNode* node,
                                     Symbol input) {
-  if (g_flags.generate_ninja || Exists(input.str()))
+  if (g_flags.generate_ninja) {
+    // Recipe-less VPATH rules are emitted as phony aliases to their source
+    // provider, without creating a local file. Automatic variables must name
+    // that provider so the consuming recipe can open it. Rule-bearing VPATH
+    // targets, on the other hand, have a local Ninja output and must retain
+    // their logical spelling so consumers follow that output after rebuilds.
+    auto find_source_alias = [input](
+                                 const std::vector<NamedDepNode>& dependencies) {
+      for (const NamedDepNode& dependency : dependencies) {
+        const DepNode* child = dependency.second;
+        if (!(dependency.first == input) &&
+            !(child->lexical_output == input))
+          continue;
+        if (!child->is_phony && IsVpathSourceAlias(child) &&
+            child->vpath_provider.IsValid())
+          return child->vpath_provider;
+      }
+      return Symbol();
+    };
+    Symbol provider = find_source_alias(node->deps);
+    if (!provider.IsValid())
+      provider = find_source_alias(node->order_onlys);
+    return provider.IsValid() ? provider : input;
+  }
+  if (Exists(input.str()))
     return input;
   auto find_provider = [ev,
                         input](const std::vector<NamedDepNode>& dependencies) {

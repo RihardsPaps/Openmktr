@@ -1263,6 +1263,27 @@ class BuildCorrectness(unittest.TestCase):
         self.ninja()
         self.assertEqual((self.directory / "program").read_text(), "sourcecommon")
 
+    def test_recipe_less_pattern_chains_generated_source_to_compile_rule(self):
+        (self.directory / "src").mkdir()
+        (self.directory / "src/image-image.c").write_text(
+            "int image_value(void) { return 7; }\n")
+        self.makefile(
+            ".PHONY: all FORCE\n"
+            "all: build/image-image.o\n"
+            "build/%-image.o: build/%-image.c\n"
+            "build/%.c: src/%.c FORCE\n"
+            "\t@mkdir -p $(@D); cp $< $@\n"
+            "build/%.o: build/%.c FORCE\n"
+            "\t@printf 'compiled:%s' '$<' > $@\n"
+        )
+        self.direct("all")
+        self.assertEqual((self.directory / "build/image-image.o").read_text(),
+                         "compiled:build/image-image.c")
+        (self.directory / "build/image-image.o").unlink()
+        self.ninja()
+        self.assertEqual((self.directory / "build/image-image.o").read_text(),
+                         "compiled:build/image-image.c")
+
     def test_pattern_and_explicit_appends_both_apply(self):
         self.makefile("FLAGS := base\n%.o: FLAGS += pattern\n"
                       "a.o: FLAGS += exact\nall: a.o\na.o:\n"
