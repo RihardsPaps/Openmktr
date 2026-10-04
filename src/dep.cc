@@ -187,9 +187,11 @@ void ApplyOutputPattern(const Rule& r,
 
 class RuleTrie {
   struct Entry {
-    Entry(const Rule* r, std::string_view s) : rule(r), suffix(s) {}
+    Entry(const Rule* r, std::string_view s, size_t o)
+        : rule(r), suffix(s), order(o) {}
     const Rule* rule;
     std::string_view suffix;
+    size_t order;
   };
 
  public:
@@ -199,7 +201,10 @@ class RuleTrie {
       delete p.second;
   }
 
-  void Add(std::string_view name, const Rule* rule, bool replace = true) {
+  void Add(std::string_view name,
+           const Rule* rule,
+           size_t order,
+           bool replace = true) {
     if (name.empty() || name[0] == '%') {
       // GNU make keeps distinct implicit rules in definition order, but a
       // later rule with the same target and prerequisites replaces the
@@ -220,7 +225,7 @@ class RuleTrie {
           return;
         }
       }
-      rules_.push_back(Entry(rule, name));
+      rules_.push_back(Entry(rule, name, order));
       return;
     }
     const char c = name[0];
@@ -228,14 +233,15 @@ class RuleTrie {
     if (p.second) {
       p.first->second = new RuleTrie();
     }
-    p.first->second->Add(name.substr(1), rule, replace);
+    p.first->second->Add(name.substr(1), rule, order, replace);
   }
 
-  void Get(std::string_view name, std::vector<const Rule*>* rules) const {
+  void Get(std::string_view name,
+           std::vector<std::pair<const Rule*, size_t>>* rules) const {
     for (const Entry& ent : rules_) {
       if ((ent.suffix.empty() && name.empty()) ||
           HasSuffix(name, ent.suffix.substr(1))) {
-        rules->push_back(ent.rule);
+        rules->emplace_back(ent.rule, ent.order);
       }
     }
     if (name.empty())
@@ -260,18 +266,25 @@ class RuleTrie {
 
 static std::vector<const Rule*> GetImplicitRuleCandidates(const RuleTrie* rules,
                                                           Symbol output) {
-  std::vector<const Rule*> candidates;
-  rules->Get(output.str(), &candidates);
+  std::vector<std::pair<const Rule*, size_t>> matches;
+  rules->Get(output.str(), &matches);
   std::string_view basename = Basename(output.str());
   if (basename != output.str())
-    rules->Get(basename, &candidates);
+    rules->Get(basename, &matches);
 
+  // Trie lookup groups candidates by pattern shape, so its result order does
+  // not necessarily match the order in which GNU make read the rules. Keep
+  // definition order for equal-stem candidates after PickRule's stable
+  // specificity sort.
+  std::stable_sort(
+      matches.begin(), matches.end(),
+      [](const auto& a, const auto& b) { return a.second < b.second; });
   std::unordered_set<const Rule*> seen;
-  candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
-                                  [&seen](const Rule* rule) {
-                                    return !seen.insert(rule).second;
-                                  }),
-                   candidates.end());
+  std::vector<const Rule*> candidates;
+  for (const auto& match : matches) {
+    if (seen.insert(match.first).second)
+      candidates.push_back(match.first);
+  }
   return candidates;
 }
 
@@ -1033,11 +1046,13 @@ class DepBuilder {
                      [&](const auto& a, const auto& b) {
                        return dotless_rank(a) < dotless_rank(b);
                      });
-    for (const auto& rule : dotless_suffix_rules_)
+    for (const auto& rule : dotless_suffix_rules_) {
       // A suffix conversion is a fallback. An equivalent explicit pattern
       // already in the trie keeps its recipe or cancellation.
+      implicit_rule_order_.emplace(rule.get(), next_implicit_rule_order_++);
       implicit_rules_->Add(rule->output_patterns.front().str(), rule.get(),
-                           false);
+                           implicit_rule_order_.at(rule.get()), false);
+    }
     for (auto& p : rules_) {
       auto vars = LookupRuleVars(p.first);
       if (!vars) {
@@ -1204,7 +1219,10 @@ class DepBuilder {
                    output_pattern.c_str());
         }
 
-        implicit_rules_->Add(output_pattern.str(), rule);
+        if (implicit_rule_order_.find(rule) == implicit_rule_order_.end())
+          implicit_rule_order_.emplace(rule, next_implicit_rule_order_++);
+        implicit_rules_->Add(output_pattern.str(), rule,
+                             implicit_rule_order_.at(rule));
       }
     }
   }
@@ -2582,6 +2600,8 @@ class DepBuilder {
   std::unique_ptr<Vars> cur_rule_vars_;
 
   std::unique_ptr<RuleTrie> implicit_rules_;
+  std::unordered_map<const Rule*, size_t> implicit_rule_order_;
+  size_t next_implicit_rule_order_ = 0;
   typedef std::unordered_map<std::string_view,
                              std::vector<std::shared_ptr<Rule>>>
       SuffixRuleMap;

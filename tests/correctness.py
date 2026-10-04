@@ -1284,6 +1284,42 @@ class BuildCorrectness(unittest.TestCase):
         self.assertEqual((self.directory / "build/image-image.o").read_text(),
                          "compiled:build/image-image.c")
 
+    def test_equal_stem_rules_keep_definition_order_across_trie_paths(self):
+        (self.directory / "dep-a").touch()
+        (self.directory / "dep-b").touch()
+        self.makefile(
+            "all: ab\n"
+            "a%: dep-a\n"
+            "\t@printf a-first > $@\n"
+            "%b: dep-b\n"
+            "\t@printf percent-b-second > $@\n"
+        )
+        self.direct("all")
+        self.assertEqual((self.directory / "ab").read_text(), "a-first")
+        (self.directory / "ab").unlink()
+        self.ninja()
+        self.assertEqual((self.directory / "ab").read_text(), "a-first")
+
+    def test_replaced_implicit_rule_keeps_original_definition_position(self):
+        (self.directory / "dep-a").touch()
+        (self.directory / "dep-b").touch()
+        self.makefile(
+            "all: ab\n"
+            "a%: dep-a\n"
+            "\t@printf old-first > $@\n"
+            "%b: dep-b\n"
+            "\t@printf percent-b-second > $@\n"
+            "a%: dep-a\n"
+            "\t@printf replacement-first > $@\n"
+        )
+        self.direct("all")
+        self.assertEqual((self.directory / "ab").read_text(),
+                         "replacement-first")
+        (self.directory / "ab").unlink()
+        self.ninja()
+        self.assertEqual((self.directory / "ab").read_text(),
+                         "replacement-first")
+
     def test_pattern_and_explicit_appends_both_apply(self):
         self.makefile("FLAGS := base\n%.o: FLAGS += pattern\n"
                       "a.o: FLAGS += exact\nall: a.o\na.o:\n"
