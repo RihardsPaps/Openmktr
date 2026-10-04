@@ -1612,6 +1612,8 @@ class DepBuilder {
           return stem_size(a) < stem_size(b);
         });
 
+    std::vector<std::pair<const Rule*, std::shared_ptr<Rule>>>
+        prerequisite_only_rules;
     for (auto iter = irules.begin(); iter != irules.end(); ++iter) {
       // A recipe-less catch-all cannot supply the missing link recipe.
       // Preserve narrower prerequisite-only routing patterns.
@@ -1625,12 +1627,50 @@ class DepBuilder {
 
       if (!picked)
         continue;
+      if (!HasRuleRecipe(*iter)) {
+        prerequisite_only_rules.emplace_back(*iter, *pattern_rule);
+        continue;
+      }
+
+      // GNU make lets a recipe-less pattern rule contribute prerequisites
+      // alongside the recipe-bearing implicit rule selected for the same
+      // target.  This is used for generated intermediates (for example,
+      // compiling a generated .c file to .o) and must remain an ordinary
+      // implicit-rule relationship, not a target-specific special case.
+      for (const auto& deferred_rule : prerequisite_only_rules) {
+        const std::shared_ptr<Rule>& prereq_rule = deferred_rule.second;
+        if (prereq_rule->secondary_expansion)
+          continue;
+        std::vector<Symbol> expanded_inputs;
+        std::vector<Symbol> expanded_order_only_inputs;
+        ApplyOutputPattern(*prereq_rule, output, prereq_rule->inputs,
+                           &expanded_inputs);
+        ApplyOutputPattern(*prereq_rule, output, prereq_rule->order_only_inputs,
+                           &expanded_order_only_inputs);
+        pattern_rule->get()->inputs.insert(pattern_rule->get()->inputs.end(),
+                                           expanded_inputs.begin(),
+                                           expanded_inputs.end());
+        pattern_rule->get()->order_only_inputs.insert(
+            pattern_rule->get()->order_only_inputs.end(),
+            expanded_order_only_inputs.begin(),
+            expanded_order_only_inputs.end());
+      }
       *out_selected_implicit_rule = *iter;
       CHECK((*pattern_rule)->output_patterns.size() == 1);
       *out_var = vars;
       if (rule_merger) {
         return true;
       }
+      return true;
+    }
+
+    // A prerequisite-only pattern is still a useful implicit rule when no
+    // recipe-bearing alternative applies.  Preserve it as the fallback, as
+    // GNU make does for directory-routing and suffix-rule precedence.
+    if (!prerequisite_only_rules.empty()) {
+      *out_selected_implicit_rule = prerequisite_only_rules.front().first;
+      *pattern_rule = prerequisite_only_rules.front().second;
+      *out_var = vars;
       return true;
     }
 

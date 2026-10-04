@@ -2300,6 +2300,20 @@
     "output": "ninja: error: 'foo.z', needed by 'test2', missing and no known rule to make it\n",
     "status": 1
   },
+  "implicit_pattern_rule_definition_order.mk:default:direct": {
+    "files": [],
+    "output": "architecture prerequisite\narchitecture: arch/item.S\n",
+    "status": 0
+  },
+  "implicit_pattern_rule_definition_order.mk:default:ninja": {
+    "files": [
+      ".ninja_log",
+      "arch",
+      "out"
+    ],
+    "output": "[1/2] build arch/item.S\narchitecture prerequisite\n[2/2] build out/item.o\narchitecture: arch/item.S\n",
+    "status": 0
+  },
   "implicit_pattern_rule_for_no_commands.mk:test2:direct": {
     "files": [
       "foo.c",
