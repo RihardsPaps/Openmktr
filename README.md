@@ -28,9 +28,13 @@ build and test environment. Other platforms are best effort.
 | Recursive builds | Run child Openmktr builds with shared job limits. |
 | GNU-free project toolchain | Build, test, and run Openmktr with LLVM, musl, libc++, Ninja, Python, and POSIX shell tools. |
 
-Openmktr implements a subset of GNU Make syntax. Compatibility depends on the
-Makefile and the selected build mode; see [compatibility](#compatibility-and-scope)
-before adopting it for an existing project.
+Openmktr is an actively developed Makefile translator, with direct and Ninja
+build modes, working toward broad compatibility across Makefile-driven
+projects. It has completed verified builds across dozens of projects and
+components, while support continues to grow and compatibility can depend on the
+Makefile and build mode. See [compatibility and scope](#compatibility-and-scope)
+and the [verified build results](validation/PROGRESS.md) for tested
+configurations and current limits.
 
 ## Contents
 
