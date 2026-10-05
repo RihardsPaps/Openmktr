@@ -1,5 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
-// Changed by the GNU-free Kati fork, maintained by Rihards Paps and
+// Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
@@ -91,7 +91,7 @@ static void ReadBootstrapMakefile(const std::vector<Symbol>& targets,
        // Pretend to be GNU make 4.2.1, for compatibility.
        "MAKE_VERSION?=4.2.1\n"
        ".FEATURES?=output-sync undefine\n"
-       "KATI?=ckati\n"
+       "KATI?=omktr\n"
        // Overwrite $SHELL environment variable.
        "SHELL=/bin/sh\n"
        // TODO: Add more builtin vars.
@@ -1117,7 +1117,7 @@ static int HandleFileRead(int argc, char** argv) {
 
 int main(int argc, char* argv[]) {
   g_argv = argv;
-  // Recursive invocations isolate ckati from a target project's runtime
+  // Recursive invocations isolate omktr from a target project's runtime
   // libraries while it is being loaded. Restore that runtime environment
   // after the loader has started this process; recipes executed by this child
   // still need the target library path.

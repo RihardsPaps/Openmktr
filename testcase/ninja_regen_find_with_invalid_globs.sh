@@ -15,7 +15,7 @@ touch .cursorignore
 touch .gemini
 touch .repo
 
-if echo "${mk}" | grep kati > /dev/null; then
+if echo "${mk}" | grep -E '(ckati|omktr)' > /dev/null; then
   mk="${mk} --use_find_emulator"
 fi
 

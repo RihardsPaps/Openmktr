@@ -16,7 +16,7 @@ source = """
 #include <SDL3/SDL.h>
 int main(void) {
   if (!SDL_Init(SDL_INIT_VIDEO)) return 1;
-  SDL_Window *window = SDL_CreateWindow("ckati smoke", 32, 32, SDL_WINDOW_HIDDEN);
+  SDL_Window *window = SDL_CreateWindow("omktr smoke", 32, 32, SDL_WINDOW_HIDDEN);
   if (!window) return 2;
   SDL_DestroyWindow(window);
   SDL_Quit();

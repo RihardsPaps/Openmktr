@@ -1,17 +1,17 @@
 > FORK MODIFICATION NOTICE (2026)
-> Changed by the GNU-free Kati fork, maintained by Rihards Paps and
+> Changed by the Openmktr fork, maintained by Rihards Paps and
 > Haralds Paps. Rewritten and expanded the fork's overview, build instructions,
 > usage examples, architecture, compatibility guidance, and troubleshooting.
 > Upstream material retains its Apache-2.0 terms. Fork modifications are
 > covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 > at the repository root. Original notices below remain applicable.
 
-# GNU-free Kati
+# Openmktr
 
 **Read Makefiles. Build targets in parallel. Generate Ninja graphs.**
 
-GNU-free Kati is a C++17 fork of [Google Kati](https://github.com/google/kati).
-Its `ckati` executable parses and evaluates Makefiles, resolves dependencies,
+Openmktr is a C++17 fork of [Google Kati](https://github.com/google/kati).
+Its `omktr` executable parses and evaluates Makefiles, resolves dependencies,
 and either runs recipes directly or writes a build graph for Ninja to execute.
 Both workflows start with your existing Makefile.
 
@@ -24,16 +24,16 @@ build and test environment. Other platforms are best effort.
 | Direct execution | Build requested Makefile targets with parallel recipe scheduling. |
 | Ninja generation | Turn evaluated Makefile rules into a Ninja graph and generated launcher. |
 | Regeneration checks | Reuse a generated graph when its recorded inputs remain current. |
-| Recursive builds | Run child Kati builds with shared job limits. |
-| GNU-free project toolchain | Build, test, and run Kati with LLVM, musl, libc++, Ninja, Python, and POSIX shell tools. |
+| Recursive builds | Run child Openmktr builds with shared job limits. |
+| GNU-free project toolchain | Build, test, and run Openmktr with LLVM, musl, libc++, Ninja, Python, and POSIX shell tools. |
 
-Kati implements a subset of GNU Make syntax. Compatibility depends on the
+Openmktr implements a subset of GNU Make syntax. Compatibility depends on the
 Makefile and the selected build mode; see [compatibility](#compatibility-and-scope)
 before adopting it for an existing project.
 
 ## Contents
 
-- [Build Kati](#build-kati)
+- [Build Openmktr](#build-openmktr)
 - [Try it in five steps](#try-it-in-five-steps)
 - [Choose a build mode](#choose-a-build-mode)
 - [Everyday usage](#everyday-usage)
@@ -44,7 +44,7 @@ before adopting it for an existing project.
 - [Contributing and documentation](#contributing-and-documentation)
 - [Maintainers, credits, and licensing](#maintainers-credits-and-licensing)
 
-## Build Kati
+## Build Openmktr
 
 ### On Chimera Linux
 
@@ -52,12 +52,12 @@ Install the supported packages, then build from the repository root:
 
 ```sh
 apk add clang ninja python chimerautils
-ninja -f build.ninja -j4 ckati
-./ckati --version
+ninja -f build.ninja -j4 omktr
+./omktr --version
 ```
 
 Installing packages requires the appropriate system privileges. The executable
-is written to `./ckati`; intermediate build files go into `out/`.
+is written to `./omktr`; intermediate build files go into `out/`.
 
 The checked-in [build graph](build.ninja) uses C++17, Clang++, libc++, LLVM's
 lld linker, and ThinLTO. Ninja's `deps = gcc` setting names a compiler depfile
@@ -68,11 +68,11 @@ format; it does not invoke GCC.
 With Docker available, run these commands from the repository root:
 
 ```sh
-docker build -t kati-test .
-docker run --rm kati-test
+docker build -t openmktr-test .
+docker run --rm openmktr-test
 ```
 
-The [Dockerfile](Dockerfile) uses a pinned Chimera image, builds `ckati` and the
+The [Dockerfile](Dockerfile) uses a pinned Chimera image, builds `omktr` and the
 C++ test binaries, checks for unwanted GNU dependencies, and runs the standard
 suites when the container starts. The executable stays inside the image; this
 workflow does not install it on the host.
@@ -82,14 +82,14 @@ build and tests execute inside Chimera.
 
 ## Try it in five steps
 
-After building `ckati`, start in the repository root and run the five steps
+After building `omktr`, start in the repository root and run the five steps
 below in the same POSIX shell. The example creates a disposable workspace so
 conversion cannot replace the repository's own build graph.
 
 **1. Save the executable path and enter a temporary directory.**
 
 ```sh
-kati_binary="$(pwd)/ckati"
+omktr_binary="$(pwd)/omktr"
 demo_dir="$(mktemp -d)"
 cd "$demo_dir"
 ```
@@ -102,24 +102,24 @@ cat > Makefile <<'EOF'
 all: hello.txt
 
 hello.txt:
-	printf 'hello from ckati\n' > $@
+	printf 'hello from omktr\n' > $@
 EOF
 ```
 
 **3. Build the target directly.**
 
 ```sh
-"$kati_binary" -f Makefile -j4 all
+"$omktr_binary" -f Makefile -j4 all
 cat hello.txt
 ```
 
-The file contains `hello from ckati`.
+The file contains `hello from omktr`.
 
 **4. Remove the result and build it through Ninja.**
 
 ```sh
 rm hello.txt
-"$kati_binary" --ninja --regen -f Makefile all
+"$omktr_binary" --ninja --regen -f Makefile all
 sh ./ninja.sh -j4
 cat hello.txt
 ```
@@ -137,18 +137,18 @@ Ninja should report that there is no work to do. The demo remains in
 
 > **Conversion writes `build.ninja` by default.** Run conversion examples in a
 > disposable directory. Running them at this repository's root can overwrite
-> the checked-in graph used to build Kati itself.
+> the checked-in graph used to build Openmktr itself.
 
 ## Choose a build mode
 
 | Behavior | Direct execution | Generated Ninja |
 | --- | --- | --- |
-| Invocation | `ckati -f Makefile -j4 all` | `ckati --ninja --regen -f Makefile all`, then `sh ninja.sh -j4` |
+| Invocation | `omktr -f Makefile -j4 all` | `omktr --ninja --regen -f Makefile all`, then `sh ninja.sh -j4` |
 | Makefile evaluation | Reads and evaluates Makefiles on each invocation. | Evaluates Makefiles when generating the graph. |
-| Recipe scheduling | Kati schedules work under its job limit. | Ninja schedules the generated edges. |
+| Recipe scheduling | Openmktr schedules work under its job limit. | Ninja schedules the generated edges. |
 | Exported variables | Captured at recipe boundaries. | Recorded during generation and restored by generated recipes. |
-| Recursive builds | Child Kati processes read their own Makefiles. | Recursive commands remain recipes; child graphs are not flattened into the parent graph. |
-| Input changes | Handled on the next Kati invocation. | Check regeneration with Kati before running the graph. |
+| Recursive builds | Child Openmktr processes read their own Makefiles. | Recursive commands remain recipes; child graphs are not flattened into the parent graph. |
+| Input changes | Handled on the next Openmktr invocation. | Check regeneration with Openmktr before running the graph. |
 
 Use direct execution to start evaluating an existing project, especially when
 its dependencies can change while recipes run. Use Ninja generation when the
@@ -162,7 +162,7 @@ rerun the same generation command, including its targets and variable
 assignments:
 
 ```sh
-ckati --ninja --regen -f Makefile all MODE=release
+omktr --ninja --regen -f Makefile all MODE=release
 sh ./ninja.sh -j4
 ```
 
@@ -171,30 +171,30 @@ they are current. Standard-input Makefiles always regenerate. Ninja itself
 does not re-evaluate Makefiles.
 
 Use the generated `ninja.sh` launcher to load the recorded environment and
-coordinate job limits with recursive Kati builds. Set runtime concurrency on
+coordinate job limits with recursive Openmktr builds. Set runtime concurrency on
 that launcher; generation-time `-j` is not the Ninja build's runtime limit.
 Run the launcher from the same working directory used for generation.
 
 ## Everyday usage
 
-These examples assume `ckati` is on your `PATH` and you are in the project you
+These examples assume `omktr` is on your `PATH` and you are in the project you
 want to build. Otherwise, use the executable's absolute path.
 
 ```sh
 # Build a named target with four jobs.
-ckati -f Makefile -j4 all
+omktr -f Makefile -j4 all
 
 # Supply a command-line variable assignment.
-ckati -f Makefile -j4 all MODE=release
+omktr -f Makefile -j4 all MODE=release
 
 # Build in a different working directory.
-ckati -C path/to/project -f Makefile -j4 all
+omktr -C path/to/project -f Makefile -j4 all
 
 # Inspect the recipes for a direct build.
-ckati -n -f Makefile all
+omktr -n -f Makefile all
 
 # Generate files in a separate directory, then run the launcher.
-ckati --ninja --regen --ninja_dir .kati -f Makefile all
+omktr --ninja --regen --ninja_dir .kati -f Makefile all
 sh ./.kati/ninja.sh -j4
 ```
 
@@ -216,30 +216,30 @@ the working directory for the build's recipes.
 | `--regen` | Check recorded inputs before reusing a generated graph. |
 | `--regen_debug` | Enable diagnostics for regeneration checks. |
 | `--ninja_dir DIR` | Write generated files into the specified directory. |
-| `--version` | Print a Make compatibility banner and the Kati source revision. |
+| `--version` | Print a Make compatibility banner and the Openmktr source revision. |
 
 ### Identify the binary
 
 Git builds include the source revision and a `+dirty` suffix when the checkout
-has uncommitted changes. `KATI_SOURCE_REVISION` can supply an explicit build
+has uncommitted changes. `OMKTR_SOURCE_REVISION` can supply an explicit build
 revision; source archives without Git metadata or an explicit revision report
 `unversioned`.
 
 The `GNU Make 4.2.1` line in `--version` is a compatibility banner. The following
-`ckati` line identifies the Kati build; the banner does not establish complete
+`omktr` line identifies the Openmktr build; the banner does not establish complete
 GNU Make compatibility.
 
 ## How it works
 
 Both modes share the same parser, evaluator, and dependency resolver. The
-execution path branches after Kati has interpreted the Makefile's rules.
+execution path branches after Openmktr has interpreted the Makefile's rules.
 
 ```mermaid
 flowchart LR
     A[Makefile and included files] --> B[Parse and evaluate]
     B --> C[Resolve rules and dependencies]
     C --> D{Build mode}
-    D -->|Direct| E[Kati schedules recipes]
+    D -->|Direct| E[Openmktr schedules recipes]
     D -->|Ninja| F[Generate graph and launcher]
     F --> G[Ninja schedules recipes]
 ```
@@ -253,15 +253,15 @@ flowchart LR
 | Expand recipes and execute direct builds | [command.cc](src/command.cc), [exec.cc](src/exec.cc) |
 | Generate Ninja files and check regeneration | [ninja.cc](src/ninja.cc), [regen.cc](src/regen.cc) |
 
-Recursive recipes using `$(MAKE)` invoke Kati through its executable path.
+Recursive recipes using `$(MAKE)` invoke Openmktr through its executable path.
 Child builds evaluate their own Makefiles at execution time. In Ninja mode,
-the generated launcher supplies the shared Kati jobserver for those children.
+the generated launcher supplies the shared Openmktr jobserver for those children.
 
 ## Compatibility and scope
 
 ### Makefile support
 
-Kati supports a subset of GNU Make syntax and behavior. The dynamic-extension
+Openmktr supports a subset of GNU Make syntax and behavior. The dynamic-extension
 `load` directive is unsupported, and BSD Make dialect support is incomplete.
 Some dynamic Makefile features have no exact Ninja equivalent.
 
@@ -274,7 +274,7 @@ the first build and subsequent incremental builds.
 
 The project-controlled build, tests, and runtime use Clang/LLVM, musl, libc++,
 Ninja, Python, and POSIX shell tools. They do not require GNU Make, GCC, glibc,
-Bash, or GNU utilities. Kati implements Makefile compatibility itself.
+Bash, or GNU utilities. Openmktr implements Makefile compatibility itself.
 
 Commands in user-supplied recipes and `$(shell ...)` expressions can invoke
 other tools. Those commands are outside this guarantee, as are external
@@ -301,7 +301,7 @@ image, checks changed C++ formatting, and runs a separate sanitizer build.
 Inside Chimera, run the standard checks with:
 
 ```sh
-ninja -f build.ninja -j4 ckati tests
+ninja -f build.ninja -j4 omktr tests
 out/find_test && out/ninja_test && out/strutil_test
 python tests/version_generator.py
 python tests/correctness.py
@@ -326,8 +326,8 @@ To measure conversion, regeneration, direct execution, peak memory, and binary
 size, build baseline and candidate binaries with the same toolchain and run:
 
 ```sh
-python tests/bench.py ./ckati
-python tests/bench.py ./ckati --baseline /path/to/baseline/ckati
+python tests/bench.py ./omktr
+python tests/bench.py ./omktr --baseline /path/to/baseline/omktr
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for formatting checks, snapshot updates,
@@ -349,7 +349,7 @@ sanitizer commands, and benchmark guidance.
 
 Open issues and pull requests in the
 [project repository](https://github.com/RihardsPaps/UNIVERSAL_GNUMAKE_TO_NINJA_TOOL).
-For a useful bug report, include a minimal Makefile, the command, `ckati --version` output, platform, expected result, and actual output. For Ninja
+For a useful bug report, include a minimal Makefile, the command, `omktr --version` output, platform, expected result, and actual output. For Ninja
 issues, include both the generation command and the launcher command.
 
 For code changes, keep fixes focused and add a regression test. Changes to

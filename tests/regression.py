@@ -11,7 +11,7 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-KATI = ROOT / "ckati"
+KATI = ROOT / "omktr"
 CASES = ROOT / "testcase"
 GOLDEN = Path(__file__).with_name("golden.json")
 KNOWN_CRASHES = Path(__file__).with_name("known_crashes.json")
@@ -96,7 +96,7 @@ def created_files(directory: Path) -> list[str]:
 
 
 def run_makefile(source: Path, target: str, ninja: bool) -> dict:
-    with tempfile.TemporaryDirectory(prefix="kati-test-") as temp:
+    with tempfile.TemporaryDirectory(prefix="openmktr-test-") as temp:
         directory = Path(temp)
         (directory / "Makefile").write_bytes(source.read_bytes())
         (directory / "submake").symlink_to(CASES / "submake", target_is_directory=True)
@@ -235,7 +235,7 @@ def main() -> int:
     if args.record and args.case:
         parser.error("--record cannot be combined with --case")
     if not KATI.is_file():
-        parser.error("build ckati first")
+        parser.error("build omktr first")
     actual = collect(args.case)
     known_crashes = set(json.loads(KNOWN_CRASHES.read_text(encoding="utf-8")))
     if args.case:

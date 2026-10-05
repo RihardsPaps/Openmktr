@@ -10,7 +10,7 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-revision = os.environ.get("KATI_SOURCE_REVISION", "")
+revision = os.environ.get("OMKTR_SOURCE_REVISION", "")
 if not revision and shutil.which("git"):
     result = subprocess.run(
         ["git", "rev-parse", "--verify", "--short=12", "HEAD"],

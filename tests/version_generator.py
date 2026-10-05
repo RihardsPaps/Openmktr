@@ -16,7 +16,7 @@ class VersionGenerator(unittest.TestCase):
     def generate(self, revision):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "version.cc"
-            env = dict(os.environ, PATH="", KATI_SOURCE_REVISION=revision)
+            env = dict(os.environ, PATH="", OMKTR_SOURCE_REVISION=revision)
             subprocess.run([sys.executable, str(GENERATOR), str(target)],
                            env=env, check=True, capture_output=True)
             content = target.read_text(encoding="utf-8")

@@ -70,7 +70,7 @@ fi
 
 # Test with --default_pool set
 args=
-if ! echo "${mk}" | grep -qv "kati"; then
+if ! echo "${mk}" | grep -Eqv '(ckati|omktr)'; then
   args=--default_pool=default_pool
 fi
 

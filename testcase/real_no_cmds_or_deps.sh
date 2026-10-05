@@ -1,6 +1,6 @@
 #!/bin/sh
 # FORK MODIFICATION NOTICE (2026)
-# Changed by the GNU-free Kati fork, maintained by Rihards Paps and
+# Changed by the Openmktr fork, maintained by Rihards Paps and
 # Haralds Paps. Adapted regression fixtures for fork behavior and GNU-free testing.
 # Upstream material retains its Apache-2.0 terms. Fork modifications are
 # covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
@@ -38,7 +38,7 @@ EOF
 
 mkdir -p out
 
-if echo "${mk}" | grep -qv "kati"; then
+if echo "${mk}" | grep -Eqv '(ckati|omktr)'; then
   # Make doesn't support these warnings, so write the expected output.
   echo 'Makefile:5: warning: target "out/bad" has no commands or deps that could create it'
   echo 'END'
@@ -46,7 +46,7 @@ else
   ${mk} --werror_phony_looks_real --writable=out/ --werror_writable --warn_real_no_cmds_or_deps 2>&1
 fi
 
-if echo "${mk}" | grep -qv "kati"; then
+if echo "${mk}" | grep -Eqv '(ckati|omktr)'; then
   # Make doesn't support these warnings, so write the expected output.
   echo 'Makefile:5: *** target "out/bad" has no commands or deps that could create it'
 else

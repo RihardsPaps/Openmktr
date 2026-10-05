@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Configure every Linux architecture with ckati in separate output trees."""
+"""Configure every Linux architecture with omktr in separate output trees."""
 
 from pathlib import Path
 import subprocess
@@ -20,7 +20,7 @@ for architecture in architectures:
         [sys.executable, str(report / "phase.py"),
          "--report", str(report),
          "--name", f"wsl-linux-6.12-{architecture}-defconfig",
-         "--cwd", str(source), "--", str(campaign / "tool/ckati"),
+         "--cwd", str(source), "--", str(campaign / "tool/omktr"),
          f"O={output}", f"ARCH={architecture}", "defconfig"],
         check=False,
     )

@@ -1,4 +1,4 @@
-# Contribute to GNU-free Kati
+# Contribute to Openmktr
 
 Keep changes focused, preserve Makefile behavior, and verify them in the supported
 Chimera environment. Report issues and submit pull requests in
@@ -29,11 +29,11 @@ Run conversion examples in disposable directories, never the repository root.
 From the repository root, build and run the supported test image:
 
 ```sh
-docker build -t kati-test .
-docker run --rm kati-test
+docker build -t openmktr-test .
+docker run --rm openmktr-test
 ```
 
-[Dockerfile](Dockerfile) builds Kati in Chimera and runs the standard suites.
+[Dockerfile](Dockerfile) builds Openmktr in Chimera and runs the standard suites.
 [The CI workflow](.github/workflows/cpp-ci.yml) uses the same image, checks
 changed C++ formatting, and runs a separate sanitizer build. Docker and the
 GitHub Actions host are external infrastructure; project checks run inside Chimera.
@@ -41,7 +41,7 @@ GitHub Actions host are external infrastructure; project checks run inside Chime
 To run the standard checks directly inside Chimera:
 
 ```sh
-ninja -f build.ninja -j4 ckati tests
+ninja -f build.ninja -j4 omktr tests
 out/find_test && out/ninja_test && out/strutil_test
 python tests/version_generator.py
 python tests/correctness.py
@@ -103,12 +103,12 @@ as CI from the repository root inside Chimera:
 
 ```sh
 python tools/gen_sanitizer_build.py
-ninja -f build.sanitizer.ninja -j4 ckati-sanitized tests
+ninja -f build.sanitizer.ninja -j4 omktr-sanitized tests
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/find_test
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/ninja_test
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/strutil_test
-ASAN_OPTIONS=detect_leaks=0 KATI_BINARY="$(pwd)/ckati-sanitized" python tests/correctness.py
-ASAN_OPTIONS=detect_leaks=0 KATI_BINARY="$(pwd)/ckati-sanitized" python tests/make_compat_regressions.py
+ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/correctness.py
+ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/make_compat_regressions.py
 ```
 
 The generator creates an isolated ASan/UBSan graph and output directory.
@@ -119,11 +119,11 @@ The normal build remains available for comparison.
 Build baseline and candidate binaries with the same toolchain. On Linux, run:
 
 ```sh
-python tests/bench.py ./ckati
-python tests/bench.py ./ckati --baseline /path/to/baseline/ckati
+python tests/bench.py ./omktr
+python tests/bench.py ./omktr --baseline /path/to/baseline/omktr
 ```
 
-Replace `/path/to/baseline/ckati` with the baseline executable. The benchmark
+Replace `/path/to/baseline/omktr` with the baseline executable. The benchmark
 measures conversion, no-op regeneration, flat and nested parallel execution,
 incremental no-op builds, peak memory, and binary size.
 

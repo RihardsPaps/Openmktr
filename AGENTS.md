@@ -2,7 +2,7 @@
 
 ## Project rules
 
-This repository is a C++17 fork of Google Kati. `ckati` reads Makefiles,
+This repository is a C++17 fork of Google Kati. `omktr` reads Makefiles,
 executes targets, or generates Ninja graphs. Linux with musl is supported;
 other platforms are best effort. Read [README.md](README.md) before changing
 build or runtime behavior and [CONTRIBUTING.md](CONTRIBUTING.md) for validation
@@ -76,14 +76,14 @@ using the Chimera image in [Dockerfile](Dockerfile). For code changes, run the
 supported image when available:
 
 ```sh
-docker build -t kati-test .
-docker run --rm kati-test
+docker build -t openmktr-test .
+docker run --rm openmktr-test
 ```
 
 Inside Chimera, run:
 
 ```sh
-ninja -f build.ninja -j4 ckati tests
+ninja -f build.ninja -j4 omktr tests
 out/find_test && out/ninja_test && out/strutil_test
 python tests/version_generator.py
 python tests/correctness.py

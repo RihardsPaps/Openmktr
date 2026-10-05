@@ -9,7 +9,7 @@ from pathlib import Path
 
 def main() -> None:
     git = sys.argv[1]
-    with tempfile.TemporaryDirectory(prefix="ckati-git-") as directory:
+    with tempfile.TemporaryDirectory(prefix="omktr-git-") as directory:
         root = Path(directory)
         origin = root / "origin"
         clone = root / "clone"

@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tests"))
 import regression as suite
-suite.KATI = Path(os.environ.get("KATI_BINARY", suite.KATI)).resolve()
+suite.KATI = Path(os.environ.get("OMKTR_BINARY", suite.KATI)).resolve()
 
 actual = suite.collect("equal_in_target.mk")
 assert len(actual) == 2

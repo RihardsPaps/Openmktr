@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Boot the ckati-built Linux kernel with the previously built root image."""
+"""Boot the omktr-built Linux kernel with the previously built root image."""
 
 from pathlib import Path
 import select

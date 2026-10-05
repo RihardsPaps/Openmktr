@@ -9,7 +9,7 @@ import tempfile
 
 
 base = Path(sys.argv[1]).resolve()
-tool = base / "tool" / "ckati"
+tool = base / "tool" / "omktr"
 prefix = base / "install" / "autotools"
 root = Path(tempfile.mkdtemp(prefix="autotools-verify-", dir=base / "builds"))
 source = root / "source"

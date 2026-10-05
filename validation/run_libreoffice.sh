@@ -3,7 +3,7 @@ set -euo pipefail
 
 campaign=/root/universal-tool-campaign-20260927
 build="$campaign/builds/libreoffice-25.2.7.2"
-tool="$campaign/tool/ckati"
+tool="$campaign/tool/omktr"
 all_langs=$(sed -n 's/^ALL_LANGS=//p' "$build/config_host_lang.mk")
 if [[ -z "$all_langs" ]]; then
     echo "ALL_LANGS missing from configured LibreOffice build" >&2

@@ -1,4 +1,4 @@
-GNU-free Kati
+Openmktr
 
 This software derives from Google Kati (https://github.com/google/kati).
 Original Google Kati material is licensed under the Apache License, Version 2.0.
@@ -9,8 +9,8 @@ Koichi Shiraishi, Kouhei Sutou, and Po Hu. The original author and contributor
 records are preserved in LICENSES/upstream-AUTHORS.txt and
 LICENSES/upstream-CONTRIBUTORS.txt. Individual source notices also apply.
 
-Copyright 2026 Rihards Paps and Haralds Paps, for their respective GNU-free Kati fork contributions.
-GNU-free Kati derives from Google Kati; retain its applicable Apache 2.0 licence and attribution notices.
+Copyright 2026 Rihards Paps and Haralds Paps, for their respective Openmktr fork contributions.
+Openmktr derives from Google Kati; retain its applicable Apache 2.0 licence and attribution notices.
 
 Fork modifications include GNU-free build and test infrastructure, direct and
 recursive execution, Makefile evaluation and compatibility, Ninja generation

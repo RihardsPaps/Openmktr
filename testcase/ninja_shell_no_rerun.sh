@@ -21,7 +21,7 @@ mk="$@"
 
 echo foo > a.txt
 
-if echo "${mk}" | grep -q kati; then
+if echo "${mk}" | grep -Eq '(ckati|omktr)'; then
   cat <<EOF > Makefile
 RESULT := \$(KATI_shell_no_rerun cat a.txt)
 all:
@@ -42,7 +42,7 @@ fi
 
 # Only change the file for kati so that make matches kati's broken output of printing foo 2 times.
 # ("broken" because the user forgot to add a.txt to $(KATI_extra_file_deps))
-if echo "${mk}" | grep -q kati; then
+if echo "${mk}" | grep -Eq '(ckati|omktr)'; then
 echo bar > a.txt
 fi
 

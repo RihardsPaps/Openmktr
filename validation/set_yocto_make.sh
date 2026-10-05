@@ -3,8 +3,8 @@ set -euo pipefail
 
 campaign=/root/universal-tool-campaign-20260927
 case "${1:?pass promoted or candidate}" in
-  promoted) tool="$campaign/tool/ckati" ;;
-  candidate) tool="$campaign/tool-next2/ckati" ;;
+  promoted) tool="$campaign/tool/omktr" ;;
+  candidate) tool="$campaign/tool-next2/omktr" ;;
   *) echo "invalid tool selection" >&2; exit 2 ;;
 esac
 

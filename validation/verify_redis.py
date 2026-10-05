@@ -10,7 +10,7 @@ from pathlib import Path
 
 def main() -> None:
     server, cli = sys.argv[1:3]
-    with tempfile.TemporaryDirectory(prefix="ckati-redis-") as directory:
+    with tempfile.TemporaryDirectory(prefix="omktr-redis-") as directory:
         socket = Path(directory) / "redis.sock"
         process = subprocess.Popen(
             [server, "--port", "0", "--unixsocket", str(socket),
