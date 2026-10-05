@@ -349,7 +349,7 @@ sanitizer commands, and benchmark guidance.
 ## Contributing and documentation
 
 Open issues and pull requests in the
-[project repository](https://github.com/RihardsPaps/UNIVERSAL_GNUMAKE_TO_NINJA_TOOL).
+[project repository](https://github.com/RihardsPaps/Openmktr).
 For a useful bug report, include a minimal Makefile, the command, `omktr --version` output, platform, expected result, and actual output. For Ninja
 issues, include both the generation command and the launcher command.
 

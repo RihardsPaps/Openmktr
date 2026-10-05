@@ -83,7 +83,7 @@ Making all in po
 
 That controlled example does not establish what caused the reporter's failure.
 The original [issue
-#20](https://github.com/RihardsPaps/UNIVERSAL_GNUMAKE_TO_NINJA_TOOL/issues/20)
+#20](https://github.com/RihardsPaps/Openmktr/issues/20)
 failure remained unreproduced with a completely configured tree. The confirmed
 Automake stdin defects were addressed in PR #21: `-f -` reads standard input,
 `include -` still reads a literal dash filename, restarts preserve the input,
