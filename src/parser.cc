@@ -289,17 +289,17 @@ class Parser {
       rule_stmt->rhs = NULL;
     }
     out_stmts_->push_back(rule_stmt);
-    // Standalone diagnostic functions are expanded while reading a makefile
-    // and never define a rule whose following tab-indented line is a recipe.
-    // TF-A uses $(error ...) in a conditional immediately before a tabbed
-    // endif; treating that expression as a rule swallows the endif.
-    const bool standalone_diagnostic = [&] {
-      for (std::string_view name : {"error", "warning", "info"}) {
+    // Standalone function expressions execute their own effects and do not
+    // introduce a rule context for following tab-indented lines. In
+    // particular, $(eval ...) may define a rule, but that rule comes from the
+    // eval text parsed below, not from the line containing the function call.
+    const bool standalone_expansion = [&] {
+      for (std::string_view name : {"error", "warning", "info", "eval"}) {
         const std::string prefix = "$(" + std::string(name) + " ";
         if (line.substr(0, prefix.size()) != prefix)
           continue;
-        // The whole line must be a diagnostic call.  A variable named
-        // $(info_target), or $(info text) followed by a target, is a rule.
+        // The whole line must be one function expression; a variable
+        // reference or a function expression followed by a target is a rule.
         size_t depth = 1;
         for (size_t i = 2; i < line.size(); ++i) {
           if (line[i] == '$' && i + 1 < line.size() && line[i + 1] == '(') {
@@ -312,7 +312,7 @@ class Parser {
       }
       return false;
     }();
-    after_rule_ = !standalone_diagnostic;
+    after_rule_ = !standalone_expansion;
   }
 
   void ParseAssign(std::string_view line, size_t separator_pos) {

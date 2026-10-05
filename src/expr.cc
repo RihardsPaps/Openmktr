@@ -430,6 +430,21 @@ Value* ParseDollar(Loc* loc, std::string_view s, size_t* index_out) {
 
   Loc start_loc = *loc;
 
+  // Make folds a backslash-newline continuation before parsing a
+  // single-character variable reference. Thus "$\\\n  " is equivalent to
+  // "${space}" (usually empty), not a reference to a variable named "\\".
+  // This form commonly appears in deferred macro expansions.
+  if (s[1] == '\\' && s.size() >= 3 && (s[2] == '\n' || s[2] == '\r')) {
+    size_t i = 3;
+    if (s[2] == '\r' && i < s.size() && s[i] == '\n')
+      i++;
+    while (i < s.size() && (s[i] == ' ' || s[i] == '\t'))
+      i++;
+    loc->lineno++;
+    *index_out = i;
+    return new SymRef(start_loc, Intern(" "));
+  }
+
   char cp = CloseParen(s[1]);
   if (cp == 0) {
     *index_out = 2;

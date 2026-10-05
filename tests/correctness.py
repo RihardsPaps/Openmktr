@@ -350,6 +350,39 @@ class BuildCorrectness(unittest.TestCase):
                          "wrapper:inner:value:wrapper:outside")
         self.assertEqual((self.directory / "generated").read_text(), "forwarded")
 
+    def test_eval_macro_folds_dollar_backslash_newline(self):
+        self.makefile(
+            "toolchains := one\n"
+            "tool-classes := cc\n"
+            "define configure\n"
+            "  $$(foreach class,$$(tool-classes), \\\n"
+            "    $$(eval $$(call configure-tool,$1,$$(class))))\n"
+            "endef\n"
+            "define configure-tool\n"
+            "  RESULT.$1.$2 := $$(if yes,$$(or $\\\n"
+            "      alpha,beta),fallback)\n"
+            "endef\n"
+            "$(foreach toolchain,$(toolchains), \\\n"
+            "    $(eval $(call configure,$(toolchain))))\n"
+            "all:\n\t@test '$(RESULT.one.cc)' = alpha\n"
+        )
+        self.direct("all")
+        self.direct("--ninja", "all")
+        self.run_command("sh", "./ninja.sh", "-j2")
+
+    def test_tab_indented_conditional_after_eval_in_else_branch(self):
+        self.makefile(
+            "ifeq (yes,yes)\n"
+            "$(eval GENERATED := yes)\n"
+            "else\n"
+            "\tifdef OPTIONAL\n"
+            "        $(eval NESTED := yes)\n"
+            "\tendif\n"
+            "endif\n"
+            "all:\n\t@test '$(GENERATED)' = yes\n"
+        )
+        self.direct("all")
+
     def test_generated_include_enables_another_include_rule(self):
         self.makefile(
             ".DEFAULT_GOAL := all\n"
