@@ -3,7 +3,7 @@
 Keep changes focused, preserve Makefile behavior, and verify them in the supported
 Chimera environment. Report issues and submit pull requests in
 [the project
-repository](https://github.com/RihardsPaps/UNIVERSAL_GNUMAKE_TO_NINJA_TOOL).
+repository](https://github.com/RihardsPaps/Openmktr).
 Automated agents must also follow [AGENTS.md](AGENTS.md).
 
 ## Before changing code
@@ -127,7 +127,7 @@ Replace `/path/to/baseline/omktr` with the baseline executable. The benchmark
 measures conversion, no-op regeneration, flat and nested parallel execution,
 incremental no-op builds, peak memory, and binary size.
 
-[PR #1](https://github.com/RihardsPaps/UNIVERSAL_GNUMAKE_TO_NINJA_TOOL/pull/1)
+[PR #1](https://github.com/RihardsPaps/Openmktr/pull/1)
 records the original C++ comparison, test results, and GNU dependency audit.
 On its fixed workloads, the refactor showed no material runtime or peak-memory
 regression and reduced the binary from 894,896 to 836,960 bytes. Those historical
