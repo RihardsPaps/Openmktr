@@ -1,6 +1,6 @@
 """Recheck GNU tar issue #20 in a Linux environment with Clang and Ninja.
 
-Usage: python3 validation/reproduce_issue20.py /path/to/tar-1.35.tar.gz /path/to/ckati
+Usage: python3 validation/reproduce_issue20.py /path/to/tar-1.35.tar.gz /path/to/omktr
 Retains fresh extracted sources, builds, and complete command logs for diagnosis.
 """
 
@@ -16,10 +16,10 @@ import time
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("archive", type=Path, help="GNU tar 1.35 release archive")
-parser.add_argument("ckati", type=Path, help="Kati executable to test")
+parser.add_argument("omktr", type=Path, help="Kati executable to test")
 args = parser.parse_args()
 archive = args.archive.resolve()
-tool = args.ckati.resolve()
+tool = args.omktr.resolve()
 root = Path(tempfile.mkdtemp(prefix="kati-issue20-"))
 env = os.environ.copy()
 # Keep inherited build state from influencing this clean reproduction.

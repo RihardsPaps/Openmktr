@@ -9,7 +9,7 @@ from pathlib import Path
 
 def main() -> None:
     sqlite = sys.argv[1]
-    with tempfile.TemporaryDirectory(prefix="ckati-sqlite-") as directory:
+    with tempfile.TemporaryDirectory(prefix="omktr-sqlite-") as directory:
         database = Path(directory) / "test.db"
         commands = """
         CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);

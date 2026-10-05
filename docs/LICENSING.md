@@ -1,6 +1,6 @@
 # Licensing and provenance
 
-The GNU-free Kati fork uses the [Mozilla Public License 2.0 (MPL 2.0)](../LICENSE)
+The Openmktr fork uses the [Mozilla Public License 2.0 (MPL 2.0)](../LICENSE)
 for fork contributions. Original Google Kati material retains its
 [Apache License 2.0](../LICENSES/Apache-2.0.txt) terms and existing rights.
 Rihards Paps and Haralds Paps provide the fork terms for their respective
@@ -71,7 +71,7 @@ source by reasonable means in a timely manner, at no more than the cost of
 distribution. Shipping the license and notices alone does not satisfy that
 source-availability requirement.
 
-A standalone `ckati` executable needs accompanying license and notice files
+A standalone `omktr` executable needs accompanying license and notice files
 and information on obtaining its covered source. This repository's distribution
 layout does not require embedding those files in the executable.
 [Dockerfile](../Dockerfile) uses `COPY . .`, and

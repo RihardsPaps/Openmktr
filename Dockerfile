@@ -1,5 +1,5 @@
 # FORK MODIFICATION NOTICE (2026)
-# Changed by the GNU-free Kati fork, maintained by Rihards Paps and
+# Changed by the Openmktr fork, maintained by Rihards Paps and
 # Haralds Paps. Adapted build, CI, or repository configuration for the GNU-free fork.
 # Upstream material retains its Apache-2.0 terms. Fork modifications are
 # covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
@@ -17,9 +17,9 @@ RUN for package in gcc glibc bash coreutils findutils; do \
 
 WORKDIR /workspace
 COPY . .
-ARG KATI_SOURCE_REVISION
-ENV KATI_SOURCE_REVISION=$KATI_SOURCE_REVISION
-RUN ninja -f build.ninja -j 4 ckati tests
-RUN if ldd ckati | grep -E 'libstdc\+\+|libgcc|libc\.so\.6'; then exit 1; fi
+ARG OMKTR_SOURCE_REVISION
+ENV OMKTR_SOURCE_REVISION=$OMKTR_SOURCE_REVISION
+RUN ninja -f build.ninja -j 4 omktr tests
+RUN if ldd omktr | grep -E 'libstdc\+\+|libgcc|libc\.so\.6'; then exit 1; fi
 
 CMD ["/bin/sh", "-c", "out/find_test && out/ninja_test && out/strutil_test && python tests/version_generator.py && python tests/correctness.py && python tests/make_compat_regressions.py && python tests/regression.py && sh testcase/dump/run.sh"]

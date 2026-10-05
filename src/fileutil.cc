@@ -1,5 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
-// Changed by the GNU-free Kati fork, maintained by Rihards Paps and
+// Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
@@ -211,7 +211,7 @@ int RunCommand(const std::string& shell,
   std::string recipe_path;
   std::string recipe_command;
   if (cmd.size() > 120000) {
-    char path[] = "/tmp/ckati-recipe-XXXXXX";
+    char path[] = "/tmp/omktr-recipe-XXXXXX";
     int fd = mkstemp(path);
     if (fd < 0)
       PERROR("mkstemp failed");

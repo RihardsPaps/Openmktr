@@ -14,7 +14,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-KATI = Path(os.environ.get("KATI_BINARY", ROOT / "ckati")).resolve()
+KATI = Path(os.environ.get("OMKTR_BINARY", ROOT / "omktr")).resolve()
 CASES = json.loads(Path(__file__).with_suffix(".json").read_text())
 
 

@@ -1,5 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
-// Changed by the GNU-free Kati fork, maintained by Rihards Paps and
+// Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
@@ -93,7 +93,7 @@ static bool IsRecursiveKatiCommandMarker(const std::string& command) {
 
   size_t pos = command.find(executable);
   while (pos != std::string::npos) {
-    // Exported MAKE=/path/to/ckati is data, not a recursive invocation.
+    // Exported MAKE=/path/to/omktr is data, not a recursive invocation.
     // Recipe environment prefixes are common, and treating one as a command
     // would execute an ordinary recipe even during a recursive dry run.
     size_t value_start = pos;

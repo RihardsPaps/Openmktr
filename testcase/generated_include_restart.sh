@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-kati=${1:?path to ckati}
+kati=${1:?path to omktr}
 kati=$(cd "$(dirname "$kati")" && pwd)/$(basename "$kati")
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT

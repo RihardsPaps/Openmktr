@@ -15,4 +15,4 @@ for file in tests/correctness.py tests/make_compat_regressions.py \
     cp "$workspace/$file" "$root/workspace/$file"
 done
 chroot "$root" /bin/sh -c \
-    'cd /workspace && ninja -j1 ckati tests && out/find_test && out/ninja_test && out/strutil_test && python3 tests/version_generator.py && python3 tests/correctness.py -q && python3 tests/make_compat_regressions.py -q && python3 tests/regression.py && sh testcase/dump/run.sh'
+    'cd /workspace && ninja -j1 omktr tests && out/find_test && out/ninja_test && out/strutil_test && python3 tests/version_generator.py && python3 tests/correctness.py -q && python3 tests/make_compat_regressions.py -q && python3 tests/regression.py && sh testcase/dump/run.sh'

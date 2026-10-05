@@ -10,7 +10,7 @@ import unittest
 
 
 KATI = Path(os.environ.get(
-    "KATI_BINARY", Path(__file__).resolve().parents[1] / "ckati"
+    "OMKTR_BINARY", Path(__file__).resolve().parents[1] / "omktr"
 )).resolve()
 
 
@@ -69,7 +69,7 @@ class BuildCorrectness(unittest.TestCase):
 
     def test_version_is_compatible_with_make_host_checks(self):
         _, output = self.direct("--version")
-        self.assertRegex(output, r"\AGNU Make 4\.2\.1\nckati [^\n]+\n\Z")
+        self.assertRegex(output, r"\AGNU Make 4\.2\.1\nomktr [^\n]+\n\Z")
         _, short_output = self.direct("-v")
         self.assertEqual(short_output, output)
 

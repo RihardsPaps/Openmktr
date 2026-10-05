@@ -26,7 +26,7 @@ all:
 EOF
 
 ${mk} 2> ${log} || true
-if echo "${mk}" | grep -q kati; then
+if echo "${mk}" | grep -Eq '(ckati|omktr)'; then
   if grep -q "file does not exist: a.txt" ${log}; then
     echo 'foo'
   else

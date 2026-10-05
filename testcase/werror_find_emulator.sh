@@ -1,6 +1,6 @@
 #!/bin/sh
 # FORK MODIFICATION NOTICE (2026)
-# Changed by the GNU-free Kati fork, maintained by Rihards Paps and
+# Changed by the Openmktr fork, maintained by Rihards Paps and
 # Haralds Paps. Adapted regression fixtures for fork behavior and GNU-free testing.
 # Upstream material retains its Apache-2.0 terms. Fork modifications are
 # covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
@@ -30,7 +30,7 @@ FOO := \$(shell find does/not/exist -name '*.txt')
 all:
 EOF
 
-if echo "${mk}" | grep -qv "kati"; then
+if echo "${mk}" | grep -Eqv '(ckati|omktr)'; then
   # Make doesn't use find emulator, or support --werror_find_emulator, so write
   # expected output.
   echo 'find: "does/not/exist": No such file or directory'
@@ -40,7 +40,7 @@ else
   ${mk} --use_find_emulator 2>&1 && echo "Clean exit"
 fi
 
-if echo "${mk}" | grep -qv "kati"; then
+if echo "${mk}" | grep -Eqv '(ckati|omktr)'; then
   echo 'find: "does/not/exist": No such file or directory'
 else
   ${mk} --use_find_emulator --werror_find_emulator 2>&1 && echo "Clean exit"

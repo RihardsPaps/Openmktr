@@ -1,6 +1,6 @@
 # TODO: Fix this. Maybe $(wildcard) always runs at eval-phase.
 
-# GNU make 4 agrees with ckati.
+# GNU make 4 agrees with omktr.
 MAKEVER:=$(firstword $(subst ., ,$(MAKE_VERSION)))
 ifeq ($(MAKE)$(MAKEVER),make4)
 $(error test skipped)
@@ -27,7 +27,7 @@ $(shell touch dir/file)
 $(info $(wildcard dir/file))
 
 # FORK MODIFICATION NOTICE (2026)
-# Changed by the GNU-free Kati fork, maintained by Rihards Paps and
+# Changed by the Openmktr fork, maintained by Rihards Paps and
 # Haralds Paps. Adapted regression fixtures for fork behavior and GNU-free testing.
 # Upstream material retains its Apache-2.0 terms. Fork modifications are
 # covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE

@@ -19,6 +19,6 @@ fi
 if [[ ! -f "$build/Makefile" ]]; then
   (cd "$build" && FORCE_UNSAFE_CONFIGURE=1 "$source/configure" --prefix="$prefix" --disable-nls)
 fi
-"$campaign/tool/ckati" -C "$build" -j2
-"$campaign/tool/ckati" -C "$build" -j2 install
+"$campaign/tool/omktr" -C "$build" -j2
+"$campaign/tool/omktr" -C "$build" -j2 install
 "$prefix/bin/tar" --version | head -1

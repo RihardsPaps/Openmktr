@@ -1,4 +1,4 @@
-# TODO(ninja): This test is only for ckati. ninja: fix $(sort $(shell $(1)))
+# TODO(ninja): This test is only for omktr. ninja: fix $(sort $(shell $(1)))
 # ninja: $(sort $(shell "find .")) becomes "$( .) find"
 
 define run_find

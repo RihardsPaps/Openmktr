@@ -7,8 +7,8 @@ mk=$(realpath "$1")
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/fragments" "$tmp/output"
-cp "$mk" "$tmp/ckati"
-mk="$tmp/ckati"
+cp "$mk" "$tmp/omktr"
+mk="$tmp/omktr"
 
 cat >"$tmp/Makefile" <<'EOF'
 MAKEFLAGS += --include-dir=$(CURDIR)

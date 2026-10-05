@@ -1,5 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
-// Changed by the GNU-free Kati fork, maintained by Rihards Paps and
+// Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
@@ -238,7 +238,7 @@ void Flags::Parse(int argc, char** argv) {
   for (int i = 1; i < argc; i++) {
     const char* arg = argv[i];
     if (strcmp(arg, "--version") == 0 || strcmp(arg, "-v") == 0) {
-      printf("GNU Make 4.2.1\nckati %s\n", kGitVersion);
+      printf("GNU Make 4.2.1\nomktr %s\n", kGitVersion);
       exit(0);
     }
     bool should_propagate = true;

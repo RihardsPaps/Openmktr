@@ -21,7 +21,7 @@ mk="$@"
 
 echo foo > a.txt
 
-if echo "${mk}" | grep -q kati; then
+if echo "${mk}" | grep -Eq '(ckati|omktr)'; then
   cat <<EOF > Makefile
 all:
 	echo \$(KATI_shell_no_rerun echo foo)

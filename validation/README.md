@@ -23,7 +23,7 @@ path, as described in [the README](../README.md).
 
 Keep release source trees separate from disposable build trees. Do not patch
 third-party sources to obtain a pass. Record the release or source revision,
-archive digest where applicable, configuration, Kati revision or binary digest,
+archive digest where applicable, configuration, Openmktr revision or binary digest,
 command, exit status, and artifact verification. Include repeat builds and
 original-source integrity checks before marking a project as passed.
 
@@ -34,7 +34,7 @@ For example, on Linux from the repository root:
 
 ```sh
 python3 validation/phase.py --name kati-version --cwd "$PWD" \
-  --report "$PWD/validation" -- "$PWD/ckati" --version
+  --report "$PWD/validation" -- "$PWD/omktr" --version
 ```
 
 This records a version probe only. It is not a compatibility pass. Full campaign
@@ -53,7 +53,7 @@ bash validation/validate_candidate_chimera.sh
 
 The format helper checks changed C++ files with the chroot's clang-format.
 The candidate helper copies selected checkout files into the existing Chimera
-workspace, builds Kati, and runs C++ units, version generation, correctness,
+workspace, builds Openmktr, and runs C++ units, version generation, correctness,
 Make compatibility, snapshots, and the dump smoke test. It uses the existing
 chroot state; CI supplies the portable clean-image and sanitizer checks.
 
@@ -61,13 +61,13 @@ chroot state; CI supplies the portable clean-image and sanitizer checks.
 
 A Ninja failure at an `all-recursive` edge identifies the failed recipe, but
 its child-process output is needed to identify the cause. Recursive shell loops
-remain recipes; child Kati processes evaluate their subdirectory Makefiles at
+remain recipes; child Openmktr processes evaluate their subdirectory Makefiles at
 execution time.
 
 For a failing build, save the executable revision and complete launcher output:
 
 ```sh
-ckati --version
+omktr --version
 sh ninja.sh -j12 all > tar-build.log 2>&1
 ```
 
@@ -93,15 +93,15 @@ and changed stdin cannot reuse a stale Ninja graph. The
 ## Reproduce the GNU tar check
 
 On Linux with Python 3.12 or newer, Clang, Ninja, and tar's configure
-prerequisites, provide a tar 1.35 release archive and the Kati executable:
+prerequisites, provide a tar 1.35 release archive and the Openmktr executable:
 
 ```sh
-python3 validation/reproduce_issue20.py /path/to/tar-1.35.tar.gz /path/to/ckati
+python3 validation/reproduce_issue20.py /path/to/tar-1.35.tar.gz /path/to/omktr
 ```
 
 Replace both paths with existing files. The helper creates disposable in-source
-and out-of-source trees, clears inherited Make and Kati jobserver state, and
-retains combined command output, exit statuses, Kati revision, and archive hash.
+and out-of-source trees, clears inherited Make and Openmktr jobserver state, and
+retains combined command output, exit statuses, Openmktr revision, and archive hash.
 It checks initial and repeated builds, relinking, changed-source rebuilds,
 regeneration, and recovery from a deliberately removed `po/Makefile`. It restores
 that file before the recovery check and does not download sources or modify
