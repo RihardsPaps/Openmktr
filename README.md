@@ -15,6 +15,10 @@ Openmktr (Open Make Translator) is a C++17 fork of
 Its `omktr` executable parses and evaluates Makefiles, resolves dependencies,
 and either runs recipes directly or writes a build graph for Ninja to execute.
 Both workflows start with your existing Makefile.
+Openmktr extends its Kati starting point with parallel recipe scheduling:
+independent steps can run concurrently while dependencies preserve the
+required order. Both direct execution and generated Ninja builds can use this
+parallelism.
 
 The supported platform is **Linux with musl**, using Clang/LLVM and libc++.
 [Chimera Linux](https://chimera-linux.org/about/) supplies the repository's
