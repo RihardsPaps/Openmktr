@@ -284,10 +284,17 @@ Makefile does not replace the tools that its recipes call.
 
 ### Recorded compatibility evidence
 
-The [campaign results](validation/PROGRESS.md) record passes for selected,
-pinned releases and configurations, along with skips, unresolved gaps, and
-coverage limits. They do not establish compatibility for every version or
-target, or prove that the current checkout passes those builds.
+See the [campaign results](validation/PROGRESS.md) for verified builds of
+selected, pinned releases and configurations, together with skips, unresolved
+gaps, and coverage limits. The matrix records the results for those specific
+runs; it does not establish compatibility for every version or target.
+
+Every external build tested with the latest Openmktr build so far has
+succeeded. The most recent end-to-end check built FFmpeg 9.0.2 through Ninja;
+the generated build completed all 2,677 steps, and the resulting executable
+passed a short audio/video encode and decode smoke check. The broader campaign
+matrix records earlier `ckati` runs and has not been rerun in full with the
+latest `omktr` build.
 
 Read the [campaign guide](validation/README.md) before using its tools or
 citing a result. The helpers target a specific recorded environment and do
