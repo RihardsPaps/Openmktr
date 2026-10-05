@@ -10,7 +10,8 @@
 
 **Read Makefiles. Build targets in parallel. Generate Ninja graphs.**
 
-Openmktr is a C++17 fork of [Google Kati](https://github.com/google/kati).
+Openmktr (Open Make Translator) is a C++17 fork of
+[Google Kati](https://github.com/google/kati).
 Its `omktr` executable parses and evaluates Makefiles, resolves dependencies,
 and either runs recipes directly or writes a build graph for Ninja to execute.
 Both workflows start with your existing Makefile.
