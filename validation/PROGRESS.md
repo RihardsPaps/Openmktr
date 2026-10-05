@@ -35,8 +35,9 @@ and zero quarantined crashes. These checks were not rerun for this documentation
   other cross-built architectures have artifact checks without boot runs.
 - coreboot 26.06 required its upstream-generated `xcompile` file to be staged before the
   selected build.
-- The firmware stack passed with TF-A 2.10.0. The recorded TF-A 2.14.0 macro-parser
-  incompatibility remains open.
+- The firmware stack passed with TF-A 2.10.0. The TF-A 2.14.0 macro-parser issue
+  is resolved for `PLAT=qemu SPD=opteed`: Openmktr generated a Ninja graph that
+  built BL1, BL2, and BL31. FIP packaging and QEMU boot were not verified for 2.14.0.
 - Yocto's selected image used `PTEST_PARALLEL_MAKE=-j1` for elfutils and QEMU's
   IvyBridge CPU. Its successful run reported 12 BitBake warnings, including
   diagnostic-task taint notices.
@@ -72,7 +73,7 @@ and zero quarantined crashes. These checks were not rerun for this documentation
 | 20 | Yocto/OpenEmbedded | PASS (selected configuration) | Poky 5.0.10 qemux86-64 `core-image-minimal` through BitBake with `MAKE=ckati` for Make-driven tasks; 4076/4076 tasks succeeded, ext4/kernel/manifest verified, IvyBridge QEMU root-shell probe, all-task repeat and clean source PASS |
 | 21 | coreboot | PASS (selected configuration) | 26.06 QEMU x86_64 i440fx ROM through ckati, QEMU bootblock/romstage log, repeat and source integrity PASS; upstream-generated `xcompile` file pre-staged after tool rejected its first generated-file check |
 | 22 | GRUB | PASS (selected configuration) | 2.14 x86_64 EFI out-of-tree ckati build/install, generated PE32+ EFI image/script smoke, repeat and source integrity PASS |
-| 23 | TF-A + OP-TEE + U-Boot firmware stack | PASS (selected configuration) | TF-A 2.10.0 + OP-TEE 4.9.0 + U-Boot 2025.01 through ckati; QEMU secure/normal UART boot, repeat and source integrity PASS; TF-A 2.14.0 macro parser incompatibility remains open |
+| 23 | TF-A + OP-TEE + U-Boot firmware stack | PASS (selected configuration) | TF-A 2.10.0 + OP-TEE 4.9.0 + U-Boot 2025.01 through ckati; QEMU secure/normal UART boot, repeat and source integrity PASS. TF-A 2.14.0 parser issue resolved: Openmktr-generated Ninja built the qemu/opteed `all` target (BL1/BL2/BL31); FIP packaging and boot not verified |
 | 24 | MariaDB | PASS (selected configuration) | 11.4.5 out-of-tree CMake Unix Makefiles via ckati; build/install, private-socket server SQL smoke, repeat and source integrity PASS |
 | 25 | SQLite | PASS (selected configuration) | 3.53.4 official autoconf archive (SHA3-256 `454e45f61c6bd75b7420e7190732dea03ce6639c63ada47bbc592f67fc340338`); ckati build/install, persisted SQL and integrity smoke, repeat build, source integrity PASS; release Makefile has no `check` target |
 | 26 | Redis | PASS (selected configuration) | 8.4.7 official release archive SHA256 `ed83df9fcb724176fc901147aaa63830166e35c1cff39835c4fc9a5860ed1310`; separate build tree, ckati -j2 TLS build, all 144 upstream suites passed, private-socket commands, repeat and original-source integrity PASS |
@@ -106,3 +107,18 @@ phase does not update the matrix automatically. Update a row only after its
 configuration and acceptance evidence have been verified.
 
 ## New phase log
+
+### TF-A 2.14.0 macro-parser follow-up (2026-10-06)
+
+With Openmktr commit `7399826` and TF-A v2.14.0 (`1d5aa939bc8d3d892e2ed9945fa50e36a1a924cc`),
+generated a Ninja graph for `PLAT=qemu SPD=opteed` and built the `all` target
+with `sh ./ninja.sh -j4`. All 245 Ninja steps completed, producing
+`build/qemu/release/bl1.bin`, `bl2.bin`, and `bl31.bin`. This resolves the
+reported macro-parser failure for this configuration. FIP packaging and a QEMU
+boot were not verified because the required OP-TEE transfer-list payloads and
+`qemu-system-aarch64` were unavailable.
+
+Openmktr printed a nonfatal parse warning for TF-A's tab-indented `$(error ...)`
+inside an inactive `tsram` conditional. GNU Make's dry run skips the inactive
+branch, and the Openmktr build succeeds; the warning does not indicate that the
+error function ran.
