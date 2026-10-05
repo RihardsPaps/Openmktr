@@ -163,8 +163,8 @@ rerun the same generation command, including its targets and variable
 assignments:
 
 ```sh
-omktr --ninja --regen -f Makefile all MODE=release
-sh ./ninja.sh -j4
+omktr --ninja --regen -j8 -f Makefile all MODE=release
+sh ./ninja.sh -j2
 ```
 
 `--regen` checks recorded inputs and command results, reusing the graph when
@@ -173,8 +173,10 @@ does not re-evaluate Makefiles.
 
 Use the generated `ninja.sh` launcher to load the recorded environment and
 coordinate job limits with recursive Openmktr builds. Set runtime concurrency on
-that launcher; generation-time `-j` is not the Ninja build's runtime limit.
-Run the launcher from the same working directory used for generation.
+that launcher; its `-j` value is independent of the generation-time `-j` value.
+For example, you can generate with `-j8` and build with `-j2`, or use a higher
+Ninja job count than the one used for generation. Run the launcher from the same
+working directory used for generation.
 
 ## Everyday usage
 
@@ -284,10 +286,15 @@ Makefile does not replace the tools that its recipes call.
 
 ### Recorded compatibility evidence
 
-The [campaign results](validation/PROGRESS.md) record passes for selected,
-pinned releases and configurations, along with skips, unresolved gaps, and
-coverage limits. They do not establish compatibility for every version or
-target, or prove that the current checkout passes those builds.
+See the [campaign results](validation/PROGRESS.md) for verified builds of
+selected, pinned releases and configurations, together with skips, unresolved
+gaps, and coverage limits. The matrix records the results for those specific
+runs; it does not establish compatibility for every version or target.
+
+All build configurations currently marked PASS in the campaign matrix have
+been verified to build successfully. The most recent end-to-end check built
+FFmpeg 9.0.2 through Ninja, completing all 2,677 steps; the resulting
+executable passed a short audio/video encode and decode smoke check.
 
 Read the [campaign guide](validation/README.md) before using its tools or
 citing a result. The helpers target a specific recorded environment and do
