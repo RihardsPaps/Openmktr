@@ -8,6 +8,7 @@ SPDX-License-Identifier: MPL-2.0
 import hashlib
 import importlib.util
 from pathlib import Path
+import re
 import struct
 import tarfile
 import tempfile
@@ -90,6 +91,8 @@ class ReleasePackagingTest(unittest.TestCase):
             readme = archive.extractfile(f'openmktr-{VERSION}/README.txt').read().decode()
             self.assertIn(f'/releases/download/{VERSION}/{self.source.name}', readme)
             self.assertIn('dynamically linked', readme)
+            command_path = re.search(r'run \./(\S+) --version', readme).group(1)
+            self.assertEqual(archive.getmember(command_path), binary)
         checksums = (self.output / 'SHA256SUMS').read_text().splitlines()
         self.assertEqual(len(checksums), 2)
         for line in checksums:

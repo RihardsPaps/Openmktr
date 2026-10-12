@@ -85,7 +85,7 @@ libraries. It is not a standalone binary for glibc Linux. Install the matching
 runtime libraries from your musl distribution. Ninja is required for generated
 graphs; recipes use the shell and tools supplied by your Makefile.
 
-Extract this archive, then run ./bin/omktr --version. Keep the accompanying
+Extract this archive, then run ./{prefix}/bin/omktr --version. Keep the accompanying
 LICENSE, NOTICE, LICENSES/, and docs/LICENSING.md when redistributing it.
 Fork contributions use MPL 2.0; upstream material retains Apache 2.0 terms.
 Corresponding source is available alongside this binary at:

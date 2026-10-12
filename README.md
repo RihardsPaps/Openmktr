@@ -67,7 +67,10 @@ consult `README.txt` and `runtime-dependencies.txt` inside the archive.
 Other platforms remain best effort.
 
 Maintainers publish a release by pushing a `vMAJOR.MINOR.PATCH` tag, such as
-`v0.1.0`, on the intended release commit. The
+`v0.1.0`, on a commit contained in the repository's default branch (currently
+`main`). Its `.github/workflows/` files must match the default branch tip;
+the workflow rejects other targets before building because the Actions token
+cannot publish releases with differing workflow files. The
 [release workflow](.github/workflows/release.yml) builds in the pinned Chimera
 image and runs the standard suites, sanitizer checks, and packaging checks
 before publishing. All assets are uploaded to a draft before it becomes

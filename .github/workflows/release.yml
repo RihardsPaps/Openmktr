@@ -35,6 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: Validate release version
         id: version
@@ -51,6 +52,21 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write(f'version={version}\n')
           PY
+      - name: Validate release commit against the default branch
+        if: github.ref_type == 'tag'
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git fetch --no-tags origin "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+          default_ref="refs/remotes/origin/$DEFAULT_BRANCH"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "$default_ref"; then
+            echo "Release tags must target commits contained in the default branch ($DEFAULT_BRANCH)" >&2
+            exit 1
+          fi
+          if ! git diff --quiet "$GITHUB_SHA" "$default_ref" -- .github/workflows/; then
+            echo "Release workflow files must match the default branch tip for GITHUB_TOKEN publication" >&2
+            exit 1
+          fi
       - name: Build in pinned Chimera image
         env:
           VERSION: ${{ steps.version.outputs.version }}
