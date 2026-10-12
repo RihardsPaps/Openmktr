@@ -1,0 +1,170 @@
+# Copyright 2026 Rihards Paps and Haralds Paps
+# SPDX-License-Identifier: MPL-2.0
+
+name: Chimera release
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+      - 'tools/package_release.py'
+      - 'tests/release_packaging.py'
+      - 'Dockerfile'
+      - 'build.ninja'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: sh
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate release version
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          version = os.environ['REF_NAME'] if os.environ['REF_TYPE'] == 'tag' else 'v0.0.0'
+          if not re.fullmatch(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', version):
+              raise SystemExit('Release tags must have the form vMAJOR.MINOR.PATCH')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'version={version}\n')
+          PY
+      - name: Validate release commit against the default branch
+        if: github.ref_type == 'tag'
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git fetch --no-tags origin "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+          default_ref="refs/remotes/origin/$DEFAULT_BRANCH"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "$default_ref"; then
+            echo "Release tags must target commits contained in the default branch ($DEFAULT_BRANCH)" >&2
+            exit 1
+          fi
+          if ! git diff --quiet "$GITHUB_SHA" "$default_ref" -- .github/workflows/; then
+            echo "Release workflow files must match the default branch tip for GITHUB_TOKEN publication" >&2
+            exit 1
+          fi
+      - name: Build in pinned Chimera image
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: docker build --build-arg "OMKTR_SOURCE_REVISION=$VERSION+$GITHUB_SHA" -t openmktr-release .
+      - name: Run unit, direct, Ninja, and regression tests
+        run: docker run --rm openmktr-release
+      - name: Check release packaging
+        run: docker run --rm openmktr-release python tests/release_packaging.py
+      - name: Run sanitizer checks
+        run: |
+          docker run --rm -e ASAN_OPTIONS=detect_leaks=0 openmktr-release /bin/sh -ec '
+            python tools/gen_sanitizer_build.py
+            ninja -f build.sanitizer.ninja -j4 omktr-sanitized tests
+            out/sanitized/find_test
+            out/sanitized/ninja_test
+            out/sanitized/strutil_test
+            OMKTR_BINARY=/workspace/omktr-sanitized python tests/correctness.py
+            OMKTR_BINARY=/workspace/omktr-sanitized python tests/make_compat_regressions.py'
+      - name: Archive exact source and package tested binary
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 -c 'from pathlib import Path; Path("dist").mkdir()'
+          git archive --format=zip --prefix="openmktr-$VERSION/" --output="dist/openmktr-$VERSION-source.zip" HEAD
+          docker run --rm -v "$PWD/dist:/dist" -e VERSION -e GITHUB_SHA -e GITHUB_REPOSITORY openmktr-release \
+            python tools/package_release.py --version "$VERSION" --revision "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY" --output /dist
+      - name: Retain release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
+      - name: Upload all assets before publishing
+        uses: actions/github-script@v8
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        with:
+          script: |
+            const fs = require('fs');
+            const crypto = require('crypto');
+            const { owner, repo } = context.repo;
+            const tag = process.env.VERSION;
+            const names = [
+              `openmktr-${tag}-source.zip`,
+              `openmktr-${tag}-linux-x86_64-musl.tar.gz`,
+              'SHA256SUMS'
+            ];
+            const checksums = fs.readFileSync('dist/SHA256SUMS', 'utf8').trim().split('\n');
+            for (const name of names.slice(0, 2)) {
+              const digest = crypto.createHash('sha256').update(fs.readFileSync(`dist/${name}`)).digest('hex');
+              if (!checksums.includes(`${digest}  ${name}`)) {
+                throw new Error(`Checksum mismatch: ${name}`);
+              }
+            }
+            const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo });
+            let release = releases.find(item => item.tag_name === tag);
+            if (release && !release.draft) {
+              throw new Error(`Release ${tag} is already published; refusing to replace its assets`);
+            }
+            const body = fs.readFileSync('dist/release-notes.md', 'utf8');
+            if (release) {
+              if (release.target_commitish !== context.sha) {
+                throw new Error('Existing draft targets a different commit');
+              }
+            } else {
+              release = (await github.rest.repos.createRelease({
+                owner, repo, tag_name: tag, target_commitish: context.sha,
+                name: `Openmktr ${tag}`, body, draft: true, prerelease: false
+              })).data;
+            }
+            const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              owner, repo, release_id: release.id
+            });
+            for (const asset of assets) {
+              await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
+            }
+            for (const name of names) {
+              await github.rest.repos.uploadReleaseAsset({
+                owner, repo, release_id: release.id, name,
+                data: fs.readFileSync(`dist/${name}`),
+                headers: { 'content-type': 'application/octet-stream' }
+              });
+            }
+            await github.rest.repos.updateRelease({
+              owner, repo, release_id: release.id, body, draft: false, make_latest: 'true'
+            });

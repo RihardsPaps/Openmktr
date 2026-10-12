@@ -1,7 +1,8 @@
 > FORK MODIFICATION NOTICE (2026)
 > Changed by the Openmktr fork, maintained by Rihards Paps and
 > Haralds Paps. Rewritten and expanded the fork's overview, build instructions,
-> usage examples, architecture, compatibility guidance, and troubleshooting.
+> usage examples, architecture, compatibility guidance, troubleshooting,
+> and versioned release documentation.
 > Upstream material retains its Apache-2.0 terms. Fork modifications are
 > covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 > at the repository root. Original notices below remain applicable.
@@ -54,6 +55,28 @@ configurations and current limits.
 - [Maintainers, credits, and licensing](#maintainers-credits-and-licensing)
 
 ## Build Openmktr
+
+### Versioned releases
+
+The release workflow publishes versioned source ZIPs, Linux x86_64 musl binary
+archives, and SHA-256 checksums to
+[GitHub Releases](https://github.com/RihardsPaps/Openmktr/releases).
+Binary archives include licenses, notices, and a link to their corresponding
+source. They require compatible musl and LLVM libc++ runtime libraries;
+consult `README.txt` and `runtime-dependencies.txt` inside the archive.
+Other platforms remain best effort.
+
+Maintainers publish a release by pushing a `vMAJOR.MINOR.PATCH` tag, such as
+`v0.1.0`, on a commit contained in the repository's default branch (currently
+`main`). Its `.github/workflows/` files must match the default branch tip;
+the workflow rejects other targets before building because the Actions token
+cannot publish releases with differing workflow files. The
+[release workflow](.github/workflows/release.yml) builds in the pinned Chimera
+image and runs the standard suites, sanitizer checks, and packaging checks
+before publishing. All assets are uploaded to a draft before it becomes
+public. A failed upload leaves a draft that the same tag run can retry;
+published assets are never replaced. Pull requests affecting release tooling
+and manual workflow runs validate and retain artifacts without publishing.
 
 ### On Chimera Linux
 
