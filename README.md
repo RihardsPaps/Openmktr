@@ -23,7 +23,7 @@ parallelism.
 
 The supported platform is **Linux with musl**, using Clang/LLVM and libc++.
 [Chimera Linux](https://chimera-linux.org/about/) supplies the repository's
-build and test environment. Other platforms are best effort.
+build and test environment.
 
 | Capability | What you can do |
 | --- | --- |
