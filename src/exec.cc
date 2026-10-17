@@ -386,7 +386,13 @@ class Executor {
         needed_by ? needed_by : "(null)");
 
     if (!n.has_rule && output_ts == kNotExist && !n.is_phony) {
-      {
+      // Several dependency checks can already be in flight when the first
+      // fatal error requests cancellation.  Report only that first missing
+      // prerequisite unless keep-going mode explicitly asks for all errors.
+      const bool report_missing_target =
+          g_flags.keep_going ||
+          !cancel_requested_.exchange(true, std::memory_order_relaxed);
+      if (report_missing_target) {
         std::lock_guard<std::mutex> lock(output_mu_);
         if (needed_by) {
           fprintf(stderr, "*** No rule to make target '%s', needed by '%s'.\n",
@@ -401,8 +407,6 @@ class Executor {
         done_[n.output] = NodeState{false, kNotExist, true, std::thread::id()};
       }
       failed_.store(true, std::memory_order_relaxed);
-      if (!g_flags.keep_going)
-        cancel_requested_.store(true, std::memory_order_relaxed);
       state_cv_.notify_all();
       return kNotExist;
     }

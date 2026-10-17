@@ -1,7 +1,8 @@
 # Contribute to Openmktr
 
-Keep changes focused, preserve Makefile behavior, and verify them in the supported
-Chimera environment. Report issues and submit pull requests in
+Keep changes focused, preserve Makefile behavior, and verify them in the
+project's GNU-free Chimera environment or an equivalent toolchain. Report
+issues and submit pull requests in
 [the project
 repository](https://github.com/RihardsPaps/Openmktr).
 Automated agents must also follow [AGENTS.md](AGENTS.md).
@@ -33,12 +34,16 @@ docker build -t openmktr-test .
 docker run --rm openmktr-test
 ```
 
-[Dockerfile](Dockerfile) builds Openmktr in Chimera and runs the standard suites.
+[Dockerfile](Dockerfile) builds Openmktr in the Chimera toolchain image and
+runs the standard suites without installing GNU utilities or explicitly
+requesting Chimera Utils. Core checks have also passed in Alpine's BusyBox
+environment.
 [The CI workflow](.github/workflows/cpp-ci.yml) uses the same image, checks
 changed C++ formatting, and runs a separate sanitizer build. Docker and the
 GitHub Actions host are external infrastructure; project checks run inside Chimera.
 
-To run the standard checks directly inside Chimera:
+To run the standard checks directly in Chimera or an equivalent environment
+with the listed build requirements:
 
 ```sh
 ninja -f build.ninja -j4 omktr tests
@@ -64,8 +69,9 @@ reference executable. Some fixtures intentionally return a nonzero status.
 The snapshot harness separately tracks existing crashes in
 [known_crashes.json](tests/known_crashes.json).
 
-If Docker or Chimera is unavailable, report the checks you actually ran and
-the limitation. Inspect CI through the GitHub integration when available.
+If Docker, Chimera, or a required tool is unavailable, report the checks you
+actually ran and the limitation. Inspect CI through the GitHub integration when
+available.
 Documentation-only changes need a diff and accuracy review; they do not need
 a full runtime test run.
 

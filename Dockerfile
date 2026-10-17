@@ -8,7 +8,7 @@
 FROM docker.io/chimeralinux/chimera@sha256:29102d7e12a1f464707d7aba19ce53e652d277861838ed4129178d0655444b1a
 
 # Chimera ships Clang/LLVM, musl, libc++, and a BSD-derived userland.
-RUN apk add clang ninja python chimerautils
+RUN apk add clang ninja python
 RUN for package in gcc glibc bash coreutils findutils; do \
       if apk info -e "$package" >/dev/null 2>&1; then \
         echo "unexpected GNU package: $package" >&2; exit 1; \

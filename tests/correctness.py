@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 import unittest
 
 
@@ -138,6 +139,58 @@ class BuildCorrectness(unittest.TestCase):
         (self.directory / "input.c").write_text("#define VALUE 37\nVALUE\n")
         self.direct("all")
         self.assertEqual((self.directory / "output").read_text().strip(), "37")
+
+    def test_ninja_question_uses_nanosecond_prerequisite_times(self):
+        self.makefile(
+            "all: output\n"
+            "output: first second\n"
+            "\t@printf '%s' \"$?\" > output\n"
+        )
+        first = self.directory / "first"
+        second = self.directory / "second"
+        output = self.directory / "output"
+        first.write_text("first\n")
+        second.write_text("second\n")
+        self.direct("--ninja", "all")
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual(output.read_text(), "first second kati_missing_output")
+
+        # Put the output later in the same second as both inputs, then move
+        # one prerequisite 250 ms ahead without relying on sleeps or crossing
+        # a wall-clock second boundary.
+        os.utime(first, ns=(1_000_000_000, 1_000_000_000))
+        os.utime(second, ns=(1_500_000_000, 1_500_000_000))
+        os.utime(output, ns=(2_000_000_000, 2_000_000_000))
+        os.utime(second, ns=(2_250_000_000, 2_250_000_000))
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual(output.read_text(), "second kati_missing_output")
+
+    def test_ninja_question_preserves_low_resolution_prerequisite_semantics(self):
+        self.makefile(
+            ".LOW_RESOLUTION_TIME: second\n"
+            "all: output\n"
+            "output: first second\n"
+            "\t@printf '%s' \"$?\" > output\n"
+        )
+        first = self.directory / "first"
+        second = self.directory / "second"
+        output = self.directory / "output"
+        first.write_text("first\n")
+        second.write_text("second\n")
+        self.direct("--ninja", "all")
+        self.run_command("sh", "./ninja.sh", "-j2")
+
+        base = (int(time.time()) - 10) * 1_000_000_000
+        os.utime(first, ns=(base, base))
+        os.utime(second, ns=(base + 750_000_000, base + 750_000_000))
+        os.utime(output, ns=(base + 500_000_000, base + 500_000_000))
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual(output.read_text(), "first second kati_missing_output")
+
+        os.utime(second, ns=(base + 2_000_000_000, base + 2_000_000_000))
+        os.utime(output, ns=(base + 1_500_000_000, base + 1_500_000_000))
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual(output.read_text(), "second kati_missing_output")
 
     def test_multiline_function_call_in_define(self):
         self.makefile(

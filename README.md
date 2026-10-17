@@ -22,8 +22,13 @@ required order. Both direct execution and generated Ninja builds can use this
 parallelism.
 
 The supported platform is **Linux with musl**, using Clang/LLVM and libc++.
-[Chimera Linux](https://chimera-linux.org/about/) supplies the repository's
-build and test environment.
+[Chimera Linux](https://chimera-linux.org/about/) is the reference build and
+test environment. The source has also been built in Alpine's musl/BusyBox
+environment. Openmktr does not depend on Chimera-specific utility interfaces;
+equivalent POSIX tools, including BusyBox, Toybox, or BSD-derived
+implementations, can provide the basic system commands. The full snapshot suite
+remains tied to the reference environment, and other environments are best
+effort until added to CI.
 
 | Capability | What you can do |
 | --- | --- |
@@ -78,18 +83,28 @@ public. A failed upload leaves a draft that the same tag run can retry;
 published assets are never replaced. Pull requests affecting release tooling
 and manual workflow runs validate and retain artifacts without publishing.
 
-### On Chimera Linux
+### Build requirements
 
-Install the supported packages, then build from the repository root:
+Openmktr's own build needs Clang/LLVM with LLD, libc++, Ninja, Python 3, a
+POSIX shell, and basic system utilities. Package names vary by distribution;
+no Chimera-specific utility package or GNU userland is required.
+
+On Chimera Linux, install the toolchain packages and build from the repository
+root:
 
 ```sh
-apk add clang ninja python chimerautils
+apk add clang ninja python
 ninja -f build.ninja -j4 omktr
 ./omktr --version
 ```
 
 Installing packages requires the appropriate system privileges. The executable
 is written to `./omktr`; intermediate build files go into `out/`.
+
+On other systems, install equivalent LLVM, libc++, Ninja, and Python packages
+using that system's package manager. Existing POSIX-compatible system
+utilities are sufficient; the `chimerautils` package is not a project
+dependency.
 
 The checked-in [build graph](build.ninja) uses C++17, Clang++, libc++, LLVM's
 lld linker, and ThinLTO. Ninja's `deps = gcc` setting names a compiler depfile
@@ -104,13 +119,16 @@ docker build -t openmktr-test .
 docker run --rm openmktr-test
 ```
 
-The [Dockerfile](Dockerfile) uses a pinned Chimera image, builds `omktr` and the
+The [Dockerfile](Dockerfile) uses a pinned Chimera toolchain, builds `omktr` and the
 C++ test binaries, checks for unwanted GNU dependencies, and runs the standard
-suites when the container starts. The executable stays inside the image; this
-workflow does not install it on the host.
+suites when the container starts. Unit, version, correctness, compatibility,
+and include-dump checks have also passed in Alpine with its BusyBox utilities.
+The executable stays inside the image; this workflow does not install it on
+the host.
 
-Docker and the CI host are external infrastructure. The project-controlled
-build and tests execute inside Chimera.
+Docker and the CI host are external infrastructure. The CI image runs in
+Chimera; the independent Alpine run also built the source and passed the core
+checks listed above.
 
 ## Try it in five steps
 
