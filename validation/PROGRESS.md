@@ -122,3 +122,29 @@ Openmktr printed a nonfatal parse warning for TF-A's tab-indented `$(error ...)`
 inside an inactive `tsram` conditional. GNU Make's dry run skips the inactive
 branch, and the Openmktr build succeeds; the warning does not indicate that the
 error function ran.
+
+### `.LOW_RESOLUTION_TIME` Ninja guard portability (2026-10-10)
+
+Replaced the generated Ninja recipe's external `stat -c`/`stat -f` probing
+with an Openmktr internal timestamp query implemented through native `stat(2)`.
+The guard compares all normal prerequisites, using whole-second precision only
+for prerequisites declared with `.LOW_RESOLUTION_TIME`; missing paths or an
+invalid helper invocation fail open and run the recipe. This removes a
+non-portable utility CLI dependency and avoids extra shell processes while
+preserving Ninja parallel scheduling. Added a regression that puts a failing
+`stat` executable first in `PATH`, alongside the existing same-second and
+later-second timestamp checks. The helper's argument protocol uses explicit
+normal/low-resolution input counts rather than a sentinel, so legal filenames
+such as `--` remain unambiguous; that filename is covered by the regression.
+
+Built Openmktr and its three C++ test binaries in a disposable target-musl
+Ninja tree using the distro Clang wrapper, libc++, musl sysroot, and LLD;
+verified ELF dependencies resolve to musl and LLVM libc++/libunwind. All three
+C++ tests, the low-resolution timestamp script, and 113 behavioral correctness
+tests pass. The broader snapshot harness matched 837/858 scenarios; the 21
+remaining mismatches are unrelated environment-sensitive snapshots (shell
+diagnostic wording/grammar, one external fixture missing from the copied test
+tree, and a test whose forced `PATH` omits Clang), not timestamp cases. Full
+output: `/tmp/openmktr-regression-musl-20261010.log`. The earlier host-default
+Openmktr compile was invalid for the GNU-free target and was discarded; the
+musl-targeted build is the result counted here.

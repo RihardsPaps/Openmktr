@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Added an internal timestamp query used by generated Ninja recipes.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -22,12 +23,14 @@
 
 // +build ignore
 
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -58,6 +61,106 @@
 #include "var.h"
 
 static char** g_argv;
+
+namespace {
+
+bool StatPath(const char* path, struct stat* result) {
+  int status;
+  do {
+    status = stat(path, result);
+  } while (status < 0 && errno == EINTR);
+  return status == 0;
+}
+
+bool IsNewer(const struct stat& input,
+             const struct stat& output,
+             bool low_resolution) {
+#if defined(__APPLE__)
+  const struct timespec input_time = input.st_mtimespec;
+  const struct timespec output_time = output.st_mtimespec;
+#else
+  const struct timespec input_time = input.st_mtim;
+  const struct timespec output_time = output.st_mtim;
+#endif
+  if (low_resolution)
+    return input_time.tv_sec > output_time.tv_sec;
+  return input_time.tv_sec > output_time.tv_sec ||
+         (input_time.tv_sec == output_time.tv_sec &&
+          input_time.tv_nsec > output_time.tv_nsec);
+}
+
+int HandleNewerInputs(int argc, char** argv) {
+  if (argc < 3)
+    return 2;
+
+  struct stat output_stat;
+  const bool output_exists = StatPath(argv[2], &output_stat);
+  std::unordered_set<std::string> low_resolution_inputs;
+  int separator = argc;
+  for (int i = 3; i < argc; ++i) {
+    if (strcmp(argv[i], "--") == 0) {
+      separator = i;
+      for (int j = i + 1; j < argc; ++j)
+        low_resolution_inputs.insert(argv[j]);
+      break;
+    }
+  }
+
+  bool first = true;
+  for (int i = 3; i < separator; ++i) {
+    struct stat input_stat;
+    if (!StatPath(argv[i], &input_stat) ||
+        (output_exists && !IsNewer(input_stat, output_stat,
+                                   low_resolution_inputs.find(argv[i]) !=
+                                       low_resolution_inputs.end())))
+      continue;
+    if (!first && putchar(' ') == EOF)
+      return 1;
+    if (fputs(argv[i], stdout) == EOF)
+      return 1;
+    first = false;
+  }
+  return fflush(stdout) == 0 ? 0 : 1;
+}
+
+int HandleLowResolutionUpToDate(int argc, char** argv) {
+  if (argc < 6)
+    return 1;
+
+  char* end = nullptr;
+  errno = 0;
+  const unsigned long normal_count = strtoul(argv[3], &end, 10);
+  if (errno != 0 || end == argv[3] || *end != '\0')
+    return 1;
+  errno = 0;
+  const unsigned long low_resolution_count = strtoul(argv[4], &end, 10);
+  if (errno != 0 || end == argv[4] || *end != '\0' ||
+      low_resolution_count == 0 || normal_count > (unsigned long)(argc - 5) ||
+      low_resolution_count != (unsigned long)(argc - 5) - normal_count)
+    return 1;
+
+  const int normal_end = 5 + (int)normal_count;
+  std::unordered_set<std::string> low_resolution_inputs;
+  for (int i = normal_end; i < argc; ++i)
+    low_resolution_inputs.insert(argv[i]);
+
+  struct stat output_stat;
+  if (!StatPath(argv[2], &output_stat))
+    return 1;
+
+  for (int i = 5; i < normal_end; ++i) {
+    struct stat input_stat;
+    if (!StatPath(argv[i], &input_stat))
+      return 1;
+    const bool low_resolution =
+        low_resolution_inputs.find(argv[i]) != low_resolution_inputs.end();
+    if (IsNewer(input_stat, output_stat, low_resolution))
+      return 1;
+  }
+  return 0;
+}
+
+}  // namespace
 
 // We know that there are leaks in Kati. Turn off LeakSanitizer by default.
 extern "C" const char* __asan_default_options() {
@@ -1131,6 +1234,10 @@ int main(int argc, char* argv[]) {
     if (!strcmp(argv[1], "--realpath")) {
       HandleRealpath(argc - 2, argv + 2);
       return 0;
+    } else if (!strcmp(argv[1], "--internal-newer-inputs")) {
+      return HandleNewerInputs(argc, argv);
+    } else if (!strcmp(argv[1], "--internal-low-resolution-up-to-date")) {
+      return HandleLowResolutionUpToDate(argc, argv);
     } else if (!strcmp(argv[1], "--file-read")) {
       return HandleFileRead(argc - 2, argv + 2);
     } else if (!strcmp(argv[1], "--dump_stamp_tool")) {

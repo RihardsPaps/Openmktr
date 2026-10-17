@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Low-resolution timestamp guards use Openmktr's internal stat helper.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -794,25 +795,16 @@ class NinjaGenerator {
       // a low-resolution prerequisite within the same second.
       const std::string output = ShellQuote(node->output.str());
       if (!node->low_resolution_inputs.empty()) {
-        std::string guard = "kati_mtime() { stat -f %m \"$$1\"; }; ";
-        guard += "if [ -e " + output + " ]; then ";
-        guard += "kati_lowres_skip=1; ";
-        guard += "kati_output_sec=$$(kati_mtime " + output + "); ";
-        for (Symbol input : node->low_resolution_inputs) {
-          guard += "if [ ! -e " + ShellQuote(input.str()) +
-                   " ] || [ $$(kati_mtime " + ShellQuote(input.str()) +
-                   ") -gt \"$$kati_output_sec\" ]; then "
-                   "kati_lowres_skip=0; fi; ";
-        }
-        for (Symbol input : node->actual_inputs) {
-          if (std::find(node->low_resolution_inputs.begin(),
-                        node->low_resolution_inputs.end(),
-                        input) != node->low_resolution_inputs.end())
-            continue;
-          guard += "if [ " + ShellQuote(input.str()) + " -nt " + output +
-                   " ]; then kati_lowres_skip=0; fi; ";
-        }
-        guard += "if [ \"$$kati_lowres_skip\" -eq 1 ]; then exit 0; fi; fi; ";
+        std::string guard = "if " + ShellQuote(GetExecutablePath()) +
+                            " --internal-low-resolution-up-to-date " + output +
+                            " " + std::to_string(node->actual_inputs.size()) +
+                            " " +
+                            std::to_string(node->low_resolution_inputs.size());
+        for (Symbol input : node->actual_inputs)
+          guard += " " + ShellQuote(input.str());
+        for (Symbol input : node->low_resolution_inputs)
+          guard += " " + ShellQuote(input.str());
+        guard += "; then exit 0; fi; ";
         cmd_buf = guard + cmd_buf;
       }
 
