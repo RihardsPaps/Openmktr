@@ -946,6 +946,89 @@ class BuildCorrectness(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout.decode())
         self.assertEqual((self.directory / "done").read_text(), "xx")
 
+    def test_recursive_siblings_share_jobserver_concurrently(self):
+        self.makefile('all:\n\t@"$(MAKE)" -f children.mk all\n')
+        (self.directory / "children.mk").write_text(
+            'all: a b\na b:\n\t@"$(MAKE)" -f leaf.mk NAME=$@ all\n')
+        (self.directory / "leaf.mk").write_text(
+            "all:\n\t@python3 worker.py $(NAME)\n")
+        (self.directory / "worker.py").write_text(
+            "from pathlib import Path\nimport sys, time\n"
+            "Path('start-' + sys.argv[1]).touch()\n"
+            "deadline = time.monotonic() + 2\n"
+            "while not (Path('start-a').exists() and Path('start-b').exists()):\n"
+            "    if time.monotonic() > deadline: raise SystemExit(1)\n"
+            "    time.sleep(0.01)\n")
+        fifo = self.directory / "jobserver"
+        os.mkfifo(fifo)
+        fd = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+        self.addCleanup(os.close, fd)
+        os.write(fd, b"xx")
+        env = os.environ.copy()
+        env["KATI_JOBSERVER_FIFO"] = str(fifo)
+        env["KATI_JOBS"] = "2"
+        env.pop("KATI_JOBSERVER_RESERVED", None)
+        for mode in ("direct", "ninja"):
+            with self.subTest(mode=mode):
+                for name in ("start-a", "start-b"):
+                    (self.directory / name).unlink(missing_ok=True)
+                if mode == "ninja":
+                    self.direct("--ninja", "-j2", "all")
+                    command = ["sh", "./ninja.sh", "-j2"]
+                else:
+                    command = [str(KATI), "-j2", "all"]
+                result = subprocess.run(
+                    command, cwd=self.directory, env=env, capture_output=True,
+                    timeout=10, check=False)
+                self.assertEqual(result.returncode, 0,
+                                 result.stdout.decode() + result.stderr.decode())
+                self.assertEqual(os.read(fd, 3), b"xx")
+                os.write(fd, b"xx")
+
+    def test_recursive_siblings_respect_shared_job_budget(self):
+        self.makefile('all:\n\t@"$(MAKE)" -f children.mk all\n')
+        (self.directory / "children.mk").write_text(
+            'all: a b c d\na b c d:\n\t@"$(MAKE)" -f leaf.mk all\n')
+        (self.directory / "leaf.mk").write_text(
+            "all: w x y z\nw x y z:\n\t@python3 worker.py\n")
+        (self.directory / "worker.py").write_text(
+            "import fcntl, json, time\n"
+            "def update(delta):\n"
+            "    with open('counts', 'r+') as f:\n"
+            "        fcntl.flock(f, fcntl.LOCK_EX)\n"
+            "        active, peak, done = json.load(f)\n"
+            "        active += delta\n"
+            "        f.seek(0)\n"
+            "        json.dump([active, max(peak, active), done + (delta < 0)], f)\n"
+            "        f.truncate()\n"
+            "update(1)\ntime.sleep(0.04)\nupdate(-1)\n")
+        fifo = self.directory / "jobserver"
+        os.mkfifo(fifo)
+        fd = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+        self.addCleanup(os.close, fd)
+        os.write(fd, b"xx")
+        env = os.environ.copy()
+        env["KATI_JOBSERVER_FIFO"] = str(fifo)
+        env["KATI_JOBS"] = "4"
+        env.pop("KATI_JOBSERVER_RESERVED", None)
+        for mode in ("direct", "ninja"):
+            with self.subTest(mode=mode):
+                (self.directory / "counts").write_text("[0, 0, 0]")
+                if mode == "ninja":
+                    self.direct("--ninja", "-j4", "all")
+                    command = ["sh", "./ninja.sh", "-j4"]
+                else:
+                    command = [str(KATI), "-j4", "all"]
+                result = subprocess.run(
+                    command, cwd=self.directory, env=env, capture_output=True,
+                    timeout=10, check=False)
+                self.assertEqual(result.returncode, 0,
+                                 result.stdout.decode() + result.stderr.decode())
+                self.assertEqual(json.loads((self.directory / "counts").read_text()),
+                                 [0, 2, 16])
+                self.assertEqual(os.read(fd, 3), b"xx")
+                os.write(fd, b"xx")
+
     def test_recursive_make_inherits_job_limit(self):
         self.makefile('all:\n\t@"$(MAKE)" -f child.mk all\n')
         (self.directory / "child.mk").write_text(

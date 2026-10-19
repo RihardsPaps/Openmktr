@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Allow independent recursive recipes to share the existing FIFO job budget.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -695,13 +696,7 @@ class Executor {
         // remain unexecuted. The normalized MAKEFLAGS installed by
         // UpdateMakeFlags carries -n into the child Kati process.
         if (recursive || command.force_run) {
-          // A recursive make is an opaque operation from this executor's
-          // point of view.  Its child may update the make state, included
-          // files, or directory layout that another recursive child is
-          // about to inspect.  GNU make keeps the recursive invocation as a
-          // single job-server job; do the equivalent here while retaining
-          // parallelism inside the child executor.
-          std::unique_lock<std::mutex> recursive_lock(recursive_command_mu_);
+          auto recursive_lock = LockRecursiveCommand();
           const std::string& command_shell =
               command.shell.empty() ? shell_ : command.shell;
           const std::string& command_shellflag =
@@ -725,11 +720,7 @@ class Executor {
         std::unique_lock<std::mutex> recursive_lock;
         std::string command_text = command.cmd;
         if (recursive) {
-          // Recursive make commands are opaque to the current graph.  Do not
-          // let sibling opaque commands mutate the same make directory at
-          // the same time.  Normal compile/link recipes remain parallel, and
-          // the child make keeps its own parallel executor.
-          recursive_lock = std::unique_lock<std::mutex>(recursive_command_mu_);
+          recursive_lock = LockRecursiveCommand();
           // Recursive children share the wrapper's FIFO. RunCommand passes
           // an inherited reserved slot to the child when one is available;
           // otherwise this boundary takes no FIFO token and the child takes
@@ -948,6 +939,19 @@ class Executor {
     std::unique_lock<std::mutex> lock(job_mu_);
     job_cv_.wait(lock, [this] { return active_jobs_ < job_limit_; });
     ++active_jobs_;
+  }
+
+  std::unique_lock<std::mutex> LockRecursiveCommand() {
+    std::unique_lock<std::mutex> lock(recursive_command_mu_, std::defer_lock);
+    // A shared FIFO already limits the visible work across child executors.
+    // Serializing independent recursive recipes as well prevents their small
+    // subgraphs from filling that budget (notably Kbuild subdirectories).
+    // Without a shared jobserver retain the conservative fallback: each
+    // child otherwise has its own full local -j limit.
+    const char* fifo = getenv("KATI_JOBSERVER_FIFO");
+    if (fifo == nullptr || *fifo == '\0')
+      lock.lock();
+    return lock;
   }
 
   void ReleaseJob() {
