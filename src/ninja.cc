@@ -3,6 +3,7 @@
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Low-resolution timestamp guards use Openmktr's internal stat helper.
+// Reuse Ninja's default POSIX shell instead of spawning a second shell.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -859,6 +860,12 @@ class NinjaGenerator {
           const std::string source_rspfile = ". " + ShellQuote(rspfile);
           out << " command = " << command_shell << ' ' << command_shellflag
               << ' ' << ShellQuote(source_rspfile) << "\n";
+        } else if (command_shell == "/bin/sh" && command_shellflag == "-c") {
+          // Ninja already runs commands through /bin/sh -c on POSIX hosts.
+          // A second identical shell adds a process launch to every recipe.
+          // cmd_buf is already escaped for Ninja; let its shell parse the
+          // complete recipe once, including assignments and nested shells.
+          out << " command = " << cmd_buf << "\n";
         } else {
           // Keep the recipe opaque to the shell that Ninja uses to launch the
           // command. The recipe itself may contain another shell invocation

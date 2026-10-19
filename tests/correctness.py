@@ -83,6 +83,49 @@ class BuildCorrectness(unittest.TestCase):
         ).stdout.strip()
         self.assertEqual(version, "4.2.1")
 
+    def test_ninja_reuses_default_shell(self):
+        self.makefile("all:\n"
+                      "\t@value='space and quote'\"'\"; export value; "
+                      "sh -c 'printf \"%s\" \"$$value\"' > result\n")
+        self.direct("all")
+        expected = (self.directory / "result").read_text()
+        self.assertEqual(expected, "space and quote'")
+        (self.directory / "result").unlink()
+        self.direct("--ninja", "all")
+        graph = (self.directory / "build.ninja").read_text()
+        commands = [line for line in graph.splitlines()
+                    if line.startswith(" command = ")]
+        self.assertEqual(len(commands), 1, graph)
+        self.assertTrue(commands[0].startswith(" command = cd "), commands[0])
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "result").read_text(), expected)
+
+    def test_ninja_preserves_custom_shell_flags(self):
+        self.makefile(".SHELLFLAGS := -ec\n"
+                      "all:\n\t@false; printf unexpected > result\n")
+        status, _ = self.direct("all", success=False)
+        self.assertNotEqual(status, 0)
+        self.assertFalse((self.directory / "result").exists())
+        self.direct("--ninja", "all")
+        status, _ = self.run_command("sh", "./ninja.sh", success=False)
+        self.assertNotEqual(status, 0)
+        self.assertFalse((self.directory / "result").exists())
+
+    def test_ninja_preserves_custom_shell(self):
+        shell = self.directory / "recipe-shell"
+        shell.write_text("#!/bin/sh\nprintf x >> shell-used\n"
+                         'exec /bin/sh "$@"\n', encoding="utf-8")
+        shell.chmod(0o755)
+        self.makefile(f"SHELL := {shell}\n"
+                      "all:\n\t@printf done > result\n")
+        self.direct("all")
+        self.assertEqual((self.directory / "shell-used").read_text(), "x")
+        (self.directory / "result").unlink()
+        self.direct("--ninja", "all")
+        self.run_command("sh", "./ninja.sh")
+        self.assertEqual((self.directory / "shell-used").read_text(), "xx")
+        self.assertEqual((self.directory / "result").read_text(), "done")
+
     def test_undefine_feature_matches_supported_directive(self):
         self.makefile("ifeq ($(filter undefine,$(.FEATURES)),)\n"
                       "$(error undefine feature missing)\nendif\n"

@@ -75,6 +75,22 @@ def measure(binary: Path, repeats: int) -> dict:
             "peak_rss_kib": max(value[1] for value in nested_samples),
         }
 
+        # Exclude graph generation and isolate recipe-launch overhead. Phony
+        # jobs run on every invocation, including the discarded warmups.
+        jobs = " ".join(f"launch{i}" for i in range(2000))
+        (cwd / "Makefile").write_text(
+            f".PHONY: all {jobs}\nall: {jobs}\n{jobs}:\n\t@:\n",
+            encoding="utf-8",
+        )
+        run([str(binary), "--ninja", "all"], cwd)
+        for job_count in (1, 4):
+            samples = [run(["sh", "./ninja.sh", f"-j{job_count}"], cwd)
+                       for _ in range(repeats + 2)][2:]
+            results[f"ninja_recipe_launch_j{job_count}"] = {
+                "median_seconds": statistics.median(value[0] for value in samples),
+                "peak_rss_kib": max(value[1] for value in samples),
+            }
+
         chain = ["all: link99\n"]
         chain += ["link0:\n\t@touch $@\n"]
         chain += [f"link{i}: link{i - 1}\n\t@touch $@\n" for i in range(1, 100)]
