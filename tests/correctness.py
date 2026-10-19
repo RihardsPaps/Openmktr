@@ -985,6 +985,34 @@ class BuildCorrectness(unittest.TestCase):
                 self.assertEqual(os.read(fd, 3), b"xx")
                 os.write(fd, b"xx")
 
+    def test_noop_recipe_does_not_consume_job_token(self):
+        self.makefile("all:\n\t@:\n")
+        fifo = self.directory / "jobserver"
+        os.mkfifo(fifo)
+        fd = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+        self.addCleanup(os.close, fd)
+        env = os.environ.copy()
+        env["KATI_JOBSERVER_FIFO"] = str(fifo)
+        env.pop("KATI_JOBSERVER_RESERVED", None)
+        result = subprocess.run(
+            [str(KATI), "-j1", "all"], cwd=self.directory, env=env,
+            capture_output=True, timeout=3, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        with self.assertRaises(BlockingIOError):
+            os.read(fd, 1)
+
+    def test_noop_custom_interpreters_and_flags_still_run(self):
+        shell = self.directory / "recipe-shell"
+        shell.write_text("#!/bin/sh\nprintf x >> shell-used\n"
+                         'exec /bin/sh "$@"\n', encoding="utf-8")
+        shell.chmod(0o755)
+        self.makefile(f"SHELL := {shell}\nall:\n\t@:\n")
+        self.direct("all")
+        self.assertEqual((self.directory / "shell-used").read_text(), "x")
+        self.makefile(".SHELLFLAGS := -xc\nall:\n\t@:\n")
+        _, output = self.direct("all")
+        self.assertIn("+ :", output)
+
     def test_recursive_siblings_respect_shared_job_budget(self):
         self.makefile('.EXPORT_ALL_VARIABLES:\nexport KATI_JOBSERVER_RESERVED\n'
                       'all:\n\t@"$(MAKE)" -f children.mk all\n')

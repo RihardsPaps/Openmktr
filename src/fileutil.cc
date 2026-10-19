@@ -3,6 +3,7 @@
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Prevent recipe exports from duplicating a live jobserver reservation.
+// Elide pure no-op commands for the default POSIX shell and flags.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -161,6 +162,12 @@ int RunCommand(const std::string& shell,
                int make_level,
                const std::vector<std::string>* extra_env,
                const std::vector<std::string>* unset_env) {
+  // Kbuild uses thousands of dummy recipes. The default shell's ':' has no
+  // expansion, output, or side effects, so it needs neither a process nor a
+  // jobserver token. Custom interpreters/flags can have observable behavior.
+  if (shell == "/bin/sh" && shellflag == "-c" && cmd == ":")
+    return 0;
+
   // A recipe owns one jobserver slot while its shell runs. Pass that slot to
   // nested Kati processes started indirectly by scripts or configure tests.
   // An explicitly recursive boundary can pass along an inherited reservation
