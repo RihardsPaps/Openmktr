@@ -83,6 +83,49 @@ class BuildCorrectness(unittest.TestCase):
         ).stdout.strip()
         self.assertEqual(version, "4.2.1")
 
+    def test_ninja_reuses_default_shell(self):
+        self.makefile("all:\n"
+                      "\t@value='space and quote'\"'\"; export value; "
+                      "sh -c 'printf \"%s\" \"$$value\"' > result\n")
+        self.direct("all")
+        expected = (self.directory / "result").read_text()
+        self.assertEqual(expected, "space and quote'")
+        (self.directory / "result").unlink()
+        self.direct("--ninja", "all")
+        graph = (self.directory / "build.ninja").read_text()
+        commands = [line for line in graph.splitlines()
+                    if line.startswith(" command = ")]
+        self.assertEqual(len(commands), 1, graph)
+        self.assertTrue(commands[0].startswith(" command = cd "), commands[0])
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "result").read_text(), expected)
+
+    def test_ninja_preserves_custom_shell_flags(self):
+        self.makefile(".SHELLFLAGS := -ec\n"
+                      "all:\n\t@false; printf unexpected > result\n")
+        status, _ = self.direct("all", success=False)
+        self.assertNotEqual(status, 0)
+        self.assertFalse((self.directory / "result").exists())
+        self.direct("--ninja", "all")
+        status, _ = self.run_command("sh", "./ninja.sh", success=False)
+        self.assertNotEqual(status, 0)
+        self.assertFalse((self.directory / "result").exists())
+
+    def test_ninja_preserves_custom_shell(self):
+        shell = self.directory / "recipe-shell"
+        shell.write_text("#!/bin/sh\nprintf x >> shell-used\n"
+                         'exec /bin/sh "$@"\n', encoding="utf-8")
+        shell.chmod(0o755)
+        self.makefile(f"SHELL := {shell}\n"
+                      "all:\n\t@printf done > result\n")
+        self.direct("all")
+        self.assertEqual((self.directory / "shell-used").read_text(), "x")
+        (self.directory / "result").unlink()
+        self.direct("--ninja", "all")
+        self.run_command("sh", "./ninja.sh")
+        self.assertEqual((self.directory / "shell-used").read_text(), "xx")
+        self.assertEqual((self.directory / "result").read_text(), "done")
+
     def test_undefine_feature_matches_supported_directive(self):
         self.makefile("ifeq ($(filter undefine,$(.FEATURES)),)\n"
                       "$(error undefine feature missing)\nendif\n"
@@ -902,6 +945,169 @@ class BuildCorrectness(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout.decode())
         self.assertEqual((self.directory / "done").read_text(), "xx")
+
+    def test_recursive_siblings_share_jobserver_concurrently(self):
+        self.makefile('all:\n\t@"$(MAKE)" -f children.mk all\n')
+        (self.directory / "children.mk").write_text(
+            'all: a b\na b:\n\t@"$(MAKE)" -f leaf.mk NAME=$@ all\n')
+        (self.directory / "leaf.mk").write_text(
+            "all:\n\t@python3 worker.py $(NAME)\n")
+        (self.directory / "worker.py").write_text(
+            "from pathlib import Path\nimport sys, time\n"
+            "Path('start-' + sys.argv[1]).touch()\n"
+            "deadline = time.monotonic() + 2\n"
+            "while not (Path('start-a').exists() and Path('start-b').exists()):\n"
+            "    if time.monotonic() > deadline: raise SystemExit(1)\n"
+            "    time.sleep(0.01)\n")
+        fifo = self.directory / "jobserver"
+        os.mkfifo(fifo)
+        fd = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+        self.addCleanup(os.close, fd)
+        os.write(fd, b"xx")
+        env = os.environ.copy()
+        env["KATI_JOBSERVER_FIFO"] = str(fifo)
+        env["KATI_JOBS"] = "2"
+        env.pop("KATI_JOBSERVER_RESERVED", None)
+        for mode in ("direct", "ninja"):
+            with self.subTest(mode=mode):
+                for name in ("start-a", "start-b"):
+                    (self.directory / name).unlink(missing_ok=True)
+                if mode == "ninja":
+                    self.direct("--ninja", "-j2", "all")
+                    command = ["sh", "./ninja.sh", "-j2"]
+                else:
+                    command = [str(KATI), "-j2", "all"]
+                result = subprocess.run(
+                    command, cwd=self.directory, env=env, capture_output=True,
+                    timeout=10, check=False)
+                self.assertEqual(result.returncode, 0,
+                                 result.stdout.decode() + result.stderr.decode())
+                self.assertEqual(os.read(fd, 3), b"xx")
+                os.write(fd, b"xx")
+
+    def test_recursive_siblings_serialize_without_usable_jobserver(self):
+        self.makefile('all:\n\t@"$(MAKE)" -f children.mk all\n')
+        (self.directory / "children.mk").write_text(
+            'all: a b\na b:\n\t@"$(MAKE)" -f leaf.mk all\n')
+        (self.directory / "leaf.mk").write_text(
+            "all:\n\t@python3 worker.py\n")
+        (self.directory / "worker.py").write_text(
+            "from pathlib import Path\nimport time\n"
+            "lock = Path('lock')\nlock.mkdir()\n"
+            "time.sleep(0.15)\nlock.rmdir()\n"
+            "with Path('done').open('a') as f: f.write('x')\n")
+        missing = self.directory / "missing-fifo"
+        deleted = self.directory / "deleted-fifo"
+        os.mkfifo(deleted)
+        deleted.unlink()
+        regular = self.directory / "regular-file"
+        regular.write_bytes(b"xx")
+        directory = self.directory / "directory"
+        directory.mkdir()
+        dangling = self.directory / "dangling-link"
+        dangling.symlink_to(missing)
+        env = os.environ.copy()
+        env["KATI_JOBS"] = "2"
+        env.pop("KATI_JOBSERVER_RESERVED", None)
+        for mode in ("direct", "ninja"):
+            if mode == "ninja":
+                self.direct("--ninja", "-j2", "all")
+                command = ["sh", "./ninja.sh", "-j2"]
+            else:
+                command = [str(KATI), "-j2", "all"]
+            for fifo in (missing, deleted, regular, directory, dangling):
+                with self.subTest(mode=mode, fifo=fifo.name):
+                    (self.directory / "done").unlink(missing_ok=True)
+                    env["KATI_JOBSERVER_FIFO"] = str(fifo)
+                    result = subprocess.run(
+                        command, cwd=self.directory, env=env, capture_output=True,
+                        timeout=10, check=False)
+                    self.assertEqual(result.returncode, 0,
+                                     result.stdout.decode() + result.stderr.decode())
+                    self.assertEqual((self.directory / "done").read_text(), "xx")
+                    self.assertEqual(regular.read_bytes(), b"xx")
+
+    def test_noop_recipe_does_not_consume_job_token(self):
+        self.makefile("all:\n\t@:\n")
+        fifo = self.directory / "jobserver"
+        os.mkfifo(fifo)
+        fd = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+        self.addCleanup(os.close, fd)
+        env = os.environ.copy()
+        env["KATI_JOBSERVER_FIFO"] = str(fifo)
+        env.pop("KATI_JOBSERVER_RESERVED", None)
+        result = subprocess.run(
+            [str(KATI), "-j1", "all"], cwd=self.directory, env=env,
+            capture_output=True, timeout=3, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        with self.assertRaises(BlockingIOError):
+            os.read(fd, 1)
+
+    def test_noop_custom_interpreters_and_flags_still_run(self):
+        shell = self.directory / "recipe-shell"
+        shell.write_text("#!/bin/sh\nprintf x >> shell-used\n"
+                         'exec /bin/sh "$@"\n', encoding="utf-8")
+        shell.chmod(0o755)
+        self.makefile(f"SHELL := {shell}\nall:\n\t@:\n")
+        self.direct("all")
+        self.assertEqual((self.directory / "shell-used").read_text(), "x")
+        self.makefile(".SHELLFLAGS := -xc\nall:\n\t@:\n")
+        _, output = self.direct("all")
+        self.assertIn("+ :", output)
+
+    def test_recursive_siblings_respect_shared_job_budget(self):
+        self.makefile('.EXPORT_ALL_VARIABLES:\nexport KATI_JOBSERVER_RESERVED\n'
+                      'all:\n\t@"$(MAKE)" -f children.mk all\n')
+        (self.directory / "children.mk").write_text(
+            '.EXPORT_ALL_VARIABLES:\nexport KATI_JOBSERVER_RESERVED\n'
+            'all: a b c d\na b c d:\n\t@"$(MAKE)" -f leaf.mk all\n')
+        (self.directory / "leaf.mk").write_text(
+            "all: w x y z\nw x y z:\n\t@python3 worker.py\n")
+        (self.directory / "worker.py").write_text(
+            "import fcntl, json, time\n"
+            "def update(delta):\n"
+            "    with open('counts', 'r+') as f:\n"
+            "        fcntl.flock(f, fcntl.LOCK_EX)\n"
+            "        active, peak, done = json.load(f)\n"
+            "        active += delta\n"
+            "        f.seek(0)\n"
+            "        json.dump([active, max(peak, active), done + (delta < 0)], f)\n"
+            "        f.truncate()\n"
+            "update(1)\ntime.sleep(0.04)\nupdate(-1)\n")
+        fifo = self.directory / "jobserver"
+        os.mkfifo(fifo)
+        fd = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+        self.addCleanup(os.close, fd)
+        os.write(fd, b"xx")
+        env = os.environ.copy()
+        env["KATI_JOBSERVER_FIFO"] = str(fifo)
+        env["KATI_JOBS"] = "4"
+        env.pop("KATI_JOBSERVER_RESERVED", None)
+        for mode, reserved in (("direct", False), ("ninja", False),
+                               ("direct", True), ("ninja", True)):
+            with self.subTest(mode=mode, reserved=reserved):
+                self.assertEqual(os.read(fd, 3), b"xx")
+                tokens = b"x" if reserved else b"xx"
+                os.write(fd, tokens)
+                if reserved:
+                    env["KATI_JOBSERVER_RESERVED"] = "1"
+                else:
+                    env.pop("KATI_JOBSERVER_RESERVED", None)
+                (self.directory / "counts").write_text("[0, 0, 0]")
+                if mode == "ninja":
+                    self.direct("--ninja", "-j4", "all")
+                    command = ["sh", "./ninja.sh", "-j4"]
+                else:
+                    command = [str(KATI), "-j4", "all"]
+                result = subprocess.run(
+                    command, cwd=self.directory, env=env, capture_output=True,
+                    timeout=10, check=False)
+                self.assertEqual(result.returncode, 0,
+                                 result.stdout.decode() + result.stderr.decode())
+                self.assertEqual(json.loads((self.directory / "counts").read_text()),
+                                 [0, 2, 16])
+                self.assertEqual(os.read(fd, 3), tokens)
+                os.write(fd, b"xx")
 
     def test_recursive_make_inherits_job_limit(self):
         self.makefile('all:\n\t@"$(MAKE)" -f child.mk all\n')

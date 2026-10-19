@@ -2,6 +2,9 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Prevent recipe exports from duplicating a live jobserver reservation.
+// Elide pure no-op commands for the default POSIX shell and flags.
+// Validate inherited FIFO endpoints before using the shared job budget.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -84,6 +87,25 @@ thread_local std::string kati_jobserver_path;
 constexpr int kReservedKatiJobToken = -2;
 std::atomic<bool> reserved_kati_job_in_use{false};
 
+int OpenKatiJobserver() {
+  const char* fifo = getenv("KATI_JOBSERVER_FIFO");
+  if (fifo == nullptr || *fifo == '\0')
+    return -1;
+
+  // Check the opened object, not just its path. Nonblocking open also avoids
+  // waiting on an invalid endpoint before its type can be checked.
+  int fd = open(fifo, O_RDWR | O_CLOEXEC | O_NONBLOCK);
+  if (fd < 0)
+    return -1;
+  struct stat st;
+  if (fstat(fd, &st) < 0 || !S_ISFIFO(st.st_mode) ||
+      fcntl(fd, F_SETFL, 0) < 0) {
+    close(fd);
+    return -1;
+  }
+  return fd;
+}
+
 int TryAcquireReservedKatiJobToken() {
   const char* reserved = getenv("KATI_JOBSERVER_RESERVED");
   bool expected = false;
@@ -94,6 +116,15 @@ int TryAcquireReservedKatiJobToken() {
 }
 
 }  // namespace
+
+bool IsKatiJobserverAvailable() {
+  // Do not consume a token: a valid jobserver may currently have none free.
+  int fd = OpenKatiJobserver();
+  if (fd < 0)
+    return false;
+  close(fd);
+  return true;
+}
 
 int AcquireKatiJobToken() {
   const int reserved = TryAcquireReservedKatiJobToken();
@@ -111,7 +142,7 @@ int AcquireKatiJobToken() {
   }
 
   if (kati_jobserver_fd < 0) {
-    kati_jobserver_fd = open(fifo, O_RDWR | O_CLOEXEC);
+    kati_jobserver_fd = OpenKatiJobserver();
     if (kati_jobserver_fd < 0) {
       LOG("jobserver unavailable: %s", fifo);
       return -1;
@@ -160,6 +191,12 @@ int RunCommand(const std::string& shell,
                int make_level,
                const std::vector<std::string>* extra_env,
                const std::vector<std::string>* unset_env) {
+  // Kbuild uses thousands of dummy recipes. The default shell's ':' has no
+  // expansion, output, or side effects, so it needs neither a process nor a
+  // jobserver token. Custom interpreters/flags can have observable behavior.
+  if (shell == "/bin/sh" && shellflag == "-c" && cmd == ":")
+    return 0;
+
   // A recipe owns one jobserver slot while its shell runs. Pass that slot to
   // nested Kati processes started indirectly by scripts or configure tests.
   // An explicitly recursive boundary can pass along an inherited reservation
@@ -199,9 +236,15 @@ int RunCommand(const std::string& shell,
       child_env.push_back(const_cast<char*>(reserved_env.c_str()));
     if (make_level >= 0)
       child_env.push_back(const_cast<char*>(level_env.c_str()));
-    if (extra_env != nullptr)
-      for (const std::string& entry : *extra_env)
+    if (extra_env != nullptr) {
+      for (const std::string& entry : *extra_env) {
+        // Reservation ownership is assigned above for this particular child.
+        // A make export must not add a second, stale copy of the variable.
+        if (forward_slot && HasPrefix(entry, "KATI_JOBSERVER_RESERVED="))
+          continue;
         child_env.push_back(const_cast<char*>(entry.c_str()));
+      }
+    }
     child_env.push_back(nullptr);
   }
   // Linux also limits each individual argument (MAX_ARG_STRLEN), even when

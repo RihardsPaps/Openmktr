@@ -1,0 +1,2764 @@
+{
+  "date": "2026-10-19",
+  "issue": "https://github.com/RihardsPaps/Openmktr/issues/37",
+  "code_revision": "05bc7e6cd995241455f5b46d5d12e11381d2518e",
+  "scheduler_only_revision": "5af427c0346dbb1fac0f2072e783fcc38e06c6de",
+  "before_scheduler_revision": "a965eaca690eaa0bc4f37ac5f3f083db00dfc253",
+  "hardware": "Intel Core i9-14900KF host; WSL2 Ubuntu 24.04; 16 logical CPUs; 24 GiB RAM",
+  "method": "Fresh output directories, identical configs and compilers, no compiler cache, warm filesystem cache, sequential runs. Initial paired runs alternate make/ninja then ninja/make. Final Ninja candidate rechecks run after the retained GNU Make baselines; both have two samples per job count. Configuration, generation and verification are excluded.",
+  "caveats": [
+    "Selected versions/configurations, not a reproduction of the original Gentoo/Ryzen environment.",
+    "Two measured runs per tool/job-count; no confidence interval or sub-percent significance claim.",
+    "Ninja only schedules the outer Kbuild graph; recursive child parsing occurs during timed execution.",
+    "Openmktr is statically linked with musl/libc++ from the pinned Chimera image, using Clang 22.1.8 and O2/ThinLTO; third-party builds use host Clang 18.1.3.",
+    "peak_rss_kib is the largest process, not aggregate process-tree memory.",
+    "Kernel image format and artifact equality were checked; no kernel boot was performed.",
+    "Exec tracing is a separate diagnostic run; its timings are not used in the comparison.",
+    "Bare direct execution without a shared FIFO retains recursive serialization."
+  ],
+  "summary": [
+    {
+      "project": "ffmpeg-7.1.1",
+      "jobs": 8,
+      "measurements": {
+        "make": {
+          "n": 2,
+          "wall_seconds": [
+            40.44913795100001,
+            39.169767756000056
+          ],
+          "mean_seconds": 39.809452853500034,
+          "min_seconds": 39.169767756000056,
+          "max_seconds": 40.44913795100001,
+          "mean_cpu_seconds": 295.9453495,
+          "mean_cpu_equivalents": 7.435782655193943
+        },
+        "ninja": {
+          "n": 2,
+          "wall_seconds": [
+            38.95251779,
+            39.542526225000074
+          ],
+          "mean_seconds": 39.24752200750004,
+          "min_seconds": 38.95251779,
+          "max_seconds": 39.542526225000074,
+          "mean_cpu_seconds": 295.2811605,
+          "mean_cpu_equivalents": 7.523940541028033
+        }
+      },
+      "ninja_delta_percent": -1.4115512917696194
+    },
+    {
+      "project": "ffmpeg-7.1.1",
+      "jobs": 16,
+      "measurements": {
+        "make": {
+          "n": 2,
+          "wall_seconds": [
+            29.288076136999962,
+            29.439365997999857
+          ],
+          "mean_seconds": 29.36372106749991,
+          "min_seconds": 29.288076136999962,
+          "max_seconds": 29.439365997999857,
+          "mean_cpu_seconds": 376.136392,
+          "mean_cpu_equivalents": 12.809673955611943
+        },
+        "ninja": {
+          "n": 2,
+          "wall_seconds": [
+            29.372430541000085,
+            29.095721108999896
+          ],
+          "mean_seconds": 29.23407582499999,
+          "min_seconds": 29.095721108999896,
+          "max_seconds": 29.372430541000085,
+          "mean_cpu_seconds": 375.5559715,
+          "mean_cpu_equivalents": 12.84693814307537
+        }
+      },
+      "ninja_delta_percent": -0.4415150321101846
+    },
+    {
+      "project": "linux-6.12",
+      "jobs": 8,
+      "measurements": {
+        "make": {
+          "n": 2,
+          "wall_seconds": [
+            142.42651761899992,
+            142.3979041399998
+          ],
+          "mean_seconds": 142.41221087949987,
+          "min_seconds": 142.3979041399998,
+          "max_seconds": 142.42651761899992,
+          "mean_cpu_seconds": 1138.21722,
+          "mean_cpu_equivalents": 7.992415305649969
+        },
+        "ninja": {
+          "n": 2,
+          "wall_seconds": [
+            143.87372921799988,
+            145.0134171750001
+          ],
+          "mean_seconds": 144.44357319649998,
+          "min_seconds": 143.87372921799988,
+          "max_seconds": 145.0134171750001,
+          "mean_cpu_seconds": 1152.500616,
+          "mean_cpu_equivalents": 7.978921974174174
+        }
+      },
+      "ninja_delta_percent": 1.4263961667717595
+    },
+    {
+      "project": "linux-6.12",
+      "jobs": 16,
+      "measurements": {
+        "make": {
+          "n": 2,
+          "wall_seconds": [
+            104.5178593999999,
+            102.12287231999971
+          ],
+          "mean_seconds": 103.32036585999981,
+          "min_seconds": 102.12287231999971,
+          "max_seconds": 104.5178593999999,
+          "mean_cpu_seconds": 1566.1025825000002,
+          "mean_cpu_equivalents": 15.159470120270019
+        },
+        "ninja": {
+          "n": 2,
+          "wall_seconds": [
+            102.66726813900004,
+            103.56162953900002
+          ],
+          "mean_seconds": 103.11444883900003,
+          "min_seconds": 102.66726813900004,
+          "max_seconds": 103.56162953900002,
+          "mean_cpu_seconds": 1545.692614,
+          "mean_cpu_equivalents": 14.990132866298218
+        }
+      },
+      "ninja_delta_percent": -0.19929954688584495
+    }
+  ],
+  "scheduler_only_paired_summary": [
+    {
+      "project": "ffmpeg-7.1.1",
+      "jobs": 8,
+      "measurements": {
+        "make": {
+          "n": 2,
+          "wall_seconds": [
+            40.44913795100001,
+            39.169767756000056
+          ],
+          "mean_seconds": 39.809452853500034,
+          "min_seconds": 39.169767756000056,
+          "max_seconds": 40.44913795100001,
+          "mean_cpu_seconds": 295.9453495,
+          "mean_cpu_equivalents": 7.435782655193943
+        },
+        "ninja": {
+          "n": 2,
+          "wall_seconds": [
+            39.62807540999984,
+            38.51089257900003
+          ],
+          "mean_seconds": 39.06948399449993,
+          "min_seconds": 38.51089257900003,
+          "max_seconds": 39.62807540999984,
+          "mean_cpu_seconds": 296.154354,
+          "mean_cpu_equivalents": 7.581756809716605
+        }
+      },
+      "ninja_delta_percent": -1.858776762703085
+    },
+    {
+      "project": "ffmpeg-7.1.1",
+      "jobs": 16,
+      "measurements": {
+        "make": {
+          "n": 2,
+          "wall_seconds": [
+            29.288076136999962,
+            29.439365997999857
+          ],
+          "mean_seconds": 29.36372106749991,
+          "min_seconds": 29.288076136999962,
+          "max_seconds": 29.439365997999857,
+          "mean_cpu_seconds": 376.136392,
+          "mean_cpu_equivalents": 12.809673955611943
+        },
+        "ninja": {
+          "n": 2,
+          "wall_seconds": [
+            29.60123729399993,
+            29.376995796000074
+          ],
+          "mean_seconds": 29.489116545,
+          "min_seconds": 29.376995796000074,
+          "max_seconds": 29.60123729399993,
+          "mean_cpu_seconds": 382.03328250000004,
+          "mean_cpu_equivalents": 12.95485315209503
+        }
+      },
+      "ninja_delta_percent": 0.4270421899589705
+    },
+    {
+      "project": "linux-6.12",
+      "jobs": 8,
+      "measurements": {
+        "make": {
+          "n": 2,
+          "wall_seconds": [
+            142.42651761899992,
+            142.3979041399998
+          ],
+          "mean_seconds": 142.41221087949987,
+          "min_seconds": 142.3979041399998,
+          "max_seconds": 142.42651761899992,
+          "mean_cpu_seconds": 1138.21722,
+          "mean_cpu_equivalents": 7.992415305649969
+        },
+        "ninja": {
+          "n": 2,
+          "wall_seconds": [
+            147.73368698199988,
+            147.81230595299985
+          ],
+          "mean_seconds": 147.77299646749987,
+          "min_seconds": 147.73368698199988,
+          "max_seconds": 147.81230595299985,
+          "mean_cpu_seconds": 1157.195686,
+          "mean_cpu_equivalents": 7.830895088592423
+        }
+      },
+      "ninja_delta_percent": 3.764273832203857
+    },
+    {
+      "project": "linux-6.12",
+      "jobs": 16,
+      "measurements": {
+        "make": {
+          "n": 2,
+          "wall_seconds": [
+            104.5178593999999,
+            102.12287231999971
+          ],
+          "mean_seconds": 103.32036585999981,
+          "min_seconds": 102.12287231999971,
+          "max_seconds": 104.5178593999999,
+          "mean_cpu_seconds": 1566.1025825000002,
+          "mean_cpu_equivalents": 15.159470120270019
+        },
+        "ninja": {
+          "n": 2,
+          "wall_seconds": [
+            106.72882573000015,
+            105.40756415999977
+          ],
+          "mean_seconds": 106.06819494499996,
+          "min_seconds": 105.40756415999977,
+          "max_seconds": 106.72882573000015,
+          "mean_cpu_seconds": 1585.0514750000002,
+          "mean_cpu_equivalents": 14.943787004293467
+        }
+      },
+      "ninja_delta_percent": 2.65952318512257
+    }
+  ],
+  "exec_trace": {
+    "make": {
+      "successful_execs": 20065,
+      "by_executable": {
+        "/bin/sh": 4689,
+        "/usr/bin/rm": 3790,
+        "/usr/bin/clang-18": 3074,
+        "scripts/basic/fixdep": 2981,
+        "/usr/bin/sed": 1013,
+        "/usr/bin/mkdir": 800,
+        "/usr/bin/make": 739,
+        "/usr/bin/cat": 713,
+        "/usr/bin/llvm-ar-18": 713,
+        "/usr/bin/wc": 391,
+        "/usr/bin/tr": 360,
+        "/usr/bin/xargs": 275,
+        "/usr/lib/llvm-18/bin/clang": 128,
+        "/usr/bin/grep": 67,
+        "/usr/bin/ld.lld-18": 33,
+        "/usr/bin/mv": 32,
+        "/usr/bin/llvm-objcopy-18": 27,
+        "/usr/bin/ld": 19,
+        "/usr/bin/llvm-strip-18": 19,
+        "/usr/bin/llvm-objdump-18": 19,
+        "/usr/bin/sh": 17,
+        "/root/openmktr-issue37-benchmark/diagnostic-linux-j8-r1-make/tools/objtool//fixdep": 15,
+        "/usr/bin/awk": 12,
+        "/usr/bin/diff": 12,
+        "/usr/bin/pkg-config": 10,
+        "./tools/objtool/objtool": 10,
+        "/usr/bin/llvm-nm-18": 8,
+        "/root/openmktr-issue37-benchmark/diagnostic-linux-j8-r1-make/tools/objtool/libsubcmd//fixdep": 7,
+        "/usr/bin/install": 6,
+        "/usr/bin/basename": 5,
+        "./scripts/asn1_compiler": 5,
+        "/usr/bin/head": 4,
+        "/usr/bin/sha1sum": 4,
+        "/usr/bin/sort": 4,
+        "/usr/bin/uname": 3,
+        "/usr/bin/getconf": 3,
+        "/usr/bin/cut": 3,
+        "/usr/bin/touch": 3,
+        "/usr/bin/uniq": 3,
+        "arch/x86/tools/relocs": 3,
+        "scripts/kallsyms": 3,
+        "/usr/bin/ln": 2,
+        "/usr/bin/expr": 2,
+        "/usr/bin/git": 2,
+        "/usr/bin/find": 2,
+        "certs/extract-cert": 2,
+        "/usr/bin/llvm-readelf-18": 2,
+        "arch/x86/entry/vdso/vdso2c": 2,
+        "/usr/bin/ls": 2,
+        "/usr/bin/true": 2,
+        "/usr/bin/rustc": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/remove-stale-files": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/setlocalversion": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/mkcompile_h": 1,
+        "/usr/bin/tail": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/misc-check": 1,
+        "scripts/mod/mk_elfconfig": 1,
+        "/usr/bin/bc": 1,
+        "/usr/bin/dirname": 1,
+        "/usr/bin/mktemp": 1,
+        "/usr/bin/date": 1,
+        "usr/gen_init_cpio": 1,
+        "scripts/selinux/genheaders/genheaders": 1,
+        "/usr/bin/perl": 1,
+        "lib/gen_crc32table": 1,
+        "drivers/tty/vt/conmakehash": 1,
+        "scripts/mod/modpost": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/link-vmlinux.sh": 1,
+        "./scripts/sorttable": 1,
+        "/usr/bin/cmp": 1,
+        "arch/x86/boot/mkcpustr": 1,
+        "/usr/bin/gzip": 1,
+        "arch/x86/boot/compressed/mkpiggy": 1,
+        "arch/x86/boot/tools/build": 1,
+        "/usr/bin/echo": 1
+      },
+      "by_basename": {
+        "sh": 4706,
+        "rm": 3790,
+        "clang-18": 3074,
+        "fixdep": 3003,
+        "sed": 1013,
+        "mkdir": 800,
+        "make": 739,
+        "cat": 713,
+        "llvm-ar-18": 713,
+        "wc": 391,
+        "tr": 360,
+        "xargs": 275,
+        "clang": 128,
+        "grep": 67,
+        "ld.lld-18": 33,
+        "mv": 32,
+        "llvm-objcopy-18": 27,
+        "ld": 19,
+        "llvm-strip-18": 19,
+        "llvm-objdump-18": 19,
+        "awk": 12,
+        "diff": 12,
+        "pkg-config": 10,
+        "objtool": 10,
+        "llvm-nm-18": 8,
+        "install": 6,
+        "basename": 5,
+        "asn1_compiler": 5,
+        "head": 4,
+        "sha1sum": 4,
+        "sort": 4,
+        "uname": 3,
+        "getconf": 3,
+        "cut": 3,
+        "touch": 3,
+        "uniq": 3,
+        "relocs": 3,
+        "kallsyms": 3,
+        "ln": 2,
+        "expr": 2,
+        "git": 2,
+        "find": 2,
+        "extract-cert": 2,
+        "llvm-readelf-18": 2,
+        "vdso2c": 2,
+        "ls": 2,
+        "true": 2,
+        "rustc": 1,
+        "remove-stale-files": 1,
+        "setlocalversion": 1,
+        "mkcompile_h": 1,
+        "tail": 1,
+        "misc-check": 1,
+        "mk_elfconfig": 1,
+        "bc": 1,
+        "dirname": 1,
+        "mktemp": 1,
+        "date": 1,
+        "gen_init_cpio": 1,
+        "genheaders": 1,
+        "perl": 1,
+        "gen_crc32table": 1,
+        "conmakehash": 1,
+        "modpost": 1,
+        "link-vmlinux.sh": 1,
+        "sorttable": 1,
+        "cmp": 1,
+        "mkcpustr": 1,
+        "gzip": 1,
+        "mkpiggy": 1,
+        "build": 1,
+        "echo": 1
+      },
+      "no_op_shell_launches": 0,
+      "clang_driver_exec_classification": {
+        "version": 2,
+        "compile_or_compile_probe": 3036,
+        "other": 22,
+        "preprocess": 14
+      }
+    },
+    "ninja": {
+      "successful_execs": 43187,
+      "by_executable": {
+        "/bin/sh": 27420,
+        "/usr/bin/rm": 3875,
+        "/usr/bin/clang-18": 3188,
+        "scripts/basic/fixdep": 2981,
+        "/usr/bin/sed": 1017,
+        "/usr/bin/mkdir": 885,
+        "/root/openmktr-issue37-benchmark/omktr-fixed": 742,
+        "/usr/bin/cat": 719,
+        "/usr/bin/llvm-ar-18": 714,
+        "/usr/bin/wc": 391,
+        "/usr/bin/tr": 360,
+        "/usr/bin/xargs": 275,
+        "/usr/lib/llvm-18/bin/clang": 152,
+        "/usr/bin/grep": 73,
+        "/usr/bin/ld.lld-18": 40,
+        "/usr/bin/mv": 32,
+        "/usr/bin/llvm-objcopy-18": 29,
+        "/usr/bin/ld": 19,
+        "/usr/bin/llvm-strip-18": 19,
+        "/usr/bin/llvm-objdump-18": 19,
+        "/usr/bin/sh": 18,
+        "/root/openmktr-issue37-benchmark/diagnostic-linux-j8-r1-ninja/tools/objtool//fixdep": 15,
+        "/usr/bin/head": 13,
+        "/usr/bin/awk": 12,
+        "/usr/bin/diff": 12,
+        "/usr/bin/llvm-nm-18": 10,
+        "/usr/bin/pkg-config": 10,
+        "./tools/objtool/objtool": 10,
+        "/usr/bin/getconf": 9,
+        "/usr/bin/uname": 8,
+        "/usr/bin/rustc": 7,
+        "/root/openmktr-issue37-benchmark/diagnostic-linux-j8-r1-ninja/tools/objtool/libsubcmd//fixdep": 7,
+        "/usr/bin/install": 6,
+        "/usr/bin/basename": 5,
+        "./scripts/asn1_compiler": 5,
+        "/usr/bin/dirname": 4,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/cc-can-link.sh": 4,
+        "/usr/bin/sha1sum": 4,
+        "/usr/bin/sort": 4,
+        "/usr/bin/ln": 3,
+        "/usr/bin/cut": 3,
+        "/usr/bin/touch": 3,
+        "/usr/bin/uniq": 3,
+        "arch/x86/tools/relocs": 3,
+        "scripts/kallsyms": 3,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/min-tool-version.sh": 2,
+        "/usr/bin/x86_64-linux-gnu-ld": 2,
+        "/usr/bin/mktemp": 2,
+        "/usr/bin/git": 2,
+        "/usr/bin/expr": 2,
+        "/usr/bin/find": 2,
+        "certs/extract-cert": 2,
+        "/usr/bin/llvm-readelf-18": 2,
+        "arch/x86/entry/vdso/vdso2c": 2,
+        "/usr/bin/ls": 2,
+        "/usr/bin/mkfifo": 1,
+        "/usr/bin/ninja": 1,
+        "scripts/kconfig/conf": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/cc-version.sh": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/as-version.sh": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/ld-version.sh": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/rustc-version.sh": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/rustc-llvm-version.sh": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/rust_is_available.sh": 1,
+        "/usr/bin/env": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/tools-support-relr.sh": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/pahole-version.sh": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/gcc-x86_64-has-stack-protector.sh": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/gcc-x86_32-has-stack-protector.sh": 1,
+        "/usr/bin/python3": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/misc-check": 1,
+        "/usr/bin/tail": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/setlocalversion": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/mkcompile_h": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/remove-stale-files": 1,
+        "scripts/mod/mk_elfconfig": 1,
+        "/usr/bin/bc": 1,
+        "/usr/bin/date": 1,
+        "usr/gen_init_cpio": 1,
+        "scripts/selinux/genheaders/genheaders": 1,
+        "lib/gen_crc32table": 1,
+        "drivers/tty/vt/conmakehash": 1,
+        "/usr/bin/perl": 1,
+        "scripts/mod/modpost": 1,
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/scripts/link-vmlinux.sh": 1,
+        "./scripts/sorttable": 1,
+        "/usr/bin/cmp": 1,
+        "arch/x86/boot/mkcpustr": 1,
+        "/usr/bin/gzip": 1,
+        "arch/x86/boot/compressed/mkpiggy": 1,
+        "arch/x86/boot/tools/build": 1
+      },
+      "by_basename": {
+        "sh": 27438,
+        "rm": 3875,
+        "clang-18": 3188,
+        "fixdep": 3003,
+        "sed": 1017,
+        "mkdir": 885,
+        "omktr-fixed": 742,
+        "cat": 719,
+        "llvm-ar-18": 714,
+        "wc": 391,
+        "tr": 360,
+        "xargs": 275,
+        "clang": 152,
+        "grep": 73,
+        "ld.lld-18": 40,
+        "mv": 32,
+        "llvm-objcopy-18": 29,
+        "ld": 19,
+        "llvm-strip-18": 19,
+        "llvm-objdump-18": 19,
+        "head": 13,
+        "awk": 12,
+        "diff": 12,
+        "llvm-nm-18": 10,
+        "pkg-config": 10,
+        "objtool": 10,
+        "getconf": 9,
+        "uname": 8,
+        "rustc": 7,
+        "install": 6,
+        "basename": 5,
+        "asn1_compiler": 5,
+        "dirname": 4,
+        "cc-can-link.sh": 4,
+        "sha1sum": 4,
+        "sort": 4,
+        "ln": 3,
+        "cut": 3,
+        "touch": 3,
+        "uniq": 3,
+        "relocs": 3,
+        "kallsyms": 3,
+        "min-tool-version.sh": 2,
+        "x86_64-linux-gnu-ld": 2,
+        "mktemp": 2,
+        "git": 2,
+        "expr": 2,
+        "find": 2,
+        "extract-cert": 2,
+        "llvm-readelf-18": 2,
+        "vdso2c": 2,
+        "ls": 2,
+        "mkfifo": 1,
+        "ninja": 1,
+        "conf": 1,
+        "cc-version.sh": 1,
+        "as-version.sh": 1,
+        "ld-version.sh": 1,
+        "rustc-version.sh": 1,
+        "rustc-llvm-version.sh": 1,
+        "rust_is_available.sh": 1,
+        "env": 1,
+        "tools-support-relr.sh": 1,
+        "pahole-version.sh": 1,
+        "gcc-x86_64-has-stack-protector.sh": 1,
+        "gcc-x86_32-has-stack-protector.sh": 1,
+        "python3": 1,
+        "misc-check": 1,
+        "tail": 1,
+        "setlocalversion": 1,
+        "mkcompile_h": 1,
+        "remove-stale-files": 1,
+        "mk_elfconfig": 1,
+        "bc": 1,
+        "date": 1,
+        "gen_init_cpio": 1,
+        "genheaders": 1,
+        "gen_crc32table": 1,
+        "conmakehash": 1,
+        "perl": 1,
+        "modpost": 1,
+        "link-vmlinux.sh": 1,
+        "sorttable": 1,
+        "cmp": 1,
+        "mkcpustr": 1,
+        "gzip": 1,
+        "mkpiggy": 1,
+        "build": 1
+      },
+      "no_op_shell_launches": 21091,
+      "clang_driver_exec_classification": {
+        "version": 8,
+        "compile_or_compile_probe": 3133,
+        "preprocess": 17,
+        "other": 30
+      }
+    }
+  },
+  "source_integrity": {
+    "final-ffmpeg-integrity.json": {
+      "files": 8540,
+      "changed": []
+    },
+    "matched-ffmpeg-integrity.json": {
+      "files": 8540,
+      "changed": []
+    },
+    "scheduler-pilot-linux-integrity.json": {
+      "files": 86618,
+      "changed": []
+    },
+    "diagnostic-linux-integrity.json": {
+      "files": 86618,
+      "changed": []
+    },
+    "matched-linux-integrity.json": {
+      "files": 86618,
+      "changed": []
+    },
+    "pilot-ffmpeg-integrity.json": {
+      "files": 8540,
+      "changed": []
+    },
+    "final-retry-linux-integrity.json": {
+      "files": 86618,
+      "changed": []
+    },
+    "final-linux-integrity.json": {
+      "files": 86618,
+      "changed": []
+    },
+    "pilot-linux-integrity.json": {
+      "files": 86618,
+      "changed": []
+    }
+  },
+  "metadata": {
+    "matched-ffmpeg-metadata.json": {
+      "project": "ffmpeg-7.1.1",
+      "archive_sha256": "733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1",
+      "omktr_sha256": "4002d77b99b3935f34940d050107eee35a82e6fff7e8a29d617df7c0f10d3f83",
+      "environment": {
+        "PATH": "/usr/bin:/bin",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "CCACHE_DISABLE": "1",
+        "SOURCE_DATE_EPOCH": "1731888000",
+        "KBUILD_BUILD_USER": "benchmark",
+        "KBUILD_BUILD_HOST": "benchmark",
+        "KBUILD_BUILD_VERSION": "1",
+        "KBUILD_BUILD_TIMESTAMP": "Mon Nov 18 00:00:00 UTC 2024"
+      },
+      "versions": {
+        "omktr": "GNU Make 4.2.1\nomktr 5af427c0346dbb1fac0f2072e783fcc38e06c6de",
+        "make": "GNU Make 4.3",
+        "clang": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+        "ninja": "1.11.1",
+        "kernel": "Linux <host> 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux"
+      }
+    },
+    "final-retry-linux-metadata.json": {
+      "project": "linux-6.12",
+      "archive_sha256": "b1a2562be56e42afb3f8489d4c2a7ac472ac23098f1ef1c1e40da601f54625eb",
+      "omktr_sha256": "fae4a92e118df643fe12be8c1257f24e5c12f4ee4824a2a015d9b0d923c67202",
+      "environment": {
+        "PATH": "/usr/bin:/bin",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "CCACHE_DISABLE": "1",
+        "SOURCE_DATE_EPOCH": "1731888000",
+        "KBUILD_BUILD_USER": "benchmark",
+        "KBUILD_BUILD_HOST": "benchmark",
+        "KBUILD_BUILD_VERSION": "1",
+        "KBUILD_BUILD_TIMESTAMP": "Mon Nov 18 00:00:00 UTC 2024"
+      },
+      "versions": {
+        "omktr": "GNU Make 4.2.1\nomktr 05bc7e6cd995241455f5b46d5d12e11381d2518e",
+        "make": "GNU Make 4.3",
+        "clang": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+        "ninja": "1.11.1",
+        "kernel": "Linux <host> 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux"
+      }
+    },
+    "pilot-ffmpeg-metadata.json": {
+      "project": "ffmpeg-7.1.1",
+      "archive_sha256": "733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1",
+      "omktr_sha256": "2ab5eca4ec5aece70b85b9038ac3da485d1c777c1e774cbf9344d5f7dd1caabb",
+      "environment": {
+        "PATH": "/usr/bin:/bin",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "CCACHE_DISABLE": "1",
+        "SOURCE_DATE_EPOCH": "1731888000",
+        "KBUILD_BUILD_USER": "benchmark",
+        "KBUILD_BUILD_HOST": "benchmark",
+        "KBUILD_BUILD_VERSION": "1",
+        "KBUILD_BUILD_TIMESTAMP": "Mon Nov 18 00:00:00 UTC 2024"
+      },
+      "versions": {
+        "omktr": "GNU Make 4.2.1\nomktr a965eaca690eaa0bc4f37ac5f3f083db00dfc253",
+        "make": "GNU Make 4.3",
+        "clang": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+        "ninja": "1.11.1",
+        "kernel": "Linux <host> 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux"
+      }
+    },
+    "final-linux-metadata.json": {
+      "project": "linux-6.12",
+      "archive_sha256": "b1a2562be56e42afb3f8489d4c2a7ac472ac23098f1ef1c1e40da601f54625eb",
+      "omktr_sha256": "fae4a92e118df643fe12be8c1257f24e5c12f4ee4824a2a015d9b0d923c67202",
+      "environment": {
+        "PATH": "/usr/bin:/bin",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "CCACHE_DISABLE": "1",
+        "SOURCE_DATE_EPOCH": "1731888000",
+        "KBUILD_BUILD_USER": "benchmark",
+        "KBUILD_BUILD_HOST": "benchmark",
+        "KBUILD_BUILD_VERSION": "1",
+        "KBUILD_BUILD_TIMESTAMP": "Mon Nov 18 00:00:00 UTC 2024"
+      },
+      "versions": {
+        "omktr": "GNU Make 4.2.1\nomktr 05bc7e6cd995241455f5b46d5d12e11381d2518e",
+        "make": "GNU Make 4.3",
+        "clang": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+        "ninja": "1.11.1",
+        "kernel": "Linux <host> 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux"
+      }
+    },
+    "matched-linux-metadata.json": {
+      "project": "linux-6.12",
+      "archive_sha256": "b1a2562be56e42afb3f8489d4c2a7ac472ac23098f1ef1c1e40da601f54625eb",
+      "omktr_sha256": "4002d77b99b3935f34940d050107eee35a82e6fff7e8a29d617df7c0f10d3f83",
+      "environment": {
+        "PATH": "/usr/bin:/bin",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "CCACHE_DISABLE": "1",
+        "SOURCE_DATE_EPOCH": "1731888000",
+        "KBUILD_BUILD_USER": "benchmark",
+        "KBUILD_BUILD_HOST": "benchmark",
+        "KBUILD_BUILD_VERSION": "1",
+        "KBUILD_BUILD_TIMESTAMP": "Mon Nov 18 00:00:00 UTC 2024"
+      },
+      "versions": {
+        "omktr": "GNU Make 4.2.1\nomktr 5af427c0346dbb1fac0f2072e783fcc38e06c6de",
+        "make": "GNU Make 4.3",
+        "clang": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+        "ninja": "1.11.1",
+        "kernel": "Linux <host> 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux"
+      }
+    },
+    "diagnostic-linux-metadata.json": {
+      "project": "linux-6.12",
+      "archive_sha256": "b1a2562be56e42afb3f8489d4c2a7ac472ac23098f1ef1c1e40da601f54625eb",
+      "omktr_sha256": "4002d77b99b3935f34940d050107eee35a82e6fff7e8a29d617df7c0f10d3f83",
+      "environment": {
+        "PATH": "/usr/bin:/bin",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "CCACHE_DISABLE": "1",
+        "SOURCE_DATE_EPOCH": "1731888000",
+        "KBUILD_BUILD_USER": "benchmark",
+        "KBUILD_BUILD_HOST": "benchmark",
+        "KBUILD_BUILD_VERSION": "1",
+        "KBUILD_BUILD_TIMESTAMP": "Mon Nov 18 00:00:00 UTC 2024"
+      },
+      "versions": {
+        "omktr": "GNU Make 4.2.1\nomktr 5af427c0346dbb1fac0f2072e783fcc38e06c6de",
+        "make": "GNU Make 4.3",
+        "clang": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+        "ninja": "1.11.1",
+        "kernel": "Linux <host> 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux"
+      }
+    },
+    "pilot-linux-metadata.json": {
+      "project": "linux-6.12",
+      "archive_sha256": "b1a2562be56e42afb3f8489d4c2a7ac472ac23098f1ef1c1e40da601f54625eb",
+      "omktr_sha256": "2ab5eca4ec5aece70b85b9038ac3da485d1c777c1e774cbf9344d5f7dd1caabb",
+      "environment": {
+        "PATH": "/usr/bin:/bin",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "CCACHE_DISABLE": "1",
+        "SOURCE_DATE_EPOCH": "1731888000",
+        "KBUILD_BUILD_USER": "benchmark",
+        "KBUILD_BUILD_HOST": "benchmark",
+        "KBUILD_BUILD_VERSION": "1",
+        "KBUILD_BUILD_TIMESTAMP": "Mon Nov 18 00:00:00 UTC 2024"
+      },
+      "versions": {
+        "omktr": "GNU Make 4.2.1\nomktr a965eaca690eaa0bc4f37ac5f3f083db00dfc253",
+        "make": "GNU Make 4.3",
+        "clang": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+        "ninja": "1.11.1",
+        "kernel": "Linux <host> 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux"
+      }
+    },
+    "scheduler-pilot-linux-metadata.json": {
+      "project": "linux-6.12",
+      "archive_sha256": "b1a2562be56e42afb3f8489d4c2a7ac472ac23098f1ef1c1e40da601f54625eb",
+      "omktr_sha256": "2c67e7ff394597bf4ad4b0e988878a80e2d0f0153ce5f0d3ad76380bac8bdf54",
+      "environment": {
+        "PATH": "/usr/bin:/bin",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "CCACHE_DISABLE": "1",
+        "SOURCE_DATE_EPOCH": "1731888000",
+        "KBUILD_BUILD_USER": "benchmark",
+        "KBUILD_BUILD_HOST": "benchmark",
+        "KBUILD_BUILD_VERSION": "1",
+        "KBUILD_BUILD_TIMESTAMP": "Mon Nov 18 00:00:00 UTC 2024"
+      },
+      "versions": {
+        "omktr": "GNU Make 4.2.1\nomktr a965eaca690eaa0bc4f37ac5f3f083db00dfc253",
+        "make": "GNU Make 4.3",
+        "clang": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+        "ninja": "1.11.1",
+        "kernel": "Linux <host> 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux"
+      }
+    },
+    "final-ffmpeg-metadata.json": {
+      "project": "ffmpeg-7.1.1",
+      "archive_sha256": "733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1",
+      "omktr_sha256": "fae4a92e118df643fe12be8c1257f24e5c12f4ee4824a2a015d9b0d923c67202",
+      "environment": {
+        "PATH": "/usr/bin:/bin",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "CCACHE_DISABLE": "1",
+        "SOURCE_DATE_EPOCH": "1731888000",
+        "KBUILD_BUILD_USER": "benchmark",
+        "KBUILD_BUILD_HOST": "benchmark",
+        "KBUILD_BUILD_VERSION": "1",
+        "KBUILD_BUILD_TIMESTAMP": "Mon Nov 18 00:00:00 UTC 2024"
+      },
+      "versions": {
+        "omktr": "GNU Make 4.2.1\nomktr 05bc7e6cd995241455f5b46d5d12e11381d2518e",
+        "make": "GNU Make 4.3",
+        "clang": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+        "ninja": "1.11.1",
+        "kernel": "Linux <host> 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux"
+      }
+    }
+  },
+  "excluded_failed_commands": [
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j8"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/final-linux-j8-r2-ninja",
+      "log": "/root/openmktr-issue37-benchmark/final-linux-j8-r2-ninja/build.log",
+      "status": 1,
+      "wall_seconds": 46.95839383199973,
+      "user_seconds": 353.678195,
+      "system_seconds": 26.012864,
+      "peak_rss_kib": 202136
+    }
+  ],
+  "compiler_failure": {
+    "command": [
+      "clang-18",
+      "-Wp,-MMD,fs/.fs-writeback.o.d",
+      "-nostdinc",
+      "-I/root/openmktr-issue37-benchmark/sources/linux-6.12/arch/x86/include",
+      "-I./arch/x86/include/generated",
+      "-I/root/openmktr-issue37-benchmark/sources/linux-6.12/include",
+      "-I./include",
+      "-I/root/openmktr-issue37-benchmark/sources/linux-6.12/arch/x86/include/uapi",
+      "-I./arch/x86/include/generated/uapi",
+      "-I/root/openmktr-issue37-benchmark/sources/linux-6.12/include/uapi",
+      "-I./include/generated/uapi",
+      "-include",
+      "/root/openmktr-issue37-benchmark/sources/linux-6.12/include/linux/compiler-version.h",
+      "-include",
+      "/root/openmktr-issue37-benchmark/sources/linux-6.12/include/linux/kconfig.h",
+      "-include",
+      "/root/openmktr-issue37-benchmark/sources/linux-6.12/include/linux/compiler_types.h",
+      "-D__KERNEL__",
+      "--target=x86_64-linux-gnu",
+      "-fintegrated-as",
+      "-Werror=unknown-warning-option",
+      "-Werror=ignored-optimization-argument",
+      "-Werror=option-ignored",
+      "-Werror=unused-command-line-argument",
+      "-fmacro-prefix-map=/root/openmktr-issue37-benchmark/sources/linux-6.12/=",
+      "-Werror",
+      "-std=gnu11",
+      "-fshort-wchar",
+      "-funsigned-char",
+      "-fno-common",
+      "-fno-PIE",
+      "-fno-strict-aliasing",
+      "-mno-sse",
+      "-mno-mmx",
+      "-mno-sse2",
+      "-mno-3dnow",
+      "-mno-avx",
+      "-fcf-protection=branch",
+      "-fno-jump-tables",
+      "-m64",
+      "-falign-loops=1",
+      "-mno-80387",
+      "-mno-fp-ret-in-387",
+      "-mstack-alignment=8",
+      "-mskip-rax-setup",
+      "-mtune=generic",
+      "-mno-red-zone",
+      "-mcmodel=kernel",
+      "-Wno-sign-compare",
+      "-fno-asynchronous-unwind-tables",
+      "-mretpoline-external-thunk",
+      "-mindirect-branch-cs-prefix",
+      "-mfunction-return=thunk-extern",
+      "-fpatchable-function-entry=16,16",
+      "-fno-delete-null-pointer-checks",
+      "-O2",
+      "-fstack-protector-strong",
+      "-fomit-frame-pointer",
+      "-ftrivial-auto-var-init=zero",
+      "-fno-stack-clash-protection",
+      "-falign-functions=16",
+      "-fstrict-flex-arrays=3",
+      "-fno-strict-overflow",
+      "-fno-stack-check",
+      "-Wall",
+      "-Wundef",
+      "-Werror=implicit-function-declaration",
+      "-Werror=implicit-int",
+      "-Werror=return-type",
+      "-Werror=strict-prototypes",
+      "-Wno-format-security",
+      "-Wno-trigraphs",
+      "-Wno-frame-address",
+      "-Wno-address-of-packed-member",
+      "-Wmissing-declarations",
+      "-Wmissing-prototypes",
+      "-Wframe-larger-than=2048",
+      "-Wno-gnu",
+      "-Wvla",
+      "-Wno-pointer-sign",
+      "-Wcast-function-type",
+      "-Wimplicit-fallthrough",
+      "-Werror=date-time",
+      "-Werror=incompatible-pointer-types",
+      "-Wenum-conversion",
+      "-Wextra",
+      "-Wunused",
+      "-Wno-unused-but-set-variable",
+      "-Wno-unused-const-variable",
+      "-Wno-format-overflow",
+      "-Wno-format-overflow-non-kprintf",
+      "-Wno-format-truncation-non-kprintf",
+      "-Wno-override-init",
+      "-Wno-pointer-to-enum-cast",
+      "-Wno-tautological-constant-out-of-range-compare",
+      "-Wno-unaligned-access",
+      "-Wno-enum-compare-conditional",
+      "-Wno-enum-enum-conversion",
+      "-Wno-missing-field-initializers",
+      "-Wno-type-limits",
+      "-Wno-shift-negative-value",
+      "-Wno-sign-compare",
+      "-Wno-unused-parameter",
+      "-I/root/openmktr-issue37-benchmark/sources/linux-6.12/fs",
+      "-Ifs",
+      "-DKBUILD_MODFILE=\"fs/fs-writeback\"",
+      "-DKBUILD_BASENAME=\"fs_writeback\"",
+      "-DKBUILD_MODNAME=\"fs_writeback\"",
+      "-D__KBUILD_MODNAME=kmod_fs_writeback",
+      "-c",
+      "-o",
+      "fs/fs-writeback.o",
+      "/root/openmktr-issue37-benchmark/sources/linux-6.12/fs/fs-writeback.c"
+    ],
+    "baseline_sha256": "761220353f929fffa4461b9cc81f703ac435824709a27c8471e573e95e21186f",
+    "replays": [
+      {
+        "status": 0,
+        "sha256": "761220353f929fffa4461b9cc81f703ac435824709a27c8471e573e95e21186f",
+        "matches_baseline": true
+      },
+      {
+        "status": 0,
+        "sha256": "761220353f929fffa4461b9cc81f703ac435824709a27c8471e573e95e21186f",
+        "matches_baseline": true
+      },
+      {
+        "status": 0,
+        "sha256": "761220353f929fffa4461b9cc81f703ac435824709a27c8471e573e95e21186f",
+        "matches_baseline": true
+      }
+    ],
+    "failure": "Clang 18 frontend SIGSEGV, Live Variable Analysis for wb_workfn",
+    "original_log": "/root/openmktr-issue37-benchmark/final-linux-j8-r2-ninja/build.log"
+  },
+  "release_archive_integrity": {
+    "ffmpeg-7.1.1": {
+      "files_checked": 8540,
+      "symlinks_checked": 0,
+      "changed": [],
+      "extra_files": [],
+      "extraction_normalized_symlinks": []
+    },
+    "linux-6.12": {
+      "files_checked": 86618,
+      "symlinks_checked": 62,
+      "changed": [],
+      "extra_files": [],
+      "extraction_normalized_symlinks": [
+        {
+          "path": "tools/testing/selftests/powerpc/primitives/asm/asm-compat.h",
+          "archive": "../.././../../../../arch/powerpc/include/asm/asm-compat.h",
+          "extracted": "../../../../../../arch/powerpc/include/asm/asm-compat.h"
+        }
+      ]
+    }
+  },
+  "microbench": {
+    "baseline": {
+      "binary_bytes": 1739992,
+      "convert": {
+        "median_seconds": 0.054045040999881166,
+        "peak_rss_kib": 24780
+      },
+      "direct_recipe_launch_j1": {
+        "median_seconds": 0.6981754449998334,
+        "peak_rss_kib": 18472
+      },
+      "direct_recipe_launch_j4": {
+        "median_seconds": 0.19829724600003829,
+        "peak_rss_kib": 18472
+      },
+      "incremental_noop": {
+        "median_seconds": 0.0008728650000193738,
+        "peak_rss_kib": 18472
+      },
+      "nested_parallel_exec": {
+        "median_seconds": 0.22549480799989396,
+        "peak_rss_kib": 18472
+      },
+      "ninja_recipe_launch_j1": {
+        "median_seconds": 0.55648580199977,
+        "peak_rss_kib": 18472
+      },
+      "ninja_recipe_launch_j4": {
+        "median_seconds": 0.15831739700024627,
+        "peak_rss_kib": 18472
+      },
+      "noop_regen": {
+        "median_seconds": 0.00044590499965124764,
+        "peak_rss_kib": 18472
+      },
+      "parallel_exec": {
+        "median_seconds": 0.2151821569996173,
+        "peak_rss_kib": 18472
+      }
+    },
+    "current": {
+      "binary_bytes": 1741032,
+      "convert": {
+        "median_seconds": 0.05356363999999303,
+        "peak_rss_kib": 24784
+      },
+      "direct_recipe_launch_j1": {
+        "median_seconds": 0.009321825000370154,
+        "peak_rss_kib": 18192
+      },
+      "direct_recipe_launch_j4": {
+        "median_seconds": 0.006849276000139071,
+        "peak_rss_kib": 18192
+      },
+      "incremental_noop": {
+        "median_seconds": 0.0009606600006009103,
+        "peak_rss_kib": 18192
+      },
+      "nested_parallel_exec": {
+        "median_seconds": 0.22454820500024653,
+        "peak_rss_kib": 18192
+      },
+      "ninja_recipe_launch_j1": {
+        "median_seconds": 0.5625143669994941,
+        "peak_rss_kib": 18192
+      },
+      "ninja_recipe_launch_j4": {
+        "median_seconds": 0.15920109499984392,
+        "peak_rss_kib": 18192
+      },
+      "noop_regen": {
+        "median_seconds": 0.00046330599980137777,
+        "peak_rss_kib": 18192
+      },
+      "parallel_exec": {
+        "median_seconds": 0.21956276400032948,
+        "peak_rss_kib": 18192
+      }
+    }
+  },
+  "runs": [
+    {
+      "command": [
+        "make",
+        "-j16",
+        "all"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/pilot-ffmpeg-j16-r1-make",
+      "log": "/root/openmktr-issue37-benchmark/pilot-ffmpeg-j16-r1-make/build.log",
+      "status": 0,
+      "wall_seconds": 29.729411037999967,
+      "user_seconds": 354.317166,
+      "system_seconds": 26.15739,
+      "peak_rss_kib": 240392,
+      "project": "ffmpeg-7.1.1",
+      "jobs": 16,
+      "repeat": 1,
+      "mode": "make",
+      "label": "pilot",
+      "config_sha256": {
+        "config.h": "a5803c97c2ad59e17618df97e0f93b918cd23d24d89967d82f3dc11c7cd05a3e",
+        "config_components.h": "2208f4d7720560c80c7594424297cbd4ee8553cf4c5cbc6cc8d4649c80d13e2a"
+      },
+      "generation": null,
+      "configured_objects": [],
+      "artifacts": {
+        "ffmpeg": {
+          "bytes": 25653592,
+          "sha256": "c94090c099a9222febe41b45bba9b6b493dfcbf62a7f99761dccaadd2605ceb2"
+        },
+        "ffprobe": {
+          "bytes": 25558552,
+          "sha256": "afdaf099606f883fc316a9539d0c39401aaec2ca432c9916491a7a28cc90fb5f"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j16"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/pilot-ffmpeg-j16-r1-ninja",
+      "log": "/root/openmktr-issue37-benchmark/pilot-ffmpeg-j16-r1-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 28.860601832000043,
+      "user_seconds": 347.367613,
+      "system_seconds": 25.670133,
+      "peak_rss_kib": 240316,
+      "project": "ffmpeg-7.1.1",
+      "jobs": 16,
+      "repeat": 1,
+      "mode": "ninja",
+      "label": "pilot",
+      "config_sha256": {
+        "config.h": "a5803c97c2ad59e17618df97e0f93b918cd23d24d89967d82f3dc11c7cd05a3e",
+        "config_components.h": "2208f4d7720560c80c7594424297cbd4ee8553cf4c5cbc6cc8d4649c80d13e2a"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr",
+          "--ninja",
+          "-j16",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/pilot-ffmpeg-j16-r1-ninja",
+        "log": "/root/openmktr-issue37-benchmark/pilot-ffmpeg-j16-r1-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 2.2123314670000127,
+        "user_seconds": 2.138942,
+        "system_seconds": 0.074915,
+        "peak_rss_kib": 43692
+      },
+      "configured_objects": [],
+      "artifacts": {
+        "ffmpeg": {
+          "bytes": 25653592,
+          "sha256": "c94090c099a9222febe41b45bba9b6b493dfcbf62a7f99761dccaadd2605ceb2"
+        },
+        "ffprobe": {
+          "bytes": 25558552,
+          "sha256": "afdaf099606f883fc316a9539d0c39401aaec2ca432c9916491a7a28cc90fb5f"
+        }
+      }
+    },
+    {
+      "command": [
+        "make",
+        "-j16",
+        "-f",
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+        "LLVM=-18",
+        "LLVM_IAS=1",
+        "ARCH=x86",
+        "all"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/pilot-linux-j16-r1-make",
+      "log": "/root/openmktr-issue37-benchmark/pilot-linux-j16-r1-make/build.log",
+      "status": 0,
+      "wall_seconds": 104.65496484699997,
+      "user_seconds": 1459.543529,
+      "system_seconds": 106.268418,
+      "peak_rss_kib": 877340,
+      "project": "linux-6.12",
+      "jobs": 16,
+      "repeat": 1,
+      "mode": "make",
+      "label": "pilot",
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": null,
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j16"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/pilot-linux-j16-r1-ninja",
+      "log": "/root/openmktr-issue37-benchmark/pilot-linux-j16-r1-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 159.128980468,
+      "user_seconds": 1323.398333,
+      "system_seconds": 96.422383,
+      "peak_rss_kib": 877340,
+      "project": "linux-6.12",
+      "jobs": 16,
+      "repeat": 1,
+      "mode": "ninja",
+      "label": "pilot",
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr",
+          "--ninja",
+          "-j16",
+          "-f",
+          "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+          "LLVM=-18",
+          "LLVM_IAS=1",
+          "ARCH=x86",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/pilot-linux-j16-r1-ninja",
+        "log": "/root/openmktr-issue37-benchmark/pilot-linux-j16-r1-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 0.0015219480000041585,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_kib": 226456
+      },
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j16"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/scheduler-pilot-linux-j16-r1-ninja",
+      "log": "/root/openmktr-issue37-benchmark/scheduler-pilot-linux-j16-r1-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 106.81437243799996,
+      "user_seconds": 1466.960704,
+      "system_seconds": 109.784889,
+      "peak_rss_kib": 877340,
+      "project": "linux-6.12",
+      "jobs": 16,
+      "repeat": 1,
+      "mode": "ninja",
+      "label": "scheduler-pilot",
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-scheduler",
+          "--ninja",
+          "-j16",
+          "-f",
+          "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+          "LLVM=-18",
+          "LLVM_IAS=1",
+          "ARCH=x86",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/scheduler-pilot-linux-j16-r1-ninja",
+        "log": "/root/openmktr-issue37-benchmark/scheduler-pilot-linux-j16-r1-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 0.001482147999922745,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_kib": 152712
+      },
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "make",
+        "-j8",
+        "all"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j8-r1-make",
+      "log": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j8-r1-make/build.log",
+      "status": 0,
+      "wall_seconds": 40.44913795100001,
+      "user_seconds": 276.332367,
+      "system_seconds": 20.0699,
+      "peak_rss_kib": 240464,
+      "project": "ffmpeg-7.1.1",
+      "jobs": 8,
+      "repeat": 1,
+      "mode": "make",
+      "label": "matched",
+      "config_sha256": {
+        "config.h": "a5803c97c2ad59e17618df97e0f93b918cd23d24d89967d82f3dc11c7cd05a3e",
+        "config_components.h": "2208f4d7720560c80c7594424297cbd4ee8553cf4c5cbc6cc8d4649c80d13e2a"
+      },
+      "generation": null,
+      "configured_objects": [],
+      "artifacts": {
+        "ffmpeg": {
+          "bytes": 25653592,
+          "sha256": "c94090c099a9222febe41b45bba9b6b493dfcbf62a7f99761dccaadd2605ceb2"
+        },
+        "ffprobe": {
+          "bytes": 25558552,
+          "sha256": "afdaf099606f883fc316a9539d0c39401aaec2ca432c9916491a7a28cc90fb5f"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j8"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j8-r1-ninja",
+      "log": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j8-r1-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 39.62807540999984,
+      "user_seconds": 275.992494,
+      "system_seconds": 20.132385,
+      "peak_rss_kib": 240332,
+      "project": "ffmpeg-7.1.1",
+      "jobs": 8,
+      "repeat": 1,
+      "mode": "ninja",
+      "label": "matched",
+      "config_sha256": {
+        "config.h": "a5803c97c2ad59e17618df97e0f93b918cd23d24d89967d82f3dc11c7cd05a3e",
+        "config_components.h": "2208f4d7720560c80c7594424297cbd4ee8553cf4c5cbc6cc8d4649c80d13e2a"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-fixed",
+          "--ninja",
+          "-j8",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j8-r1-ninja",
+        "log": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j8-r1-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 2.120422096000084,
+        "user_seconds": 2.053282,
+        "system_seconds": 0.08892,
+        "peak_rss_kib": 43300
+      },
+      "configured_objects": [],
+      "artifacts": {
+        "ffmpeg": {
+          "bytes": 25653592,
+          "sha256": "c94090c099a9222febe41b45bba9b6b493dfcbf62a7f99761dccaadd2605ceb2"
+        },
+        "ffprobe": {
+          "bytes": 25558552,
+          "sha256": "afdaf099606f883fc316a9539d0c39401aaec2ca432c9916491a7a28cc90fb5f"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j8"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j8-r2-ninja",
+      "log": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j8-r2-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 38.51089257900003,
+      "user_seconds": 276.373054,
+      "system_seconds": 19.810775,
+      "peak_rss_kib": 240412,
+      "project": "ffmpeg-7.1.1",
+      "jobs": 8,
+      "repeat": 2,
+      "mode": "ninja",
+      "label": "matched",
+      "config_sha256": {
+        "config.h": "a5803c97c2ad59e17618df97e0f93b918cd23d24d89967d82f3dc11c7cd05a3e",
+        "config_components.h": "2208f4d7720560c80c7594424297cbd4ee8553cf4c5cbc6cc8d4649c80d13e2a"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-fixed",
+          "--ninja",
+          "-j8",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j8-r2-ninja",
+        "log": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j8-r2-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 1.9612193150001076,
+        "user_seconds": 2.103192,
+        "system_seconds": 0.062526,
+        "peak_rss_kib": 43364
+      },
+      "configured_objects": [],
+      "artifacts": {
+        "ffmpeg": {
+          "bytes": 25653592,
+          "sha256": "c94090c099a9222febe41b45bba9b6b493dfcbf62a7f99761dccaadd2605ceb2"
+        },
+        "ffprobe": {
+          "bytes": 25558552,
+          "sha256": "afdaf099606f883fc316a9539d0c39401aaec2ca432c9916491a7a28cc90fb5f"
+        }
+      }
+    },
+    {
+      "command": [
+        "make",
+        "-j8",
+        "all"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j8-r2-make",
+      "log": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j8-r2-make/build.log",
+      "status": 0,
+      "wall_seconds": 39.169767756000056,
+      "user_seconds": 275.308895,
+      "system_seconds": 20.179537,
+      "peak_rss_kib": 240404,
+      "project": "ffmpeg-7.1.1",
+      "jobs": 8,
+      "repeat": 2,
+      "mode": "make",
+      "label": "matched",
+      "config_sha256": {
+        "config.h": "a5803c97c2ad59e17618df97e0f93b918cd23d24d89967d82f3dc11c7cd05a3e",
+        "config_components.h": "2208f4d7720560c80c7594424297cbd4ee8553cf4c5cbc6cc8d4649c80d13e2a"
+      },
+      "generation": null,
+      "configured_objects": [],
+      "artifacts": {
+        "ffmpeg": {
+          "bytes": 25653592,
+          "sha256": "c94090c099a9222febe41b45bba9b6b493dfcbf62a7f99761dccaadd2605ceb2"
+        },
+        "ffprobe": {
+          "bytes": 25558552,
+          "sha256": "afdaf099606f883fc316a9539d0c39401aaec2ca432c9916491a7a28cc90fb5f"
+        }
+      }
+    },
+    {
+      "command": [
+        "make",
+        "-j16",
+        "all"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j16-r1-make",
+      "log": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j16-r1-make/build.log",
+      "status": 0,
+      "wall_seconds": 29.288076136999962,
+      "user_seconds": 350.552534,
+      "system_seconds": 25.896247,
+      "peak_rss_kib": 240392,
+      "project": "ffmpeg-7.1.1",
+      "jobs": 16,
+      "repeat": 1,
+      "mode": "make",
+      "label": "matched",
+      "config_sha256": {
+        "config.h": "a5803c97c2ad59e17618df97e0f93b918cd23d24d89967d82f3dc11c7cd05a3e",
+        "config_components.h": "2208f4d7720560c80c7594424297cbd4ee8553cf4c5cbc6cc8d4649c80d13e2a"
+      },
+      "generation": null,
+      "configured_objects": [],
+      "artifacts": {
+        "ffmpeg": {
+          "bytes": 25653592,
+          "sha256": "c94090c099a9222febe41b45bba9b6b493dfcbf62a7f99761dccaadd2605ceb2"
+        },
+        "ffprobe": {
+          "bytes": 25558552,
+          "sha256": "afdaf099606f883fc316a9539d0c39401aaec2ca432c9916491a7a28cc90fb5f"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j16"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j16-r1-ninja",
+      "log": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j16-r1-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 29.60123729399993,
+      "user_seconds": 358.011149,
+      "system_seconds": 27.081139,
+      "peak_rss_kib": 240464,
+      "project": "ffmpeg-7.1.1",
+      "jobs": 16,
+      "repeat": 1,
+      "mode": "ninja",
+      "label": "matched",
+      "config_sha256": {
+        "config.h": "a5803c97c2ad59e17618df97e0f93b918cd23d24d89967d82f3dc11c7cd05a3e",
+        "config_components.h": "2208f4d7720560c80c7594424297cbd4ee8553cf4c5cbc6cc8d4649c80d13e2a"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-fixed",
+          "--ninja",
+          "-j16",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j16-r1-ninja",
+        "log": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j16-r1-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 1.9340229179999824,
+        "user_seconds": 2.08121,
+        "system_seconds": 0.055666,
+        "peak_rss_kib": 43420
+      },
+      "configured_objects": [],
+      "artifacts": {
+        "ffmpeg": {
+          "bytes": 25653592,
+          "sha256": "c94090c099a9222febe41b45bba9b6b493dfcbf62a7f99761dccaadd2605ceb2"
+        },
+        "ffprobe": {
+          "bytes": 25558552,
+          "sha256": "afdaf099606f883fc316a9539d0c39401aaec2ca432c9916491a7a28cc90fb5f"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j16"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j16-r2-ninja",
+      "log": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j16-r2-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 29.376995796000074,
+      "user_seconds": 352.610021,
+      "system_seconds": 26.364256,
+      "peak_rss_kib": 240492,
+      "project": "ffmpeg-7.1.1",
+      "jobs": 16,
+      "repeat": 2,
+      "mode": "ninja",
+      "label": "matched",
+      "config_sha256": {
+        "config.h": "a5803c97c2ad59e17618df97e0f93b918cd23d24d89967d82f3dc11c7cd05a3e",
+        "config_components.h": "2208f4d7720560c80c7594424297cbd4ee8553cf4c5cbc6cc8d4649c80d13e2a"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-fixed",
+          "--ninja",
+          "-j16",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j16-r2-ninja",
+        "log": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j16-r2-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 2.0763538399999106,
+        "user_seconds": 2.063097,
+        "system_seconds": 0.06436399999999999,
+        "peak_rss_kib": 43392
+      },
+      "configured_objects": [],
+      "artifacts": {
+        "ffmpeg": {
+          "bytes": 25653592,
+          "sha256": "c94090c099a9222febe41b45bba9b6b493dfcbf62a7f99761dccaadd2605ceb2"
+        },
+        "ffprobe": {
+          "bytes": 25558552,
+          "sha256": "afdaf099606f883fc316a9539d0c39401aaec2ca432c9916491a7a28cc90fb5f"
+        }
+      }
+    },
+    {
+      "command": [
+        "make",
+        "-j16",
+        "all"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j16-r2-make",
+      "log": "/root/openmktr-issue37-benchmark/matched-ffmpeg-j16-r2-make/build.log",
+      "status": 0,
+      "wall_seconds": 29.439365997999857,
+      "user_seconds": 349.333533,
+      "system_seconds": 26.49047,
+      "peak_rss_kib": 240476,
+      "project": "ffmpeg-7.1.1",
+      "jobs": 16,
+      "repeat": 2,
+      "mode": "make",
+      "label": "matched",
+      "config_sha256": {
+        "config.h": "a5803c97c2ad59e17618df97e0f93b918cd23d24d89967d82f3dc11c7cd05a3e",
+        "config_components.h": "2208f4d7720560c80c7594424297cbd4ee8553cf4c5cbc6cc8d4649c80d13e2a"
+      },
+      "generation": null,
+      "configured_objects": [],
+      "artifacts": {
+        "ffmpeg": {
+          "bytes": 25653592,
+          "sha256": "c94090c099a9222febe41b45bba9b6b493dfcbf62a7f99761dccaadd2605ceb2"
+        },
+        "ffprobe": {
+          "bytes": 25558552,
+          "sha256": "afdaf099606f883fc316a9539d0c39401aaec2ca432c9916491a7a28cc90fb5f"
+        }
+      }
+    },
+    {
+      "command": [
+        "make",
+        "-j8",
+        "-f",
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+        "LLVM=-18",
+        "LLVM_IAS=1",
+        "ARCH=x86",
+        "all"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-linux-j8-r1-make",
+      "log": "/root/openmktr-issue37-benchmark/matched-linux-j8-r1-make/build.log",
+      "status": 0,
+      "wall_seconds": 142.42651761899992,
+      "user_seconds": 1059.300884,
+      "system_seconds": 75.905611,
+      "peak_rss_kib": 877340,
+      "project": "linux-6.12",
+      "jobs": 8,
+      "repeat": 1,
+      "mode": "make",
+      "label": "matched",
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": null,
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j8"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-linux-j8-r1-ninja",
+      "log": "/root/openmktr-issue37-benchmark/matched-linux-j8-r1-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 147.73368698199988,
+      "user_seconds": 1072.374688,
+      "system_seconds": 81.303788,
+      "peak_rss_kib": 877192,
+      "project": "linux-6.12",
+      "jobs": 8,
+      "repeat": 1,
+      "mode": "ninja",
+      "label": "matched",
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-fixed",
+          "--ninja",
+          "-j8",
+          "-f",
+          "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+          "LLVM=-18",
+          "LLVM_IAS=1",
+          "ARCH=x86",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/matched-linux-j8-r1-ninja",
+        "log": "/root/openmktr-issue37-benchmark/matched-linux-j8-r1-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 0.001430368000001181,
+        "user_seconds": 0.000448,
+        "system_seconds": 0.0,
+        "peak_rss_kib": 152784
+      },
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j8"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-linux-j8-r2-ninja",
+      "log": "/root/openmktr-issue37-benchmark/matched-linux-j8-r2-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 147.81230595299985,
+      "user_seconds": 1079.068397,
+      "system_seconds": 81.644499,
+      "peak_rss_kib": 877320,
+      "project": "linux-6.12",
+      "jobs": 8,
+      "repeat": 2,
+      "mode": "ninja",
+      "label": "matched",
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-fixed",
+          "--ninja",
+          "-j8",
+          "-f",
+          "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+          "LLVM=-18",
+          "LLVM_IAS=1",
+          "ARCH=x86",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/matched-linux-j8-r2-ninja",
+        "log": "/root/openmktr-issue37-benchmark/matched-linux-j8-r2-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 0.0014795540000704932,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_kib": 152784
+      },
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "make",
+        "-j8",
+        "-f",
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+        "LLVM=-18",
+        "LLVM_IAS=1",
+        "ARCH=x86",
+        "all"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-linux-j8-r2-make",
+      "log": "/root/openmktr-issue37-benchmark/matched-linux-j8-r2-make/build.log",
+      "status": 0,
+      "wall_seconds": 142.3979041399998,
+      "user_seconds": 1064.326319,
+      "system_seconds": 76.901626,
+      "peak_rss_kib": 877340,
+      "project": "linux-6.12",
+      "jobs": 8,
+      "repeat": 2,
+      "mode": "make",
+      "label": "matched",
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": null,
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "make",
+        "-j16",
+        "-f",
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+        "LLVM=-18",
+        "LLVM_IAS=1",
+        "ARCH=x86",
+        "all"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-linux-j16-r1-make",
+      "log": "/root/openmktr-issue37-benchmark/matched-linux-j16-r1-make/build.log",
+      "status": 0,
+      "wall_seconds": 104.5178593999999,
+      "user_seconds": 1462.986602,
+      "system_seconds": 105.789193,
+      "peak_rss_kib": 877248,
+      "project": "linux-6.12",
+      "jobs": 16,
+      "repeat": 1,
+      "mode": "make",
+      "label": "matched",
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": null,
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j16"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-linux-j16-r1-ninja",
+      "log": "/root/openmktr-issue37-benchmark/matched-linux-j16-r1-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 106.72882573000015,
+      "user_seconds": 1478.112438,
+      "system_seconds": 115.360228,
+      "peak_rss_kib": 877336,
+      "project": "linux-6.12",
+      "jobs": 16,
+      "repeat": 1,
+      "mode": "ninja",
+      "label": "matched",
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-fixed",
+          "--ninja",
+          "-j16",
+          "-f",
+          "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+          "LLVM=-18",
+          "LLVM_IAS=1",
+          "ARCH=x86",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/matched-linux-j16-r1-ninja",
+        "log": "/root/openmktr-issue37-benchmark/matched-linux-j16-r1-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 0.0014437340000768017,
+        "user_seconds": 0.0013369999999999999,
+        "system_seconds": 0.0,
+        "peak_rss_kib": 152784
+      },
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j16"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-linux-j16-r2-ninja",
+      "log": "/root/openmktr-issue37-benchmark/matched-linux-j16-r2-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 105.40756415999977,
+      "user_seconds": 1460.877627,
+      "system_seconds": 115.752657,
+      "peak_rss_kib": 877332,
+      "project": "linux-6.12",
+      "jobs": 16,
+      "repeat": 2,
+      "mode": "ninja",
+      "label": "matched",
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-fixed",
+          "--ninja",
+          "-j16",
+          "-f",
+          "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+          "LLVM=-18",
+          "LLVM_IAS=1",
+          "ARCH=x86",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/matched-linux-j16-r2-ninja",
+        "log": "/root/openmktr-issue37-benchmark/matched-linux-j16-r2-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 0.0015139069996621402,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_kib": 152784
+      },
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "make",
+        "-j16",
+        "-f",
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+        "LLVM=-18",
+        "LLVM_IAS=1",
+        "ARCH=x86",
+        "all"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/matched-linux-j16-r2-make",
+      "log": "/root/openmktr-issue37-benchmark/matched-linux-j16-r2-make/build.log",
+      "status": 0,
+      "wall_seconds": 102.12287231999971,
+      "user_seconds": 1451.237359,
+      "system_seconds": 112.192011,
+      "peak_rss_kib": 877192,
+      "project": "linux-6.12",
+      "jobs": 16,
+      "repeat": 2,
+      "mode": "make",
+      "label": "matched",
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": null,
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "strace",
+        "-f",
+        "--seccomp-bpf",
+        "-qq",
+        "-s",
+        "200",
+        "-e",
+        "trace=execve",
+        "-o",
+        "/root/openmktr-issue37-benchmark/diagnostic-linux-j8-r1-make/execve.log",
+        "make",
+        "-j8",
+        "-f",
+        "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+        "LLVM=-18",
+        "LLVM_IAS=1",
+        "ARCH=x86",
+        "all"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/diagnostic-linux-j8-r1-make",
+      "log": "/root/openmktr-issue37-benchmark/diagnostic-linux-j8-r1-make/build.log",
+      "status": 0,
+      "wall_seconds": 148.4693069320001,
+      "user_seconds": 1101.705433,
+      "system_seconds": 93.993175,
+      "peak_rss_kib": 877192,
+      "project": "linux-6.12",
+      "jobs": 8,
+      "repeat": 1,
+      "mode": "make",
+      "label": "diagnostic",
+      "traced": true,
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": null,
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "strace",
+        "-f",
+        "--seccomp-bpf",
+        "-qq",
+        "-s",
+        "200",
+        "-e",
+        "trace=execve",
+        "-o",
+        "/root/openmktr-issue37-benchmark/diagnostic-linux-j8-r1-ninja/execve.log",
+        "sh",
+        "./ninja.sh",
+        "-j8"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/diagnostic-linux-j8-r1-ninja",
+      "log": "/root/openmktr-issue37-benchmark/diagnostic-linux-j8-r1-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 156.89628438,
+      "user_seconds": 1116.733879,
+      "system_seconds": 140.7274,
+      "peak_rss_kib": 877112,
+      "project": "linux-6.12",
+      "jobs": 8,
+      "repeat": 1,
+      "mode": "ninja",
+      "label": "diagnostic",
+      "traced": true,
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-fixed",
+          "--ninja",
+          "-j8",
+          "-f",
+          "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+          "LLVM=-18",
+          "LLVM_IAS=1",
+          "ARCH=x86",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/diagnostic-linux-j8-r1-ninja",
+        "log": "/root/openmktr-issue37-benchmark/diagnostic-linux-j8-r1-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 0.0015550469997833716,
+        "user_seconds": 0.001395,
+        "system_seconds": 0.0,
+        "peak_rss_kib": 152704
+      },
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j8"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/final-ffmpeg-j8-r1-ninja",
+      "log": "/root/openmktr-issue37-benchmark/final-ffmpeg-j8-r1-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 38.95251779,
+      "user_seconds": 275.67831,
+      "system_seconds": 19.360434,
+      "peak_rss_kib": 240196,
+      "project": "ffmpeg-7.1.1",
+      "jobs": 8,
+      "repeat": 1,
+      "mode": "ninja",
+      "label": "final",
+      "traced": false,
+      "config_sha256": {
+        "config.h": "a5803c97c2ad59e17618df97e0f93b918cd23d24d89967d82f3dc11c7cd05a3e",
+        "config_components.h": "2208f4d7720560c80c7594424297cbd4ee8553cf4c5cbc6cc8d4649c80d13e2a"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-optimized",
+          "--ninja",
+          "-j8",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/final-ffmpeg-j8-r1-ninja",
+        "log": "/root/openmktr-issue37-benchmark/final-ffmpeg-j8-r1-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 2.0848088120001194,
+        "user_seconds": 2.028409,
+        "system_seconds": 0.09442199999999999,
+        "peak_rss_kib": 43432
+      },
+      "configured_objects": [],
+      "artifacts": {
+        "ffmpeg": {
+          "bytes": 25653592,
+          "sha256": "c94090c099a9222febe41b45bba9b6b493dfcbf62a7f99761dccaadd2605ceb2"
+        },
+        "ffprobe": {
+          "bytes": 25558552,
+          "sha256": "afdaf099606f883fc316a9539d0c39401aaec2ca432c9916491a7a28cc90fb5f"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j8"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/final-ffmpeg-j8-r2-ninja",
+      "log": "/root/openmktr-issue37-benchmark/final-ffmpeg-j8-r2-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 39.542526225000074,
+      "user_seconds": 276.69721,
+      "system_seconds": 18.826367,
+      "peak_rss_kib": 240324,
+      "project": "ffmpeg-7.1.1",
+      "jobs": 8,
+      "repeat": 2,
+      "mode": "ninja",
+      "label": "final",
+      "traced": false,
+      "config_sha256": {
+        "config.h": "a5803c97c2ad59e17618df97e0f93b918cd23d24d89967d82f3dc11c7cd05a3e",
+        "config_components.h": "2208f4d7720560c80c7594424297cbd4ee8553cf4c5cbc6cc8d4649c80d13e2a"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-optimized",
+          "--ninja",
+          "-j8",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/final-ffmpeg-j8-r2-ninja",
+        "log": "/root/openmktr-issue37-benchmark/final-ffmpeg-j8-r2-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 1.9468098190000092,
+        "user_seconds": 2.022743,
+        "system_seconds": 0.106781,
+        "peak_rss_kib": 43368
+      },
+      "configured_objects": [],
+      "artifacts": {
+        "ffmpeg": {
+          "bytes": 25653592,
+          "sha256": "c94090c099a9222febe41b45bba9b6b493dfcbf62a7f99761dccaadd2605ceb2"
+        },
+        "ffprobe": {
+          "bytes": 25558552,
+          "sha256": "afdaf099606f883fc316a9539d0c39401aaec2ca432c9916491a7a28cc90fb5f"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j16"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/final-ffmpeg-j16-r1-ninja",
+      "log": "/root/openmktr-issue37-benchmark/final-ffmpeg-j16-r1-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 29.372430541000085,
+      "user_seconds": 348.640694,
+      "system_seconds": 26.074245,
+      "peak_rss_kib": 240328,
+      "project": "ffmpeg-7.1.1",
+      "jobs": 16,
+      "repeat": 1,
+      "mode": "ninja",
+      "label": "final",
+      "traced": false,
+      "config_sha256": {
+        "config.h": "a5803c97c2ad59e17618df97e0f93b918cd23d24d89967d82f3dc11c7cd05a3e",
+        "config_components.h": "2208f4d7720560c80c7594424297cbd4ee8553cf4c5cbc6cc8d4649c80d13e2a"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-optimized",
+          "--ninja",
+          "-j16",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/final-ffmpeg-j16-r1-ninja",
+        "log": "/root/openmktr-issue37-benchmark/final-ffmpeg-j16-r1-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 1.9482763539999723,
+        "user_seconds": 2.053514,
+        "system_seconds": 0.110139,
+        "peak_rss_kib": 43288
+      },
+      "configured_objects": [],
+      "artifacts": {
+        "ffmpeg": {
+          "bytes": 25653592,
+          "sha256": "c94090c099a9222febe41b45bba9b6b493dfcbf62a7f99761dccaadd2605ceb2"
+        },
+        "ffprobe": {
+          "bytes": 25558552,
+          "sha256": "afdaf099606f883fc316a9539d0c39401aaec2ca432c9916491a7a28cc90fb5f"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j16"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/final-ffmpeg-j16-r2-ninja",
+      "log": "/root/openmktr-issue37-benchmark/final-ffmpeg-j16-r2-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 29.095721108999896,
+      "user_seconds": 350.915796,
+      "system_seconds": 25.481208,
+      "peak_rss_kib": 240480,
+      "project": "ffmpeg-7.1.1",
+      "jobs": 16,
+      "repeat": 2,
+      "mode": "ninja",
+      "label": "final",
+      "traced": false,
+      "config_sha256": {
+        "config.h": "a5803c97c2ad59e17618df97e0f93b918cd23d24d89967d82f3dc11c7cd05a3e",
+        "config_components.h": "2208f4d7720560c80c7594424297cbd4ee8553cf4c5cbc6cc8d4649c80d13e2a"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-optimized",
+          "--ninja",
+          "-j16",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/final-ffmpeg-j16-r2-ninja",
+        "log": "/root/openmktr-issue37-benchmark/final-ffmpeg-j16-r2-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 1.9162402689998999,
+        "user_seconds": 2.068279,
+        "system_seconds": 0.063023,
+        "peak_rss_kib": 43752
+      },
+      "configured_objects": [],
+      "artifacts": {
+        "ffmpeg": {
+          "bytes": 25653592,
+          "sha256": "c94090c099a9222febe41b45bba9b6b493dfcbf62a7f99761dccaadd2605ceb2"
+        },
+        "ffprobe": {
+          "bytes": 25558552,
+          "sha256": "afdaf099606f883fc316a9539d0c39401aaec2ca432c9916491a7a28cc90fb5f"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j8"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/final-linux-j8-r1-ninja",
+      "log": "/root/openmktr-issue37-benchmark/final-linux-j8-r1-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 143.87372921799988,
+      "user_seconds": 1070.006397,
+      "system_seconds": 78.805304,
+      "peak_rss_kib": 877340,
+      "project": "linux-6.12",
+      "jobs": 8,
+      "repeat": 1,
+      "mode": "ninja",
+      "label": "final",
+      "traced": false,
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-optimized",
+          "--ninja",
+          "-j8",
+          "-f",
+          "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+          "LLVM=-18",
+          "LLVM_IAS=1",
+          "ARCH=x86",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/final-linux-j8-r1-ninja",
+        "log": "/root/openmktr-issue37-benchmark/final-linux-j8-r1-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 0.0016151329996318964,
+        "user_seconds": 0.0,
+        "system_seconds": 0.000665,
+        "peak_rss_kib": 152552
+      },
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j8"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/final-retry-linux-j8-r1-ninja",
+      "log": "/root/openmktr-issue37-benchmark/final-retry-linux-j8-r1-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 145.0134171750001,
+      "user_seconds": 1076.280385,
+      "system_seconds": 79.909146,
+      "peak_rss_kib": 877192,
+      "project": "linux-6.12",
+      "jobs": 8,
+      "repeat": 1,
+      "mode": "ninja",
+      "label": "final-retry",
+      "traced": false,
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-optimized",
+          "--ninja",
+          "-j8",
+          "-f",
+          "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+          "LLVM=-18",
+          "LLVM_IAS=1",
+          "ARCH=x86",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/final-retry-linux-j8-r1-ninja",
+        "log": "/root/openmktr-issue37-benchmark/final-retry-linux-j8-r1-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 0.0015191350003078696,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_kib": 152644
+      },
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j16"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/final-linux-j16-r1-ninja",
+      "log": "/root/openmktr-issue37-benchmark/final-linux-j16-r1-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 102.66726813900004,
+      "user_seconds": 1435.022506,
+      "system_seconds": 105.505876,
+      "peak_rss_kib": 877316,
+      "project": "linux-6.12",
+      "jobs": 16,
+      "repeat": 1,
+      "mode": "ninja",
+      "label": "final",
+      "traced": false,
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-optimized",
+          "--ninja",
+          "-j16",
+          "-f",
+          "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+          "LLVM=-18",
+          "LLVM_IAS=1",
+          "ARCH=x86",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/final-linux-j16-r1-ninja",
+        "log": "/root/openmktr-issue37-benchmark/final-linux-j16-r1-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 0.0015794020000612363,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_kib": 152732
+      },
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    },
+    {
+      "command": [
+        "sh",
+        "./ninja.sh",
+        "-j16"
+      ],
+      "cwd": "/root/openmktr-issue37-benchmark/final-linux-j16-r2-ninja",
+      "log": "/root/openmktr-issue37-benchmark/final-linux-j16-r2-ninja/build.log",
+      "status": 0,
+      "wall_seconds": 103.56162953900002,
+      "user_seconds": 1444.15708,
+      "system_seconds": 106.699766,
+      "peak_rss_kib": 877192,
+      "project": "linux-6.12",
+      "jobs": 16,
+      "repeat": 2,
+      "mode": "ninja",
+      "label": "final",
+      "traced": false,
+      "config_sha256": {
+        ".config": "75032a492ff0d1f602a45b90a2c429832e2091451d4dbdf600671ee5b7ed430e"
+      },
+      "generation": {
+        "command": [
+          "/root/openmktr-issue37-benchmark/omktr-optimized",
+          "--ninja",
+          "-j16",
+          "-f",
+          "/root/openmktr-issue37-benchmark/sources/linux-6.12/Makefile",
+          "LLVM=-18",
+          "LLVM_IAS=1",
+          "ARCH=x86",
+          "all"
+        ],
+        "cwd": "/root/openmktr-issue37-benchmark/final-linux-j16-r2-ninja",
+        "log": "/root/openmktr-issue37-benchmark/final-linux-j16-r2-ninja/generate.log",
+        "status": 0,
+        "wall_seconds": 0.0014287750000221422,
+        "user_seconds": 0.000869,
+        "system_seconds": 0.0,
+        "peak_rss_kib": 152732
+      },
+      "configured_objects": [
+        "scripts/kconfig/conf.o",
+        "scripts/kconfig/confdata.o",
+        "scripts/kconfig/expr.o",
+        "scripts/kconfig/lexer.lex.o",
+        "scripts/kconfig/menu.o",
+        "scripts/kconfig/parser.tab.o",
+        "scripts/kconfig/preprocess.o",
+        "scripts/kconfig/symbol.o",
+        "scripts/kconfig/util.o"
+      ],
+      "artifacts": {
+        "vmlinux": {
+          "bytes": 53297008,
+          "sha256": "4e71914943df9a6f2ddc63f3306233eae82e992bb8fafc7cf7aa08d897adc11a"
+        },
+        "arch/x86/boot/bzImage": {
+          "bytes": 13693952,
+          "sha256": "1e084686241f4e10ff2a5c15c40eb16d8c11e360414efa4c73f690c535909eed"
+        }
+      }
+    }
+  ]
+}

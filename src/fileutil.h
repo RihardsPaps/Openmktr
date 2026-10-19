@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Expose validation of inherited FIFO jobservers for recursive scheduling.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -52,6 +53,9 @@ int RunCommand(const std::string& shell,
                int make_level = -1,
                const std::vector<std::string>* extra_env = nullptr,
                const std::vector<std::string>* unset_env = nullptr);
+
+// Check that the inherited jobserver can be opened as a read/write FIFO.
+bool IsKatiJobserverAvailable();
 
 // Acquire and release one slot from the optional inherited Kati jobserver.
 // -1 means no slot; -2 is the inherited slot reserved by a parent recipe.

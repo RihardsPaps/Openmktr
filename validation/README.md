@@ -19,6 +19,41 @@ The WSL campaign host and third-party build recipes can use GNU tools. The
 project's GNU-free build and test guarantee applies to the supported Chimera
 path, as described in [the README](../README.md).
 
+## Benchmark clean builds for issue 37
+
+[`benchmark_issue37.py`](benchmark_issue37.py) compares external GNU Make and
+Openmktr-generated Ninja execution using unmodified FFmpeg 7.1.1 and Linux 6.12
+release archives. It requires the recorded Linux host tools, including Clang 18,
+LLVM tools with the `-18` suffix, Ninja, and each project's configure/build
+prerequisites. GNU Make is the external comparison tool; this helper is separate
+from the GNU-free portable gate.
+
+For example, on the recorded WSL builder with a native Linux output directory:
+
+```sh
+python3 validation/benchmark_issue37.py \
+  --root /root/openmktr-issue37-benchmark \
+  --archives /root/universal-tool-campaign-20260927/sources \
+  --omktr /path/to/omktr --project ffmpeg --jobs 8 16 --repeats 2
+```
+
+Repeat with `--project linux`. Every run gets a fresh output directory; use a
+new `--label` when repeating a campaign. The helper preserves logs, archive and
+binary hashes, configuration hashes, artifacts, CPU/wall measurements, and source
+content checks. Configuration, graph generation, and artifact verification are
+outside the execution timer. It rejects generation that compiles additional
+object files. Compiler caches are disabled; filesystem caches stay warm.
+
+The default order alternates Make/Ninja and Ninja/Make. `--modes ninja` supports
+candidate rechecks against retained baselines. Optional `--trace-exec` uses
+strace for a separate diagnostic run; traced timings must not be mixed with the
+untraced comparison. Kbuild's recursive evaluation remains part of execution,
+because its generated outer graph invokes child Openmktr processes at runtime.
+
+The retained [issue 37 measurements](issue37-results.json) identify each measured
+revision and phase. These selected configurations do not reproduce every detail
+of the original reporter's Gentoo/Ryzen environment.
+
 ## Preserve evidence
 
 Keep release source trees separate from disposable build trees. Do not patch

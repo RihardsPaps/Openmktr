@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Keep jobserver reservations live instead of copying them as make exports.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -127,8 +128,11 @@ static bool IsShellIdentifierCommand(std::string_view name) {
 // deferred recursive command freezes state from an earlier recursion level
 // and can override assignments made by the recipe immediately before the
 // child is started.
+// Jobserver reservations are also live transport state: RunCommand assigns
+// ownership to one child, so a saved make export must not duplicate it.
 static bool IsRecursiveTransportVariable(std::string_view name) {
-  return name == "MAKEFLAGS" || name == "MAKEOVERRIDES" || name == "MAKELEVEL";
+  return name == "MAKEFLAGS" || name == "MAKEOVERRIDES" ||
+         name == "MAKELEVEL" || name == "KATI_JOBSERVER_RESERVED";
 }
 
 // Recursive commands executed directly by Kati do not pass through the
@@ -253,7 +257,8 @@ static void ExportAllVariables(Command* command, Evaluator* ev) {
   std::unordered_set<std::string> emitted;
   for (std::string_view name_view : GetSymbolNames(
            [](Var* var) { return var->IsDefined() && !var->Obsolete(); })) {
-    if (name_view == "MAKELEVEL" || !IsShellIdentifierCommand(name_view) ||
+    if (name_view == "MAKELEVEL" || name_view == "KATI_JOBSERVER_RESERVED" ||
+        !IsShellIdentifierCommand(name_view) ||
         !emitted.insert(std::string(name_view)).second)
       continue;
     Symbol name = Intern(name_view);
