@@ -47,6 +47,60 @@ and zero quarantined crashes. These checks were not rerun for this documentation
   `.if`/`.endif` directives. Openmktr does not target the BSD Make dialect, and
   no complete NetBSD cross-build is claimed.
 
+## Issue 37 clean-build execution benchmark
+
+The 2026-10-19 investigation compared GNU Make 4.3 with Openmktr-generated
+Ninja 1.11.1 builds on the Intel i9-14900KF WSL2 builder (16 logical CPUs,
+24 GiB RAM). Both tools used host Clang 18.1.3, identical configurations and job
+counts, fresh output directories, and disabled compiler caches. Configuration,
+graph generation, and artifact checks were outside the execution timer.
+
+Final Openmktr code was `05bc7e6cd995241455f5b46d5d12e11381d2518e`, built
+with Clang 22.1.8, musl/libc++, O2/ThinLTO and static linking. Means below use two
+successful runs per tool and job count. Initial Make/Ninja runs alternated order;
+the final candidate rechecks followed the retained Make baselines. Filesystem
+caches remained warm. Small percentage differences have no confidence interval.
+
+| Project/configuration | Jobs | GNU Make mean | Final Openmktr/Ninja mean | Difference |
+| --- | ---: | ---: | ---: | ---: |
+| FFmpeg 7.1.1, autodetect/doc/debug disabled | 8 | 39.81 s | 39.25 s | -1.4% |
+| Same FFmpeg configuration | 16 | 29.36 s | 29.23 s | -0.4% |
+| Linux 6.12, x86-64 defconfig, LLVM=-18 | 8 | 142.41 s | 144.44 s | +1.4% |
+| Same Linux configuration | 16 | 103.32 s | 103.11 s | -0.2% |
+
+The initial Linux `-j16` pair took 104.65 s with Make and 159.13 s with
+Openmktr at `a965eac`. Recursive-command serialization held average CPU
+utilization near 8.9 logical CPUs. Letting independent children share the existing
+FIFO budget raised it near 15. A separate execution trace of the scheduler-only
+candidate found 21,091 `/bin/sh -c ':'` launches. The final default-shell no-op
+fast path avoids those launches while retaining custom interpreter/flag behavior.
+Reservation transport also prevents exports from duplicating a shared job slot.
+
+Every successful build produced matching `ffmpeg`/`ffprobe` or
+`vmlinux`/`bzImage` hashes across tools and revisions. FFmpeg encode smoke checks
+passed. Release-file contents and symlink targets matched the archives; Python's
+safe extraction normalized one Linux link's redundant `./` component without
+changing its target. One final Linux run failed in Clang's Live Variable Analysis
+pass and was excluded. The exact compiler command then passed three direct
+replays with a baseline-identical object; a fresh replacement build passed.
+The crash log and reproducer are retained, and its underlying cause is unresolved.
+
+The remaining 1.4% Linux `-j8` difference is recorded. The trace also showed
+additional capability probes; their contribution to that small final difference
+was not isolated. Bare direct recursion without a shared FIFO retains its
+conservative serialization. These results apply to the selected WSL configurations;
+the original Gentoo/Ryzen commands were unavailable. Kernel boot was not checked
+in this performance run.
+
+The [structured evidence](issue37-results.json) retains individual samples,
+versions, archive/binary/configuration/artifact hashes, CPU measurements, trace
+counts, the excluded failure and replays, and `tests/bench.py` comparisons using
+baseline/candidate binaries built with the same toolchain. See the
+[reproduction guide](README.md#benchmark-clean-builds-for-issue-37). The GNU-free
+Chimera gate passed all 120 correctness tests, 6 compatibility tests, 858 snapshot
+scenarios, C++ units, version tests, dump smoke and formatting; PR CI also passed
+ASan/UBSan for the final code.
+
 ## Project matrix (requested order)
 
 | # | Project | Status | Evidence / configuration |

@@ -83,13 +83,15 @@ def measure(binary: Path, repeats: int) -> dict:
             encoding="utf-8",
         )
         run([str(binary), "--ninja", "all"], cwd)
-        for job_count in (1, 4):
-            samples = [run(["sh", "./ninja.sh", f"-j{job_count}"], cwd)
-                       for _ in range(repeats + 2)][2:]
-            results[f"ninja_recipe_launch_j{job_count}"] = {
-                "median_seconds": statistics.median(value[0] for value in samples),
-                "peak_rss_kib": max(value[1] for value in samples),
-            }
+        for mode, command in (("ninja", ["sh", "./ninja.sh"]),
+                              ("direct", [str(binary)])):
+            for job_count in (1, 4):
+                samples = [run([*command, f"-j{job_count}"], cwd)
+                           for _ in range(repeats + 2)][2:]
+                results[f"{mode}_recipe_launch_j{job_count}"] = {
+                    "median_seconds": statistics.median(value[0] for value in samples),
+                    "peak_rss_kib": max(value[1] for value in samples),
+                }
 
         chain = ["all: link99\n"]
         chain += ["link0:\n\t@touch $@\n"]
