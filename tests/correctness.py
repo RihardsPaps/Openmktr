@@ -985,6 +985,48 @@ class BuildCorrectness(unittest.TestCase):
                 self.assertEqual(os.read(fd, 3), b"xx")
                 os.write(fd, b"xx")
 
+    def test_recursive_siblings_serialize_without_usable_jobserver(self):
+        self.makefile('all:\n\t@"$(MAKE)" -f children.mk all\n')
+        (self.directory / "children.mk").write_text(
+            'all: a b\na b:\n\t@"$(MAKE)" -f leaf.mk all\n')
+        (self.directory / "leaf.mk").write_text(
+            "all:\n\t@python3 worker.py\n")
+        (self.directory / "worker.py").write_text(
+            "from pathlib import Path\nimport time\n"
+            "lock = Path('lock')\nlock.mkdir()\n"
+            "time.sleep(0.15)\nlock.rmdir()\n"
+            "with Path('done').open('a') as f: f.write('x')\n")
+        missing = self.directory / "missing-fifo"
+        deleted = self.directory / "deleted-fifo"
+        os.mkfifo(deleted)
+        deleted.unlink()
+        regular = self.directory / "regular-file"
+        regular.write_bytes(b"xx")
+        directory = self.directory / "directory"
+        directory.mkdir()
+        dangling = self.directory / "dangling-link"
+        dangling.symlink_to(missing)
+        env = os.environ.copy()
+        env["KATI_JOBS"] = "2"
+        env.pop("KATI_JOBSERVER_RESERVED", None)
+        for mode in ("direct", "ninja"):
+            if mode == "ninja":
+                self.direct("--ninja", "-j2", "all")
+                command = ["sh", "./ninja.sh", "-j2"]
+            else:
+                command = [str(KATI), "-j2", "all"]
+            for fifo in (missing, deleted, regular, directory, dangling):
+                with self.subTest(mode=mode, fifo=fifo.name):
+                    (self.directory / "done").unlink(missing_ok=True)
+                    env["KATI_JOBSERVER_FIFO"] = str(fifo)
+                    result = subprocess.run(
+                        command, cwd=self.directory, env=env, capture_output=True,
+                        timeout=10, check=False)
+                    self.assertEqual(result.returncode, 0,
+                                     result.stdout.decode() + result.stderr.decode())
+                    self.assertEqual((self.directory / "done").read_text(), "xx")
+                    self.assertEqual(regular.read_bytes(), b"xx")
+
     def test_noop_recipe_does_not_consume_job_token(self):
         self.makefile("all:\n\t@:\n")
         fifo = self.directory / "jobserver"

@@ -4,6 +4,7 @@
 // Changed build execution, evaluation, or portability for this fork.
 // Prevent recipe exports from duplicating a live jobserver reservation.
 // Elide pure no-op commands for the default POSIX shell and flags.
+// Validate inherited FIFO endpoints before using the shared job budget.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -86,6 +87,25 @@ thread_local std::string kati_jobserver_path;
 constexpr int kReservedKatiJobToken = -2;
 std::atomic<bool> reserved_kati_job_in_use{false};
 
+int OpenKatiJobserver() {
+  const char* fifo = getenv("KATI_JOBSERVER_FIFO");
+  if (fifo == nullptr || *fifo == '\0')
+    return -1;
+
+  // Check the opened object, not just its path. Nonblocking open also avoids
+  // waiting on an invalid endpoint before its type can be checked.
+  int fd = open(fifo, O_RDWR | O_CLOEXEC | O_NONBLOCK);
+  if (fd < 0)
+    return -1;
+  struct stat st;
+  if (fstat(fd, &st) < 0 || !S_ISFIFO(st.st_mode) ||
+      fcntl(fd, F_SETFL, 0) < 0) {
+    close(fd);
+    return -1;
+  }
+  return fd;
+}
+
 int TryAcquireReservedKatiJobToken() {
   const char* reserved = getenv("KATI_JOBSERVER_RESERVED");
   bool expected = false;
@@ -96,6 +116,15 @@ int TryAcquireReservedKatiJobToken() {
 }
 
 }  // namespace
+
+bool IsKatiJobserverAvailable() {
+  // Do not consume a token: a valid jobserver may currently have none free.
+  int fd = OpenKatiJobserver();
+  if (fd < 0)
+    return false;
+  close(fd);
+  return true;
+}
 
 int AcquireKatiJobToken() {
   const int reserved = TryAcquireReservedKatiJobToken();
@@ -113,7 +142,7 @@ int AcquireKatiJobToken() {
   }
 
   if (kati_jobserver_fd < 0) {
-    kati_jobserver_fd = open(fifo, O_RDWR | O_CLOEXEC);
+    kati_jobserver_fd = OpenKatiJobserver();
     if (kati_jobserver_fd < 0) {
       LOG("jobserver unavailable: %s", fifo);
       return -1;

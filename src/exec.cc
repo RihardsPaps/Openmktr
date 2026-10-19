@@ -3,6 +3,7 @@
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Allow independent recursive recipes to share the existing FIFO job budget.
+// Retain recursive serialization when the inherited FIFO cannot be used.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -948,8 +949,7 @@ class Executor {
     // subgraphs from filling that budget (notably Kbuild subdirectories).
     // Without a shared jobserver retain the conservative fallback: each
     // child otherwise has its own full local -j limit.
-    const char* fifo = getenv("KATI_JOBSERVER_FIFO");
-    if (fifo == nullptr || *fifo == '\0')
+    if (!IsKatiJobserverAvailable())
       lock.lock();
     return lock;
   }
