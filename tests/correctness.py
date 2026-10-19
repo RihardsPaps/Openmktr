@@ -986,8 +986,10 @@ class BuildCorrectness(unittest.TestCase):
                 os.write(fd, b"xx")
 
     def test_recursive_siblings_respect_shared_job_budget(self):
-        self.makefile('all:\n\t@"$(MAKE)" -f children.mk all\n')
+        self.makefile('.EXPORT_ALL_VARIABLES:\nexport KATI_JOBSERVER_RESERVED\n'
+                      'all:\n\t@"$(MAKE)" -f children.mk all\n')
         (self.directory / "children.mk").write_text(
+            '.EXPORT_ALL_VARIABLES:\nexport KATI_JOBSERVER_RESERVED\n'
             'all: a b c d\na b c d:\n\t@"$(MAKE)" -f leaf.mk all\n')
         (self.directory / "leaf.mk").write_text(
             "all: w x y z\nw x y z:\n\t@python3 worker.py\n")
@@ -1011,8 +1013,16 @@ class BuildCorrectness(unittest.TestCase):
         env["KATI_JOBSERVER_FIFO"] = str(fifo)
         env["KATI_JOBS"] = "4"
         env.pop("KATI_JOBSERVER_RESERVED", None)
-        for mode in ("direct", "ninja"):
-            with self.subTest(mode=mode):
+        for mode, reserved in (("direct", False), ("ninja", False),
+                               ("direct", True), ("ninja", True)):
+            with self.subTest(mode=mode, reserved=reserved):
+                self.assertEqual(os.read(fd, 3), b"xx")
+                tokens = b"x" if reserved else b"xx"
+                os.write(fd, tokens)
+                if reserved:
+                    env["KATI_JOBSERVER_RESERVED"] = "1"
+                else:
+                    env.pop("KATI_JOBSERVER_RESERVED", None)
                 (self.directory / "counts").write_text("[0, 0, 0]")
                 if mode == "ninja":
                     self.direct("--ninja", "-j4", "all")
@@ -1026,7 +1036,7 @@ class BuildCorrectness(unittest.TestCase):
                                  result.stdout.decode() + result.stderr.decode())
                 self.assertEqual(json.loads((self.directory / "counts").read_text()),
                                  [0, 2, 16])
-                self.assertEqual(os.read(fd, 3), b"xx")
+                self.assertEqual(os.read(fd, 3), tokens)
                 os.write(fd, b"xx")
 
     def test_recursive_make_inherits_job_limit(self):

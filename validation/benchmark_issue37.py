@@ -37,6 +37,8 @@ def main():
     parser.add_argument("--modes", nargs="+", choices=("make", "ninja"),
                         default=["make", "ninja"])
     parser.add_argument("--label", default="matched")
+    parser.add_argument("--trace-exec", action="store_true",
+                        help="Diagnostic exec trace; do not compare traced timings")
     args = parser.parse_args()
     root = args.root.resolve()
     root.mkdir(parents=True, exist_ok=True)
@@ -128,6 +130,10 @@ def main():
                     command = ["sh", "./ninja.sh", f"-j{jobs}"]
                 else:
                     command = ["make", f"-j{jobs}", *common, "all"]
+                if args.trace_exec:
+                    command = ["strace", "-f", "--seccomp-bpf", "-qq", "-s", "200",
+                               "-e", "trace=execve", "-o", str(build / "execve.log"),
+                               *command]
                 new_objects = sorted(str(p.relative_to(build))
                                      for p in build.rglob("*.o")
                                      if str(p.relative_to(build)) not in configured_objects)
@@ -135,7 +141,8 @@ def main():
                     raise RuntimeError(f"Generation compiled objects: {new_objects[:10]}")
                 result = run(build, build / "build.log", command)
                 result.update(project=version, jobs=jobs, repeat=repeat + 1,
-                              mode=mode, label=args.label, config_sha256=configs,
+                              mode=mode, label=args.label, traced=args.trace_exec,
+                              config_sha256=configs,
                               generation=generation, configured_objects=configured_objects,
                               artifacts={p: dict(bytes=(build / p).stat().st_size,
                                                  sha256=digest(build / p))

@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Prevent recipe exports from duplicating a live jobserver reservation.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -199,9 +200,15 @@ int RunCommand(const std::string& shell,
       child_env.push_back(const_cast<char*>(reserved_env.c_str()));
     if (make_level >= 0)
       child_env.push_back(const_cast<char*>(level_env.c_str()));
-    if (extra_env != nullptr)
-      for (const std::string& entry : *extra_env)
+    if (extra_env != nullptr) {
+      for (const std::string& entry : *extra_env) {
+        // Reservation ownership is assigned above for this particular child.
+        // A make export must not add a second, stale copy of the variable.
+        if (forward_slot && HasPrefix(entry, "KATI_JOBSERVER_RESERVED="))
+          continue;
         child_env.push_back(const_cast<char*>(entry.c_str()));
+      }
+    }
     child_env.push_back(nullptr);
   }
   // Linux also limits each individual argument (MAX_ARG_STRLEN), even when

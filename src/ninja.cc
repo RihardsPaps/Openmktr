@@ -4,6 +4,7 @@
 // Changed build execution, evaluation, or portability for this fork.
 // Low-resolution timestamp guards use Openmktr's internal stat helper.
 // Reuse Ninja's default POSIX shell instead of spawning a second shell.
+// Preserve runtime reservation ownership across generated environment files.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -1224,7 +1225,8 @@ class NinjaGenerator {
     emitted_exports.insert("MAKELEVEL");
     fprintf(fp, "export MAKELEVEL=%d\n", g_flags.make_level + 1);
     for (const auto& [symbol, is_exported] : ev_->exports()) {
-      if (symbol.str() == "MAKELEVEL")
+      if (symbol.str() == "MAKELEVEL" ||
+          symbol.str() == "KATI_JOBSERVER_RESERVED")
         continue;
       if (!IsShellIdentifier(symbol.str())) {
         continue;
