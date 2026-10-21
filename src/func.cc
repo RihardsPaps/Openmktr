@@ -1,7 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
-// Changed build execution, evaluation, or portability for this fork.
+// Changed pattern substitution, build execution, evaluation, and portability.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -118,7 +118,14 @@ void PatsubstFunc(const std::vector<Value*>& args,
   const std::string&& str = args[2]->Eval(ev);
   WordWriter ww(s);
   Pattern pat(pat_str);
+  const bool remove_matches =
+      repl.empty() && pat_str.find('%') != std::string::npos;
   for (std::string_view tok : WordScanner(str)) {
+    // An empty pattern replacement removes the word and its separator.
+    // Literal substitutions and empty stems in nonempty replacements retain
+    // their separators, as in GNU make.
+    if (remove_matches && pat.Match(tok))
+      continue;
     ww.MaybeAddSeparator();
     pat.AppendSubst(tok, repl, s);
   }

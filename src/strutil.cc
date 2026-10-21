@@ -1,7 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
-// Changed build execution, evaluation, or portability for this fork.
+// Changed pattern matching, build execution, evaluation, and portability.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -148,14 +148,18 @@ std::string_view TrimSuffix(std::string_view str, std::string_view suffix) {
 Pattern::Pattern(std::string_view pat)
     : pat_(pat), percent_index_(pat.find('%')) {}
 
-bool Pattern::Match(std::string_view str) const {
+bool Pattern::Match(std::string_view str, size_t minimum_stem_length) const {
   if (percent_index_ == std::string::npos)
     return str == pat_;
-  return MatchImpl(str);
+  return MatchImpl(str) &&
+         str.size() - (pat_.size() - 1) >= minimum_stem_length;
 }
 
 bool Pattern::MatchImpl(std::string_view str) const {
-  return (HasPrefix(str, pat_.substr(0, percent_index_)) &&
+  // The literal prefix and suffix must fit without overlapping. This also
+  // keeps stem-length arithmetic in substitution and Stem() from underflowing.
+  return (str.size() >= pat_.size() - 1 &&
+          HasPrefix(str, pat_.substr(0, percent_index_)) &&
           HasSuffix(str, pat_.substr(percent_index_ + 1)));
 }
 
@@ -196,8 +200,7 @@ void Pattern::AppendSubst(std::string_view str,
 void Pattern::AppendSubstRef(std::string_view str,
                              std::string_view subst,
                              std::string* out) const {
-  if (percent_index_ != std::string::npos &&
-      subst.find('%') != std::string::npos) {
+  if (percent_index_ != std::string::npos) {
     AppendSubst(str, subst, out);
     return;
   }

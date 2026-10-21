@@ -113,6 +113,12 @@ def run_makefile(source: Path, target: str, ninja: bool) -> dict:
             output += ninja_output
         if not ninja and source.name in UNORDERED_OUTPUT_CASES:
             output = "".join(sorted(output.splitlines(keepends=True)))
+        if not ninja and source.name == "multi_explicit_output_patterns.mk" and target == "test":
+            # The two prerequisites of zzz are independent. Their build
+            # notices can interleave with their recipe output under -j1.
+            before, marker, after = output.partition("  BUILD   zzz\n")
+            if marker:
+                output = "".join(sorted(before.splitlines(keepends=True))) + marker + after
         if not ninja and source.name == "multi_rule_order_only.mk" and target == "test2":
             # Independent prerequisites can print their BUILD notices while
             # another worker prints its recipe. Keep recipe order intact.

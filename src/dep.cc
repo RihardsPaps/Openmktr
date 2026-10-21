@@ -1,7 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
-// Changed build execution, evaluation, or portability for this fork.
+// Changed implicit pattern matching, build execution, and portability.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -307,7 +307,7 @@ static bool IsImplicitRuleCancellation(Symbol output,
           (output_pattern.str().empty() || output_pattern.str().back() != '/'))
         continue;
       Pattern pat(output_pattern.str());
-      if (pat.Match(ImplicitMatchTarget(output, output_pattern)))
+      if (pat.Match(ImplicitMatchTarget(output, output_pattern), 1))
         return true;
     }
   }
@@ -1295,7 +1295,7 @@ class DepBuilder {
                                           output_pattern.str().back() != '/'))
           continue;
         Pattern pat(output_pattern.str());
-        if (pat.Match(ImplicitMatchTarget(output, output_pattern))) {
+        if (pat.Match(ImplicitMatchTarget(output, output_pattern), 1)) {
           matched = output_pattern;
           break;
         }
@@ -1370,7 +1370,7 @@ class DepBuilder {
           (output_pattern.str().empty() || output_pattern.str().back() != '/'))
         continue;
       Pattern pat(output_pattern.str());
-      if (pat.Match(ImplicitMatchTarget(output, output_pattern))) {
+      if (pat.Match(ImplicitMatchTarget(output, output_pattern), 1)) {
         bool ok = true;
         for (Symbol input : rule->inputs) {
           if (rule->secondary_expansion &&
@@ -1503,7 +1503,7 @@ class DepBuilder {
       if (key.find('%') == std::string_view::npos)
         continue;
       Pattern pat(key);
-      if (!pat.Match(target))
+      if (!pat.Match(target, 1))
         continue;
       patterns.push_back(p);
     }
@@ -1614,7 +1614,7 @@ class DepBuilder {
             for (Symbol pattern : rule->output_patterns) {
               Pattern pat(pattern.str());
               std::string_view target = ImplicitMatchTarget(output, pattern);
-              if (pat.Match(target)) {
+              if (pat.Match(target, 1)) {
                 // GNU make includes the target's directory in the stem of a
                 // pattern without a slash. It is stripped only for matching.
                 // Otherwise git-% can outrank bin-wrappers/% for a target in

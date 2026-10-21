@@ -1359,5 +1359,73 @@
     "expected_files": {
       "result": "item\n"
     }
+  },
+  {
+    "name": "overlapping_pattern_functions",
+    "text": "WORDS := a aa aba aaaa\nOTHER := abc abbc abZbc abbcx\nall:\n\t@printf '%s\\n' '$(filter a%a,$(WORDS))' '$(filter-out a%a,$(WORDS))' '$(patsubst a%a,X%Y,$(WORDS))' '$(filter ab%bc,$(OTHER))' '$(filter-out ab%bc,$(OTHER))' '$(patsubst ab%bc,X%Y,$(OTHER))' '$(OTHER:ab%bc=X%Y)' > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "aa aba aaaa\na\na XY XbY XaaY\nabbc abZbc\nabc abbcx\nabc XY XZY abbcx\nabc XY XZY abbcx\n"
+    }
+  },
+  {
+    "name": "overlapping_pattern_functions_ninja",
+    "text": "WORDS := a aa aba aaaa\nOTHER := abc abbc abZbc abbcx\nall:\n\t@printf '%s\\n' '$(filter a%a,$(WORDS))' '$(filter-out a%a,$(WORDS))' '$(patsubst a%a,X%Y,$(WORDS))' '$(filter ab%bc,$(OTHER))' '$(filter-out ab%bc,$(OTHER))' '$(patsubst ab%bc,X%Y,$(OTHER))' '$(OTHER:ab%bc=X%Y)' > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "aa aba aaaa\na\na XY XbY XaaY\nabbc abZbc\nabc abbcx\nabc XY XZY abbcx\nabc XY XZY abbcx\n"
+    },
+    "ninja": true
+  },
+  {
+    "name": "overlapping_implicit_pattern",
+    "text": ".PHONY: all\nall: abc abbc abZbc\n\t@cat abc abbc abZbc > result\nab%bc:\n\t@printf pattern > $@\n%:\n\t@printf fallback > $@\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "fallbackfallbackpattern"
+    }
+  },
+  {
+    "name": "overlapping_implicit_pattern_ninja",
+    "text": ".PHONY: all\nall: abc abbc abZbc\n\t@cat abc abbc abZbc > result\nab%bc:\n\t@printf pattern > $@\n%:\n\t@printf fallback > $@\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "fallbackfallbackpattern"
+    },
+    "ninja": true
+  },
+  {
+    "name": "overlapping_pattern_variables",
+    "text": "TAG = default\na%a: TAG = pattern\n.PHONY: all\nall: a aa aba\na aa aba:\n\t@printf \"%s:%s\\n\" \"$@\" \"$(TAG)\" >> result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "a:default\naa:default\naba:pattern\n"
+    }
+  },
+  {
+    "name": "overlapping_pattern_variables_ninja",
+    "text": "TAG = default\na%a: TAG = pattern\n.PHONY: all\nall: a aa aba\na aa aba:\n\t@printf \"%s:%s\\n\" \"$@\" \"$(TAG)\" >> result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "a:default\naa:default\naba:pattern\n"
+    },
+    "ninja": true
+  },
+  {
+    "name": "pattern_substitution_without_replacement_stem",
+    "text": "OTHER := abc abbc abZbc abbcx\nWORDS := aa aba aaaa\nall:\n\t@printf '<%s>\\n' '$(OTHER:ab%bc=X)' '$(OTHER:ab%bc=)' '$(patsubst ab%bc,,$(OTHER))' '$(patsubst aa,,$(WORDS))' '$(patsubst a%a,%,$(WORDS))' '$(WORDS:a%a=%)' > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<abc X X abbcx>\n<abc abbcx>\n<abc abbcx>\n< aba aaaa>\n< b aa>\n< b aa>\n"
+    }
+  },
+  {
+    "name": "pattern_substitution_without_replacement_stem_ninja",
+    "text": "OTHER := abc abbc abZbc abbcx\nWORDS := aa aba aaaa\nall:\n\t@printf '<%s>\\n' '$(OTHER:ab%bc=X)' '$(OTHER:ab%bc=)' '$(patsubst ab%bc,,$(OTHER))' '$(patsubst aa,,$(WORDS))' '$(patsubst a%a,%,$(WORDS))' '$(WORDS:a%a=%)' > result\n",
+    "expected_status": 0,
+    "expected_files": {
+      "result": "<abc X X abbcx>\n<abc abbcx>\n<abc abbcx>\n< aba aaaa>\n< b aa>\n< b aa>\n"
+    },
+    "ninja": true
   }
 ]
