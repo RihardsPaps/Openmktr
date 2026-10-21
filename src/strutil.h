@@ -1,7 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
-// Changed build execution, evaluation, or portability for this fork.
+// Changed pattern matching, build execution, evaluation, and portability.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -94,7 +94,9 @@ class Pattern {
  public:
   explicit Pattern(std::string_view pat);
 
-  bool Match(std::string_view str) const;
+  // Text functions allow empty stems; implicit rules and pattern-specific
+  // variables require at least one character to match '%'.
+  bool Match(std::string_view str, size_t minimum_stem_length = 0) const;
 
   std::string_view Stem(std::string_view str) const;
 

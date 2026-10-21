@@ -1,7 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
-// Updated regression coverage for fork behavior.
+// Updated regression coverage, including overlapping patterns and empty stems.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -85,6 +85,25 @@ std::string SubstPattern(std::string_view str,
 }
 
 void TestSubstPattern() {
+  assert(!Pattern("a%a").Match("a"));
+  assert(!Pattern("ab%bc").Match("abc"));
+  assert(Pattern("a%a").Match("aa"));
+  assert(!Pattern("a%a").Match("aa", 1));
+  assert(Pattern("a%a").Match("aba", 1));
+  assert(Pattern("%").Match(""));
+  assert(!Pattern("%").Match("", 1));
+  assert(Pattern("%").Match("x", 1));
+  ASSERT_EQ(Pattern("ab%bc").Stem("abc"), "");
+  ASSERT_EQ(Pattern("ab%bc").Stem("abZbc"), "Z");
+  ASSERT_EQ(SubstPattern("abc", "ab%bc", "X%Y"), "abc");
+  ASSERT_EQ(SubstPattern("abbc", "ab%bc", "X%Y"), "XY");
+  ASSERT_EQ(SubstPattern("abZbc", "ab%bc", "X%Y"), "XZY");
+  std::string substituted;
+  Pattern("ab%bc").AppendSubstRef("abZbc", "X", &substituted);
+  ASSERT_EQ(substituted, "X");
+  substituted.clear();
+  Pattern("ab%bc").AppendSubstRef("abZbc", "", &substituted);
+  ASSERT_EQ(substituted, "");
   ASSERT_EQ(SubstPattern("x.c", "%.c", "%.o"), "x.o");
   ASSERT_EQ(SubstPattern("c.x", "c.%", "o.%"), "o.x");
   ASSERT_EQ(SubstPattern("x.c.c", "%.c", "%.o"), "x.c.o");
