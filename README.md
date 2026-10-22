@@ -21,10 +21,10 @@ independent steps can run concurrently while dependencies preserve the
 required order. Both direct execution and generated Ninja builds can use this
 parallelism.
 
-The supported platform is **Linux with musl**, using Clang/LLVM and libc++.
+The supported platform is **Linux with musl or glibc**, using Clang/LLVM and libc++.
 [Chimera Linux](https://chimera-linux.org/about/) is the reference build and
 test environment. The source has also been built in Alpine's musl/BusyBox
-environment. Openmktr does not depend on Chimera-specific utility interfaces;
+environment and Gentoo linux. Openmktr does not depend on Chimera-specific utility interfaces;
 equivalent POSIX tools, including BusyBox, Toybox, or BSD-derived
 implementations, can provide the basic system commands. The full snapshot suite
 remains tied to the reference environment, and other environments are best
