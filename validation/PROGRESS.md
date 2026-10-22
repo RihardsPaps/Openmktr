@@ -11,7 +11,7 @@ not establish compatibility with every version or target. Read the
 
 ## Evidence boundary
 
-A project pass requires a real build using this repository's `ckati` for
+A project pass requires a real build using this repository's `omktr` for
 Make-driven stages, plus the recorded source revision, configuration, command,
 exit status, artifact checks, repeat build, and source-integrity checks.
 Success through another build system alone does not establish Kati compatibility.
