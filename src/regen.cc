@@ -3,6 +3,7 @@
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
+// Keep explanation checks from refreshing the regeneration stamp.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -98,7 +99,7 @@ class StampChecker {
     if (CheckStep2())
       RETURN_TRUE;
 
-    if (!needs_regen_) {
+    if (!needs_regen_ && !g_flags.explain) {
       FILE* fp = fopen(GetNinjaStampFilename().c_str(), "rb+");
       if (!fp)
         return true;
@@ -176,8 +177,13 @@ class StampChecker {
       printf("Generated time: %f\n", gen_time);
 
     int requires_evaluation = LOAD_INT(fp);
-    if (requires_evaluation != 0)
+    if (requires_evaluation != 0) {
+      if (g_flags.explain)
+        printf(
+            "Makefile evaluation has observable effects or generated inputs; "
+            "regenerating...\n");
       RETURN_TRUE;
+    }
 
     std::string s, s2;
     int num_files = LOAD_INT(fp);

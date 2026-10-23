@@ -17,6 +17,197 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_explain_resolves_included_rule_and_does_not_run_recipes(self):
+        self.makefile("include rules.mk\n")
+        (self.directory / "rules.mk").write_text(
+            "out: VALUE = expanded\nout: input | ready\n"
+            "\t+@printf '%s' '$(VALUE) $< $@' > $@\n"
+            ".PHONY: ready\nready:\n\t+@touch ran\n")
+        (self.directory / "input").write_text("source")
+        for mode in ((), ("--ninja", "--regen")):
+            _, output = self.direct(*mode, "--explain", "out")
+            self.assertIn("Source: rules.mk:2", output)
+            self.assertIn("Recipe source: rules.mk:3", output)
+            self.assertIn("Prerequisites: input", output)
+            self.assertIn("Order-only prerequisites: ready", output)
+            self.assertIn("expanded input out", output)
+            self.assertIn("outdated: output is missing", output)
+            for name in ("out", "ran", "build.ninja", ".kati_stamp"):
+                self.assertFalse((self.directory / name).exists(), name)
+
+    def test_explain_freshness_and_order_only_inputs(self):
+        self.makefile("out: input | ready\n\t@cp $< $@\n"
+                      ".PHONY: ready\nready:\n\t@:\n")
+        (self.directory / "input").write_text("source")
+        (self.directory / "out").write_text("old")
+        os.utime(self.directory / "input", (1000000000, 1000000000))
+        os.utime(self.directory / "out", (1000000010, 1000000010))
+        _, output = self.direct("--explain", "out")
+        self.assertIn("Target: out\n  Source: Makefile:1\n"
+                      "  Decision: up to date", output)
+        self.assertIn("cp input out", output)
+        self.assertNotIn("Outdated prerequisite: ready", output)
+        os.utime(self.directory / "input", (1000000020, 1000000020))
+        _, output = self.direct("--explain", "out")
+        self.assertIn("outdated: prerequisite is newer", output)
+        self.assertIn("Outdated prerequisite: input", output)
+        self.assertEqual((self.directory / "out").read_text(), "old")
+
+    def test_explain_propagates_planned_updates_and_labels_recursion(self):
+        self.makefile("all: out\n\t+@$(MAKE) child\n"
+                      "out: input\n\t@cp $< $@\n"
+                      "input:\n\t@touch $@\n"
+                      "child:\n\t@touch ran\n")
+        (self.directory / "all").write_text("existing")
+        (self.directory / "out").write_text("existing")
+        os.utime(self.directory / "all", (1000000010, 1000000010))
+        os.utime(self.directory / "out", (1000000000, 1000000000))
+        _, output = self.direct("--explain", "all")
+        self.assertIn("Outdated prerequisite: out (newer or would be rebuilt)", output)
+        self.assertIn("child graph is not flattened", output)
+        self.assertFalse((self.directory / "input").exists())
+        self.assertFalse((self.directory / "ran").exists())
+
+    def test_explain_regeneration_preserves_generated_files(self):
+        self.makefile("out: input\n\t@cp $< $@\n")
+        (self.directory / "input").write_text("source")
+        self.direct("--ninja", "--regen", "out")
+        names = ("build.ninja", "ninja.sh", "env.sh", ".kati_stamp")
+        before = {name: (self.directory / name).read_bytes() for name in names}
+        _, output = self.direct("--ninja", "--regen", "--explain", "out")
+        self.assertIn("Regeneration: recorded inputs unchanged", output)
+        self.makefile("out: input\n\t@printf changed > $@\n")
+        _, output = self.direct("--ninja", "--regen", "--explain", "out")
+        self.assertIn("Regeneration: required", output)
+        self.assertIn("Makefile was modified", output)
+        self.assertIn("printf changed > out", output)
+        for name in names:
+            self.assertEqual((self.directory / name).read_bytes(), before[name])
+
+    def test_explain_double_colon_and_missing_input(self):
+        self.makefile("out:: input\n\t@cp $< $@\nout::\n\t@touch $@\n")
+        (self.directory / "input").write_text("source")
+        (self.directory / "out").write_text("existing")
+        _, output = self.direct("--explain", "out")
+        self.assertIn("double-colon group is unconditional", output)
+        self.assertIn("Double-colon group 2: outdated (unconditional)", output)
+        self.assertIn("touch out", output)
+        (self.directory / "input").unlink()
+        status, output = self.direct("--explain", "out", success=False)
+        self.assertNotEqual(status, 0)
+        self.assertIn("missing input with no producing rule", output)
+
+    def test_explain_forced_inputs_old_outputs_and_current_groups(self):
+        self.makefile("out:: input\n\t@cp $< $@\n")
+        (self.directory / "input").write_text("source")
+        (self.directory / "out").write_text("existing")
+        os.utime(self.directory / "input", (1000000000, 1000000000))
+        os.utime(self.directory / "out", (1000000010, 1000000010))
+        for mode in ((), ("--ninja", "--regen")):
+            _, output = self.direct(*mode, "--explain", "out")
+            self.assertIn("all double-colon groups are current", output)
+            self.assertIn("cp input out", output)
+            _, output = self.direct(*mode, "--explain", "-W", "input", "out")
+            self.assertIn("input (forced by -W)", output)
+            _, output = self.direct(*mode, "--explain", "-W", "input",
+                                     "-o", "out", "out")
+            self.assertIn("kept unchanged by -o", output)
+
+    def test_explain_vpath_and_target_specific_exports(self):
+        (self.directory / "src").mkdir()
+        (self.directory / "src" / "input").write_text("source")
+        self.makefile("VPATH = src\nexport VALUE = top\nout: VALUE = local\n"
+                      "out: input\n\t@printf '%s' '$(VALUE) $<' > $@\n")
+        for mode in ((), ("--ninja", "--regen")):
+            _, output = self.direct(*mode, "--explain", "out")
+            self.assertIn("Prerequisites: src/input", output)
+            self.assertIn("local src/input", output)
+            self.assertFalse((self.directory / "out").exists())
+
+    def test_explain_option_value_is_part_of_regeneration_identity(self):
+        # A Makefile can itself be named like the diagnostic option.
+        (self.directory / "--explain").write_text("all:\n\t@:\n")
+        args = ("--ninja", "--regen", "-f", "--explain", "all")
+        self.direct(*args)
+        _, output = self.direct(*args, "--explain", "--explain")
+        self.assertIn("Regeneration: recorded inputs unchanged", output)
+
+    def test_explain_requires_current_generated_makefiles(self):
+        self.makefile("include generated.mk\nall:\n\t@touch ran\n"
+                      "generated.mk:\n\t@printf 'X = value\\n' > $@\n")
+        status, output = self.direct("--explain", "all", success=False)
+        self.assertNotEqual(status, 0)
+        self.assertIn("generated Makefiles need rebuilding", output)
+        self.assertFalse((self.directory / "generated.mk").exists())
+        self.assertFalse((self.directory / "ran").exists())
+
+    def test_strict_compat_rejects_known_gaps_with_source(self):
+        self.makefile(".NOTINTERMEDIATE: out\nall:\n\t@:\n")
+        for mode in ((), ("--ninja",)):
+            status, output = self.direct(*mode, "--strict-compat", success=False)
+            self.assertNotEqual(status, 0)
+            self.assertIn("Makefile:1:", output)
+            self.assertIn("--strict-compat: .NOTINTERMEDIATE", output)
+        self.makefile("all: temp\n.INTERMEDIATE: temp\ntemp:\n\t@touch $@\n")
+        self.direct("--strict-compat", "all")
+        self.assertFalse((self.directory / "temp").exists())
+        for extra in ((), ("--explain",)):
+            status, output = self.direct("--ninja", "--strict-compat", *extra,
+                                         "all", success=False)
+            self.assertNotEqual(status, 0)
+            self.assertIn("intermediate target 'temp'", output)
+        self.assertFalse((self.directory / "build.ninja").exists())
+
+    def test_strict_compat_rejects_recipe_eval_and_preserves_graph(self):
+        self.makefile("all:\n\t@:\n")
+        self.direct("--ninja", "--regen")
+        before = (self.directory / ".kati_stamp").read_bytes()
+        self.makefile("all:\n\t$(eval X := changed)\n\t@printf '$(X)' > result\n")
+        status, output = self.direct("--ninja", "--strict-compat", success=False)
+        self.assertNotEqual(status, 0)
+        self.assertIn("Makefile:2:", output)
+        self.assertIn("$(eval) in a recipe", output)
+        self.assertEqual((self.directory / ".kati_stamp").read_bytes(), before)
+        self.direct("--strict-compat")
+        self.assertEqual((self.directory / "result").read_text(), "changed")
+
+    def test_strict_compat_accepts_recursive_builds_and_parse_time_eval(self):
+        self.makefile("$(eval VALUE := preserved)\nall:\n\t@$(MAKE) child\n"
+                      "child:\n\t@printf '$(VALUE)' > result\n")
+        self.direct("--strict-compat", "-j2")
+        self.assertEqual((self.directory / "result").read_text(), "preserved")
+        (self.directory / "result").unlink()
+        self.direct("--ninja", "--regen", "--strict-compat")
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "result").read_text(), "preserved")
+
+    def test_strict_compat_propagates_to_recursive_children(self):
+        self.makefile("all:\n\t@$(MAKE) -f child.mk child\n")
+        (self.directory / "child.mk").write_text(
+            ".NOTINTERMEDIATE: child\nchild:\n\t@touch ran\n")
+        for mode in ("direct", "ninja"):
+            if mode == "direct":
+                status, output = self.direct("--strict-compat", success=False)
+            else:
+                self.direct("--ninja", "--strict-compat")
+                status, output = self.run_command("sh", "./ninja.sh", "-j2",
+                                                  success=False)
+            self.assertNotEqual(status, 0)
+            self.assertIn("child.mk:1:", output)
+            self.assertIn("--strict-compat: .NOTINTERMEDIATE", output)
+            self.assertFalse((self.directory / "ran").exists())
+
+    def test_explain_rejects_conflicting_execution_modes(self):
+        self.makefile("all:\n\t+@touch ran\n")
+        for mode in ("-t", "-n", "-q"):
+            status, output = self.direct("--explain", mode, success=False)
+            self.assertNotEqual(status, 0)
+            self.assertIn("--explain cannot be combined", output)
+        status, output = self.direct("build", "--explain", success=False)
+        self.assertNotEqual(status, 0)
+        self.assertIn("use omktr --ninja", output)
+        self.assertFalse((self.directory / "ran").exists())
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="kati-correctness-")
         self.addCleanup(self.temp.cleanup)

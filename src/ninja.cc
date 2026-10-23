@@ -8,6 +8,7 @@
 // Reuse Ninja's default POSIX shell instead of spawning a second shell.
 // Preserve runtime reservation ownership across generated environment files.
 // Clean changed non-precious outputs before interrupted timestamp guards recur.
+// Reject known Ninja compatibility gaps before publishing a strict graph.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -248,8 +249,8 @@ class NinjaGenerator {
                 const std::string& orig_args) {
     if (g_flags.ninja_dir && !EnsureDirectory(g_flags.ninja_dir))
       ERROR("*** cannot create Ninja output directory: %s", g_flags.ninja_dir);
-    unlink(GetNinjaStampFilename().c_str());
     PopulateNinjaNodes(nodes);
+    unlink(GetNinjaStampFilename().c_str());
     GenerateNinja();
     GenerateShell();
     GenerateStamp(orig_args);

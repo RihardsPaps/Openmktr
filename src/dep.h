@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Retain the originating rule separately from its recipe diagnostic location.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -93,6 +94,7 @@ struct DepNode {
   Var* ninja_pool_var;
   Var* tags_var;
   Symbol output_pattern;
+  Loc rule_loc;
   Loc loc;
 };
 
