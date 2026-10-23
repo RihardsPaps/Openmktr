@@ -69,6 +69,13 @@ reference executable. Some fixtures intentionally return a nonzero status.
 The snapshot harness separately tracks existing crashes in
 [known_crashes.json](tests/known_crashes.json).
 
+The GNU-free `python tests/incremental_campaign.py` checks the differential
+campaign's failure detection. CI and release qualification also run a separate
+[external incremental comparison](validation/incremental/README.md) with GNU Make
+as the oracle. Its comparison image is separate from the portable image. Missed
+rebuilds and stale artifacts block release; unnecessary work is a performance
+defect. The existing correctness and snapshot suites remain required.
+
 If Docker, Chimera, or a required tool is unavailable, report the checks you
 actually ran and the limitation. Inspect CI through the GitHub integration when
 available.

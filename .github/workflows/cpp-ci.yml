@@ -1,6 +1,7 @@
 # FORK MODIFICATION NOTICE (2026)
 # Changed by the Openmktr fork, maintained by Rihards Paps and
 # Haralds Paps. Adapted build, CI, or repository configuration for the GNU-free fork.
+# Added an isolated external differential incremental campaign gate.
 # Upstream material retains its Apache-2.0 terms. Fork modifications are
 # covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 # at the repository root. Original notices below remain applicable.
@@ -39,6 +40,26 @@ jobs:
         run: |
           set -o pipefail
           docker run --rm openmktr-test 2>&1 | tee tests.log
+      - name: Check incremental campaign harness without GNU dependencies
+        run: docker run --rm openmktr-test python tests/incremental_campaign.py
+      - name: Compare incremental builds with external GNU Make
+        shell: sh
+        run: |
+          docker build -f validation/incremental/Dockerfile -t openmktr-incremental .
+          mkdir -p incremental-evidence
+          status=0
+          docker run --rm -v "$PWD/incremental-evidence:/evidence" openmktr-incremental || status=$?
+          if [ "$status" -eq 3 ]; then
+            echo '::warning::Incremental campaign found unnecessary rebuilding; see evidence'
+          elif [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: incremental-evidence
+          path: incremental-evidence/
+          if-no-files-found: ignore
       - name: Run sanitizer checks in Chimera
         run: |
           set -o pipefail

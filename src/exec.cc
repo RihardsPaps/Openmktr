@@ -4,6 +4,7 @@
 // Changed build execution, evaluation, or portability for this fork.
 // Allow independent recursive recipes to share the existing FIFO job budget.
 // Retain recursive serialization when the inherited FIFO cannot be used.
+// Remove changed non-precious recipe outputs on build interruption.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -666,10 +667,12 @@ class Executor {
 
     bool node_failed = false;
     bool ran_recipe = false;
+    const std::string output_stamp = GetOutputStamp(n.output.str());
     for (const Command& command : commands) {
       if (command.double_colon_group != static_cast<size_t>(-1))
         needs_build_.store(true, std::memory_order_relaxed);
-      if (cancel_requested_.load(std::memory_order_relaxed)) {
+      if (cancel_requested_.load(std::memory_order_relaxed) ||
+          GetBuildSignal() != 0) {
         node_failed = true;
         break;
       }
@@ -745,8 +748,11 @@ class Executor {
                                command.unset_environment);
         ReleaseJob();
         ran_recipe = true;
-        if (result != 0) {
-          if (command.ignore_error) {
+        const bool interrupted = GetBuildSignal() != 0 || WIFSIGNALED(result);
+        if (interrupted && !n.precious)
+          DeleteChangedOutput(n.output.str(), output_stamp);
+        if (result != 0 || interrupted) {
+          if (command.ignore_error && !interrupted) {
             fprintf(stderr, "[%s] Error %d (ignored)\n", command.output.c_str(),
                     CommandExitStatus(result));
           } else {
@@ -877,7 +883,9 @@ class Executor {
     return needs_build_.load(std::memory_order_relaxed);
   }
 
-  bool Failed() const { return failed_.load(std::memory_order_relaxed); }
+  bool Failed() const {
+    return failed_.load(std::memory_order_relaxed) || GetBuildSignal() != 0;
+  }
 
   bool IsWhatIf(Symbol output) const {
     const std::string name(TrimLeadingCurdir(output.str()));
@@ -1001,6 +1009,7 @@ bool IsRecursiveKatiCommand(const std::string& command) {
 ExecResult Exec(const std::vector<NamedDepNode>& roots,
                 Evaluator* ev,
                 bool parallel) {
+  ScopedBuildSignals signals;
   for (const auto& root : roots) {
     if (root.second->is_notparallel) {
       parallel = false;

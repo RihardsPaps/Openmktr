@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Expose native output stamps for generated recipes' interruption cleanup.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -1236,6 +1237,13 @@ int main(int argc, char* argv[]) {
       return 0;
     } else if (!strcmp(argv[1], "--internal-newer-inputs")) {
       return HandleNewerInputs(argc, argv);
+    } else if (!strcmp(argv[1], "--internal-output-stamp") && argc == 3) {
+      puts(GetOutputStamp(argv[2]).c_str());
+      return 0;
+    } else if (!strcmp(argv[1], "--internal-delete-changed-output") &&
+               argc == 4) {
+      DeleteChangedOutput(argv[2], argv[3]);
+      return 0;
     } else if (!strcmp(argv[1], "--internal-low-resolution-up-to-date")) {
       return HandleLowResolutionUpToDate(argc, argv);
     } else if (!strcmp(argv[1], "--file-read")) {

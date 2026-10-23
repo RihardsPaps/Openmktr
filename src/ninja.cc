@@ -5,6 +5,7 @@
 // Low-resolution timestamp guards use Openmktr's internal stat helper.
 // Reuse Ninja's default POSIX shell instead of spawning a second shell.
 // Preserve runtime reservation ownership across generated environment files.
+// Clean changed non-precious outputs before interrupted timestamp guards recur.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -700,6 +701,37 @@ class NinjaGenerator {
       // valid shell no-op, including when the leaf-output guard is added.
       if (cmd_buf.empty())
         cmd_buf = ":";
+      // Internal cleanup helpers are ordinary commands, not recursive makes.
+      // Classify the actual recipe before adding those executable references.
+      use_local_pool = IsRecursiveKatiCommand(cmd_buf);
+      if (!node->is_phony && !node->precious && cmd_buf != ":") {
+        // Keep this inside the freshness guards: merely checking an existing
+        // output must not arm cleanup. A separate subshell keeps recipe exit,
+        // exec, errexit and user traps from bypassing the supervising shell.
+        const std::string tool = ShellQuote(GetExecutablePath());
+        const std::string output = ShellQuote(node->output.str());
+        const std::string cleanup = "kati_cleanup_output";
+        std::string supervise = "kati_output_stamp=$$(" + tool +
+                                " --internal-output-stamp " + output +
+                                ") || exit $$?; kati_cleanup_output() { " +
+                                tool + " --internal-delete-changed-output " +
+                                output + " \"$$kati_output_stamp\"; }; ";
+        for (const auto& signal :
+             {std::make_pair("HUP", 129), std::make_pair("INT", 130),
+              std::make_pair("QUIT", 131), std::make_pair("TERM", 143)}) {
+          supervise +=
+              "trap " +
+              ShellQuote(cleanup + "; exit " + std::to_string(signal.second)) +
+              " " + signal.first + "; ";
+        }
+        supervise += "trap " +
+                     ShellQuote(
+                         "kati_recipe_status=$$?; "
+                         "case $$kati_recipe_status in 129|130|131|143) " +
+                         cleanup + ";; esac") +
+                     " 0; ";
+        cmd_buf = supervise + "( " + cmd_buf + " )";
+      }
       if (vpath_output) {
         const std::string output = ShellQuote(node->output.str());
         const std::string provider = ShellQuote(node->vpath_provider.str());
@@ -764,7 +796,6 @@ class NinjaGenerator {
       }
       // Recursive sub-builds remain serialized; recipe exports are prepared by
       // CommandEvaluator for both direct and Ninja execution.
-      use_local_pool = IsRecursiveKatiCommand(cmd_buf);
       // The generated environment snapshot is part of Kati's graph output,
       // but users may invoke Ninja directly instead of using ninja.sh.  Load
       // that snapshot inside every recipe so exported make variables have the
@@ -938,8 +969,21 @@ class NinjaGenerator {
       for (char c : node->output.str())
         directory_marker += c == '/' ? '_' : c;
     }
-    std::string target = EscapeBuildTarget(
-        directory_output ? Intern(directory_marker) : node->output);
+    const bool precious_output =
+        node->precious && !node->is_phony && rule_name != "phony";
+    if (precious_output) {
+      // Ninja's own abort cleanup must never own a .PRECIOUS file. Keep its
+      // command reachable through a synthetic output; the recipe freshness
+      // guard still tests the real file and prevents needless compilation.
+      directory_marker = "__kati_precious_";
+      for (unsigned char c : node->output.str()) {
+        directory_marker += "0123456789abcdef"[c >> 4];
+        directory_marker += "0123456789abcdef"[c & 15];
+      }
+    }
+    std::string target = EscapeBuildTarget(directory_output || precious_output
+                                               ? Intern(directory_marker)
+                                               : node->output);
     out << "build " << target;
     if (!node->implicit_outputs.empty()) {
       out << " |";
@@ -988,7 +1032,7 @@ class NinjaGenerator {
     // declaring that directory as the command output makes interruption try
     // to unlink it (for example, remove(.)). Use a synthetic marker for the
     // command and retain the logical directory as a phony alias.
-    if (directory_output) {
+    if (directory_output || precious_output) {
       out << "build " << EscapeBuildTarget(node->output) << ": phony "
           << EscapeBuildTarget(Intern(directory_marker)) << "\n";
     }
@@ -1353,8 +1397,12 @@ class NinjaGenerator {
     // incremental attempt by racing the same output directory.
     fprintf(fp, "kati_ninja_pid=\"\"\n");
     fprintf(fp, "kati_cleanup() {\n");
+    fprintf(fp, "  trap '' HUP INT TERM\n");
     fprintf(fp,
             "  if [ -n \"$kati_ninja_pid\" ]; then kill -TERM "
+            "\"$kati_ninja_pid\" 2>/dev/null || :; fi\n");
+    fprintf(fp,
+            "  if [ -n \"$kati_ninja_pid\" ]; then wait "
             "\"$kati_ninja_pid\" 2>/dev/null || :; fi\n");
     fprintf(fp,
             "  if [ -n \"${kati_fifo:-}\" ]; then rm -f \"$kati_fifo\"; fi\n");

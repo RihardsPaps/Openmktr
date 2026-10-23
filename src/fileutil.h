@@ -3,6 +3,7 @@
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Expose validation of inherited FIFO jobservers for recursive scheduling.
+// Share signal handling and interrupted-output identity checks across modes.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -25,6 +26,7 @@
 #define FILEUTIL_H_
 
 #include <errno.h>
+#include <signal.h>
 
 #include <functional>
 #include <memory>
@@ -36,6 +38,23 @@
 bool Exists(std::string_view f);
 double GetTimestampFromStat(const struct stat& st);
 double GetTimestamp(std::string_view f);
+
+// Installed before executor workers start and restored after they stop.
+// The handler only records a signal; recipe waiters forward it and reap jobs.
+class ScopedBuildSignals {
+ public:
+  ScopedBuildSignals();
+  ~ScopedBuildSignals();
+  ScopedBuildSignals(const ScopedBuildSignals&) = delete;
+  ScopedBuildSignals& operator=(const ScopedBuildSignals&) = delete;
+
+ private:
+  std::vector<struct sigaction> previous_;
+};
+
+int GetBuildSignal();
+std::string GetOutputStamp(std::string_view path);
+void DeleteChangedOutput(std::string_view path, const std::string& previous);
 
 enum struct RedirectStderr {
   NONE,

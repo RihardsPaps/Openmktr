@@ -3,6 +3,7 @@
 
 import json
 import os
+import signal
 from pathlib import Path
 import subprocess
 import tempfile
@@ -616,11 +617,111 @@ class BuildCorrectness(unittest.TestCase):
         self.assertNotEqual(status, 0)
         self.assertFalse((self.directory / "all").exists())
 
+    def test_interruption_cleans_changed_outputs_and_preserves_precious(self):
+        (self.directory / "worker.py").write_text(
+            "from pathlib import Path\nimport time\n"
+            "if Path('arm').exists():\n"
+            "    if Path('arm').read_text() == 'change':\n"
+            "        Path('result').write_text('partial')\n"
+            "    Path('ready').touch()\n"
+            "    time.sleep(30)\n"
+            "Path('result').write_text(Path('input').read_text())\n")
+        for mode in ("direct", "ninja"):
+            for policy in ("changed", "unchanged", "precious", "new"):
+                with self.subTest(mode=mode, policy=policy):
+                    self.makefile(
+                        (".PRECIOUS: result\n" if policy == "precious" else "") +
+                        "all: result\nresult: input\n\t@python3 worker.py\n")
+                    output = self.directory / "result"
+                    output.write_text("old")
+                    os.utime(output, (time.time() - 10, time.time() - 10))
+                    if policy == "new":
+                        output.unlink()
+                    (self.directory / "input").write_text("complete")
+                    (self.directory / "arm").write_text(
+                        "nochange" if policy == "unchanged" else "change")
+                    ready = self.directory / "ready"
+                    ready.unlink(missing_ok=True)
+                    if mode == "ninja":
+                        self.direct("--ninja", "--regen", "all")
+                        command = ["sh", "./ninja.sh", "-j4"]
+                    else:
+                        command = [str(KATI), "-j4", "all"]
+                    with (self.directory / "interrupted.log").open("wb") as log:
+                        child = subprocess.Popen(command, cwd=self.directory,
+                                                 stdout=log, stderr=log,
+                                                 start_new_session=True)
+                        try:
+                            deadline = time.monotonic() + 10
+                            while not ready.exists() and child.poll() is None:
+                                self.assertLess(time.monotonic(), deadline)
+                                time.sleep(0.02)
+                            self.assertTrue(ready.exists())
+                            os.killpg(child.pid, signal.SIGINT)
+                            self.assertNotEqual(child.wait(timeout=10), 0)
+                        finally:
+                            if child.poll() is None:
+                                os.killpg(child.pid, signal.SIGKILL)
+                                child.wait()
+                    (self.directory / "arm").unlink()
+                    if policy in ("changed", "new"):
+                        self.assertFalse(output.exists())
+                        if mode == "ninja":
+                            self.ninja()
+                        else:
+                            self.direct("all")
+                        self.assertEqual(output.read_text(), "complete")
+                    else:
+                        self.assertEqual(output.read_text(),
+                                         "partial" if policy == "precious" else "old")
+                        if policy == "precious":
+                            stamp = output.stat().st_mtime_ns
+                            if mode == "ninja":
+                                self.ninja()
+                            else:
+                                self.direct("all")
+                            self.assertEqual(output.read_text(), "partial")
+                            self.assertEqual(output.stat().st_mtime_ns, stamp)
+
+    def test_direct_termination_reaches_recipe_descendants(self):
+        self.makefile("all: result\nresult:\n"
+                      "\t@echo partial > result; echo ready > ready; sleep 30\n")
+        child = subprocess.Popen([str(KATI), "-j4", "all"], cwd=self.directory,
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                 start_new_session=True)
+        try:
+            deadline = time.monotonic() + 10
+            while not (self.directory / "ready").exists() and child.poll() is None:
+                self.assertLess(time.monotonic(), deadline)
+                time.sleep(0.02)
+            self.assertTrue((self.directory / "ready").exists())
+            child.send_signal(signal.SIGTERM)
+            output, _ = child.communicate(timeout=10)
+            self.assertNotEqual(child.returncode, 0, output)
+            self.assertFalse((self.directory / "result").exists(), output)
+        finally:
+            if child.poll() is None:
+                os.killpg(child.pid, signal.SIGKILL)
+                child.wait()
+
     def test_failed_ninja_recipe_stays_failed(self):
         self.makefile("all:\n\t@sleep 0.05; echo partial > all; false\n")
         self.direct("--ninja")
         status, _ = self.run_command("sh", "./ninja.sh", "-j1", success=False)
         self.assertNotEqual(status, 0)
+
+    def test_recipe_signal_is_fatal_even_when_error_ignored(self):
+        self.makefile("all: result\nresult:\n"
+                      "\t-@echo partial > result; kill -TERM $$$$\n")
+        for mode in ("direct", "ninja"):
+            with self.subTest(mode=mode):
+                if mode == "ninja":
+                    self.direct("--ninja", "--regen", "all")
+                    status, _ = self.run_command("sh", "./ninja.sh", success=False)
+                else:
+                    status, _ = self.direct("all", success=False)
+                self.assertNotEqual(status, 0)
+                self.assertFalse((self.directory / "result").exists())
 
     def test_target_specific_export(self):
         self.makefile("all: export VALUE = target\nall:\n"
@@ -910,6 +1011,11 @@ class BuildCorrectness(unittest.TestCase):
             "Path(sys.argv[1]).touch()\n", encoding="utf-8",
         )
         self.direct("-j2")
+        self.assertTrue((self.directory / "a").exists())
+        self.assertTrue((self.directory / "b").exists())
+        for name in ("a", "b", "start-a", "start-b"):
+            (self.directory / name).unlink()
+        self.ninja()
         self.assertTrue((self.directory / "a").exists())
         self.assertTrue((self.directory / "b").exists())
 

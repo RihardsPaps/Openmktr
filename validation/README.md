@@ -19,6 +19,18 @@ The WSL campaign host and third-party build recipes can use GNU tools. The
 project's GNU-free build and test guarantee applies to the supported Chimera
 path, as described in [the README](../README.md).
 
+## Differential incremental correctness
+
+[`incremental.py`](incremental.py) compares changed target sets, deterministic
+output hashes against clean GNU Make builds, compiler dependency coverage, and
+unnecessary work in direct and Ninja modes. The [suite guide](incremental/README.md)
+describes all nine controlled scenarios, reusable external-project manifests,
+retained evidence, and the separate comparison image. Missed rebuilds, invalid
+artifacts and incomplete validation block release; excessive rebuilding is
+reported separately as a performance defect. The bundled representative build
+fixtures do not establish incremental correctness for the third-party releases
+in the existing matrix. Qualify their project adapters before making that claim.
+
 ## Benchmark clean builds for issue 37
 
 [`benchmark_issue37.py`](benchmark_issue37.py) compares external GNU Make and
