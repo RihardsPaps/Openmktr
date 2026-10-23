@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed implicit pattern matching, build execution, and portability.
+// Diagnose unsupported special targets and intermediate lifetimes on request.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -428,6 +429,7 @@ struct RuleMerger {
   }
 
   void FillDepNodeLoc(const Rule* r, DepNode* n) const {
+    n->rule_loc = r->loc;
     n->loc = r->loc;
     if (!r->cmds.empty() && r->cmd_lineno)
       n->loc.lineno = r->cmd_lineno;
@@ -456,8 +458,10 @@ struct RuleMerger {
       if (r == primary_rule)
         continue;
       FillDepNodeFromRule(output, r, n);
-      if (n->loc.filename == NULL)
+      if (n->loc.filename == NULL) {
+        n->rule_loc = r->loc;
         n->loc = r->loc;
+      }
     }
 
     if (is_double_colon) {
@@ -798,6 +802,12 @@ class DepBuilder {
     Loc loc;
     std::vector<Symbol> targets;
 
+    if (g_flags.strict_compat &&
+        GetRuleInputs(Intern(".NOTINTERMEDIATE"), &targets, &loc))
+      ERROR_LOC(loc,
+                "--strict-compat: .NOTINTERMEDIATE is not implemented; "
+                "use explicit .SECONDARY targets instead");
+
     auto normalize_special_target = [](Symbol target) {
       const std::string_view trimmed = TrimLeadingCurdir(target.str());
       const bool current_directory = IsCurrentDirectoryPath(target.str());
@@ -894,6 +904,8 @@ class DepBuilder {
           (notparallel_ || notparallel_targets_.size() != 0))
         continue;
       if (GetRuleInputs(Intern(*p), &targets, &loc)) {
+        if (g_flags.strict_compat)
+          ERROR_LOC(loc, "--strict-compat: unsupported special target %s", *p);
         WARN_LOC(loc, "kati doesn't support %s", *p);
       }
     }
@@ -1908,6 +1920,7 @@ class DepBuilder {
       if (default_rule_) {
         n->cmds = default_rule_->cmds;
         n->loc = default_rule_->loc;
+        n->rule_loc = default_rule_->loc;
         if (!n->cmds.empty() && default_rule_->cmd_lineno)
           n->loc.lineno = default_rule_->cmd_lineno;
         n->has_rule = true;
@@ -1987,6 +2000,14 @@ class DepBuilder {
         !::Exists(n->output.str()) && !n->precious && !secondary_all_ &&
         !secondary_.exists(n->lexical_output))
       n->intermediate = true;
+
+    if (g_flags.strict_compat && g_flags.generate_ninja && n->intermediate)
+      ERROR_LOC(n->loc,
+                "--strict-compat: intermediate target '%s' requires Make's "
+                "intermediate-file lifetime semantics; Ninja retains these "
+                "outputs. Use direct mode or explicitly mark retained "
+                "outputs .SECONDARY.",
+                n->lexical_output.c_str());
 
     // A target-specific rule can provide the commands while a suffix rule
     // provides the source relationship.  GNU make still defines $* for this

@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Add build explanations and opt-in compatibility diagnostics.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -55,6 +56,9 @@ struct Flags {
   bool is_syntax_check_only;
   bool regen;
   bool regen_debug;
+  bool explain = false;
+  bool strict_compat = false;
+  std::vector<int> explain_arg_indices;
   bool regen_ignoring_kati_binary;
   bool use_find_emulator;
   bool color_warnings;

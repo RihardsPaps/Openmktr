@@ -3,6 +3,7 @@
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
+// Parse explanation and strict compatibility options.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -219,6 +220,8 @@ void Flags::Parse(int argc, char** argv) {
         no_builtin_rules = true;
       else if (tok == "--environment-overrides")
         environment_overrides = true;
+      else if (tok == "--strict-compat")
+        strict_compat = true;
       if (tok == "-I" || tok == "--include-dir" || tok == "--include") {
         if (i + 1 < makeflags_tokens.size())
           include_dirs.push_back(makeflags_tokens[++i]);
@@ -404,6 +407,12 @@ void Flags::Parse(int argc, char** argv) {
       regen = true;
     } else if (!strcmp(arg, "--regen_debug")) {
       regen_debug = true;
+    } else if (!strcmp(arg, "--explain")) {
+      explain = true;
+      explain_arg_indices.push_back(i);
+      should_propagate = false;
+    } else if (!strcmp(arg, "--strict-compat")) {
+      strict_compat = true;
     } else if (!strcmp(arg, "--regen_ignoring_kati_binary")) {
       regen_ignoring_kati_binary = true;
     } else if (!strcmp(arg, "--dump_kati_stamp")) {
@@ -582,5 +591,13 @@ void Flags::Parse(int argc, char** argv) {
     ERROR(
         "--variable_assignment_trace_filter is valid only together with "
         "--dump_variable_assignment_trace");
+  }
+  if (explain) {
+    if (is_touch || is_dry_run || is_question || is_syntax_check_only ||
+        dump_kati_stamp || generate_empty_ninja || gen_all_targets)
+      ERROR("--explain cannot be combined with execution or dump modes");
+    // Use the question-mode scheduler without running even '+' recipes.
+    is_question = true;
+    regen_debug = true;
   }
 }

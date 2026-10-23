@@ -3,6 +3,7 @@
 // Haralds Paps.
 // Changed pattern substitution, build execution, evaluation, and portability.
 // Preserve observable evaluation output when reusing generated graphs.
+// Reject recipe-time eval in strict Ninja compatibility mode.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -510,6 +511,12 @@ void ValueFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
 }
 
 void EvalFunc(const std::vector<Value*>& args, Evaluator* ev, std::string*) {
+  if (g_flags.strict_compat && g_flags.generate_ninja &&
+      ev->IsEvaluatingCommand())
+    ev->Error(
+        "--strict-compat: $(eval) in a recipe changes Make state at "
+        "execution time; Ninja expands recipes during conversion. "
+        "Use direct mode or move the eval outside the recipe.");
   // TODO: eval leaks everything... for now.
   // const string text = args[0]->Eval(ev);
   ev->CheckStack();

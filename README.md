@@ -302,6 +302,8 @@ the working directory for the build's recipes.
 | `--regen` | Check recorded inputs before reusing a generated graph. |
 | `--recursive_cache` | Cache validated no-op decisions for eligible recursive children. |
 | `--regen_debug` | Enable diagnostics for regeneration checks. |
+| `--explain TARGET` | Explain resolved rules and Make freshness without running recipes. |
+| `--strict-compat` | Reject known constructs whose behavior cannot be preserved in the selected mode. |
 | `--ninja_dir DIR` | Write generated files into the specified directory. |
 | `--version` | Print a Make compatibility banner and the Openmktr source revision. |
 
@@ -445,6 +447,39 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for formatting checks, snapshot updates,
 sanitizer commands, and benchmark guidance.
 
 ## Troubleshooting
+
+Use `omktr --explain target` to inspect the selected rule's Makefile and line,
+recipe location, resolved normal and order-only prerequisites, expanded recipe,
+and freshness decision. The report includes visited prerequisites and identifies
+missing outputs, phony targets, newer prerequisites, planned prerequisite
+updates, independent double-colon groups, and recursive directory recipes.
+Recursive calls are labeled as child builds evaluated at runtime; their graphs
+are not flattened into the parent graph.
+
+For conversion diagnostics, repeat the generation command with `--explain`, for
+example `omktr --ninja --regen --explain all`. This also checks recorded
+regeneration inputs, reports the decision and its cause, and leaves the graph,
+launcher, environment script, and regeneration stamp unchanged. Recipe expansion
+uses Ninja's deferred shell expressions in this mode. Freshness describes Make
+semantics at the time of inspection; Ninja can additionally rebuild for command
+changes, dependency logs, or missing depfiles. Use `sh ninja.sh -d explain target`
+to inspect those scheduler decisions in an already generated graph.
+
+Explanation runs no recipes, including recursive and `+` recipes. Evaluating
+Makefiles and expanding recipes can still run Make functions such as `$(shell)`
+or `$(file)`; regeneration checks can also repeat recorded evaluations. If a
+generated Makefile needs rebuilding, explanation stops with a diagnostic: run a
+normal build first so the report can use its resulting rules. `--explain`
+cannot be combined with `build`, `-n`, `-q`, or `-t`.
+
+Enable `--strict-compat` to turn known compatibility gaps into source-located
+errors. It currently rejects `.NOTINTERMEDIATE` in both modes, and rejects
+intermediate-file lifetime differences and recipe-time `$(eval)` in Ninja mode.
+Use direct execution for those Ninja limitations, or mark deliberately retained
+intermediates with `.SECONDARY`. Parse-time `$(eval)` and recursive builds remain
+supported. Strict mode propagates to recursive Openmktr calls. This is an
+incremental set of checks, not a proof of complete Make compatibility; opaque
+shell recipes and external tool behavior remain outside its coverage.
 
 | Symptom | What to check |
 | --- | --- |

@@ -5,6 +5,7 @@
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
+// Explain graph inputs and scheduler decisions without running recipes.
 // Added an internal timestamp query used by generated Ninja recipes.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
@@ -126,6 +127,8 @@ static int HandleBuild(int argc, char** argv) {
   generation.push_back(nullptr);
   g_flags.Parse(generation.size() - 1, generation.data());
   generation.pop_back();
+  if (g_flags.explain)
+    ERROR("use omktr --ninja --regen --explain TARGET to inspect a build");
   if (g_flags.is_question || g_flags.is_touch || g_flags.is_syntax_check_only ||
       g_flags.generate_empty_ninja || g_flags.dump_kati_stamp) {
     ERROR(
@@ -618,7 +621,7 @@ static void UpdateMakeFlags(Evaluator* ev) {
   };
   if (g_flags.is_dry_run)
     append_option("-n");
-  if (g_flags.is_question)
+  if (g_flags.is_question && !g_flags.explain)
     append_option("-q");
   if (g_flags.keep_going)
     append_option("-k");
@@ -630,6 +633,8 @@ static void UpdateMakeFlags(Evaluator* ev) {
     append_option("-r");
   if (g_flags.environment_overrides)
     append_option("-e");
+  if (g_flags.strict_compat)
+    append_option("--strict-compat");
 
   // Wrappers such as QEMU's Makefile forward this option to Ninja. Replace
   // inherited job limits with the effective limit selected for this process.
@@ -791,7 +796,7 @@ static int Run(const std::vector<Symbol>& targets,
                const std::string& invocation_dir) {
   double start_time = GetTime();
   RecursiveCache recursive_cache(orig_args);
-  if (recursive_cache.Reuse())
+  if (!g_flags.explain && recursive_cache.Reuse())
     return 0;
 
   const bool has_stdin_makefile =
@@ -800,9 +805,13 @@ static int Run(const std::vector<Symbol>& targets,
   // Stdin has no persistent timestamp. Even a real file named '-' cannot
   // establish that the stream supplied to this invocation is unchanged.
   if (!has_stdin_makefile && g_flags.generate_ninja &&
-      (g_flags.regen || g_flags.dump_kati_stamp)) {
+      (g_flags.regen || g_flags.dump_kati_stamp || g_flags.explain)) {
     ScopedTimeReporter tr("regen check time");
-    if (!NeedsRegen(start_time, orig_args)) {
+    const bool needs_regen = NeedsRegen(start_time, orig_args);
+    if (g_flags.explain) {
+      printf("Regeneration: %s\n", needs_regen ? "required (see diagnostics)"
+                                               : "recorded inputs unchanged");
+    } else if (!needs_regen) {
       fprintf(stderr, "No need to regenerate ninja file\n");
       return 0;
     }
@@ -811,6 +820,13 @@ static int Run(const std::vector<Symbol>& targets,
       return 0;
     }
     ClearGlobCache();
+  }
+  if (g_flags.explain) {
+    if (!g_flags.generate_ninja)
+      printf("Regeneration: not applicable in direct mode\n");
+    else if (has_stdin_makefile)
+      printf("Regeneration: required because a Makefile is read from stdin\n");
+    printf("Explanation uses Make freshness decisions; recipes are not run.\n");
   }
 
   std::vector<Stmt*> bootstrap_asts;
@@ -1096,6 +1112,10 @@ static int Run(const std::vector<Symbol>& targets,
           const bool touch_mode = g_flags.is_touch;
           g_flags.is_touch = false;
           include_result = Exec(include_remake_nodes, &ev);
+          if (g_flags.explain && include_result.needs_build)
+            ERROR(
+                "--explain: generated Makefiles need rebuilding; run a "
+                "normal build before explaining the resulting rules");
           g_flags.is_touch = touch_mode;
           if (include_result.failed && !g_flags.keep_going) {
             ev.Finish();
@@ -1209,7 +1229,7 @@ static int Run(const std::vector<Symbol>& targets,
       return 0;
     }
 
-    if (g_flags.generate_ninja) {
+    if (g_flags.generate_ninja && !g_flags.explain) {
       ScopedFrame frame(
           ev.Enter(FrameType::PHASE, "*ninja generation*", Loc()));
 
@@ -1257,7 +1277,17 @@ static int Run(const std::vector<Symbol>& targets,
       ScopedFrame frame(ev.Enter(FrameType::PHASE, "*execution*", Loc()));
       ScopedTimeReporter tr("exec time");
 
-      const ExecResult execution = Exec(nodes, &ev);
+      if (g_flags.explain && g_flags.generate_ninja)
+        ev.set_avoid_io(true);
+      const ExecResult execution = Exec(nodes, &ev, !g_flags.explain);
+
+      if (g_flags.explain) {
+        ev.set_avoid_io(false);
+        ev.Finish();
+        for (Stmt* stmt : bootstrap_asts)
+          delete stmt;
+        return execution.failed ? 1 : 0;
+      }
 
       if (g_flags.is_question) {
         ev.DumpStackStats();
@@ -1403,9 +1433,15 @@ int main(int argc, char* argv[]) {
       return stamp_dump_main(argc, argv);
     }
   }
+  g_flags.Parse(argc, argv);
   std::string orig_args;
   for (int i = 0; i < argc; i++) {
-    if (i)
+    // An explanation checks the same invocation's regeneration stamp.
+    if (std::find(g_flags.explain_arg_indices.begin(),
+                  g_flags.explain_arg_indices.end(),
+                  i) != g_flags.explain_arg_indices.end())
+      continue;
+    if (!orig_args.empty())
       orig_args += ' ';
     // Preserve argument boundaries: ["A=x y", "B=z"] and
     // ["A=x", "y B=z"] must invalidate each other's graph.
@@ -1417,7 +1453,6 @@ int main(int argc, char* argv[]) {
   if (!getcwd(invocation_dir_buf, sizeof(invocation_dir_buf)))
     PERROR("getcwd");
   const std::string invocation_dir(invocation_dir_buf);
-  g_flags.Parse(argc, argv);
   // Direct recursive invocations must inherit the effective local job limit,
   // including a command-line -j override. Ninja's launcher supplies its own
   // shared jobserver; KATI_JOBS also bounds children launched by configure.

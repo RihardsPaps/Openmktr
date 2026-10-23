@@ -5,6 +5,7 @@
 // Allow independent recursive recipes to share the existing FIFO job budget.
 // Retain recursive serialization when the inherited FIFO cannot be used.
 // Remove changed non-precious recipe outputs on build interruption.
+// Report resolved recipes and freshness decisions in explanation mode.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -250,6 +251,84 @@ class Executor {
     return jobs;
   }
 
+  void ExplainNode(const DepNode& n,
+                   double output_ts,
+                   const char* reason,
+                   const std::vector<Command>* expanded = nullptr,
+                   const std::vector<bool>* groups = nullptr) {
+    if (!g_flags.explain)
+      return;
+    std::vector<Command> commands;
+    if (!expanded) {
+      std::lock_guard<std::mutex> lock(eval_mu_);
+      commands = ce_.Eval(n, output_ts);
+      expanded = &commands;
+    }
+    std::lock_guard<std::mutex> lock(output_mu_);
+    const Loc& source = n.rule_loc.filename ? n.rule_loc : n.loc;
+    printf("Target: %s\n  Source: %s:%d\n  Decision: %s\n",
+           n.lexical_output.c_str(),
+           source.filename ? source.filename : "<input>", source.lineno,
+           reason);
+    if (n.vpath_provider.IsValid())
+      printf("  VPATH provider: %s\n", n.vpath_provider.c_str());
+    auto print_inputs = [](const char* label, const auto& inputs) {
+      printf("  %s:", label);
+      for (const auto& input : inputs)
+        printf(" %s", input.first.c_str());
+      printf("\n");
+    };
+    print_inputs("Prerequisites", n.deps);
+    print_inputs("Order-only prerequisites", n.order_onlys);
+    print_inputs("Validations", n.validations);
+    if (groups) {
+      for (size_t group = 0; group < groups->size(); ++group) {
+        printf("  Double-colon group %zu: %s; prerequisites:", group + 1,
+               !(*groups)[group] ? "up to date"
+               : !n.double_colon_group_has_prerequisites[group]
+                   ? "outdated (unconditional)"
+                   : "outdated");
+        for (Symbol input : n.double_colon_group_inputs[group])
+          printf(" %s", input.c_str());
+        printf("\n");
+      }
+    }
+    for (const auto& dep : n.deps) {
+      double timestamp = GetTimestamp(dep.second->output.c_str());
+      {
+        std::lock_guard<std::mutex> state_lock(state_mu_);
+        const auto completed = done_.find(dep.second->output);
+        if (completed != done_.end())
+          timestamp = completed->second.timestamp;
+      }
+      if (std::find(n.low_resolution_inputs.begin(),
+                    n.low_resolution_inputs.end(),
+                    dep.first) != n.low_resolution_inputs.end())
+        timestamp = LowResolutionTimestamp(timestamp);
+      if (dep.second->is_phony || IsWhatIf(dep.second->output) ||
+          timestamp > output_ts) {
+        printf("  Outdated prerequisite: %s (%s)\n", dep.first.c_str(),
+               dep.second->is_phony           ? "phony"
+               : IsWhatIf(dep.second->output) ? "forced by -W"
+                                              : "newer or would be rebuilt");
+      }
+    }
+    if (!n.cmds.empty()) {
+      const Loc& loc = n.loc;
+      printf("  Recipe source: %s:%d\n",
+             loc.filename ? loc.filename : "<input>", loc.lineno);
+    }
+    printf("  Expanded recipe%s:\n", expanded->empty() ? " (empty)" : "");
+    for (const Command& command : *expanded) {
+      printf("    %s\n", command.cmd.c_str());
+      if (IsRecursiveKatiCommand(command.cmd))
+        printf(
+            "    Recursive build: child Makefile evaluated at runtime; "
+            "child graph is not flattened\n");
+    }
+    fflush(stdout);
+  }
+
   bool DependenciesAreCurrent(const DepNode& node,
                               double target_timestamp,
                               std::unordered_set<Symbol>* visiting) {
@@ -376,6 +455,8 @@ class Executor {
       std::unordered_set<Symbol> visited;
       if (parent_ts != kNotExist &&
           DependenciesAreCurrent(*parent_node, parent_ts, &visited)) {
+        ExplainNode(n, output_ts,
+                    "missing intermediate is not needed by current parent");
         {
           std::lock_guard<std::mutex> lock(state_mu_);
           done_.erase(n.output);
@@ -389,6 +470,7 @@ class Executor {
         needed_by ? needed_by : "(null)");
 
     if (!n.has_rule && output_ts == kNotExist && !n.is_phony) {
+      ExplainNode(n, output_ts, "missing input with no producing rule");
       // Several dependency checks can already be in flight when the first
       // fatal error requests cancellation.  Report only that first missing
       // prerequisite unless keep-going mode explicitly asks for all errors.
@@ -497,6 +579,7 @@ class Executor {
     // dependents. Missing targets follow the normal path so this mode does
     // not invent an output file.
     if (IsOldFile(n.output) && output_ts != kNotExist && n.has_rule) {
+      ExplainNode(n, output_ts, "kept unchanged by -o");
       {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] = NodeState{false, output_ts, false, std::thread::id()};
@@ -519,6 +602,7 @@ class Executor {
 
     if (output_ts != kNotExist && output_ts >= latest && !n.is_phony &&
         !output_is_directory && n.double_colon_group_inputs.empty()) {
+      ExplainNode(n, output_ts, "up to date");
       {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] = NodeState{false, output_ts, false, std::thread::id()};
@@ -589,7 +673,7 @@ class Executor {
     std::vector<Command> commands;
     {
       std::lock_guard<std::mutex> lock(eval_mu_);
-      if (group_needs_build.empty()) {
+      if (group_needs_build.empty() || g_flags.explain) {
         commands = ce_.Eval(n, output_ts);
       } else {
         for (size_t group = 0; group < group_needs_build.size(); ++group) {
@@ -612,6 +696,7 @@ class Executor {
         std::none_of(commands.begin(), commands.end(), [](const Command& c) {
           return IsRecursiveKatiCommand(c.cmd);
         })) {
+      ExplainNode(n, output_ts, "up to date (directory)", &commands);
       {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] = NodeState{false, output_ts, false, std::thread::id()};
@@ -627,9 +712,9 @@ class Executor {
         (output_ts == kNotExist ||
          (n.vpath_provider.IsValid() && !n.cmds.empty() &&
           GetTimestamp(n.output.c_str()) == kNotExist));
-    const double logical_ts = missing_empty_rule
-                                  ? std::numeric_limits<double>::infinity()
-                                  : output_ts;
+    double logical_ts = missing_empty_rule
+                            ? std::numeric_limits<double>::infinity()
+                            : output_ts;
 
     if (n.vpath_provider.IsValid() && (n.is_phony || !n.cmds.empty())) {
       n.vpath_discarded.store(true, std::memory_order_release);
@@ -646,8 +731,23 @@ class Executor {
                       [](bool needed) { return needed; });
       if (n.is_phony ||
           (!commands.empty() &&
-           (n.double_colon_group_inputs.empty() || any_group_needs_build)))
+           (n.double_colon_group_inputs.empty() || any_group_needs_build))) {
         needs_build_.store(true, std::memory_order_relaxed);
+        if (g_flags.explain)
+          logical_ts = std::numeric_limits<double>::infinity();
+      }
+      const char* reason =
+          n.is_phony               ? "outdated: phony target"
+          : output_ts == kNotExist ? "outdated: output is missing"
+          : !group_needs_build.empty()
+              ? (any_group_needs_build
+                     ? "outdated: double-colon group is unconditional or has "
+                       "an outdated prerequisite"
+                     : "up to date: all double-colon groups are current")
+          : output_ts < latest
+              ? "outdated: prerequisite is newer or would be rebuilt"
+              : "outdated: recursive directory recipe";
+      ExplainNode(n, output_ts, reason, &commands, &group_needs_build);
       {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] =
@@ -1009,6 +1109,8 @@ bool IsRecursiveKatiCommand(const std::string& command) {
 ExecResult Exec(const std::vector<NamedDepNode>& roots,
                 Evaluator* ev,
                 bool parallel) {
+  if (g_flags.explain)
+    parallel = false;
   ScopedBuildSignals signals;
   for (const auto& root : roots) {
     if (root.second->is_notparallel) {
@@ -1039,7 +1141,7 @@ ExecResult Exec(const std::vector<NamedDepNode>& roots,
       pending.push_back(dep.second);
   }
   const char* kati_verbose = getenv("KATI_VERBOSE");
-  if (executor.Count() == 0 && !g_flags.is_silent_mode &&
+  if (executor.Count() == 0 && !g_flags.explain && !g_flags.is_silent_mode &&
       !(kati_verbose != nullptr && std::string_view(kati_verbose) == "1")) {
     for (auto const& root : roots) {
       printf("kati: Nothing to be done for `%s'.\n", root.first.c_str());
