@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: MPL-2.0
+name: Optional external compatibility and benchmarks
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/compatibility.yml'
+      - 'validation/compatibility/**'
+      - 'tests/ninja_jobserver.py'
+      - 'tests/bench.py'
+
+permissions:
+  contents: read
+
+jobs:
+  environments:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [alpine, gentoo]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build independent toolchain image
+        run: |
+          set -o pipefail
+          docker build --build-arg OMKTR_SOURCE_REVISION=${{ github.sha }} -f validation/compatibility/Dockerfile.${{ matrix.environment }} -t openmktr-compat . 2>&1 | tee build.log
+      - name: Test direct, generated, recursive and Ninja FIFO scheduling
+        run: |
+          set -o pipefail
+          docker run --rm openmktr-compat 2>&1 | tee tests.log
+      - name: Publish phase and end-to-end benchmark samples
+        run: docker run --rm openmktr-compat python3 tests/bench.py ./omktr > benchmark.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compatibility-${{ matrix.environment }}
+          path: |
+            *.log
+            benchmark.json
+  gnu-reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t openmktr-test .
+      - run: docker build -f validation/incremental/Dockerfile -t openmktr-reference .
+      - name: Compare serial and parallel incremental builds
+        shell: sh
+        run: |
+          mkdir -p evidence
+          for jobs in 1 4; do
+            status=0
+            docker run --rm -v "$PWD/evidence:/evidence" openmktr-reference --make gmake --omktr /workspace/omktr --jobs "$jobs" --output "/evidence/j$jobs" || status=$?
+            if [ "$status" -eq 3 ]; then
+              echo '::warning::Unnecessary rebuilding; inspect evidence'
+            elif [ "$status" -ne 0 ]; then
+              exit "$status"
+            fi
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: optional-gnu-reference
+          path: evidence/

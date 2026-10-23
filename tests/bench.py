@@ -11,9 +11,84 @@ import tempfile
 import time
 
 
+def end_to_end(binary: Path, repeats: int) -> dict:
+    """Time complete invocations and retain paired phase samples.
+
+    This is a synthetic copy workload, not a compiler or release benchmark.
+    Setup, controlled edits, and output validation are outside the timers.
+    """
+    results = {}
+    for scenario in ("clean", "noop", "single_file_change", "graph_change"):
+        samples = []
+        for _ in range(repeats + 2):
+            with tempfile.TemporaryDirectory(prefix="omktr-e2e-") as temp:
+                cwd = Path(temp)
+                (cwd / "configure.py").write_text(
+                    "from pathlib import Path\n"
+                    "Path('config.mk').write_text('CONFIG := initial\\n')\n")
+                (cwd / "Makefile").write_text(
+                    "include config.mk\n.PHONY: all\nall: " +
+                    " ".join(f"out{i}" for i in range(32)) + "\n" +
+                    "".join(f"out{i}: src{i} config.mk\n\t@cp src{i} $@\n"
+                            for i in range(32)))
+                for i in range(32):
+                    (cwd / f"src{i}").write_text(f"input {i}\n")
+                configure = ["python3", "configure.py"]
+                generate = [str(binary), "--ninja", "--regen", "-j4", "all"]
+                execute = ["sh", "./ninja.sh", "-j4"]
+                if scenario != "clean":
+                    for command in (configure, generate, execute):
+                        run(command, cwd)
+                    # Advance beyond every output on coarse timestamp filesystems.
+                    # Waiting and edits are deliberately excluded from measurement.
+                    if scenario != "noop":
+                        latest = max(p.stat().st_mtime_ns for p in cwd.iterdir())
+                        while time.time_ns() <= latest + 1_000_000_000:
+                            time.sleep(0.01)
+                        if scenario == "single_file_change":
+                            (cwd / "src0").write_text("changed input\n")
+                        else:
+                            (cwd / "config.mk").write_text("CONFIG := changed\n")
+                before = {i: (cwd / f"out{i}").stat().st_mtime_ns
+                          for i in range(32)} if scenario != "clean" else {}
+                graph_before = ((cwd / "build.ninja").stat().st_mtime_ns
+                                if scenario != "clean" else None)
+                phases = {}
+                start = time.perf_counter()
+                if scenario == "clean":
+                    phases["configuration"] = run(configure, cwd)[0]
+                phases["graph_generation" if scenario == "clean" else
+                       "regeneration"] = run(generate, cwd)[0]
+                phases["recipe_execution"] = run(execute, cwd)[0]
+                phases["end_to_end"] = time.perf_counter() - start
+                graph_after = (cwd / "build.ninja").stat().st_mtime_ns
+                if scenario in ("noop", "single_file_change"):
+                    assert graph_after == graph_before
+                elif scenario == "graph_change":
+                    assert graph_after > graph_before
+                for i in range(32):
+                    assert (cwd / f"out{i}").read_bytes() == (cwd / f"src{i}").read_bytes()
+                    if scenario == "noop" or (scenario == "single_file_change" and i):
+                        assert (cwd / f"out{i}").stat().st_mtime_ns == before[i]
+                    elif scenario != "clean":
+                        assert (cwd / f"out{i}").stat().st_mtime_ns > before[i]
+                samples.append(phases)
+        samples = samples[2:]
+        results[scenario] = {
+            "samples_seconds": samples,
+            "median_seconds": {phase: statistics.median(s[phase] for s in samples)
+                               for phase in samples[0]},
+        }
+    return results
+
+
 def run(command: list[str], cwd: Path) -> tuple[float, int]:
     start = time.perf_counter()
-    child = subprocess.Popen(command, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith("KATI_") and k not in
+           ("MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES", "MAKELEVEL")}
+    child = subprocess.Popen(command, cwd=cwd, env=env,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     _, status, usage = os.wait4(child.pid, 0)
     child.returncode = os.waitstatus_to_exitcode(status)
     if child.returncode:
@@ -105,6 +180,7 @@ def measure(binary: Path, repeats: int) -> dict:
             "peak_rss_kib": max(value[1] for value in no_op),
         }
         results["binary_bytes"] = binary.stat().st_size
+        results["end_to_end"] = end_to_end(binary, repeats)
         return results
 
 

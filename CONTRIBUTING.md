@@ -140,6 +140,21 @@ Replace `/path/to/baseline/omktr` with the baseline executable. The benchmark
 measures conversion, no-op regeneration, flat and nested parallel execution,
 incremental no-op builds, peak memory, and binary size.
 
+It also reports paired phase samples and complete wall times under `end_to_end`
+for a synthetic 32-output copy workload: configuration plus generation and
+execution for a clean build; regeneration checking plus execution for no-op,
+single-source-change, and included-configuration-change builds. Incremental
+setup and controlled edits are outside the timer. Output contents and unchanged
+mtimes are checked after timing. Each workload discards two warmups and retains
+all measured samples; the total median is computed from per-run totals, not by
+adding phase medians. These small synthetic workloads measure build overhead,
+not compiler throughput or full third-party project performance.
+
+The manually dispatched [optional compatibility workflow](.github/workflows/compatibility.yml)
+publishes these reports and tests Alpine/musl, Gentoo/glibc, Ninja >= 1.13 FIFO
+jobserver interaction, and serial/parallel external GNU Make comparisons.
+See the [lane guide](validation/compatibility/README.md) for scope and local commands.
+
 For the child-graph reuse experiment, run
 `python tests/recursive_bench.py ./omktr`. It compares direct recursion with
 native cached children, including the available CPU affinity by default.

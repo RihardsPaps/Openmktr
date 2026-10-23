@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MPL-2.0
+# External glibc comparison environment, separate from the GNU-free core.
+FROM gentoo/stage3:latest
+# Only the native ABI is needed; avoid optional 32-bit runtime builds.
+RUN mkdir -p /etc/portage/package.use && \
+    printf '%s\n' 'llvm-runtimes/libcxx -abi_x86_32' \
+      'llvm-runtimes/libcxxabi -abi_x86_32' \
+      'llvm-runtimes/libunwind -abi_x86_32' > /etc/portage/package.use/openmktr
+RUN emerge-webrsync && emerge --getbinpkg --jobs=4 \
+      llvm-core/clang llvm-core/lld llvm-runtimes/libcxx dev-build/ninja dev-lang/python
+WORKDIR /workspace
+COPY . .
+ARG OMKTR_SOURCE_REVISION
+ENV OMKTR_SOURCE_REVISION=$OMKTR_SOURCE_REVISION
+RUN . /etc/profile && ninja -j4 omktr tests
+ENTRYPOINT ["sh", "validation/compatibility/gentoo-environment.sh"]
+CMD ["sh", "validation/compatibility/check.sh"]

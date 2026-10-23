@@ -52,8 +52,12 @@ python3 validation/benchmark_issue37.py \
 Repeat with `--project linux`. Every run gets a fresh output directory; use a
 new `--label` when repeating a campaign. The helper preserves logs, archive and
 binary hashes, configuration hashes, artifacts, CPU/wall measurements, and source
-content checks. Configuration, graph generation, and artifact verification are
-outside the execution timer. It rejects generation that compiles additional
+content checks. Configuration, graph generation, and artifact verification remain
+outside the execution timer. Reports also retain the configuration phase,
+`phase_total_wall_seconds` (configuration + generation + execution), and
+`end_to_end_wall_seconds` (elapsed configuration through execution, including
+the intervening configuration hashes and object scans). Final artifact checks
+and smoke tests remain outside both totals. It rejects generation that compiles additional
 object files. Compiler caches are disabled; filesystem caches stay warm.
 
 The default order alternates Make/Ninja and Ninja/Make. `--modes ninja` supports
@@ -61,6 +65,12 @@ candidate rechecks against retained baselines. Optional `--trace-exec` uses
 strace for a separate diagnostic run; traced timings must not be mixed with the
 untraced comparison. Kbuild's recursive evaluation remains part of execution,
 because its generated outer graph invokes child Openmktr processes at runtime.
+
+For repeatable no-op and single-file-change overhead measurements, use
+`tests/bench.py` as described in the [contributor guide](../CONTRIBUTING.md#measure-performance).
+Those are synthetic fixtures, not incremental FFmpeg or Linux measurements.
+Historical results retain their original execution-only meaning; rerun this
+helper to obtain end-to-end totals rather than inferring them from old reports.
 
 The retained [issue 37 measurements](issue37-results.json) identify each measured
 revision and phase. These selected configurations do not reproduce every detail

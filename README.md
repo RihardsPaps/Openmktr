@@ -1,6 +1,7 @@
 > FORK MODIFICATION NOTICE (2026)
 > Added automatic Ninja build usage, locking, and generated-file safety guidance.
 > Added conservative recursive no-op caching and shared Ninja recipe limits.
+> Added optional compatibility lanes and phase/end-to-end benchmark guidance.
 > Changed by the Openmktr fork, maintained by Rihards Paps and
 > Haralds Paps. Rewritten and expanded the fork's overview, build instructions,
 > usage examples, architecture, compatibility guidance, troubleshooting,
@@ -29,8 +30,10 @@ test environment. The source has also been built in Alpine's musl/BusyBox
 environment and Gentoo linux. Openmktr does not depend on Chimera-specific utility interfaces;
 equivalent POSIX tools, including BusyBox, Toybox, or BSD-derived
 implementations, can provide the basic system commands. The full snapshot suite
-remains tied to the reference environment, and other environments are best
-effort until added to CI.
+remains tied to the reference environment. Optional manually dispatched
+[compatibility lanes](validation/compatibility/README.md) exercise Alpine/musl
+and Gentoo/glibc, including Ninja >= 1.13 jobserver behavior; their coverage
+does not replace the reference gate.
 
 | Capability | What you can do |
 | --- | --- |

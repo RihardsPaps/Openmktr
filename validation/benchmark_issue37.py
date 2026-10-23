@@ -2,7 +2,7 @@
 """External Linux build benchmark for issue 37; GNU Make is a comparison tool.
 
 Use unmodified FFmpeg 7.1.1 and Linux 6.12 release archives. Builds and logs
-are retained under --root; graph generation and configuration are untimed.
+are retained under --root; phase and complete clean-build times are reported.
 This campaign helper does not form part of the GNU-free portable test gate.
 """
 
@@ -118,7 +118,8 @@ def main():
                     configure = ["make", *common, "defconfig"]
                     config_files = (".config",)
                     artifacts = ("vmlinux", "arch/x86/boot/bzImage")
-                run(build, build / "configure.log", configure)
+                end_to_end_start = time.monotonic()
+                configuration = run(build, build / "configure.log", configure)
                 configs = {p: digest(build / p) for p in config_files}
                 configured_objects = sorted(str(p.relative_to(build))
                                             for p in build.rglob("*.o"))
@@ -140,9 +141,15 @@ def main():
                 if new_objects:
                     raise RuntimeError(f"Generation compiled objects: {new_objects[:10]}")
                 result = run(build, build / "build.log", command)
+                end_to_end_elapsed = time.monotonic() - end_to_end_start
                 result.update(project=version, jobs=jobs, repeat=repeat + 1,
                               mode=mode, label=args.label, traced=args.trace_exec,
                               config_sha256=configs,
+                              configuration=configuration,
+                              end_to_end_wall_seconds=end_to_end_elapsed,
+                              phase_total_wall_seconds=(configuration["wall_seconds"] +
+                                  (generation["wall_seconds"] if generation else 0) +
+                                  result["wall_seconds"]),
                               generation=generation, configured_objects=configured_objects,
                               artifacts={p: dict(bytes=(build / p).stat().st_size,
                                                  sha256=digest(build / p))

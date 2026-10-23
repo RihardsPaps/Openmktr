@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: MPL-2.0
+# Independent musl/BusyBox toolchain; no GNU reference tools in this image.
+FROM alpine:3.23
+RUN apk add --no-cache clang lld libc++-dev llvm-libunwind-dev ninja-build python3
+ENV PATH=/usr/lib/ninja-build/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+RUN ln -s /usr/bin/python3 /usr/local/bin/python
+WORKDIR /workspace
+COPY . .
+ARG OMKTR_SOURCE_REVISION
+ENV OMKTR_SOURCE_REVISION=$OMKTR_SOURCE_REVISION
+RUN ninja -j4 omktr tests
+CMD ["sh", "validation/compatibility/check.sh"]
