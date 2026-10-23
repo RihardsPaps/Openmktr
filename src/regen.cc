@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -158,7 +159,7 @@ class StampChecker {
     }
     ScopedFile sfp(fp);
 
-    double gen_time;
+    double gen_time = 0;
     size_t r = fread(&gen_time, sizeof(gen_time), 1, fp);
     gen_time_ = gen_time;
     if (r != 1) {
@@ -167,21 +168,27 @@ class StampChecker {
     }
     char magic[4];
     if (fread(magic, 1, sizeof(magic), fp) != sizeof(magic) ||
-        memcmp(magic, "KAT2", sizeof(magic)) != 0) {
+        memcmp(magic, "KAT3", sizeof(magic)) != 0) {
       fprintf(stderr, "obsolete kati_stamp, regenerating...\n");
       RETURN_TRUE;
     }
     if (g_flags.regen_debug)
       printf("Generated time: %f\n", gen_time);
 
+    int requires_evaluation = LOAD_INT(fp);
+    if (requires_evaluation != 0)
+      RETURN_TRUE;
+
     std::string s, s2;
     int num_files = LOAD_INT(fp);
     for (int i = 0; i < num_files; i++) {
       LOAD_STRING(fp, &s);
+      LOAD_STRING(fp, &s2);
       double ts = GetTimestamp(s);
       // GetTimestamp returns < 0 when there's an error reading the file, like
       // when its been removed.
-      if (gen_time < ts || ts < 0) {
+      if (gen_time < ts || ts < 0 || GetFileIdentity(s) != s2 ||
+          s2 == "unreadable") {
         if (g_flags.regen_ignoring_kati_binary) {
           if (s == GetExecutablePath()) {
             fprintf(stderr, "%s was modified, ignored.\n", s.c_str());

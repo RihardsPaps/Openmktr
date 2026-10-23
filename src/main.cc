@@ -4,6 +4,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Added an internal timestamp query used by generated Ninja recipes.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
@@ -52,6 +53,7 @@
 #include "log.h"
 #include "ninja.h"
 #include "parser.h"
+#include "recursive_cache.h"
 #include "regen.h"
 #include "regen_dump.h"
 #include "rule.h"
@@ -788,6 +790,9 @@ static int Run(const std::vector<Symbol>& targets,
                const std::string& orig_args,
                const std::string& invocation_dir) {
   double start_time = GetTime();
+  RecursiveCache recursive_cache(orig_args);
+  if (recursive_cache.Reuse())
+    return 0;
 
   const bool has_stdin_makefile =
       std::any_of(g_flags.makefiles.begin(), g_flags.makefiles.end(),
@@ -1018,6 +1023,9 @@ static int Run(const std::vector<Symbol>& targets,
       for (const auto& include : include_nodes) {
         if (!include.second->has_rule)
           continue;
+        // The next invocation must remake includes before it can establish
+        // graph validity, even if the include itself has not changed yet.
+        MakefileCacheManager::Get().RequireEvaluation();
         const DepNode* makefile_node = include.second;
         bool unconditional = false;
         for (size_t group = 0;
@@ -1270,6 +1278,7 @@ static int Run(const std::vector<Symbol>& targets,
 
         return 1;
       }
+      recursive_cache.Save(nodes, &ev);
     }
 
     ev.DumpStackStats();
@@ -1357,7 +1366,18 @@ int main(int argc, char* argv[]) {
   }
 
   if (argc >= 2) {
-    if (!strcmp(argv[1], "--realpath")) {
+    if (!strcmp(argv[1], "--internal-run-recipe") && argc == 5) {
+      ScopedBuildSignals signals;
+      const int status =
+          RunCommand(argv[2], argv[3], argv[4], RedirectStderr::NONE, nullptr,
+                     true, [](std::string_view output) {
+                       fwrite(output.data(), 1, output.size(), stdout);
+                       fflush(stdout);
+                     });
+      return WIFEXITED(status)     ? WEXITSTATUS(status)
+             : WIFSIGNALED(status) ? 128 + WTERMSIG(status)
+                                   : 1;
+    } else if (!strcmp(argv[1], "--realpath")) {
       HandleRealpath(argc - 2, argv + 2);
       return 0;
     } else if (!strcmp(argv[1], "--internal-newer-inputs")) {

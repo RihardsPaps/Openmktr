@@ -1,5 +1,6 @@
 > FORK MODIFICATION NOTICE (2026)
 > Added automatic Ninja build usage, locking, and generated-file safety guidance.
+> Added conservative recursive no-op caching and shared Ninja recipe limits.
 > Changed by the Openmktr fork, maintained by Rihards Paps and
 > Haralds Paps. Rewritten and expanded the fork's overview, build instructions,
 > usage examples, architecture, compatibility guidance, troubleshooting,
@@ -299,6 +300,7 @@ the working directory for the build's recipes.
 | `--ninja` | Generate a Ninja graph, environment script, and launcher. |
 | `build` | First argument: validate or generate a graph in `.openmktr/`, then run Ninja. |
 | `--regen` | Check recorded inputs before reusing a generated graph. |
+| `--recursive_cache` | Cache validated no-op decisions for eligible recursive children. |
 | `--regen_debug` | Enable diagnostics for regeneration checks. |
 | `--ninja_dir DIR` | Write generated files into the specified directory. |
 | `--version` | Print a Make compatibility banner and the Openmktr source revision. |
@@ -341,6 +343,25 @@ flowchart LR
 Recursive recipes using `$(MAKE)` invoke Openmktr through its executable path.
 Child builds evaluate their own Makefiles at execution time. In Ninja mode,
 the generated launcher supplies the shared Openmktr jobserver for those children.
+
+For repeated recursive builds, opt into conservative child no-op caching:
+
+```sh
+omktr build --recursive_cache -j32 all
+```
+
+The option also works with direct execution and propagates to child Openmktr
+processes. Eligible unchanged children reuse a validated no-op certificate in
+`.openmktr-recursive-cache`, avoiding parsing and evaluation. Changed inputs,
+missing outputs, dynamic evaluation, generated includes, unsupported graph
+features, or invalid cache data fall back to normal evaluation and execution.
+This first version caches no-op decisions; builds that need recipes use the
+existing direct scheduler. It does not flatten child graphs. See the
+[cache design and measurements](docs/recursive-cache.md) for eligibility and costs.
+
+Ordinary generated Ninja recipes now acquire the shared FIFO budget, including
+recipes in nested Ninja builds. A child Ninja borrowing one inherited reservation
+runs serially to prevent separate helper processes from claiming that slot twice.
 
 ## Compatibility and scope
 

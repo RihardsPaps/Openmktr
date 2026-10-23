@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -378,6 +379,9 @@ void Flags::Parse(int argc, char** argv) {
       enable_debug = true;
     } else if (!strcmp(arg, "--kati_stats")) {
       enable_stat_logs = true;
+    } else if (!strcmp(arg, "--recursive_cache")) {
+      setenv("OMKTR_RECURSIVE_CACHE", "1", 1);
+      should_propagate = false;
     } else if (!strcmp(arg, "--ninja_stats")) {
       ninja_stats = true;
       should_propagate = false;

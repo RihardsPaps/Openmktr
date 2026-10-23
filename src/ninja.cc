@@ -3,6 +3,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Low-resolution timestamp guards use Openmktr's internal stat helper.
 // Reuse Ninja's default POSIX shell instead of spawning a second shell.
 // Preserve runtime reservation ownership across generated environment files.
@@ -851,6 +852,19 @@ class NinjaGenerator {
       }
       std::string depfile;
       const bool has_depfile = GetDepfile(node, &cmd_buf, &depfile);
+      // Every ordinary Ninja recipe participates in the same budget as
+      // recursive executors. A recursive boundary holds no token itself.
+      // The helper forwards one live reservation to indirect child builds.
+      const bool token_recipe =
+          !use_local_pool &&
+          !(commands.size() == 1 && commands.front().cmd == ":");
+      const bool recipe_in_rsp = cmd_buf.size() > 100 * 1000;
+      if (token_recipe && !recipe_in_rsp) {
+        cmd_buf = "cd " + ShellQuote(working_dir_) + " && " +
+                  EscapeNinja(ShellQuote(GetExecutablePath())) +
+                  " --internal-run-recipe " + ShellQuote(command_shell) + " " +
+                  ShellQuote(command_shellflag) + " " + ShellQuote(cmd_buf);
+      }
       std::string rule_key = description;
       rule_key += '\0';
       rule_key += cmd_buf;
@@ -884,16 +898,25 @@ class NinjaGenerator {
 
         // It seems Linux is OK with ~130kB and Mac's limit is ~250kB.
         // TODO: Find this number automatically.
-        if (cmd_buf.size() > 100 * 1000) {
+        if (recipe_in_rsp || cmd_buf.size() > 100 * 1000) {
           out << " rspfile = $out.rsp\n";
           out << " rspfile_content = " << cmd_buf << "\n";
           std::string rspfile = node->output.str() + ".rsp";
           if (rspfile.front() != '/')
             rspfile = "./" + rspfile;
           const std::string source_rspfile = ". " + ShellQuote(rspfile);
-          out << " command = " << command_shell << ' ' << command_shellflag
-              << ' ' << ShellQuote(source_rspfile) << "\n";
-        } else if (command_shell == "/bin/sh" && command_shellflag == "-c") {
+          if (token_recipe && recipe_in_rsp) {
+            out << " command = " << EscapeNinja(ShellQuote(GetExecutablePath()))
+                << " --internal-run-recipe " << ShellQuote(command_shell) << ' '
+                << ShellQuote(command_shellflag) << ' '
+                << ShellQuote(source_rspfile) << "\n";
+          } else {
+            out << " command = " << (token_recipe ? "/bin/sh" : command_shell)
+                << ' ' << (token_recipe ? "-c" : command_shellflag) << ' '
+                << ShellQuote(source_rspfile) << "\n";
+          }
+        } else if (token_recipe ||
+                   (command_shell == "/bin/sh" && command_shellflag == "-c")) {
           // Ninja already runs commands through /bin/sh -c on POSIX hosts.
           // A second identical shell adds a process launch to every recipe.
           // cmd_buf is already escaped for Ninja; let its shell parse the
@@ -1413,6 +1436,13 @@ class NinjaGenerator {
             "  if [ -n \"${kati_fifo:-}\" ]; then rm -f \"$kati_fifo\"; fi\n");
     fprintf(fp, "}\n");
     fprintf(fp, "trap 'kati_cleanup; exit 129' HUP INT TERM\n");
+    // A reservation belongs to one parent recipe. Separate Ninja helper
+    // processes cannot share the executor's atomic reservation owner, so
+    // serialize this child Ninja while borrowing that single slot. Other
+    // recursive executors may still use free FIFO tokens normally.
+    fprintf(fp,
+            "if [ \"${KATI_JOBSERVER_RESERVED:-}\" = 1 ]; then "
+            "set -- \"$@\" -j1; fi\n");
     fprintf(fp, "ninja -f %s ", ShellQuote(GetNinjaFilename()).c_str());
     if (g_flags.remote_num_jobs > 0) {
       fprintf(fp, "-j%d ", g_flags.remote_num_jobs);
@@ -1441,14 +1471,17 @@ class NinjaGenerator {
 
     size_t r = fwrite(&start_time_, sizeof(start_time_), 1, fp);
     CHECK(r == 1);
-    CHECK(fwrite("KAT2", 1, 4, fp) == 4);
+    CHECK(fwrite("KAT3", 1, 4, fp) == 4);
+    DumpInt(fp, MakefileCacheManager::Get().requires_evaluation());
 
     std::unordered_set<std::string> makefiles;
     MakefileCacheManager::Get().GetAllFilenames(&makefiles);
     DumpInt(fp, makefiles.size() + 1);
     DumpString(fp, kati_binary_);
+    DumpString(fp, GetFileIdentity(kati_binary_));
     for (const std::string& makefile : makefiles) {
       DumpString(fp, makefile);
+      DumpString(fp, GetFileIdentity(makefile));
     }
 
     DumpInt(fp, Evaluator::used_undefined_vars().size());

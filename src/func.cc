@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed pattern substitution, build execution, evaluation, and portability.
+// Preserve observable evaluation output when reusing generated graphs.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -938,6 +939,7 @@ void FlavorFunc(const std::vector<Value*>& args,
 }
 
 void InfoFunc(const std::vector<Value*>& args, Evaluator* ev, std::string*) {
+  MakefileCacheManager::Get().RequireEvaluation();
   const std::string&& a = args[0]->Eval(ev);
   if (ev->avoid_io()) {
     ev->add_delayed_output_command(
@@ -949,6 +951,7 @@ void InfoFunc(const std::vector<Value*>& args, Evaluator* ev, std::string*) {
 }
 
 void WarningFunc(const std::vector<Value*>& args, Evaluator* ev, std::string*) {
+  MakefileCacheManager::Get().RequireEvaluation();
   const std::string&& a = args[0]->Eval(ev);
   if (ev->avoid_io()) {
     ev->add_delayed_output_command(StringPrintf(

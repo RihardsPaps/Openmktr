@@ -1,0 +1,80 @@
+{
+  "baseline": {
+    "binary_bytes": 1045472,
+    "convert": {
+      "median_seconds": 0.06242797999993854,
+      "peak_rss_kib": 26076
+    },
+    "direct_recipe_launch_j1": {
+      "median_seconds": 0.012818325999887747,
+      "peak_rss_kib": 25148
+    },
+    "direct_recipe_launch_j4": {
+      "median_seconds": 0.007952900999953272,
+      "peak_rss_kib": 25148
+    },
+    "incremental_noop": {
+      "median_seconds": 0.0013729059999150195,
+      "peak_rss_kib": 25148
+    },
+    "nested_parallel_exec": {
+      "median_seconds": 0.26707547299997714,
+      "peak_rss_kib": 25148
+    },
+    "ninja_recipe_launch_j1": {
+      "median_seconds": 0.6393230690000564,
+      "peak_rss_kib": 25148
+    },
+    "ninja_recipe_launch_j4": {
+      "median_seconds": 0.18008105499984595,
+      "peak_rss_kib": 25148
+    },
+    "noop_regen": {
+      "median_seconds": 0.0009300090000579075,
+      "peak_rss_kib": 25148
+    },
+    "parallel_exec": {
+      "median_seconds": 0.21588463600005525,
+      "peak_rss_kib": 25148
+    }
+  },
+  "current": {
+    "binary_bytes": 1086952,
+    "convert": {
+      "median_seconds": 0.060446249000051466,
+      "peak_rss_kib": 26096
+    },
+    "direct_recipe_launch_j1": {
+      "median_seconds": 0.01294727899994541,
+      "peak_rss_kib": 24604
+    },
+    "direct_recipe_launch_j4": {
+      "median_seconds": 0.007992584999783503,
+      "peak_rss_kib": 24604
+    },
+    "incremental_noop": {
+      "median_seconds": 0.0014015959998232574,
+      "peak_rss_kib": 24604
+    },
+    "nested_parallel_exec": {
+      "median_seconds": 0.21565501700001732,
+      "peak_rss_kib": 24348
+    },
+    "ninja_recipe_launch_j1": {
+      "median_seconds": 0.6372307229999024,
+      "peak_rss_kib": 24604
+    },
+    "ninja_recipe_launch_j4": {
+      "median_seconds": 0.18002767400002995,
+      "peak_rss_kib": 24604
+    },
+    "noop_regen": {
+      "median_seconds": 0.0008486860001539753,
+      "peak_rss_kib": 24348
+    },
+    "parallel_exec": {
+      "median_seconds": 0.2098367789999429,
+      "peak_rss_kib": 24348
+    }
+  }
+}
