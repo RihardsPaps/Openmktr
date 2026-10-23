@@ -4,8 +4,8 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Investigate child graph reuse without changing recursive build semantics.
 
-Compare direct children with explicitly opted-in `omktr build` children below
-the same generated Ninja parent. All workloads live in disposable directories.
+Compare direct children with native no-op caching or explicitly opted-in Ninja
+children below the same parent. All workloads live in disposable directories.
 Recipe occupancy is a lower bound on slot utilization, not FIFO telemetry.
 """
 
@@ -23,22 +23,27 @@ import tempfile
 import time
 
 
-STAT = re.compile(r"^\*kati\*: (eval time|parse file time): ([0-9.]+)(?: / (\d+))?$",
+STAT = re.compile(r"^\*kati\*: (eval time|parse file time|recursive cache (?:lookup|eligibility|save) time): ([0-9.]+)(?: / (\d+))?$",
                   re.MULTILINE)
 
 
 def counters(log):
     result = {"evaluation_passes": 0, "parse_seconds": 0.0,
               "parsed_files": 0, "evaluation_seconds": 0.0,
+              "cache_lookup_seconds": 0.0, "cache_save_seconds": 0.0,
+              "cache_eligibility_seconds": 0.0,
+              "eligibility_reuses": log.count("Recursive cache eligibility reused"),
               "graph_reuses": (log.count("No need to regenerate ninja file") +
                                log.count("Recursive cache hit"))}
     for name, elapsed, count in STAT.findall(log):
         if name == "eval time":
             result["evaluation_passes"] += 1
             result["evaluation_seconds"] += float(elapsed)
-        else:
+        elif name == "parse file time":
             result["parse_seconds"] += float(elapsed)
             result["parsed_files"] += int(count)
+        else:
+            result[f"cache_{name.split()[2]}_seconds"] += float(elapsed)
     return result
 
 
@@ -204,6 +209,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binary", type=Path)
     parser.add_argument("--baseline", type=Path)
+    parser.add_argument("--baseline-cache", action="store_true",
+                        help="also measure cached native builds on a supporting baseline")
     parser.add_argument("--cache-kind", choices=("ninja", "native"), default="native")
     parser.add_argument("--children", type=int, default=8)
     parser.add_argument("--variables", type=int, default=10000)
@@ -237,7 +244,8 @@ def main():
                                                             text=True).strip(),
                          "runs": {}}
         for jobs in args.jobs:
-            modes = (False,) if label == "baseline" and args.cache_kind == "native" else (False, True)
+            modes = ((False,) if label == "baseline" and args.cache_kind == "native"
+                     and not args.baseline_cache else (False, True))
             for cached in modes:
                 name = f"{'cached' if cached else 'direct'}_j{jobs}"
                 print(f"Measuring {label} {name}", file=sys.stderr, flush=True)

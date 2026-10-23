@@ -22,7 +22,10 @@
 #include "fileutil.h"
 #include "flags.h"
 #include "rule.h"
+#include "stats.h"
 #include "stmt.h"
+#include "strutil.h"
+#include "timeutil.h"
 #include "var.h"
 
 extern char** environ;
@@ -114,7 +117,10 @@ bool SafeCommand(std::string_view source, Evaluator* ev) {
   return true;
 }
 
-bool SafeFile(const Makefile& file, Evaluator* ev) {
+bool SafeFile(const Makefile& file,
+              Evaluator* ev,
+              const std::unordered_set<std::string>& files) {
+  COLLECT_STATS("recursive cache eligibility time");
   if (!file.Exists())
     return false;
   for (const Stmt* stmt : file.stmts()) {
@@ -133,6 +139,13 @@ bool SafeFile(const Makefile& file, Evaluator* ev) {
           include->expr->GetLiteralValueUnsafe().find_first_of("*?[$\\") !=
               std::string_view::npos)
         return false;
+      // Search-path resolution can change when a previously absent nearer
+      // include appears. Until misses are tracked, require the direct spelling
+      // to be present in the evaluated source set.
+      for (std::string_view name :
+           WordScanner(include->expr->GetLiteralValueUnsafe()))
+        if (!files.count(std::string(name)))
+          return false;
     } else if (const auto* rule = dynamic_cast<const RuleStmt*>(stmt)) {
       if (!rule->lhs->IsLiteral() || rule->sep != RuleStmt::SEP_NULL)
         return false;
@@ -182,7 +195,7 @@ RecursiveCache::RecursiveCache(const std::string& arguments) {
       g_flags.warn_suffix_rules || g_flags.warn_real_to_phony ||
       g_flags.warn_phony_looks_real || g_flags.warn_real_no_cmds_or_deps ||
       g_flags.warn_real_no_cmds || !g_flags.old_files.empty() ||
-      !g_flags.what_if_files.empty())
+      !g_flags.what_if_files.empty() || getenv("MAKEFILES"))
     return;
   for (const char* name : g_flags.makefiles)
     if (std::string_view(name) == "-")
@@ -209,7 +222,7 @@ RecursiveCache::RecursiveCache(const std::string& arguments) {
     lock_ = -1;
     return;
   }
-  Put(&key_, "OMKTR-NOOP-1");
+  Put(&key_, "OMKTR-NOOP-2");
   Put(&key_, cwd);
   Put(&key_, arguments);
   Put(&key_, GetFileIdentity(g_flags.executable_path));
@@ -234,9 +247,13 @@ RecursiveCache::~RecursiveCache() {
 }
 
 bool RecursiveCache::Reuse() {
-  std::string data;
-  if (lock_ < 0 || !Read(kCache, &data))
+  if (lock_ < 0)
     return false;
+  eligible_sources_.clear();
+  ScopedTimeReporter timer("recursive cache lookup time");
+  if (!Read(kCache, &certificate_))
+    return false;
+  const std::string& data = certificate_;
   const size_t footer = data.rfind('\n');
   if (footer == std::string::npos || Checksum(std::string_view(data).substr(
                                          0, footer)) != data.substr(footer + 1))
@@ -247,15 +264,19 @@ bool RecursiveCache::Reuse() {
   uint32_t count;
   if (!GetInt(&input, &count) || count > kMaxEntries)
     return false;
+  bool unchanged = true;
+  std::unordered_map<std::string, std::string_view> sources;
   for (uint32_t i = 0; i < count; ++i) {
     std::string_view path, identity, contents;
     if (!Get(&input, &path) || !Get(&input, &identity) ||
-        !Get(&input, &contents) || identity == "unreadable" ||
-        GetFileIdentity(path) != identity)
+        !Get(&input, &contents) || identity == "unreadable")
       return false;
+    unchanged &= GetFileIdentity(path) == identity;
     if (!contents.empty()) {
-      std::string current;
-      if (!Read(std::string(path), &current) || current != contents)
+      // An explicit kind marker distinguishes even an empty Makefile from a
+      // graph-only record. Never infer eligibility from filesystem metadata.
+      if (contents.front() != 'M' ||
+          !sources.emplace(std::string(path), contents.substr(1)).second)
         return false;
     }
   }
@@ -269,6 +290,17 @@ bool RecursiveCache::Reuse() {
   }
   if (!input.empty())
     return false;
+  // A dirty graph is still a cache miss. Its intact, key-matching certificate
+  // can prove source eligibility later, but only after normal evaluation has
+  // read exactly the same complete source set and Save rechecks those bytes.
+  eligible_sources_ = std::move(sources);
+  if (!unchanged)
+    return false;
+  for (const auto& [path, contents] : eligible_sources_) {
+    std::string current;
+    if (!Read(path, &current) || current != contents)
+      return false;
+  }
   if (g_flags.enable_stat_logs)
     fprintf(stderr, "Recursive cache hit\n");
   const char* verbose = getenv("KATI_VERBOSE");
@@ -282,8 +314,13 @@ void RecursiveCache::Save(const std::vector<NamedDepNode>& roots,
                           Evaluator* ev) {
   if (lock_ < 0 || MakefileCacheManager::Get().requires_evaluation())
     return;
+  ScopedTimeReporter timer("recursive cache save time");
   // Remove a preceding certificate before considering a replacement.
   unlink(kCache);
+  // VPATH can switch a plain prerequisite to a newly appearing local file.
+  // Such absent search candidates are not part of a no-op certificate yet.
+  if (ev->LookupVar(Intern("VPATH"))->IsDefined())
+    return;
   std::unordered_set<std::string> files;
   MakefileCacheManager::Get().GetAllFilenames(&files);
   std::unordered_set<Symbol> outputs;
@@ -320,15 +357,26 @@ void RecursiveCache::Save(const std::vector<NamedDepNode>& roots,
   std::string data;
   Put(&data, key_);
   std::vector<std::string> records;
+  const bool sources_proven =
+      files.size() == eligible_sources_.size() &&
+      std::all_of(files.begin(), files.end(), [&](const std::string& name) {
+        const auto prior = eligible_sources_.find(name);
+        return prior != eligible_sources_.end() &&
+               prior->second ==
+                   MakefileCacheManager::Get().ReadMakefile(name).buf();
+      });
+  if (sources_proven && g_flags.enable_stat_logs)
+    fprintf(stderr, "Recursive cache eligibility reused\n");
   for (const auto& name : files) {
     const auto& file = MakefileCacheManager::Get().ReadMakefile(name);
     std::string current;
-    if (!SafeFile(file, ev) || !Read(name, &current) || current != file.buf())
+    if ((!sources_proven && !SafeFile(file, ev, files)) ||
+        !Read(name, &current) || current != file.buf())
       return;
     std::string record;
     Put(&record, name);
     Put(&record, GetFileIdentity(name));
-    Put(&record, current);
+    Put(&record, "M" + current);
     records.push_back(std::move(record));
   }
   std::unordered_set<const DepNode*> root_nodes, visited;

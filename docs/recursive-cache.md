@@ -15,7 +15,9 @@ identities include inode, size, mode, nanosecond mtime and ctime. Only simple
 literal assignments/includes, explicit static rules and side-effect-free recipe
 expansions are admitted. Generated includes, conditionals, functions, exports,
 implicit rules, cycles, directories, phony work, and intermediate aggregates
-are declined. This deliberately covers less than the proposed full graph cache.
+are declined. VPATH, MAKEFILES and includes resolved through a search path also
+fall back until absent search candidates are tracked. This deliberately covers
+less than the proposed full graph cache.
 
 `.openmktr-recursive.lock` serializes cache publication without waiting behind
 a recursive parent in the same directory: lock contention falls back to normal
@@ -38,6 +40,59 @@ The historical investigation and unsafe measurements below are retained for
 comparison; they describe the behavior before these fixes.
 
 ### Follow-up measurements on all 32 CPUs
+
+#### Work-build overhead optimization
+
+The cache now preserves the validated source-eligibility proof from a complete,
+checksummed, key-matching certificate even when a graph node is dirty. A dirty
+node still forces normal evaluation and execution. Publication can skip the
+repeated AST eligibility scan only when the entire evaluated source set and all
+its bytes exactly match that proof. It still rereads the files after execution,
+checks graph eligibility/freshness, validates configuration and publishes an
+atomic, fully checksummed certificate. No-op hits still validate all identities
+and Makefile contents. Certificate version 2 distinguishes source records from
+graph records explicitly, including empty source files; its retained views are
+owned by the certificate buffer through publication.
+
+On the same 32-CPU workload below, 15 measured samples after one warmup gave:
+
+| Metric | Before eligibility reuse | Optimized |
+| --- | ---: | ---: |
+| Warm work, cache enabled | 154.29 ms | 151.74 ms |
+| Warm work, cache disabled | 149.50 ms | 147.31 ms |
+| Warm no-op, cache enabled | 7.48 ms | 7.58 ms |
+| Aggregate child eligibility-scan time during work | 49.35 ms | 0 ms |
+| Aggregate child cache-save time during work | 86.64 ms | 40.60 ms |
+| Aggregate child cache-lookup time during work | 27.85 ms | 17.65 ms |
+
+Cached work was 1.7% faster than the matched prior cache implementation. The
+remaining overhead relative to the candidate's own uncached work run was 3.0%
+in this run, below the initial 4.5% observation. Earlier shorter samples showed
+1.6%; wall timings vary with scheduling, so the consistent result is eliminated
+rescanning and roughly halved aggregate cache-save time, rather than a claim that
+overhead is zero. No sample exceeded 32 active recipes. Warm work still evaluated
+all 16 children and executed all 64 recipes; all 16 reused only their eligibility
+proof. No-op builds performed zero evaluations. The checksummed source set,
+post-execution rereads and normal graph checks are retained.
+
+[Raw optimized results](recursive-cache-optimized-results.json) retain binary
+hashes, complete samples, configuration invalidations and per-phase timers.
+Both binaries include the same opt-in profiling. Reproduce with a supporting
+pre-optimization binary using `--baseline-cache`:
+
+```sh
+python tests/recursive_bench.py ./omktr --baseline /path/to/prior/omktr \
+  --baseline-cache --cache-kind native --children 16 --variables 30000 \
+  --recipes 4 --jobs 32 --repeats 15
+```
+
+Tests cover proof reuse on a dirty graph, empty includes, corruption, changed
+source text with preserved timestamps, configuration changes, and newly
+appearing nearer include files. Unsupported search-path cases are declined
+rather than extending the proof to untracked filesystem lookups.
+Profiling counters measure aggregate elapsed time across children, not CPU time.
+
+#### Initial cache implementation
 
 The native cache was compared with the original `fa95018` executable, built
 with the same Clang 22.1.8/musl/libc++ flags. The unchanged workload had 16

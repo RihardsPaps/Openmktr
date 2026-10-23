@@ -31,6 +31,17 @@ class Accounting(unittest.TestCase):
         self.assertEqual(result["recipe_slot_occupancy"], 0.25)
         self.assertEqual(occupancy([], 1, 4)["peak_active_recipes"], 0)
 
+    def test_cache_profiling_separates_lookup_eligibility_and_publication(self):
+        result = counters("*kati*: recursive cache lookup time: 0.002\n"
+                          "*kati*: recursive cache eligibility time: 0.003 / 2\n"
+                          "*kati*: recursive cache save time: 0.005\n"
+                          "Recursive cache eligibility reused\n")
+        self.assertEqual(result["cache_lookup_seconds"], 0.002)
+        self.assertEqual(result["cache_eligibility_seconds"], 0.003)
+        self.assertEqual(result["cache_save_seconds"], 0.005)
+        self.assertEqual(result["eligibility_reuses"], 1)
+        self.assertEqual(result["evaluation_passes"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

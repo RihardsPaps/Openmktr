@@ -70,8 +70,9 @@ class BuildCorrectness(unittest.TestCase):
     def test_recursive_cache_hits_and_invalidates_without_caching_work(self):
         child = self.directory / "child"
         child.mkdir()
-        source = "all: out\nout: input\n\t@cp $< $@\n"
+        source = "include empty.mk\nall: out\nout: input\n\t@cp $< $@\n"
         (child / "Makefile").write_text(source)
+        (child / "empty.mk").write_text("")
         (child / "input").write_text("one")
         self.makefile(".PHONY: all\nall:\n"
                       "\t@$(MAKE) --recursive_cache --kati_stats -C child all\n")
@@ -84,16 +85,19 @@ class BuildCorrectness(unittest.TestCase):
         (child / "out").unlink()
         _, output = self.direct("-j32")
         self.assertNotIn("Recursive cache hit", output)
+        self.assertIn("Recursive cache eligibility reused", output)
         self.assertEqual((child / "out").read_text(), "one")
         cache.write_bytes(b"partial certificate")
         _, output = self.direct("-j32")
         self.assertNotIn("Recursive cache hit", output)
+        self.assertNotIn("Recursive cache eligibility reused", output)
         stamp = (child / "Makefile").stat()
         (child / "Makefile").write_text(source.replace("cp $< $@", "printf two > $@"))
         os.utime(child / "Makefile", ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
         (child / "out").unlink()
         _, output = self.direct("-j32")
         self.assertNotIn("Recursive cache hit", output)
+        self.assertNotIn("Recursive cache eligibility reused", output)
         self.assertEqual((child / "out").read_text(), "two")
 
     def test_recursive_cache_declines_dynamic_evaluation(self):
@@ -109,6 +113,30 @@ class BuildCorrectness(unittest.TestCase):
                 _, output = self.direct("-j32")
                 self.assertNotIn("Recursive cache hit", output)
                 self.assertFalse((child / ".openmktr-recursive-cache").exists())
+
+    def test_recursive_cache_declines_untracked_search_candidates(self):
+        child = self.directory / "child"
+        child.mkdir()
+        (child / "headers").mkdir()
+        (child / "headers/config.mk").write_text("CONFIG := first\n")
+        (child / "headers/input").write_text("input")
+        self.makefile("all:\n\t@$(MAKE) --recursive_cache --kati_stats -C child "
+                      "-I headers $(OPTIONS) all\n")
+        for source, option in (
+                ("include config.mk\nall: out\nout:\n\t@printf '%s' '$(CONFIG)' > $@\n", ""),
+                ("all: out\nout: input\n\t@cp $< $@\n", "VPATH=headers")):
+            with self.subTest(option=option):
+                (child / "Makefile").write_text(source)
+                (child / "out").unlink(missing_ok=True)
+                for _ in range(2):
+                    _, output = self.direct("OPTIONS=" + option)
+                    self.assertNotIn("Recursive cache hit", output)
+                    self.assertFalse((child / ".openmktr-recursive-cache").exists())
+                if not option:
+                    (child / "config.mk").write_text("CONFIG := second\nout: newer\n")
+                    (child / "newer").write_text("new prerequisite")
+                    self.direct("OPTIONS=")
+                    self.assertEqual((child / "out").read_text(), "second")
 
     def test_nested_ninja_respects_fifo_and_single_reservation(self):
         children = [f"child{i}" for i in range(4)]
