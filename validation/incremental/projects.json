@@ -1,0 +1,69 @@
+{
+  "defaults": {
+    "source": "fixture",
+    "artifacts": ["*.o", "app", "generated.h"],
+    "dependencies": {
+      "main.o.d": ["main.c", "shared.h", "generated.h"],
+      "worker.o.d": ["worker.c", "shared.h"],
+      "spare.o.d": ["spare.c"]
+    },
+    "cases": [
+      {"name": "no-change", "expected": []},
+      {
+        "name": "source",
+        "changes": [{"path": "worker.c", "action": "replace", "old": "SHARED + 10", "new": "SHARED + 11"}],
+        "expected": ["worker.o", "app"]
+      },
+      {
+        "name": "shared-header",
+        "changes": [{"path": "shared.h", "action": "replace", "old": "SHARED 2", "new": "SHARED 7"}],
+        "expected": ["main.o", "worker.o", "app"]
+      },
+      {
+        "name": "generated-header",
+        "changes": [{"path": "config.txt", "action": "replace", "old": "GENERATED 3", "new": "GENERATED 9"}],
+        "expected": ["generated.h", "main.o", "app"]
+      },
+      {
+        "name": "discovered-generated-dependency",
+        "prime": [{"path": "config.txt", "action": "write", "text": "#include \"added.h\"\n#define GENERATED ADDED\n"}],
+        "changes": [{"path": "added.h", "action": "replace", "old": "ADDED 4", "new": "ADDED 6"}],
+        "dependencies": {
+          "main.o.d": ["main.c", "shared.h", "generated.h", "added.h"],
+          "worker.o.d": ["worker.c", "shared.h"],
+          "spare.o.d": ["spare.c"]
+        },
+        "expected": ["main.o", "app"]
+      },
+      {
+        "name": "deleted-object",
+        "changes": [{"path": "worker.o", "action": "delete"}],
+        "expected": ["worker.o", "app"]
+      },
+      {
+        "name": "flags",
+        "changes": [{"path": "flags.mk", "action": "replace", "old": "FACTOR=1", "new": "FACTOR=5"}],
+        "expected": ["main.o", "worker.o", "spare.o", "app"]
+      },
+      {
+        "name": "included-makefile",
+        "changes": [
+          {"path": "deps.mk", "action": "replace", "old": "EXTRA_DEPS :=", "new": "EXTRA_DEPS := added.h"},
+          {"path": "added.h", "action": "write", "text": "#define ADDED 8\n"}
+        ],
+        "expected": ["worker.o", "app"]
+      },
+      {
+        "name": "interrupted-build",
+        "changes": [{"path": "worker.c", "action": "replace", "old": "SHARED + 10", "new": "SHARED + 12"}],
+        "interrupt": {"arm": ".interrupt-arm", "marker": ".interrupt-ready"},
+        "expected": ["worker.o", "app"]
+      }
+    ]
+  },
+  "projects": [
+    {"name": "explicit", "args": ["CC={cc}", "PYTHON={python}", "LAYOUT=explicit", "all"]},
+    {"name": "depfile", "args": ["CC={cc}", "PYTHON={python}", "LAYOUT=depfile", "all"]},
+    {"name": "recursive", "args": ["CC={cc}", "PYTHON={python}", "LAYOUT=recursive", "all"]}
+  ]
+}

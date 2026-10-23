@@ -5,6 +5,7 @@
 // Prevent recipe exports from duplicating a live jobserver reservation.
 // Elide pure no-op commands for the default POSIX shell and flags.
 // Validate inherited FIFO endpoints before using the shared job budget.
+// Forward build interruptions, reap recipes, and identify changed outputs.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -31,6 +32,7 @@
 #include <fcntl.h>
 #include <glob.h>
 #include <limits.h>
+#include <poll.h>
 #include <signal.h>
 #include <spawn.h>
 #include <sys/stat.h>
@@ -78,6 +80,66 @@ double GetTimestamp(std::string_view filename) {
     return -2.0;
   }
   return GetTimestampFromStat(st);
+}
+
+namespace {
+
+constexpr int kBuildSignals[] = {SIGHUP, SIGINT, SIGQUIT, SIGTERM};
+std::atomic<int> build_signal{0};
+static_assert(std::atomic<int>::is_always_lock_free);
+bool build_signals_active = false;
+
+}  // namespace
+
+ScopedBuildSignals::ScopedBuildSignals() {
+  build_signal.store(0, std::memory_order_relaxed);
+  for (int sig : kBuildSignals) {
+    struct sigaction previous;
+    if (sigaction(sig, nullptr, &previous) != 0)
+      PERROR("sigaction failed");
+    previous_.push_back(previous);
+    if (previous.sa_handler == SIG_IGN)
+      continue;
+    struct sigaction action = {};
+    sigemptyset(&action.sa_mask);
+    action.sa_handler = [](int signal) {
+      build_signal.store(signal, std::memory_order_relaxed);
+    };
+    if (sigaction(sig, &action, nullptr) != 0)
+      PERROR("sigaction failed");
+  }
+  build_signals_active = true;
+}
+
+ScopedBuildSignals::~ScopedBuildSignals() {
+  build_signals_active = false;
+  for (size_t i = 0; i < previous_.size(); ++i)
+    if (sigaction(kBuildSignals[i], &previous_[i], nullptr) != 0)
+      PERROR("sigaction failed");
+  build_signal.store(0, std::memory_order_relaxed);
+}
+
+int GetBuildSignal() {
+  return build_signal.load(std::memory_order_relaxed);
+}
+
+std::string GetOutputStamp(std::string_view path) {
+  struct stat st;
+  if (lstat(std::string(path).c_str(), &st) != 0 || !S_ISREG(st.st_mode))
+    return "missing";
+#if defined(__APPLE__)
+  const auto mtime = st.st_mtimespec;
+#else
+  const auto mtime = st.st_mtim;
+#endif
+  return std::to_string(st.st_dev) + ":" + std::to_string(st.st_ino) + ":" +
+         std::to_string(mtime.tv_sec) + ":" + std::to_string(mtime.tv_nsec);
+}
+
+void DeleteChangedOutput(std::string_view path, const std::string& previous) {
+  const std::string current = GetOutputStamp(path);
+  if (current != "missing" && current != previous)
+    unlink(std::string(path).c_str());
 }
 
 namespace {
@@ -148,16 +210,26 @@ int AcquireKatiJobToken() {
       return -1;
     }
     kati_jobserver_path = fifo;
+    if (fcntl(kati_jobserver_fd, F_SETFL, O_NONBLOCK) < 0)
+      PERROR("fcntl(O_NONBLOCK) failed");
   }
 
   char token;
   while (true) {
+    if (GetBuildSignal() != 0)
+      return -1;
+    struct pollfd ready = {kati_jobserver_fd, POLLIN, 0};
+    int available = poll(&ready, 1, 100);
+    if (available == 0 || (available < 0 && errno == EINTR))
+      continue;
+    if (available < 0)
+      break;
     ssize_t n = HANDLE_EINTR(read(kati_jobserver_fd, &token, 1));
     if (n == 1)
       return kati_jobserver_fd;
     if (n == 0)
       break;
-    if (n < 0)
+    if (n < 0 && errno != EAGAIN)
       break;
   }
 
@@ -191,6 +263,8 @@ int RunCommand(const std::string& shell,
                int make_level,
                const std::vector<std::string>* extra_env,
                const std::vector<std::string>* unset_env) {
+  if (GetBuildSignal() != 0)
+    return GetBuildSignal();
   // Kbuild uses thousands of dummy recipes. The default shell's ':' has no
   // expansion, output, or side effects, so it needs neither a process nor a
   // jobserver token. Custom interpreters/flags can have observable behavior.
@@ -203,6 +277,10 @@ int RunCommand(const std::string& shell,
   // without taking an additional FIFO token.
   const int job_token = acquire_job_token ? AcquireKatiJobToken()
                                           : TryAcquireReservedKatiJobToken();
+  if (GetBuildSignal() != 0) {
+    ReleaseKatiJobToken(job_token);
+    return GetBuildSignal();
+  }
   const char* fifo = getenv("KATI_JOBSERVER_FIFO");
   const bool forward_slot = (fifo != nullptr && *fifo != '\0') ||
                             getenv("KATI_JOBSERVER_RESERVED") != nullptr;
@@ -334,6 +412,13 @@ int RunCommand(const std::string& shell,
   }
 
   short flags = 0;
+  if (build_signals_active) {
+    // A signal addressed to Openmktr alone must reach all recipe descendants.
+    // Recursive Openmktr jobs forward it to their own recipe groups in turn.
+    flags |= POSIX_SPAWN_SETPGROUP;
+    if (posix_spawnattr_setpgroup(&attr, 0) != 0)
+      PERROR("posix_spawnattr_setpgroup failed");
+  }
 #ifdef POSIX_SPAWN_USEVFORK
   flags |= POSIX_SPAWN_USEVFORK;
 #endif
@@ -382,7 +467,22 @@ int RunCommand(const std::string& shell,
 
   int status;
   close(pipefd[1]);
+  int forwarded_signal = 0;
+  auto forward_signal = [&]() {
+    const int sig = GetBuildSignal();
+    if (sig != 0 && sig != forwarded_signal) {
+      kill(-pid, sig);
+      forwarded_signal = sig;
+    }
+  };
   while (true) {
+    forward_signal();
+    struct pollfd ready = {pipefd[0], POLLIN, 0};
+    int available = poll(&ready, 1, 100);
+    if (available == 0 || (available < 0 && errno == EINTR))
+      continue;
+    if (available < 0)
+      PERROR("poll failed");
     char buf[4096];
     ssize_t r = HANDLE_EINTR(read(pipefd[0], buf, sizeof(buf)));
     if (r < 0)
@@ -395,8 +495,15 @@ int RunCommand(const std::string& shell,
       s->append(buf, buf + r);
   }
   close(pipefd[0]);
-  if (HANDLE_EINTR(waitpid(pid, &status, 0)) < 0)
-    PERROR("waitpid failed");
+  while (true) {
+    forward_signal();
+    pid_t waited = waitpid(pid, &status, WNOHANG);
+    if (waited == pid)
+      break;
+    if (waited < 0 && errno != EINTR)
+      PERROR("waitpid failed");
+    poll(nullptr, 0, 10);
+  }
   if (!recipe_path.empty() && unlink(recipe_path.c_str()) != 0)
     PERROR("unlink recipe failed");
 

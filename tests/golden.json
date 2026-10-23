@@ -311,7 +311,7 @@
   },
   "blank_line_before_command.mk:test:ninja": {
     "files": [],
-    "output": "[1/1] build test\nFAILED: [code=127] test \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else include foo; fi\n/bin/sh: include: not found\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build test\nFAILED: [code=127] test \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else kati_output_stamp=$('<KATI>' --internal-output-stamp 'test') || exit $?; kati_cleanup_output() { '<KATI>' --internal-delete-changed-output 'test' \"$kati_output_stamp\"; }; trap 'kati_cleanup_output; exit 129' HUP; trap 'kati_cleanup_output; exit 130' INT; trap 'kati_cleanup_output; exit 131' QUIT; trap 'kati_cleanup_output; exit 143' TERM; trap 'kati_recipe_status=$?; case $kati_recipe_status in 129|130|131|143) kati_cleanup_output;; esac' 0; ( include foo ); fi\n/bin/sh: include: not found\nninja: build stopped: subcommand failed.\n",
     "status": 127
   },
   "build_once.mk:test:direct": {
@@ -499,7 +499,7 @@
   },
   "command_hash.mk:default:ninja": {
     "files": [],
-    "output": "[1/1] build out\nFAILED: [code=2] out \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'out' ]; then :; else { echo \\#include <generated>; } > out; fi\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build out\nFAILED: [code=2] out \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'out' ]; then :; else kati_output_stamp=$('<KATI>' --internal-output-stamp 'out') || exit $?; kati_cleanup_output() { '<KATI>' --internal-delete-changed-output 'out' \"$kati_output_stamp\"; }; trap 'kati_cleanup_output; exit 129' HUP; trap 'kati_cleanup_output; exit 130' INT; trap 'kati_cleanup_output; exit 131' QUIT; trap 'kati_cleanup_output; exit 143' TERM; trap 'kati_recipe_status=$?; case $kati_recipe_status in 129|130|131|143) kati_cleanup_output;; esac' 0; ( { echo \\#include <generated>; } > out ); fi\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
     "status": 2
   },
   "command_line_last_assignment.sh:script": {
@@ -745,7 +745,7 @@
   },
   "delete_on_error.mk:test:ninja": {
     "files": [],
-    "output": "[1/1] build file\nFAILED: [code=1] file \n( cd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'file' ]; then :; else (touch file ) && (false ); fi ); kati_status=$?; if [ $kati_status -ne 0 ] && [ -e 'file' ] && [ ! -d 'file' ]; then rm -f 'file'; fi; exit $kati_status\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build file\nFAILED: [code=1] file \n( cd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'file' ]; then :; else kati_output_stamp=$('<KATI>' --internal-output-stamp 'file') || exit $?; kati_cleanup_output() { '<KATI>' --internal-delete-changed-output 'file' \"$kati_output_stamp\"; }; trap 'kati_cleanup_output; exit 129' HUP; trap 'kati_cleanup_output; exit 130' INT; trap 'kati_cleanup_output; exit 131' QUIT; trap 'kati_cleanup_output; exit 143' TERM; trap 'kati_recipe_status=$?; case $kati_recipe_status in 129|130|131|143) kati_cleanup_output;; esac' 0; ( (touch file ) && (false ) ); fi ); kati_status=$?; if [ $kati_status -ne 0 ] && [ -e 'file' ] && [ ! -d 'file' ]; then rm -f 'file'; fi; exit $kati_status\nninja: build stopped: subcommand failed.\n",
     "status": 1
   },
   "deprecated_export.mk:test:direct": {
@@ -1058,7 +1058,7 @@
   },
   "err_error_in_recipe.mk:test:ninja": {
     "files": [],
-    "output": "[1/1] build test\nFAILED: [code=1] test \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else echo -e \"Makefile:2: *** foo.\" 2>&1 && false; fi\nMakefile:2: *** foo.\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build test\nFAILED: [code=1] test \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else kati_output_stamp=$('<KATI>' --internal-output-stamp 'test') || exit $?; kati_cleanup_output() { '<KATI>' --internal-delete-changed-output 'test' \"$kati_output_stamp\"; }; trap 'kati_cleanup_output; exit 129' HUP; trap 'kati_cleanup_output; exit 130' INT; trap 'kati_cleanup_output; exit 131' QUIT; trap 'kati_cleanup_output; exit 143' TERM; trap 'kati_recipe_status=$?; case $kati_recipe_status in 129|130|131|143) kati_cleanup_output;; esac' 0; ( echo -e \"Makefile:2: *** foo.\" 2>&1 && false ); fi\nMakefile:2: *** foo.\nninja: build stopped: subcommand failed.\n",
     "status": 1
   },
   "err_export_override.mk:default:direct": {
@@ -1823,7 +1823,7 @@
   },
   "fail_ignore_error.mk:test:ninja": {
     "files": [],
-    "output": "[1/1] build test\nFAILED: [code=1] test \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else (false ) && (false ; true ) && (echo FAIL ); fi\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build test\nFAILED: [code=1] test \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else kati_output_stamp=$('<KATI>' --internal-output-stamp 'test') || exit $?; kati_cleanup_output() { '<KATI>' --internal-delete-changed-output 'test' \"$kati_output_stamp\"; }; trap 'kati_cleanup_output; exit 129' HUP; trap 'kati_cleanup_output; exit 130' INT; trap 'kati_cleanup_output; exit 131' QUIT; trap 'kati_cleanup_output; exit 143' TERM; trap 'kati_recipe_status=$?; case $kati_recipe_status in 129|130|131|143) kati_cleanup_output;; esac' 0; ( (false ) && (false ; true ) && (echo FAIL ) ); fi\nninja: build stopped: subcommand failed.\n",
     "status": 1
   },
   "fail_subshell_in_recipe.mk:test:direct": {
@@ -1833,7 +1833,7 @@
   },
   "fail_subshell_in_recipe.mk:test:ninja": {
     "files": [],
-    "output": "[1/1] build test\nFAILED: [code=1] test \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else (false ) && ((true) ; echo FAIL ); fi\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build test\nFAILED: [code=1] test \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else kati_output_stamp=$('<KATI>' --internal-output-stamp 'test') || exit $?; kati_cleanup_output() { '<KATI>' --internal-delete-changed-output 'test' \"$kati_output_stamp\"; }; trap 'kati_cleanup_output; exit 129' HUP; trap 'kati_cleanup_output; exit 130' INT; trap 'kati_cleanup_output; exit 131' QUIT; trap 'kati_cleanup_output; exit 143' TERM; trap 'kati_recipe_status=$?; case $kati_recipe_status in 129|130|131|143) kati_cleanup_output;; esac' 0; ( (false ) && ((true) ; echo FAIL ) ); fi\nninja: build stopped: subcommand failed.\n",
     "status": 1
   },
   "file_func.sh:script": {
@@ -1896,7 +1896,7 @@
       "build",
       "testdir"
     ],
-    "output": "[1/1] build test1\nFAILED: [code=1] test1 \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test1' ]; then :; else (mkdir testdir ) && (touch testdir/file1 ) && (touch testdir/file2 ) && (mkdir testdir/dir1 ) && (touch testdir/dir1/file1 ) && (touch testdir/dir1/file2 ) && (touch testdir/dir1/file3 ) && (mkdir testdir/dir2 ) && (touch testdir/dir2/file1 ) && (touch testdir/dir2/file2 ) && (touch testdir/dir2/file3 ) && (ln -s ../dir1/file1 testdir/dir2/link1 ) && (ln -s ../../testdir/dir1 testdir/dir2/link2 ) && (ln -s broken testdir/dir2/link3 ) && (mkdir -p build/tools ) && (cp ../../../testcase/tools/findleaves.py build/tools ) && (mkdir -p testdir3/b/c/d ) && (ln -s b testdir3/a ) && (touch testdir3/b/c/d/e ) && (mkdir -p testdir4/a/b ) && (ln -s self testdir4/self ) && (ln -s .. testdir4/a/b/c ) && (ln -s b testdir4/a/l ) && (mkdir -p testdir5 ) && (ln -s a testdir5/a ) && (ln -s b testdir5/c ) && (ln -s c testdir5/b ); fi\ncp: ../../../testcase/tools/findleaves.py: No such file or directory\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build test1\nFAILED: [code=1] test1 \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test1' ]; then :; else kati_output_stamp=$('<KATI>' --internal-output-stamp 'test1') || exit $?; kati_cleanup_output() { '<KATI>' --internal-delete-changed-output 'test1' \"$kati_output_stamp\"; }; trap 'kati_cleanup_output; exit 129' HUP; trap 'kati_cleanup_output; exit 130' INT; trap 'kati_cleanup_output; exit 131' QUIT; trap 'kati_cleanup_output; exit 143' TERM; trap 'kati_recipe_status=$?; case $kati_recipe_status in 129|130|131|143) kati_cleanup_output;; esac' 0; ( (mkdir testdir ) && (touch testdir/file1 ) && (touch testdir/file2 ) && (mkdir testdir/dir1 ) && (touch testdir/dir1/file1 ) && (touch testdir/dir1/file2 ) && (touch testdir/dir1/file3 ) && (mkdir testdir/dir2 ) && (touch testdir/dir2/file1 ) && (touch testdir/dir2/file2 ) && (touch testdir/dir2/file3 ) && (ln -s ../dir1/file1 testdir/dir2/link1 ) && (ln -s ../../testdir/dir1 testdir/dir2/link2 ) && (ln -s broken testdir/dir2/link3 ) && (mkdir -p build/tools ) && (cp ../../../testcase/tools/findleaves.py build/tools ) && (mkdir -p testdir3/b/c/d ) && (ln -s b testdir3/a ) && (touch testdir3/b/c/d/e ) && (mkdir -p testdir4/a/b ) && (ln -s self testdir4/self ) && (ln -s .. testdir4/a/b/c ) && (ln -s b testdir4/a/l ) && (mkdir -p testdir5 ) && (ln -s a testdir5/a ) && (ln -s b testdir5/c ) && (ln -s c testdir5/b ) ); fi\ncp: ../../../testcase/tools/findleaves.py: No such file or directory\nninja: build stopped: subcommand failed.\n",
     "status": 1
   },
   "find_command.mk:test2:direct": {
@@ -2060,7 +2060,7 @@
   },
   "function_command_hash.mk:default:ninja": {
     "files": [],
-    "output": "[1/1] build out\nFAILED: [code=2] out \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'out' ]; then :; else echo \\#include <generated> > out; fi\n/bin/sh: Syntax error: redirection unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build out\nFAILED: [code=2] out \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'out' ]; then :; else kati_output_stamp=$('<KATI>' --internal-output-stamp 'out') || exit $?; kati_cleanup_output() { '<KATI>' --internal-delete-changed-output 'out' \"$kati_output_stamp\"; }; trap 'kati_cleanup_output; exit 129' HUP; trap 'kati_cleanup_output; exit 130' INT; trap 'kati_cleanup_output; exit 131' QUIT; trap 'kati_cleanup_output; exit 143' TERM; trap 'kati_recipe_status=$?; case $kati_recipe_status in 129|130|131|143) kati_cleanup_output;; esac' 0; ( echo \\#include <generated> > out ); fi\n/bin/sh: Syntax error: redirection unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
     "status": 2
   },
   "generated_include_restart.sh:script": {
@@ -2106,7 +2106,7 @@
   },
   "if_function_command_hash.mk:default:ninja": {
     "files": [],
-    "output": "[1/1] build out\nFAILED: [code=2] out \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'out' ]; then :; else echo \"/* header */\"; echo \\#define CFG; echo \\#include <configs/sandbox.h>; fi\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build out\nFAILED: [code=2] out \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'out' ]; then :; else kati_output_stamp=$('<KATI>' --internal-output-stamp 'out') || exit $?; kati_cleanup_output() { '<KATI>' --internal-delete-changed-output 'out' \"$kati_output_stamp\"; }; trap 'kati_cleanup_output; exit 129' HUP; trap 'kati_cleanup_output; exit 130' INT; trap 'kati_cleanup_output; exit 131' QUIT; trap 'kati_cleanup_output; exit 143' TERM; trap 'kati_recipe_status=$?; case $kati_recipe_status in 129|130|131|143) kati_cleanup_output;; esac' 0; ( echo \"/* header */\"; echo \\#define CFG; echo \\#include <configs/sandbox.h> ); fi\n/bin/sh: Syntax error: \")\" unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
     "status": 2
   },
   "if_recipe.mk:test1:direct": {
@@ -3084,7 +3084,7 @@
   },
   "nested_function_command_hash.mk:default:ninja": {
     "files": [],
-    "output": "[1/1] build out\nFAILED: [code=2] out \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'out' ]; then :; else { \techo \"/* header */\"; echo \\#include <generated>; } > out; fi\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build out\nFAILED: [code=2] out \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'out' ]; then :; else kati_output_stamp=$('<KATI>' --internal-output-stamp 'out') || exit $?; kati_cleanup_output() { '<KATI>' --internal-delete-changed-output 'out' \"$kati_output_stamp\"; }; trap 'kati_cleanup_output; exit 129' HUP; trap 'kati_cleanup_output; exit 130' INT; trap 'kati_cleanup_output; exit 131' QUIT; trap 'kati_cleanup_output; exit 143' TERM; trap 'kati_recipe_status=$?; case $kati_recipe_status in 129|130|131|143) kati_cleanup_output;; esac' 0; ( { \techo \"/* header */\"; echo \\#include <generated>; } > out ); fi\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\nninja: build stopped: subcommand failed.\n",
     "status": 2
   },
   "ninja_delete_on_error.sh:script": {
@@ -3496,7 +3496,7 @@
   },
   "override_export.mk:test:ninja": {
     "files": [],
-    "output": "[1/1] build test\nFAILED: [code=1] test \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else (echo $A ) && (echo $B ) && (echo ) && (echo ) && (env | grep 'override B' ); fi\nmake_A\nmake_B\n\n\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build test\nFAILED: [code=1] test \ncd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else kati_output_stamp=$('<KATI>' --internal-output-stamp 'test') || exit $?; kati_cleanup_output() { '<KATI>' --internal-delete-changed-output 'test' \"$kati_output_stamp\"; }; trap 'kati_cleanup_output; exit 129' HUP; trap 'kati_cleanup_output; exit 130' INT; trap 'kati_cleanup_output; exit 131' QUIT; trap 'kati_cleanup_output; exit 143' TERM; trap 'kati_recipe_status=$?; case $kati_recipe_status in 129|130|131|143) kati_cleanup_output;; esac' 0; ( (echo $A ) && (echo $B ) && (echo ) && (echo ) && (env | grep 'override B' ) ); fi\nmake_A\nmake_B\n\n\nninja: build stopped: subcommand failed.\n",
     "status": 1
   },
   "override_override.mk:test:direct": {
@@ -3651,7 +3651,7 @@
     "files": [
       ".ninja_log"
     ],
-    "output": "foo\n-c echo bar\n-ec echo baz\n[1/1] build test\n-ec cd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else foobar; fi\n",
+    "output": "foo\n-c echo bar\n-ec echo baz\n[1/1] build test\n-ec cd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else kati_output_stamp=$('<KATI>' --internal-output-stamp 'test') || exit $?; kati_cleanup_output() { '<KATI>' --internal-delete-changed-output 'test' \"$kati_output_stamp\"; }; trap 'kati_cleanup_output; exit 129' HUP; trap 'kati_cleanup_output; exit 130' INT; trap 'kati_cleanup_output; exit 131' QUIT; trap 'kati_cleanup_output; exit 143' TERM; trap 'kati_recipe_status=$?; case $kati_recipe_status in 129|130|131|143) kati_cleanup_output;; esac' 0; ( foobar ); fi\n",
     "status": 0
   },
   "preserve_single_dot.mk:test:direct": {
@@ -3964,7 +3964,7 @@
     "files": [
       ".ninja_log"
     ],
-    "output": "/bin/sh\n-c foo\n-c bar\n[1/1] build test\n-c cd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else baz; fi\n",
+    "output": "/bin/sh\n-c foo\n-c bar\n[1/1] build test\n-c cd '<TESTDIR>' && if [ -r '././env.sh' ]; then . '././env.sh'; fi; if [ -e 'test' ]; then :; else kati_output_stamp=$('<KATI>' --internal-output-stamp 'test') || exit $?; kati_cleanup_output() { '<KATI>' --internal-delete-changed-output 'test' \"$kati_output_stamp\"; }; trap 'kati_cleanup_output; exit 129' HUP; trap 'kati_cleanup_output; exit 130' INT; trap 'kati_cleanup_output; exit 131' QUIT; trap 'kati_cleanup_output; exit 143' TERM; trap 'kati_recipe_status=$?; case $kati_recipe_status in 129|130|131|143) kati_cleanup_output;; esac' 0; ( baz ); fi\n",
     "status": 0
   },
   "shell_var_with_args.mk:test:direct": {
@@ -3986,7 +3986,7 @@
   },
   "shellflags.mk:test:ninja": {
     "files": [],
-    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -ec 'cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''test'\\'' ]; then :; else (echo \"flags=-ec\" ) && (false ); fi'\nflags=-ec\nninja: build stopped: subcommand failed.\n",
+    "output": "[1/1] build test\nFAILED: [code=1] test \n/bin/sh -ec 'cd '\\''<TESTDIR>'\\'' && if [ -r '\\''././env.sh'\\'' ]; then . '\\''././env.sh'\\''; fi; if [ -e '\\''test'\\'' ]; then :; else kati_output_stamp=$('\\''<KATI>'\\'' --internal-output-stamp '\\''test'\\'') || exit $?; kati_cleanup_output() { '\\''<KATI>'\\'' --internal-delete-changed-output '\\''test'\\'' \"$kati_output_stamp\"; }; trap '\\''kati_cleanup_output; exit 129'\\'' HUP; trap '\\''kati_cleanup_output; exit 130'\\'' INT; trap '\\''kati_cleanup_output; exit 131'\\'' QUIT; trap '\\''kati_cleanup_output; exit 143'\\'' TERM; trap '\\''kati_recipe_status=$?; case $kati_recipe_status in 129|130|131|143) kati_cleanup_output;; esac'\\'' 0; ( (echo \"flags=-ec\" ) && (false ) ); fi'\nflags=-ec\nninja: build stopped: subcommand failed.\n",
     "status": 1
   },
   "shellstatus.mk:test:direct": {

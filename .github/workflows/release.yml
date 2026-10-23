@@ -11,6 +11,9 @@ on:
       - '.github/workflows/release.yml'
       - 'tools/package_release.py'
       - 'tests/release_packaging.py'
+      - 'validation/incremental.py'
+      - 'validation/incremental/**'
+      - 'tests/incremental_campaign.py'
       - 'Dockerfile'
       - 'build.ninja'
   workflow_dispatch:
@@ -75,6 +78,33 @@ jobs:
         run: docker run --rm openmktr-release
       - name: Check release packaging
         run: docker run --rm openmktr-release python tests/release_packaging.py
+      - name: Check incremental campaign harness
+        run: docker run --rm openmktr-release python tests/incremental_campaign.py
+      - name: Gate release on differential incremental correctness
+        run: |
+          docker build --build-arg BASE_IMAGE=openmktr-release \
+            -f validation/incremental/Dockerfile -t openmktr-incremental .
+          mkdir -p incremental-evidence
+          failed=0
+          for jobs in 1 4; do
+            status=0
+            docker run --rm -v "$PWD/incremental-evidence:/evidence" openmktr-incremental \
+              --make gmake --omktr /workspace/omktr --jobs "$jobs" \
+              --output "/evidence/jobs-$jobs" || status=$?
+            if [ "$status" -eq 3 ]; then
+              echo '::warning::Incremental performance defect; see retained evidence'
+            elif [ "$status" -ne 0 ]; then
+              failed=1
+            fi
+          done
+          exit "$failed"
+      - name: Retain differential incremental evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: incremental-release-evidence
+          path: incremental-evidence/
+          if-no-files-found: ignore
       - name: Run sanitizer checks
         run: |
           docker run --rm -e ASAN_OPTIONS=detect_leaks=0 openmktr-release /bin/sh -ec '
