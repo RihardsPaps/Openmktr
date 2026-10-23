@@ -17,6 +17,97 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_inferred_depfile_preserves_compiler_failure(self):
+        self.makefile("out.o: source.c\n"
+                      "\t@clang -c -MMD -MF deps.d -o $@ $<\n")
+        (self.directory / "source.c").write_text("#error expected failure\n")
+        (self.directory / "deps.d").write_text("out.o: stale.h\n")
+        self.direct("--ninja", "--detect_depfiles")
+        status, output = self.run_command("sh", "./ninja.sh", "-j2", success=False)
+        self.assertNotEqual(status, 0)
+        self.assertIn("expected failure", output)
+        self.assertFalse((self.directory / "deps.d.tmp").exists())
+
+    def test_inferred_depfile_tracks_header_and_keeps_original(self):
+        self.makefile("all: out.o\nout.o: source.c\n"
+                      "\t@clang -c -MMD -MF deps.d -o $@ $<\n")
+        (self.directory / "source.c").write_text(
+            '#include "header.h"\nint value = VALUE;\n')
+        header = self.directory / "header.h"
+        header.write_text("#define VALUE 1\n")
+        self.direct("--ninja")
+        self.assertNotIn(" depfile =", (self.directory / "build.ninja").read_text())
+        self.direct("--ninja", "--detect_depfiles")
+        self.run_command("sh", "./ninja.sh", "-j2")
+        original = (self.directory / "out.o").read_bytes()
+        self.assertTrue((self.directory / "deps.d").exists())
+        _, output = self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertIn("no work to do", output)
+        header.write_text("#define VALUE 2\n")
+        future = (self.directory / "out.o").stat().st_mtime + 2
+        os.utime(header, (future, future))
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertNotEqual((self.directory / "out.o").read_bytes(), original)
+
+    def test_detection_declines_compound_recipes_without_changing_failure(self):
+        self.makefile("all:\n\t@printf '%s' ' -c -MD -o out.o ' > result; false\n")
+        self.direct("--ninja", "--detect_depfiles")
+        self.assertNotIn(" depfile =", (self.directory / "build.ninja").read_text())
+        status, _ = self.run_command("sh", "./ninja.sh", "-j2", success=False)
+        self.assertNotEqual(status, 0)
+        self.assertEqual((self.directory / "result").read_text(), " -c -MD -o out.o ")
+
+    def test_translation_preserves_escaped_quotes_and_hashes(self):
+        self.makefile(
+            "all:\n"
+            "\t@printf '%s' \"before\\\" # after\" > 'odd $$ name'\n"
+            "\t@printf '%s' done >> 'odd $$ name'\n")
+        self.direct("all")
+        result = self.directory / "odd $ name"
+        expected = result.read_bytes()
+        self.assertEqual(expected, b'before" # afterdone')
+        result.unlink()
+        self.ninja()
+        self.assertEqual(result.read_bytes(), expected)
+
+    def test_explicit_depfile_overrides_detection_and_tracks_generated_header(self):
+        self.makefile(
+            "all: out.o\n"
+            "out.o: .KATI_DEPFILE = explicit$$deps.d\n"
+            "out.o: source.c | generated.h\n"
+            "\t@clang -c -MMD -MF 'explicit$$deps.d' -o $@ $< && "
+            "printf '%s' built >> log\n"
+            "generated.h: seed\n\t@cp seed $@\n")
+        (self.directory / "source.c").write_text(
+            '#include "generated.h"\nint value = VALUE;\n')
+        (self.directory / "seed").write_text("#define VALUE 1\n")
+        self.direct("--ninja", "--detect_depfiles")
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "log").read_text(), "built")
+        header = self.directory / "generated.h"
+        header.write_text("#define VALUE 2\n")
+        future = (self.directory / "out.o").stat().st_mtime + 2
+        os.utime(header, (future, future))
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "log").read_text(), "builtbuilt")
+
+    def test_translation_propagates_failure_between_recipe_lines(self):
+        self.makefile("all:\n\t@printf '%s' 'literal # $$ ;' > result; false\n"
+                      "\t@printf unexpected > should-not-exist\n")
+        for mode in ("direct", "ninja"):
+            with self.subTest(mode=mode):
+                if mode == "direct":
+                    status, _ = self.direct(success=False)
+                else:
+                    self.direct("--ninja")
+                    status, _ = self.run_command("sh", "./ninja.sh", "-j2",
+                                                 success=False)
+                self.assertNotEqual(status, 0)
+                self.assertFalse((self.directory / "should-not-exist").exists())
+                self.assertEqual((self.directory / "result").read_text(),
+                                 "literal # $ ;")
+
     def test_explain_resolves_included_rule_and_does_not_run_recipes(self):
         self.makefile("include rules.mk\n")
         (self.directory / "rules.mk").write_text(

@@ -367,6 +367,27 @@ runs serially to prevent separate helper processes from claiming that slot twice
 
 ## Compatibility and scope
 
+Compiler depfile inference remains disabled by default. Prefer explicit,
+target-specific metadata when generating Ninja graphs:
+
+```make
+out.o: .KATI_DEPFILE = out.d
+out.o: source.c
+	clang -c -MMD -MF out.d -o $@ $<
+```
+
+`.KATI_DEPFILE` takes precedence over `--detect_depfiles`. The opt-in detector
+accepts only a single literal invocation of `clang`, `clang++`, `cc`, `c++`,
+`gcc`, or `g++`, optionally behind `ccache` or `sccache`, with `-c`, `-MD` or
+`-MMD`, and an explicit `-o` output. It preserves the compiler's depfile and
+gives Ninja a temporary copy. Quoting, shell expansions, compound commands,
+redirections, response files, unknown compiler options, and unknown wrappers
+are deliberately declined;
+this also replaces the inherited Android command-rewriting special cases.
+Use explicit metadata for those recipes and for unusual filenames. Declined
+inference adds no dependency tracking, so ensure the Makefile prerequisites
+or explicit depfile describe every required input.
+
 ### Makefile support
 
 Openmktr supports a subset of GNU Make syntax and behavior. The dynamic-extension
