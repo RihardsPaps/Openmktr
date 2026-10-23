@@ -1,0 +1,17 @@
+{
+  "generated_include_prerequisite": {
+    "cached": "two",
+    "direct": "two",
+    "equivalent": true
+  },
+  "parse_time_info": {
+    "cached": true,
+    "direct": true,
+    "equivalent": true
+  },
+  "preserved_makefile_mtime": {
+    "cached": "two",
+    "direct": "two",
+    "equivalent": true
+  }
+}

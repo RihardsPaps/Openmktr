@@ -42,6 +42,168 @@ class BuildCorrectness(unittest.TestCase):
         self.direct("--ninja", "--regen")
         return self.run_command("sh", "./ninja.sh", "-j2")
 
+    def test_build_refreshes_preserved_timestamps_and_generated_includes(self):
+        self.makefile("include config.mk\n.PHONY: all\nall:\n"
+                      "\t@printf '%s' '$(VALUE)' > result\n"
+                      "config.mk: seed\n\t@cp seed $@\n")
+        (self.directory / "seed").write_text("VALUE := one\n")
+        (self.directory / "config.mk").write_text("VALUE := one\n")
+        self.direct("build")
+        (self.directory / "seed").write_text("VALUE := two\n")
+        self.direct("build")
+        self.assertEqual((self.directory / "result").read_text(), "two")
+        self.makefile(".PHONY: all\nall:\n\t@printf one > result\n")
+        self.direct("build")
+        stamp = (self.directory / "Makefile").stat()
+        self.makefile(".PHONY: all\nall:\n\t@printf two > result\n")
+        os.utime(self.directory / "Makefile", ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+        self.direct("build")
+        self.assertEqual((self.directory / "result").read_text(), "two")
+
+    def test_build_repeats_observable_evaluation_output(self):
+        self.makefile("$(info evaluated)\n$(warning diagnostic)\nall:\n\t@:\n")
+        for _ in range(2):
+            _, output = self.direct("build")
+            self.assertIn("evaluated", output)
+            self.assertIn("diagnostic", output)
+
+    def test_recursive_cache_hits_and_invalidates_without_caching_work(self):
+        child = self.directory / "child"
+        child.mkdir()
+        source = "all: out\nout: input\n\t@cp $< $@\n"
+        (child / "Makefile").write_text(source)
+        (child / "input").write_text("one")
+        self.makefile(".PHONY: all\nall:\n"
+                      "\t@$(MAKE) --recursive_cache --kati_stats -C child all\n")
+        self.direct("-j32")
+        cache = child / ".openmktr-recursive-cache"
+        self.assertTrue(cache.exists())
+        _, output = self.direct("-j32")
+        self.assertIn("Recursive cache hit", output)
+        self.assertNotIn("eval time:", output)
+        (child / "out").unlink()
+        _, output = self.direct("-j32")
+        self.assertNotIn("Recursive cache hit", output)
+        self.assertEqual((child / "out").read_text(), "one")
+        cache.write_bytes(b"partial certificate")
+        _, output = self.direct("-j32")
+        self.assertNotIn("Recursive cache hit", output)
+        stamp = (child / "Makefile").stat()
+        (child / "Makefile").write_text(source.replace("cp $< $@", "printf two > $@"))
+        os.utime(child / "Makefile", ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+        (child / "out").unlink()
+        _, output = self.direct("-j32")
+        self.assertNotIn("Recursive cache hit", output)
+        self.assertEqual((child / "out").read_text(), "two")
+
+    def test_recursive_cache_declines_dynamic_evaluation(self):
+        child = self.directory / "child"
+        child.mkdir()
+        self.makefile("all:\n\t@$(MAKE) --recursive_cache --kati_stats -C child all\n")
+        for source in ("$(info observable)\nall:\n\t@:\n",
+                       "X := $(shell printf dynamic)\nall:\n\t@:\n",
+                       "export X := exported\nall:\n\t@:\n",
+                       ".PHONY: all\nall:\n\t@printf sideeffect > result\n"):
+            (child / "Makefile").write_text(source)
+            for _ in range(2):
+                _, output = self.direct("-j32")
+                self.assertNotIn("Recursive cache hit", output)
+                self.assertFalse((child / ".openmktr-recursive-cache").exists())
+
+    def test_nested_ninja_respects_fifo_and_single_reservation(self):
+        children = [f"child{i}" for i in range(4)]
+        self.makefile(".PHONY: all " + " ".join(children) + "\nall: " +
+                      " ".join(children) + "\n" + "".join(
+                          f"{name}:\n\t@$(MAKE) build -C {name} all\n"
+                          for name in children))
+        for name in children:
+            (self.directory / name).mkdir()
+            (self.directory / name / "Makefile").write_text(
+                ".PHONY: all a b c d\nall: a b c d\na b c d:\n"
+                "\t@python3 ../worker.py\n")
+        (self.directory / "worker.py").write_text(
+            "import fcntl, json, time\n"
+            "def update(delta):\n"
+            "    with open('../counts', 'r+') as f:\n"
+            "        fcntl.flock(f, fcntl.LOCK_EX)\n"
+            "        active, peak, done = json.load(f)\n"
+            "        active += delta\n"
+            "        f.seek(0)\n"
+            "        json.dump([active, max(active, peak), done + (delta < 0)], f)\n"
+            "        f.truncate()\n"
+            "update(1)\ntime.sleep(0.02)\nupdate(-1)\n")
+        self.direct("--ninja", "-j32")
+        fifo = self.directory / "fifo"
+        os.mkfifo(fifo)
+        fd = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+        self.addCleanup(os.close, fd)
+        for jobs, reserved in ((1, False), (4, False), (1, True), (4, True)):
+            with self.subTest(jobs=jobs, reserved=reserved):
+                tokens = b"x" * (jobs - int(reserved))
+                os.write(fd, tokens)
+                env = dict(os.environ, KATI_JOBSERVER_FIFO=str(fifo), KATI_JOBS=str(jobs))
+                env["KATI_JOBSERVER_RESERVED"] = "1" if reserved else "0"
+                (self.directory / "counts").write_text("[0, 0, 0]")
+                result = subprocess.run(["sh", "./ninja.sh", "-j32"],
+                                        cwd=self.directory, env=env,
+                                        capture_output=True, timeout=15)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                active, peak, done = json.loads((self.directory / "counts").read_text())
+                self.assertEqual((active, done), (0, 16))
+                self.assertLessEqual(peak, jobs)
+                if tokens:
+                    self.assertEqual(os.read(fd, 100), tokens)
+                else:
+                    with self.assertRaises(BlockingIOError):
+                        os.read(fd, 100)
+
+    def test_ninja_jobserver_helper_preserves_output_and_large_recipes(self):
+        self.makefile("all:\n\t@printf '%s' '" + "x" * 150000 + "' > result\n"
+                      "\t@printf 'stdout\\n'; printf 'stderr\\n' >&2\n")
+        _, output = self.ninja()
+        self.assertIn("stdout", output)
+        self.assertIn("stderr", output)
+        self.assertEqual((self.directory / "result").read_text(), "x" * 150000)
+
+    def test_recursive_cache_contention_does_not_deadlock_same_directory(self):
+        self.makefile("all:\n\t@$(MAKE) --recursive_cache child\n"
+                      "child:\n\t@$(MAKE) --recursive_cache leaf\n"
+                      "leaf:\n\t@printf ready > result\n")
+        self.direct("-j32")
+        self.assertEqual((self.directory / "result").read_text(), "ready")
+
+    def test_recursive_cache_configuration_invalidates_with_outputs_present(self):
+        child = self.directory / "child"
+        child.mkdir()
+        (child / "input").write_text("one")
+        (child / "config.mk").write_text("CONFIG := one\n")
+        (child / "Makefile").write_text(
+            "include config.mk\nall: out\nout: input\n\t@cp $< $@\n")
+        self.makefile(".PHONY: all\nall:\n"
+                      "\t@$(MAKE) --recursive_cache --kati_stats -C child MODE=$(MODE)\n")
+        self.direct("MODE=one")
+        _, output = self.direct("MODE=one")
+        self.assertIn("Recursive cache hit", output)
+        _, output = self.direct("MODE=two")
+        self.assertNotIn("Recursive cache hit", output)
+        stamp = (child / "config.mk").stat()
+        (child / "config.mk").write_text("CONFIG := two\n")
+        os.utime(child / "config.mk", ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+        _, output = self.direct("MODE=two")
+        self.assertNotIn("Recursive cache hit", output)
+        for value, hit in (("one", False), ("one", True), ("two", False), ("two", True)):
+            result = subprocess.run(
+                [str(KATI), "MODE=two"], cwd=self.directory, capture_output=True,
+                env=dict(os.environ, OMKTR_CACHE_KEY_TEST=value), timeout=15)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(b"Recursive cache hit" in result.stderr, hit)
+        # Configuration-only invalidation must not invent Make rebuilds.
+        self.assertEqual((child / "out").read_text(), "one")
+        (child / "input").write_text("two")
+        _, output = self.direct("MODE=two")
+        self.assertNotIn("Recursive cache hit", output)
+        self.assertEqual((child / "out").read_text(), "two")
+
     def test_build_refreshes_inputs_and_preserves_project_graph(self):
         project_graph = self.directory / "build.ninja"
         project_graph.write_text("# unrelated project graph\n")

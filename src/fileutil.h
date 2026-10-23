@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Expose validation of inherited FIFO jobservers for recursive scheduling.
 // Share signal handling and interrupted-output identity checks across modes.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
@@ -38,6 +39,9 @@
 bool Exists(std::string_view f);
 double GetTimestampFromStat(const struct stat& st);
 double GetTimestamp(std::string_view f);
+// Identity includes ctime so timestamp-preserving replacements invalidate
+// caches.
+std::string GetFileIdentity(std::string_view path);
 
 // Installed before executor workers start and restored after they stop.
 // The handler only records a signal; recipe waiters forward it and reap jobs.

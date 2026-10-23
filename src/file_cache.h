@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -35,6 +36,8 @@ class MakefileCacheManager {
   const Makefile& ReadStdinMakefile();
   void GetAllFilenames(std::unordered_set<std::string>* out);
   void AddExtraFileDep(std::string_view dep);
+  void RequireEvaluation() { require_evaluation_ = true; }
+  bool requires_evaluation() const { return require_evaluation_; }
 
   static MakefileCacheManager& Get();
 
@@ -45,6 +48,7 @@ class MakefileCacheManager {
   std::unordered_map<std::string, Makefile> cache_;
   std::unique_ptr<Makefile> stdin_makefile_;
   std::unordered_set<std::string> extra_file_deps_;
+  bool require_evaluation_ = false;
 };
 
 #endif  // FILE_CACHE_H_

@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -101,19 +102,25 @@ int stamp_dump_main(int argc, char* argv[]) {
     ERROR("Incomplete stamp file");
   char magic[4];
   if (fread(magic, 1, sizeof(magic), fp) != sizeof(magic) ||
-      memcmp(magic, "KAT2", sizeof(magic)) != 0)
+      memcmp(magic, "KAT3", sizeof(magic)) != 0)
     ERROR("Unsupported stamp file");
+  if (LoadInt(fp) < 0)
+    ERROR("Incomplete stamp file");
 
   //
   // See regen.cc CheckStep1 for how this is read normally
   //
 
   {
-    auto files = LoadVecString(fp);
-    if (dump_files) {
-      for (const auto& f : files) {
-        printf("%s\n", f.c_str());
-      }
+    int count = LoadInt(fp);
+    if (count < 0 || count > 1000000)
+      ERROR("Incomplete stamp file");
+    for (int i = 0; i < count; ++i) {
+      std::string file, identity;
+      if (!LoadString(fp, &file) || !LoadString(fp, &identity))
+        ERROR("Incomplete stamp file");
+      if (dump_files)
+        printf("%s\n", file.c_str());
     }
   }
 

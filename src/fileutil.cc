@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Prevent recipe exports from duplicating a live jobserver reservation.
 // Elide pure no-op commands for the default POSIX shell and flags.
 // Validate inherited FIFO endpoints before using the shared job budget.
@@ -134,6 +135,23 @@ std::string GetOutputStamp(std::string_view path) {
 #endif
   return std::to_string(st.st_dev) + ":" + std::to_string(st.st_ino) + ":" +
          std::to_string(mtime.tv_sec) + ":" + std::to_string(mtime.tv_nsec);
+}
+
+std::string GetFileIdentity(std::string_view path) {
+  struct stat st;
+  if (stat(std::string(path).c_str(), &st) != 0)
+    return errno == ENOENT ? "missing" : "unreadable";
+#if defined(__APPLE__)
+  const auto mt = st.st_mtimespec;
+  const auto ct = st.st_ctimespec;
+#else
+  const auto mt = st.st_mtim;
+  const auto ct = st.st_ctim;
+#endif
+  return std::to_string(st.st_dev) + ":" + std::to_string(st.st_ino) + ":" +
+         std::to_string(st.st_mode) + ":" + std::to_string(st.st_size) + ":" +
+         std::to_string(mt.tv_sec) + ":" + std::to_string(mt.tv_nsec) + ":" +
+         std::to_string(ct.tv_sec) + ":" + std::to_string(ct.tv_nsec);
 }
 
 void DeleteChangedOutput(std::string_view path, const std::string& previous) {

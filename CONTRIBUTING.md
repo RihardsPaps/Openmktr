@@ -140,6 +140,13 @@ Replace `/path/to/baseline/omktr` with the baseline executable. The benchmark
 measures conversion, no-op regeneration, flat and nested parallel execution,
 incremental no-op builds, peak memory, and binary size.
 
+For the child-graph reuse experiment, run
+`python tests/recursive_bench.py ./omktr`. It compares direct recursion with
+native cached children, including the available CPU affinity by default.
+Use `--cache-kind ninja` to measure explicit `build` children instead.
+The [investigation guide](docs/recursive-cache.md) documents the cache
+safety boundaries, measurement limits and recorded results.
+
 [PR #1](https://github.com/RihardsPaps/Openmktr/pull/1)
 records the original C++ comparison, test results, and GNU dependency audit.
 On its fixed workloads, the refactor showed no material runtime or peak-memory

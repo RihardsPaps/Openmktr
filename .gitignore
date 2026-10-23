@@ -10,6 +10,8 @@
 .ninja_deps
 .openmktr/
 .openmktr.lock
+.openmktr-recursive.lock
+.openmktr-recursive-cache*
 omktr
 out/
 __pycache__/
