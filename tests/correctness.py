@@ -42,6 +42,138 @@ class BuildCorrectness(unittest.TestCase):
         self.direct("--ninja", "--regen")
         return self.run_command("sh", "./ninja.sh", "-j2")
 
+    def test_build_refreshes_inputs_and_preserves_project_graph(self):
+        project_graph = self.directory / "build.ninja"
+        project_graph.write_text("# unrelated project graph\n")
+        include = self.directory / "config.mk"
+        include.write_text("VALUE = first\n")
+        self.makefile("include config.mk\nall:\n"
+                      "\t@printf '%s' '$(VALUE):$(MODE)' > result\n")
+        self.direct("build", "-j2", "all", "MODE=one")
+        self.assertEqual((self.directory / "result").read_text(), "first:one")
+        graph = self.directory / ".openmktr/build.ninja"
+        graph_time = graph.stat().st_mtime_ns
+        _, output = self.direct("build", "-j2", "all", "MODE=one")
+        self.assertIn("No need to regenerate", output)
+        self.assertEqual(graph.stat().st_mtime_ns, graph_time)
+        include.write_text("VALUE = second\n")
+        self.direct("build", "-j2", "all", "MODE=two")
+        self.assertEqual((self.directory / "result").read_text(), "second:two")
+        self.makefile("all:\n\t@printf changed > result\n")
+        self.direct("build", "-j2", "all")
+        self.assertEqual((self.directory / "result").read_text(), "changed")
+        self.assertEqual(project_graph.read_text(), "# unrelated project graph\n")
+
+    def test_build_tracks_environment_and_missing_support_files(self):
+        self.makefile("all:\n\t@printf '%s' '$(BUILD_VALUE)' > result\n")
+        for value in ("first", "second"):
+            result = subprocess.run(
+                [str(KATI), "build", "all"], cwd=self.directory,
+                env=dict(os.environ, BUILD_VALUE=value), capture_output=True,
+                timeout=15)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((self.directory / "result").read_text(), value)
+        (self.directory / ".openmktr/env.sh").unlink()
+        self.direct("build", "all")
+        self.assertTrue((self.directory / ".openmktr/env.sh").exists())
+
+    def test_build_stops_on_generation_or_recipe_failure(self):
+        self.makefile("all:\n\t@printf old >> ran\n")
+        self.direct("build", "all")
+        self.makefile("$(error generation failed)\nall:\n\t@printf stale >> ran\n")
+        status, _ = self.direct("build", "all", success=False)
+        self.assertNotEqual(status, 0)
+        self.assertEqual((self.directory / "ran").read_text(), "old")
+        self.makefile("all:\n\t@false\n")
+        status, _ = self.direct("build", "all", success=False)
+        self.assertNotEqual(status, 0)
+
+    def test_build_serializes_generation_and_execution(self):
+        self.makefile(".PHONY: all\nall:\n"
+                      "\t@mkdir running; sleep 0.2; "
+                      "printf '%s\\n' '$(VALUE)' >> results; rmdir running\n")
+        builds = [subprocess.Popen(
+            [str(KATI), "build", "-j2", "all", "VALUE=" + value],
+            cwd=self.directory, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            for value in ("first", "second")]
+        for process in builds:
+            output, _ = process.communicate(timeout=15)
+            self.assertEqual(process.returncode, 0, output)
+        self.assertCountEqual((self.directory / "results").read_text().splitlines(),
+                              ["first", "second"])
+
+    def test_build_directory_paths_and_recursive_exports(self):
+        child = self.directory / "project"
+        child.mkdir()
+        (child / "Makefile").write_text(
+            "export VALUE = $(MODE)\nall:\n\t@$(MAKE) -f child.mk\n")
+        (child / "child.mk").write_text(
+            "all:\n\t@printf '%s' '$(VALUE)' > result\n")
+        for output_dir in ("graph ' dir", str(child / "absolute graph")):
+            self.direct("build", "-C", "project", "--ninja_dir", output_dir,
+                        "-j2", "all", "MODE=exported")
+            self.assertEqual((child / "result").read_text(), "exported")
+
+    def test_build_refuses_unrelated_explicit_output(self):
+        self.makefile("all:\n\t@touch result\n")
+        graph = self.directory / "build.ninja"
+        graph.write_text("# project-owned\n")
+        status, output = self.direct("build", "--ninja_dir=.", success=False)
+        self.assertNotEqual(status, 0)
+        self.assertIn("refusing to overwrite", output)
+        self.assertEqual(graph.read_text(), "# project-owned\n")
+        self.assertFalse((self.directory / "result").exists())
+
+    def test_build_argument_boundaries_invalidate_graph(self):
+        self.makefile(".PHONY: all y\nall y:\n"
+                      "\t@printf '%s' '$(A):$(B)' > result\n")
+        self.direct("build", "all", "A=x y", "B=z")
+        self.assertEqual((self.directory / "result").read_text(), "x y:z")
+        self.direct("build", "all", "A=x", "y", "B=z")
+        self.assertEqual((self.directory / "result").read_text(), "x:z")
+
+    def test_build_restarts_for_generated_includes(self):
+        self.makefile("include generated.mk\nall:\n"
+                      "\t@printf '%s' '$(VALUE)' > result\n"
+                      "generated.mk:\n\t@printf 'VALUE = remade\\n' > $@\n")
+        self.direct("build", "all")
+        self.assertEqual((self.directory / "result").read_text(), "remade")
+
+    def test_build_stdin_and_dry_run(self):
+        for value in ("first", "second"):
+            result = subprocess.run(
+                [str(KATI), "build", "-f", "-", "all"], cwd=self.directory,
+                input="all:\n\t@printf " + value + " > result\n", text=True,
+                capture_output=True, timeout=15)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((self.directory / "result").read_text(), value)
+        self.makefile("all:\n\t@touch dry-run-result\n")
+        self.direct("build", "-n", "all")
+        self.assertFalse((self.directory / "dry-run-result").exists())
+
+    def test_build_interrupt_releases_lock(self):
+        self.makefile("all:\n\t@touch started; sleep 10; touch stale\n")
+        process = subprocess.Popen(
+            [str(KATI), "build", "all"], cwd=self.directory,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        try:
+            deadline = time.monotonic() + 10
+            while not (self.directory / "started").exists():
+                self.assertIsNone(process.poll())
+                self.assertLess(time.monotonic(), deadline)
+                time.sleep(0.02)
+            process.terminate()
+            process.communicate(timeout=5)
+            self.assertNotEqual(process.returncode, 0)
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.communicate(timeout=5)
+        self.makefile("all:\n\t@touch recovered\n")
+        self.direct("build", "all")
+        self.assertTrue((self.directory / "recovered").exists())
+        self.assertFalse((self.directory / "stale").exists())
+
     def test_wait_barriers_distinguish_slashes_from_underscores(self):
         makefile = (
             ".PHONY: all a/b a_b first second third fourth\n"

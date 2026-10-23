@@ -8,6 +8,8 @@
 .kati_stamp*
 .ninja_log
 .ninja_deps
+.openmktr/
+.openmktr.lock
 omktr
 out/
 __pycache__/
