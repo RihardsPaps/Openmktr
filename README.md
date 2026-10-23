@@ -1,4 +1,5 @@
 > FORK MODIFICATION NOTICE (2026)
+> Added automatic Ninja build usage, locking, and generated-file safety guidance.
 > Changed by the Openmktr fork, maintained by Rihards Paps and
 > Haralds Paps. Rewritten and expanded the fork's overview, build instructions,
 > usage examples, architecture, compatibility guidance, troubleshooting,
@@ -169,23 +170,22 @@ The file contains `hello from omktr`.
 
 ```sh
 rm hello.txt
-"$omktr_binary" --ninja --regen -f Makefile all
-sh ./ninja.sh -j4
+"$omktr_binary" build -j4 -f Makefile all
 cat hello.txt
 ```
 
 You get the same file through the generated graph.
 
-**5. Run the launcher again.**
+**5. Run the build command again.**
 
 ```sh
-sh ./ninja.sh -j4
+"$omktr_binary" build -j4 -f Makefile all
 ```
 
 Ninja should report that there is no work to do. The demo remains in
 `$demo_dir` for inspection.
 
-> **Conversion writes `build.ninja` by default.** Run conversion examples in a
+> **Legacy `--ninja` conversion writes `build.ninja` by default.** Run conversion examples in a
 > disposable directory. Running them at this repository's root can overwrite
 > the checked-in graph used to build Openmktr itself.
 
@@ -193,12 +193,12 @@ Ninja should report that there is no work to do. The demo remains in
 
 | Behavior | Direct execution | Generated Ninja |
 | --- | --- | --- |
-| Invocation | `omktr -f Makefile -j4 all` | `omktr --ninja --regen -f Makefile all`, then `sh ninja.sh -j4` |
+| Invocation | `omktr -f Makefile -j4 all` | `omktr build -j4 -f Makefile all` (or the legacy two-step interface) |
 | Makefile evaluation | Reads and evaluates Makefiles on each invocation. | Evaluates Makefiles when generating the graph. |
 | Recipe scheduling | Openmktr schedules work under its job limit. | Ninja schedules the generated edges. |
 | Exported variables | Captured at recipe boundaries. | Recorded during generation and restored by generated recipes. |
 | Recursive builds | Child Openmktr processes read their own Makefiles. | Recursive commands remain recipes; child graphs are not flattened into the parent graph. |
-| Input changes | Handled on the next Openmktr invocation. | Check regeneration with Openmktr before running the graph. |
+| Input changes | Handled on the next Openmktr invocation. | Checked automatically by `omktr build`; legacy launchers need an explicit regeneration check. |
 
 Use direct execution to start evaluating an existing project, especially when
 its dependencies can change while recipes run. Use Ninja generation when the
@@ -207,9 +207,38 @@ subsequent builds.
 
 ### Keep a generated graph current
 
-Treat generation and execution as two separate steps. Before a Ninja build,
-rerun the same generation command, including its targets and variable
-assignments:
+For everyday Ninja builds, use one command:
+
+```sh
+omktr build -j8 -f Makefile all MODE=release
+```
+
+Every invocation checks the existing regeneration stamp before launching Ninja.
+Makefiles, includes, recorded environment inputs, wildcard results, shell
+results, and generation arguments retain the existing invalidation checks.
+The stamp persists generation arguments and relevant environment values;
+repeat the desired targets and variable assignments on each invocation.
+Changing `MODE=release` to `MODE=debug`, for example, regenerates the graph.
+Standard-input Makefiles always regenerate. A failed generation stops the build.
+
+This mode writes its graph, environment script, launcher, and stamp into
+`.openmktr/` by default. `--ninja_dir DIR` overrides that directory; recipes
+still run in the build working directory. Existing unrelated graphs at the
+selected output path are refused. `-jN` controls Ninja and recursive job limits;
+`-n` requests a dry run and `-k` continues independent work after failures.
+Question, touch, syntax-only, empty-graph, and stamp-dump modes are rejected.
+
+Concurrent `omktr build` commands in the same build working directory wait on
+`.openmktr.lock`, held from input validation through Ninja completion. The lock
+is released automatically when the supervisor exits; leave its file in place.
+Generation runs with the current invocation's environment before the launcher
+loads the recorded recipe environment. The generated launcher remains an
+execution-only tool; use `omktr build` for automatic validation. Avoid mixing
+concurrent legacy generation or standalone Ninja invocations with this mode.
+
+Advanced users can keep generation and execution as two separate steps. Before
+a Ninja build, rerun the same generation command, including its targets and
+variable assignments:
 
 ```sh
 omktr --ninja --regen -j8 -f Makefile all MODE=release
@@ -235,6 +264,9 @@ want to build. Otherwise, use the executable's absolute path.
 ```sh
 # Build a named target with four jobs.
 omktr -f Makefile -j4 all
+
+# Validate or regenerate a Ninja graph and build in one command.
+omktr build -j8 all MODE=release
 
 # Supply a command-line variable assignment.
 omktr -f Makefile -j4 all MODE=release
@@ -265,6 +297,7 @@ the working directory for the build's recipes.
 | `-q` | Check whether targets need building. |
 | `-t` | Update target timestamps instead of running ordinary recipes. |
 | `--ninja` | Generate a Ninja graph, environment script, and launcher. |
+| `build` | First argument: validate or generate a graph in `.openmktr/`, then run Ninja. |
 | `--regen` | Check recorded inputs before reusing a generated graph. |
 | `--regen_debug` | Enable diagnostics for regeneration checks. |
 | `--ninja_dir DIR` | Write generated files into the specified directory. |
@@ -395,7 +428,7 @@ sanitizer commands, and benchmark guidance.
 | Symptom | What to check |
 | --- | --- |
 | The native build cannot find libc++ or lld. | Use the supported Chimera packages or the container workflow. Other platforms are best effort. |
-| Ninja uses an old rule or variable value. | Rerun the generation command with `--regen`, preserving targets and variable assignments, before invoking the launcher. |
+| Ninja uses an old rule or variable value. | Use `omktr build` with the desired targets and variable assignments, or rerun legacy generation with `--regen` before invoking its launcher. |
 | Recursive Ninja builds have unexpected environment or concurrency behavior. | Use the generated `ninja.sh` launcher and set its runtime `-j` limit. |
 | A recursive edge fails without an obvious cause. | Inspect the child command's output and exit status; the parent edge names the failed recipe. See the [recursive-build diagnosis guide](validation/README.md#diagnose-recursive-ninja-failures). |
 | Shell commands run during conversion. | Check parse-time `$(shell ...)` expressions and regeneration checks. |
