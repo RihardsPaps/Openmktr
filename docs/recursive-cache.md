@@ -58,17 +58,17 @@ On the same 32-CPU workload below, 15 measured samples after one warmup gave:
 
 | Metric | Before eligibility reuse | Optimized |
 | --- | ---: | ---: |
-| Warm work, cache enabled | 154.29 ms | 151.74 ms |
-| Warm work, cache disabled | 149.50 ms | 147.31 ms |
-| Warm no-op, cache enabled | 7.48 ms | 7.58 ms |
-| Aggregate child eligibility-scan time during work | 49.35 ms | 0 ms |
-| Aggregate child cache-save time during work | 86.64 ms | 40.60 ms |
-| Aggregate child cache-lookup time during work | 27.85 ms | 17.65 ms |
+| Warm work, cache enabled | 154.81 ms | 152.21 ms |
+| Warm work, cache disabled | 149.01 ms | 149.21 ms |
+| Warm no-op, cache enabled | 7.63 ms | 7.49 ms |
+| Aggregate child eligibility-scan time during work | 47.58 ms | 0 ms |
+| Aggregate child cache-save time during work | 82.21 ms | 39.63 ms |
+| Aggregate child cache-lookup time during work | 28.02 ms | 17.82 ms |
 
 Cached work was 1.7% faster than the matched prior cache implementation. The
-remaining overhead relative to the candidate's own uncached work run was 3.0%
-in this run, below the initial 4.5% observation. Earlier shorter samples showed
-1.6%; wall timings vary with scheduling, so the consistent result is eliminated
+remaining overhead relative to the candidate's own uncached work run was 2.0%
+in this run, below the initial 4.5% observation. Earlier samples ranged from
+1.6% to 3.0%; wall timings vary with scheduling, so the consistent result is eliminated
 rescanning and roughly halved aggregate cache-save time, rather than a claim that
 overhead is zero. No sample exceeded 32 active recipes. Warm work still evaluated
 all 16 children and executed all 64 recipes; all 16 reused only their eligibility
@@ -91,6 +91,10 @@ source text with preserved timestamps, configuration changes, and newly
 appearing nearer include files. Unsupported search-path cases are declined
 rather than extending the proof to untracked filesystem lookups.
 Profiling counters measure aggregate elapsed time across children, not CPU time.
+Review follow-up preserves shell parsing for multi-option `.SHELLFLAGS` in the
+Ninja recipe supervisor, including quoted options and large response-file
+recipes. Regression coverage verifies success and `-e` failure behavior in both
+direct and Ninja modes; the new test fails on the preceding implementation.
 
 #### Initial cache implementation
 

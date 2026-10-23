@@ -3,6 +3,7 @@
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
+// Preserve shell parsing of multi-option flags in recipe supervisors.
 // Prevent recipe exports from duplicating a live jobserver reservation.
 // Elide pure no-op commands for the default POSIX shell and flags.
 // Validate inherited FIFO endpoints before using the shared job budget.
@@ -370,7 +371,11 @@ int RunCommand(const std::string& shell,
   const std::string& shell_command = recipe_path.empty() ? cmd : recipe_command;
   const char* argv[] = {NULL, NULL, NULL, NULL};
   std::string cmd_with_shell;
-  if (shell[0] != '/' || shell.find_first_of(" $") != std::string::npos) {
+  if (shell[0] != '/' || shell.find_first_of(" $") != std::string::npos ||
+      shellflag.find_first_of(" \t\r\n'\"\\$`") != std::string::npos) {
+    // A flag string can contain several shell words (for example -e -c),
+    // quoting, or expansions. Let the POSIX shell parse those just as it did
+    // in the generated invocation before the jobserver supervisor was added.
     std::string cmd_escaped = shell_command;
     EscapeShell(&cmd_escaped);
     cmd_with_shell = shell + " " + shellflag + " \"" + cmd_escaped + "\"";

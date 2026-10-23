@@ -193,6 +193,32 @@ class BuildCorrectness(unittest.TestCase):
         self.assertIn("stderr", output)
         self.assertEqual((self.directory / "result").read_text(), "x" * 150000)
 
+    def test_multi_option_shell_flags_in_direct_ninja_and_response_files(self):
+        for flags in ("-e -c", "-e '-c'"):
+            for large in (False, True):
+                for mode in ("direct", "ninja"):
+                    with self.subTest(flags=flags, large=large, mode=mode):
+                        result = self.directory / "result"
+                        result.unlink(missing_ok=True)
+                        value = "x" * (150000 if large else 1)
+                        self.makefile(".SHELLFLAGS := " + flags + "\nall:\n"
+                                      "\t@printf '%s' '" + value + "' > result\n")
+                        if mode == "direct":
+                            self.direct("-j32")
+                        else:
+                            self.ninja()
+                        self.assertEqual(result.read_text(), value)
+                        result.unlink()
+                        self.makefile(".SHELLFLAGS := " + flags + "\nall:\n"
+                                      "\t@false; printf '%s' '" + value + "' > result\n")
+                        if mode == "direct":
+                            status, _ = self.direct("-j32", success=False)
+                        else:
+                            self.direct("--ninja", "--regen")
+                            status, _ = self.run_command("sh", "./ninja.sh", "-j2", success=False)
+                        self.assertNotEqual(status, 0)
+                        self.assertFalse(result.exists())
+
     def test_recursive_cache_contention_does_not_deadlock_same_directory(self):
         self.makefile("all:\n\t@$(MAKE) --recursive_cache child\n"
                       "child:\n\t@$(MAKE) --recursive_cache leaf\n"
