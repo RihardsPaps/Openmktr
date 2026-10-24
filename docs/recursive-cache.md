@@ -8,6 +8,10 @@ Children inherit the option. It preserves the direct executor: only an unchanged
 child proven to need no recipes can return from the cache. Work, uncertainty or
 unsupported features go through ordinary evaluation and execution.
 
+This cache does not store compiled outputs for a new package version's working
+directory. The separate [cross-version compiler-cache investigation](cross-version-reuse.md)
+tests object reuse through ccache while retaining normal build evaluation.
+
 The certificate records the invocation, physical working directory, selected
 Makefiles, executable identity, complete environment (except live FIFO transport),
 exact Makefile contents, and identities/existence of resolved graph nodes. File

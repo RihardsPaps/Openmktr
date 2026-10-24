@@ -45,7 +45,7 @@ def namespace_warning(log):
 
 
 @contextmanager
-def evidence_run(output):
+def evidence_run(output, *, openmktr_use_test=True):
     """An evidence directory belongs to exactly one run, including failures."""
     output.mkdir(parents=True, exist_ok=True)
     if any(output.iterdir()):
@@ -53,7 +53,7 @@ def evidence_run(output):
     result = {'status': 'running', 'started': datetime.now(timezone.utc).isoformat(),
               'image_id': os.environ.get('OMKTR_VALIDATION_IMAGE_ID') or None,
               'namespace_sandboxes': NAMESPACE_FEATURES.split(),
-              'openmktr_use_test': True}
+              'openmktr_use_test': openmktr_use_test}
     atomic_json(output / 'result.json', result)
     try:
         yield result
