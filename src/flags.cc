@@ -4,6 +4,7 @@
 // Changed build execution, evaluation, or portability for this fork.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Parse explanation and strict compatibility options.
+// Parse and validate Make-compatible load-average limits.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -31,8 +32,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <algorithm>
+#include <cerrno>
+#include <cmath>
 
 #include "log.h"
+#include "stringprintf.h"
 #include "strutil.h"
 #include "version.h"
 
@@ -104,6 +108,46 @@ static bool ParseCommandLineOptionWithArg(std::string_view option,
   return false;
 }
 
+double ParseLoadLimit(const char* value) {
+  char* end = nullptr;
+  errno = 0;
+  const double limit = strtod(value, &end);
+  if (value == end || *end != '\0' || (errno == ERANGE && limit == 0) ||
+      !std::isfinite(limit) || limit < 0)
+    ERROR("Invalid load-average limit: %s", value);
+  return limit;
+}
+
+// Long options have optional values only after '='. A short -l may consume a
+// following number, but must leave a following target/option untouched.
+static bool ParseLoadOption(std::string_view arg,
+                            const char* next,
+                            bool* consume_next,
+                            double* limit) {
+  *consume_next = false;
+  if (arg == "-l" || arg == "--load-average" || arg == "--max-load") {
+    *limit = -1;
+    if (arg == "-l" && next &&
+        (isdigit(static_cast<unsigned char>(next[0])) || next[0] == '.')) {
+      *limit = ParseLoadLimit(next);
+      *consume_next = true;
+    }
+    return true;
+  }
+  for (std::string_view prefix : {"--load-average=", "--max-load=", "-l"}) {
+    if (HasPrefix(arg, prefix)) {
+      const std::string value(arg.substr(prefix.size()));
+      *limit = ParseLoadLimit(value.c_str());
+      return true;
+    }
+  }
+  return false;
+}
+
+std::string Flags::LoadLimitOption() const {
+  return load_limit < 0 ? "-l" : StringPrintf("-l%.17g", load_limit);
+}
+
 void Flags::Parse(int argc, char** argv) {
   executable_path = GetExecutablePath();
   subkati_args.push_back(executable_path.c_str());
@@ -173,11 +217,29 @@ void Flags::Parse(int argc, char** argv) {
 
     for (size_t i = 0; i < makeflags_tokens.size(); ++i) {
       const std::string& tok = makeflags_tokens[i];
+      bool consume_next;
+      const char* next = i + 1 < makeflags_tokens.size()
+                             ? makeflags_tokens[i + 1].c_str()
+                             : nullptr;
+      if (ParseLoadOption(tok, next, &consume_next, &load_limit)) {
+        load_limit_set = true;
+        if (consume_next)
+          ++i;
+        continue;
+      }
       // Execution modes in MAKEFLAGS apply to recursive invocations too.
       // In particular, a child of `make -n` must print its recipes without
       // executing them.  GNU make may combine short flags into one word.
       if (tok.size() > 1 && tok[0] == '-' && tok[1] != '-') {
         for (size_t j = 1; j < tok.size(); ++j) {
+          if (tok[j] == 'l') {
+            ParseLoadOption("-l" + tok.substr(j + 1), next, &consume_next,
+                            &load_limit);
+            load_limit_set = true;
+            if (consume_next)
+              ++i;
+            break;
+          }
           if (tok[j] == 'C' || tok[j] == 'f' || tok[j] == 'I' ||
               tok[j] == 'j' || tok[j] == 'o' || tok[j] == 'W')
             break;
@@ -239,6 +301,14 @@ void Flags::Parse(int argc, char** argv) {
     }
   }
 
+  // Generated recipes reload generation-time MAKEFLAGS. Like KATI_JOBS, this
+  // live launcher value takes precedence over the frozen environment. Explicit
+  // child command-line options still win below.
+  if (const char* runtime_load = getenv("KATI_NINJA_LOAD_LIMIT")) {
+    load_limit = *runtime_load ? ParseLoadLimit(runtime_load) : -1;
+    load_limit_set = true;
+  }
+
   for (int i = 1; i < argc; i++) {
     const char* arg = argv[i];
     if (strcmp(arg, "--version") == 0 || strcmp(arg, "-v") == 0) {
@@ -248,12 +318,33 @@ void Flags::Parse(int argc, char** argv) {
     bool should_propagate = true;
     int pi = i;
 
+    bool consume_next;
+    if (ParseLoadOption(arg, argv[i + 1], &consume_next, &load_limit)) {
+      load_limit_set = true;
+      if (consume_next)
+        ++i;
+      // Regeneration replays this invocation's original arguments.
+      for (; pi <= i; ++pi)
+        subkati_args.push_back(argv[pi]);
+      continue;
+    }
+
     if (arg[0] == '-' && arg[1] != '-' && arg[1] != '\0' && arg[2] != '\0') {
       bool valid_cluster = true;
       bool handled = false;
 
       for (size_t pos = 1; arg[pos] != '\0'; pos++) {
         char option = arg[pos];
+
+        if (option == 'l') {
+          ParseLoadOption(std::string("-l") + (arg + pos + 1), argv[i + 1],
+                          &consume_next, &load_limit);
+          load_limit_set = true;
+          handled = true;
+          if (consume_next)
+            ++i;
+          break;
+        }
 
         if (option == 'c' || option == 'd' || option == 'e' || option == 'i' ||
             option == 'n' || option == 'q' || option == 's' || option == 't' ||

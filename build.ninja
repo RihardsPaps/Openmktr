@@ -1,4 +1,5 @@
 # Portable, GNU-free Linux build. Run with Ninja in a musl environment.
+# Openmktr fork (2026): include standalone load-limit admission tests.
 cxx = clang++
 cxxflags = -std=c++17 -O2 -DNOLOG -Wall -Wextra -stdlib=libc++ -pthread -flto=thin -ffunction-sections -fdata-sections
 ldflags = -stdlib=libc++ -fuse-ld=lld -pthread -flto=thin -Wl,--gc-sections -Wl,--icf=safe
@@ -57,10 +58,12 @@ build out/main.o: cxx src/main.cc || out
 build out/find_test.o: cxx src/find_test.cc || out
 build out/ninja_test.o: cxx src/ninja_test.cc || out
 build out/strutil_test.o: cxx src/strutil_test.cc || out
+build out/load_limit_test.o: cxx src/load_limit_test.cc || out
 
 build omktr: link out/main.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/recursive_cache.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
 build out/find_test: link out/find_test.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/recursive_cache.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
 build out/ninja_test: link out/ninja_test.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/recursive_cache.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
 build out/strutil_test: link out/strutil_test.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/recursive_cache.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
-build tests: phony out/find_test out/ninja_test out/strutil_test
+build out/load_limit_test: link out/load_limit_test.o
+build tests: phony out/find_test out/ninja_test out/strutil_test out/load_limit_test
 default omktr

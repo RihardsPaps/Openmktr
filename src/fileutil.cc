@@ -8,6 +8,7 @@
 // Elide pure no-op commands for the default POSIX shell and flags.
 // Validate inherited FIFO endpoints before using the shared job budget.
 // Forward build interruptions, reap recipes, and identify changed outputs.
+// Coordinate generated recipes' load admission with process-owned locks.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -53,6 +54,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "flags.h"
+#include "load_limit.h"
 #include "log.h"
 #include "strutil.h"
 
@@ -270,6 +273,70 @@ void ReleaseKatiJobToken(int fd) {
   if (HANDLE_EINTR(write(fd, &token, 1)) != 1) {
     LOG("failed to return jobserver token");
   }
+}
+
+int AcquireNinjaLoadSlot() {
+  const char* path = getenv("KATI_NINJA_LOAD_STATE");
+  const char* value = getenv("KATI_NINJA_LOAD_LIMIT");
+  if (!path || !*path || !value || !*value)
+    return -1;
+  const double limit = ParseLoadLimit(value);
+  const int fd = open(path, O_RDWR | O_CLOEXEC);
+  if (fd < 0)
+    PERROR("open Ninja load state failed");
+  while (!GetBuildSignal()) {
+    struct flock guard = {};
+    guard.l_type = F_WRLCK;
+    guard.l_whence = SEEK_SET;
+    guard.l_len = 1;
+    if (fcntl(fd, F_SETLK, &guard) == 0) {
+      // Only the presence of another recipe matters for Make's progress
+      // exception. Each helper locks its own PID byte; the kernel drops that
+      // lock on exit, including forced termination, without stale counters.
+      struct flock active = {};
+      active.l_type = F_WRLCK;
+      active.l_whence = SEEK_SET;
+      active.l_start = 1;
+      if (fcntl(fd, F_GETLK, &active) < 0)
+        PERROR("query Ninja load slots failed");
+      char failed = 0;
+      if (pread(fd, &failed, 1, 0) != 1)
+        PERROR("read Ninja load state failed");
+      double sample = -1;
+      if (active.l_type != F_UNLCK && !failed && getloadavg(&sample, 1) != 1) {
+        sample = -1;
+        failed = 1;
+        if (pwrite(fd, &failed, 1, 0) != 1)
+          PERROR("write Ninja load state failed");
+        fprintf(stderr,
+                "omktr: cannot read load average; limiting this executor "
+                "to one recipe at a time\n");
+      }
+      const bool admitted =
+          LoadAllowsJob(limit, active.l_type == F_UNLCK ? 0 : 1, sample);
+      if (admitted) {
+        struct flock slot = {};
+        slot.l_type = F_WRLCK;
+        slot.l_whence = SEEK_SET;
+        slot.l_start = static_cast<off_t>(getpid()) + 1;
+        slot.l_len = 1;
+        if (fcntl(fd, F_SETLK, &slot) < 0)
+          PERROR("lock Ninja load slot failed");
+      }
+      guard.l_type = F_UNLCK;
+      if (fcntl(fd, F_SETLK, &guard) < 0)
+        PERROR("unlock Ninja load admission failed");
+      if (admitted)
+        return fd;
+    } else if (errno != EACCES && errno != EAGAIN && errno != EINTR) {
+      PERROR("lock Ninja load admission failed");
+    }
+    // A changing load need not coincide with a completed job. Poll without
+    // owning the admission lock or a FIFO reservation, and notice signals.
+    poll(nullptr, 0, 100);
+  }
+  close(fd);
+  return -1;
 }
 
 int RunCommand(const std::string& shell,

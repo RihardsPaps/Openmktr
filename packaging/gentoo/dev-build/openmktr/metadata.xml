@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+  <!-- SPDX-License-Identifier: MPL-2.0 -->
+  <upstream><remote-id type="github">RihardsPaps/Openmktr</remote-id></upstream>
+</pkgmetadata>

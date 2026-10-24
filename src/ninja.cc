@@ -1,6 +1,8 @@
 // FORK MODIFICATION NOTICE (2026)
-// Quote generated launcher paths for build directories containing shell syntax.
-// Changed by the Openmktr fork, maintained by Rihards Paps and
+// Carry generation/runtime load limits into Ninja and recursive recipes.
+// Use native load admission for every recipe, with configurable Ninja
+// selection. Quote generated launcher paths for build directories containing
+// shell syntax. Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
@@ -31,6 +33,10 @@
 // +build ignore
 
 #include "ninja.h"
+
+#ifndef OMKTR_NINJA_EXECUTABLE
+#define OMKTR_NINJA_EXECUTABLE "ninja"
+#endif
 
 #include <errno.h>
 #include <limits.h>
@@ -858,11 +864,15 @@ class NinjaGenerator {
       const bool token_recipe =
           !use_local_pool &&
           !(commands.size() == 1 && commands.front().cmd == ":");
+      const bool helper_recipe = token_recipe || use_local_pool;
+      const char* recipe_helper = token_recipe
+                                      ? " --internal-run-recipe "
+                                      : " --internal-run-recursive-recipe ";
       const bool recipe_in_rsp = cmd_buf.size() > 100 * 1000;
-      if (token_recipe && !recipe_in_rsp) {
+      if (helper_recipe && !recipe_in_rsp) {
         cmd_buf = "cd " + ShellQuote(working_dir_) + " && " +
-                  EscapeNinja(ShellQuote(GetExecutablePath())) +
-                  " --internal-run-recipe " + ShellQuote(command_shell) + " " +
+                  EscapeNinja(ShellQuote(GetExecutablePath())) + recipe_helper +
+                  ShellQuote(command_shell) + " " +
                   ShellQuote(command_shellflag) + " " + ShellQuote(cmd_buf);
       }
       std::string rule_key = description;
@@ -905,17 +915,17 @@ class NinjaGenerator {
           if (rspfile.front() != '/')
             rspfile = "./" + rspfile;
           const std::string source_rspfile = ". " + ShellQuote(rspfile);
-          if (token_recipe && recipe_in_rsp) {
+          if (helper_recipe && recipe_in_rsp) {
             out << " command = " << EscapeNinja(ShellQuote(GetExecutablePath()))
-                << " --internal-run-recipe " << ShellQuote(command_shell) << ' '
+                << recipe_helper << ShellQuote(command_shell) << ' '
                 << ShellQuote(command_shellflag) << ' '
                 << ShellQuote(source_rspfile) << "\n";
           } else {
-            out << " command = " << (token_recipe ? "/bin/sh" : command_shell)
-                << ' ' << (token_recipe ? "-c" : command_shellflag) << ' '
+            out << " command = " << (helper_recipe ? "/bin/sh" : command_shell)
+                << ' ' << (helper_recipe ? "-c" : command_shellflag) << ' '
                 << ShellQuote(source_rspfile) << "\n";
           }
-        } else if (token_recipe ||
+        } else if (helper_recipe ||
                    (command_shell == "/bin/sh" && command_shellflag == "-c")) {
           // Ninja already runs commands through /bin/sh -c on POSIX hosts.
           // A second identical shell adds a process launch to every recipe.
@@ -1294,7 +1304,9 @@ class NinjaGenerator {
     fprintf(fp, "export MAKELEVEL=%d\n", g_flags.make_level + 1);
     for (const auto& [symbol, is_exported] : ev_->exports()) {
       if (symbol.str() == "MAKELEVEL" ||
-          symbol.str() == "KATI_JOBSERVER_RESERVED")
+          symbol.str() == "KATI_JOBSERVER_RESERVED" ||
+          symbol.str() == "KATI_NINJA_LOAD_LIMIT" ||
+          symbol.str() == "KATI_NINJA_LOAD_STATE")
         continue;
       if (!IsShellIdentifier(symbol.str())) {
         continue;
@@ -1375,12 +1387,13 @@ class NinjaGenerator {
     fprintf(fp, "prev=\"\"\n");
     fprintf(fp, "for arg in \"$@\"; do\n");
     fprintf(fp, "  case \"$arg\" in\n");
-    fprintf(fp, "    -j[0-9]*) ninja_jobs=\"${arg#-j}\" ;;\n");
-    fprintf(fp, "    -j=*) ninja_jobs=\"${arg#-j=}\" ;;\n");
+    fprintf(fp, "    --) break ;;\n");
+    fprintf(fp, "    -j[0-9]*) ninja_jobs=\"${arg#-j}\"; prev=\"\" ;;\n");
+    fprintf(fp, "    -j=*) ninja_jobs=\"${arg#-j=}\"; prev=\"\" ;;\n");
     fprintf(fp, "    -j) prev=\"-j\" ;;\n");
     fprintf(fp,
             "    [0-9]*) if [ \"$prev\" = \"-j\" ]; then ninja_jobs=\"$arg\"; "
-            "prev=\"\"; fi ;;\n");
+            "fi; prev=\"\" ;;\n");
     fprintf(fp, "    *) prev=\"\" ;;\n");
     fprintf(fp, "  esac\n");
     fprintf(fp, "done\n");
@@ -1440,10 +1453,14 @@ class NinjaGenerator {
     // processes cannot share the executor's atomic reservation owner, so
     // serialize this child Ninja while borrowing that single slot. Other
     // recursive executors may still use free FIFO tokens normally.
-    fprintf(fp,
-            "if [ \"${KATI_JOBSERVER_RESERVED:-}\" = 1 ]; then "
-            "set -- \"$@\" -j1; fi\n");
-    fprintf(fp, "ninja -f %s ", ShellQuote(GetNinjaFilename()).c_str());
+    fprintf(
+        fp, "%s --internal-run-ninja %s %s -f %s ",
+        ShellQuote(GetExecutablePath()).c_str(),
+        ShellQuote(g_flags.load_limit < 0 ? std::string()
+                                          : g_flags.LoadLimitOption().substr(2))
+            .c_str(),
+        ShellQuote(OMKTR_NINJA_EXECUTABLE).c_str(),
+        ShellQuote(GetNinjaFilename()).c_str());
     if (g_flags.remote_num_jobs > 0) {
       fprintf(fp, "-j%d ", g_flags.remote_num_jobs);
     }

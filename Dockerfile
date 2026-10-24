@@ -1,6 +1,7 @@
 # FORK MODIFICATION NOTICE (2026)
 # Changed by the Openmktr fork, maintained by Rihards Paps and
 # Haralds Paps. Adapted build, CI, or repository configuration for the GNU-free fork.
+# Run portable Portage adapter and load-limit checks in the reference gate.
 # Upstream material retains its Apache-2.0 terms. Fork modifications are
 # covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 # at the repository root. Original notices below remain applicable.
@@ -22,4 +23,4 @@ ENV OMKTR_SOURCE_REVISION=$OMKTR_SOURCE_REVISION
 RUN ninja -f build.ninja -j 4 omktr tests
 RUN if ldd omktr | grep -E 'libstdc\+\+|libgcc|libc\.so\.6'; then exit 1; fi
 
-CMD ["/bin/sh", "-c", "out/find_test && out/ninja_test && out/strutil_test && python tests/version_generator.py && python tests/correctness.py && python tests/make_compat_regressions.py && python tests/regression.py && sh testcase/dump/run.sh"]
+CMD ["/bin/sh", "-c", "out/find_test && out/ninja_test && out/strutil_test && out/load_limit_test && python tests/version_generator.py && python tests/correctness.py && python tests/make_compat_regressions.py && python tests/portage.py && python tests/load_limits.py && python tests/portage_validation.py && python tests/regression.py && sh testcase/dump/run.sh"]

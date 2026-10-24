@@ -5,6 +5,7 @@
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Expose validation of inherited FIFO jobservers for recursive scheduling.
 // Share signal handling and interrupted-output identity checks across modes.
+// Expose process-owned load-admission slots for generated Ninja recipes.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -84,6 +85,11 @@ bool IsKatiJobserverAvailable();
 // -1 means no slot; -2 is the inherited slot reserved by a parent recipe.
 int AcquireKatiJobToken();
 void ReleaseKatiJobToken(int fd);
+
+// Hold one per-launcher load slot until close(fd). No FIFO token is held while
+// waiting; fcntl locks release the slot automatically if the helper dies.
+// Returns -1 when admission is disabled or interrupted.
+int AcquireNinjaLoadSlot();
 
 std::string GetExecutablePath();
 

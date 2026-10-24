@@ -1,4 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
+// Forward load limits to Ninja and normalize recursive Make load options.
+// Supervise per-launcher load state and normalize options before Ninja's --.
 // Add a locked, regenerating single-command Ninja build supervisor.
 // Expose native output stamps for generated recipes' interruption cleanup.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
@@ -40,6 +42,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cmath>
 #include <string_view>
 #include <unordered_set>
 
@@ -183,6 +186,9 @@ static int HandleBuild(int argc, char** argv) {
     std::string jobs = "-j" + std::to_string(g_flags.num_jobs);
     std::vector<char*> ninja = {const_cast<char*>("sh"), launcher.data(),
                                 jobs.data()};
+    std::string load_option = g_flags.LoadLimitOption();
+    if (g_flags.load_limit >= 0)
+      ninja.push_back(load_option.data());
     if (g_flags.is_dry_run)
       ninja.push_back(const_cast<char*>("-n"));
     if (g_flags.keep_going)
@@ -640,7 +646,22 @@ static void UpdateMakeFlags(Evaluator* ev) {
   // inherited job limits with the effective limit selected for this process.
   std::string without_jobs;
   bool skip_job_count = false;
+  bool skip_load_count = false;
   for (std::string_view token : WordScanner(makeflags_value)) {
+    if (skip_load_count) {
+      skip_load_count = false;
+      if (!token.empty() &&
+          (isdigit(static_cast<unsigned char>(token[0])) || token[0] == '.'))
+        continue;
+    }
+    if (token == "-l") {
+      skip_load_count = true;
+      continue;
+    }
+    if (HasPrefix(token, "-l") || token == "--load-average" ||
+        token == "--max-load" || HasPrefix(token, "--load-average=") ||
+        HasPrefix(token, "--max-load="))
+      continue;
     if (skip_job_count) {
       skip_job_count = false;
       if (!token.empty() && isdigit(static_cast<unsigned char>(token[0])))
@@ -659,6 +680,19 @@ static void UpdateMakeFlags(Evaluator* ev) {
   makeflags_value = std::move(without_jobs);
   const std::string jobs_option = "-j" + std::to_string(g_flags.num_jobs);
   append_option(jobs_option.c_str());
+  if (g_flags.load_limit_set) {
+    // Append even if an older clustered option contains the same limit:
+    // the effective setting, including a bare -l reset, must come last.
+    makeflags_value += " " + g_flags.LoadLimitOption();
+  }
+  if (getenv("KATI_NINJA_LOAD_LIMIT")) {
+    // Preserve a child's explicit override or reset for grandchildren.
+    if (g_flags.load_limit < 0)
+      unsetenv("KATI_NINJA_LOAD_LIMIT");
+    else
+      setenv("KATI_NINJA_LOAD_LIMIT",
+             g_flags.LoadLimitOption().substr(2).c_str(), 1);
+  }
 
   // Options inherited from MAKEFLAGS are already present in makeflags_value.
   // Add only directories supplied on this command line, preserving their
@@ -1337,6 +1371,116 @@ static void FindFirstMakefie() {
     g_flags.makefiles.push_back(g_flags.makefile);
 }
 
+static int HandleRunNinja(int argc, char** argv) {
+  // argv: tool, helper, generation-time limit (empty means disabled), Ninja,
+  // then Ninja arguments. Keep targets after -- completely opaque.
+  double limit = *argv[2] ? ParseLoadLimit(argv[2]) : -1;
+  bool load_set = *argv[2];
+  std::vector<std::string> arguments;
+  bool options = true;
+  size_t option_end = static_cast<size_t>(-1);
+  for (int i = 4; i < argc; ++i) {
+    const std::string_view arg(argv[i]);
+    if (options && (arg == "--" || HasPrefix(arg, "-t"))) {
+      option_end = arguments.size();
+      options = false;
+    }
+    if (options && (arg == "-f" || arg == "-C" || arg == "-j" || arg == "-k" ||
+                    arg == "-d" || arg == "-w")) {
+      arguments.emplace_back(arg);
+      if (++i == argc)
+        ERROR("Missing Ninja option operand: %s", arguments.back().c_str());
+      arguments.emplace_back(argv[i]);
+      continue;
+    }
+    if (options &&
+        (arg == "-l" || arg == "--load-average" || arg == "--max-load")) {
+      limit = -1;
+      load_set = true;
+      if (arg == "-l" && i + 1 < argc &&
+          (isdigit(static_cast<unsigned char>(argv[i + 1][0])) ||
+           argv[i + 1][0] == '.'))
+        limit = ParseLoadLimit(argv[++i]);
+      continue;
+    }
+    if (options && (HasPrefix(arg, "-l") || HasPrefix(arg, "--load-average=") ||
+                    HasPrefix(arg, "--max-load="))) {
+      const size_t start = arg[1] == 'l' ? 2 : arg.find('=') + 1;
+      limit = ParseLoadLimit(argv[i] + start);
+      load_set = true;
+      continue;
+    }
+    arguments.emplace_back(arg);
+  }
+  if (option_end == static_cast<size_t>(-1))
+    option_end = arguments.size();
+  const std::string value = limit < 0 ? "" : StringPrintf("%.17g", limit);
+  if (limit >= 0)
+    setenv("KATI_NINJA_LOAD_LIMIT", value.c_str(), 1);
+  else
+    unsetenv("KATI_NINJA_LOAD_LIMIT");
+  const char* inherited_flags = getenv("MAKEFLAGS");
+  const std::string makeflags =
+      std::string(inherited_flags ? inherited_flags : "") + " -l" + value;
+  if (load_set)
+    setenv("MAKEFLAGS", makeflags.c_str(), 1);
+
+  std::string state;
+  if (limit >= 0) {
+    const char* temp = getenv("TMPDIR");
+    state = std::string(temp && *temp ? temp : "/tmp") + "/omktr-load-XXXXXX";
+    const int fd = mkstemp(state.data());
+    if (fd < 0)
+      PERROR("create Ninja load state failed");
+    const char initial = 0;
+    if (write(fd, &initial, 1) != 1 || close(fd) != 0)
+      PERROR("initialize Ninja load state failed");
+    setenv("KATI_NINJA_LOAD_STATE", state.c_str(), 1);
+    // Load admission belongs to our helpers. Disable Ninja's independent
+    // sampler so a failed sample cannot evade our fallback and so helpers
+    // waiting for load do not count as active recipes in a second scheduler.
+    arguments.insert(arguments.begin() + option_end++, "-l0");
+    if (limit == 0)
+      arguments.insert(arguments.begin() + option_end++, "-j1");
+  } else {
+    unsetenv("KATI_NINJA_LOAD_STATE");
+  }
+  if (const char* reserved = getenv("KATI_JOBSERVER_RESERVED")) {
+    if (!strcmp(reserved, "1"))
+      arguments.insert(arguments.begin() + option_end, "-j1");
+  }
+  if (state.empty()) {
+    // The ordinary path needs no additional supervisor or process boundary.
+    std::vector<char*> child = {argv[3]};
+    for (std::string& arg : arguments)
+      child.push_back(arg.data());
+    child.push_back(nullptr);
+    execvp(child.front(), child.data());
+    PERROR("exec Ninja failed");
+  }
+  const auto quote = [](std::string_view word) {
+    std::string result = "'";
+    for (char c : word)
+      result += c == '\'' ? "'\\''" : std::string(1, c);
+    return result + "'";
+  };
+  std::string command = quote(argv[3]);
+  for (const std::string& arg : arguments)
+    command += " " + quote(arg);
+  ScopedBuildSignals signals;
+  const int status =
+      RunCommand("/bin/sh", "-c", command, RedirectStderr::NONE, nullptr, false,
+                 [](std::string_view output) {
+                   fwrite(output.data(), 1, output.size(), stdout);
+                   fflush(stdout);
+                 });
+  if (!state.empty())
+    unlink(state.c_str());
+  return WIFEXITED(status)     ? WEXITSTATUS(status)
+         : WIFSIGNALED(status) ? 128 + WTERMSIG(status)
+                               : 1;
+}
+
 static void HandleRealpath(int argc, char** argv) {
   char buf[PATH_MAX];
   for (int i = 0; i < argc; i++) {
@@ -1396,14 +1540,22 @@ int main(int argc, char* argv[]) {
   }
 
   if (argc >= 2) {
-    if (!strcmp(argv[1], "--internal-run-recipe") && argc == 5) {
+    if (!strcmp(argv[1], "--internal-run-ninja") && argc >= 4) {
+      return HandleRunNinja(argc, argv);
+    } else if ((!strcmp(argv[1], "--internal-run-recipe") ||
+                !strcmp(argv[1], "--internal-run-recursive-recipe")) &&
+               argc == 5) {
       ScopedBuildSignals signals;
+      const int load_slot = AcquireNinjaLoadSlot();
       const int status =
           RunCommand(argv[2], argv[3], argv[4], RedirectStderr::NONE, nullptr,
-                     true, [](std::string_view output) {
+                     !strcmp(argv[1], "--internal-run-recipe"),
+                     [](std::string_view output) {
                        fwrite(output.data(), 1, output.size(), stdout);
                        fflush(stdout);
                      });
+      if (load_slot >= 0)
+        close(load_slot);
       return WIFEXITED(status)     ? WEXITSTATUS(status)
              : WIFSIGNALED(status) ? 128 + WTERMSIG(status)
                                    : 1;

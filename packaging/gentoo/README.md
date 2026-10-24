@@ -1,0 +1,137 @@
+# Opt-in Gentoo Portage integration
+
+This experimental integration targets native Linux Gentoo, EAPI 8, without
+Gentoo Prefix. Installation alone activates no packages. It does not establish
+compatibility with every ebuild or Makefile. The live ebuild builds the current
+`main` source using LLVM, libc++, Ninja, and Python; Portage's own Bash and system
+tools belong to this optional external environment, not the portable core.
+
+## Install from a local overlay
+
+Obtain a checkout containing this integration, then register its **absolute**
+`packaging/gentoo` directory in `/etc/portage/repos.conf/openmktr.conf`:
+
+```ini
+[openmktr]
+location = /absolute/path/to/Openmktr/packaging/gentoo
+masters = gentoo
+auto-sync = no
+```
+
+Keep that checkout at a stable, Portage-readable location. It supplies the
+overlay metadata; the live ebuild independently fetches upstream `main`.
+An unpublished local development branch must be tested using the validation
+lane's local Git source override, rather than assuming `main` contains it.
+
+Explicitly accept the live package in `/etc/portage/package.accept_keywords`:
+
+```text
+=dev-build/openmktr-9999::openmktr **
+```
+
+Portage accepts either a file or a directory at `package.accept_keywords`,
+`package.env`, and `package.use`. If your configuration uses directories, put
+the corresponding lines in a new `openmktr` file inside each directory. If it
+uses files, append the lines to those files. Preserve existing configuration;
+do not replace a file with a directory or overwrite its contents.
+
+Then run `emerge --ask dev-build/openmktr::openmktr`. The ebuild installs
+`/usr/bin/omktr` and `/usr/bin/omktr-portage` together and declares the LLVM,
+libc++, Python build requirements and Ninja runtime dependency. It honors
+`CPPFLAGS`, `CXXFLAGS`, and `LDFLAGS` while selecting C++17, libc++, and LLD.
+The Gentoo build invokes `/usr/bin/ninja-reference` explicitly at runtime and
+requires Ninja 1.13 or newer. Your system's `ninja` alternative may remain Samurai;
+installing Openmktr does not change that alternative. The portable source build
+continues to use `ninja` from `PATH` unless configured at build time with
+`OMKTR_NINJA_EXECUTABLE`.
+The current binary release archives require musl; this ebuild builds natively
+on Gentoo rather than installing those archives on glibc.
+
+To run Openmktr's own test suite during installation, add
+`dev-build/openmktr test` to `package.use` (or its `openmktr` snippet), and enable
+Portage's `test` feature. This is separate from selecting Openmktr to build
+another package. For per-package testing, create `/etc/portage/env/openmktr-test`
+with `FEATURES="${FEATURES} test"`, then add
+`dev-build/openmktr openmktr-test` to `package.env`.
+
+Configuration examples are installed as documentation under
+`/usr/share/doc/openmktr-9999/portage/examples/`. Portage may compress them;
+read or decompress the example contents before copying them into configuration.
+No example is activated automatically.
+
+## Select individual packages
+
+Create `/etc/portage/env/openmktr-direct` containing:
+
+```sh
+export MAKE="/usr/bin/omktr-portage"
+export OMKTR_PORTAGE_MODE="direct"
+```
+
+Add a specific package to `/etc/portage/package.env`, for example:
+
+```text
+category/package openmktr-direct
+```
+
+Replace the placeholder with a package you intend to test. Build it using the
+normal `emerge` command. Portage continues to own unpacking, configuration,
+testing, staged installation into `${D}`, merging, and removal. Its `emake`
+helper selects the wrapper through `MAKE` and supplies `MAKEOPTS` and
+`EXTRA_EMAKE` once. Options such as `MAKEOPTS="-j4 -l2.5"` remain effective;
+explicit ebuild arguments such as `-j1` retain their normal precedence.
+
+For experimental Ninja compilation, copy that environment file to
+`/etc/portage/env/openmktr-ninja`, change the exported mode to `ninja`, and
+select it for the package instead. Only `src_compile` uses `omktr build`.
+Configuration, test-target probes, tests, and installation use direct Openmktr.
+When the phase is absent, direct execution is used. Recursive Make invocations
+use the sibling `omktr` and its shared job budget. Ninja graphs, stamps, and
+launchers stay in `.openmktr/` within the recipe working directory, with the
+existing `.openmktr.lock` protecting concurrent invocations and regeneration.
+
+The wrapper preserves argument boundaries and exports the sibling executable
+as `MAKE`. A command-line `MAKE=...` assignment still takes precedence.
+Use the installed absolute wrapper path in Portage configuration. Directory
+symlinks are resolved to their physical directory; a symlink to the wrapper
+file itself is not followed to locate its target's sibling executable. An alias
+in another directory therefore needs `omktr` beside that alias.
+Compiler settings, working directory, staged-install arguments, exit status,
+and signals pass through. It does not replace the system `make` or intercept
+hard-coded `make`, ebuilds that replace `MAKE`, or Meson/CMake Ninja builds.
+Unsupported options fail visibly; there is no automatic GNU Make retry.
+Ninja mode retains `omktr build`'s restrictions, including question and touch
+modes during compilation. Use the direct environment for such packages.
+
+## Load limits and troubleshooting
+
+`-lN`, `-l N`, `--load-average=N`, and `--max-load=N` accept finite nonnegative
+limits. A bare `-l`, `--load-average`, or `--max-load` clears an earlier limit.
+Limits propagate through `MAKEFLAGS`; command-line options take precedence.
+At high load, one recipe can always progress. Zero serializes execution,
+including Ninja. Failed load sampling warns once and conservatively serializes
+that executor while a limit is enabled. A load limit does not coordinate the number of
+packages Portage builds concurrently; configure Portage's own `--jobs` separately.
+
+If a selected package fails, retain the full Portage log and Openmktr revision,
+report which mode was selected, remove its activation, and rebuild normally.
+An unsupported Makefile is not evidence of a Gentoo package defect.
+
+## Disable or remove
+
+Remove the package's Openmktr entry from `package.env` to restore its normal
+build tool. Remove unused environment examples when no packages refer to them.
+After disabling all users, `emerge --ask --unmerge dev-build/openmktr` removes
+the tool. Remove the overlay configuration and its live keyword entry if no
+longer needed. User-created configuration is never installed or removed by
+the Openmktr ebuild.
+
+## Validation
+
+Portable wrapper and load tests run in the GNU-free Chimera gate. The optional
+Gentoo compatibility lane additionally builds this ebuild from the candidate
+Git source and runs disposable EAPI 8 fixture packages through real Portage
+configuration, compilation, default test probes, testing, installation,
+merge, and unmerge. See `validation/compatibility/README.md` at the source root
+for commands and the evidence boundary. Passing those fixtures does not qualify
+arbitrary third-party packages, cross-compilation, or Prefix.

@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MPL-2.0
+include config.mk
+.PHONY: all check install fail a b c d
+all: fixture a b c d
+fixture: fixture.c config.mk
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DFIXTURE_VERSION=$(FIXTURE_VERSION) $(LDFLAGS) $< -o $@
+a b c d:
+	@python3 worker.py work
+	@printf '%s' "$$EBUILD_PHASE" > compile-phase
+check: fixture
+	@test "$(shell ./fixture)" = 'marker=7 version=2'
+	@printf '%s' "$$EBUILD_PHASE" > test-phase
+	@printf '%s' '$@' > test-target
+	@touch tested
+install: fixture
+	mkdir -p "$(DESTDIR)/usr/bin"
+	cp fixture "$(DESTDIR)/usr/bin/$(PACKAGE)"
+	@printf '%s' "$$EBUILD_PHASE" > install-phase
+fail:
+	@printf '%s\n' 'intentional Portage fixture failure' >&2; exit 23
