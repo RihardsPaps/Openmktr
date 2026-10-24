@@ -6,6 +6,7 @@
 // Retain recursive serialization when the inherited FIFO cannot be used.
 // Remove changed non-precious recipe outputs on build interruption.
 // Report resolved recipes and freshness decisions in explanation mode.
+// Throttle recipe admission by load average without blocking forward progress.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -38,6 +39,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <condition_variable>
 #include <cstdint>
@@ -58,6 +60,7 @@
 #include "expr.h"
 #include "fileutil.h"
 #include "flags.h"
+#include "load_limit.h"
 #include "log.h"
 #include "strutil.h"
 #include "symtab.h"
@@ -805,7 +808,10 @@ class Executor {
               command.shell.empty() ? shell_ : command.shell;
           const std::string& command_shellflag =
               command.shellflag.empty() ? shellflag_ : command.shellflag;
-          AcquireJob();
+          if (!AcquireJob()) {
+            node_failed = true;
+            break;
+          }
           const int result =
               RunRecipe(command_shell, command_shellflag, command.cmd, false,
                         command.environment, command.unset_environment);
@@ -842,7 +848,10 @@ class Executor {
             command.shell.empty() ? shell_ : command.shell;
         const std::string& command_shellflag =
             command.shellflag.empty() ? shellflag_ : command.shellflag;
-        AcquireJob();
+        if (!AcquireJob()) {
+          node_failed = true;
+          break;
+        }
         int result = RunRecipe(command_shell, command_shellflag, command_text,
                                !recursive, command.environment,
                                command.unset_environment);
@@ -1044,10 +1053,30 @@ class Executor {
     return it != done_.end() && it->second.failed;
   }
 
-  void AcquireJob() {
+  bool AcquireJob() {
     std::unique_lock<std::mutex> lock(job_mu_);
-    job_cv_.wait(lock, [this] { return active_jobs_ < job_limit_; });
-    ++active_jobs_;
+    while (!cancel_requested_.load(std::memory_order_relaxed) &&
+           GetBuildSignal() == 0) {
+      if (active_jobs_ < job_limit_) {
+        double sample = -1;
+        if (g_flags.load_limit >= 0 && active_jobs_ > 0 && !load_warning_ &&
+            getloadavg(&sample, 1) != 1) {
+          sample = -1;
+          fprintf(stderr,
+                  "omktr: cannot read load average; limiting this executor "
+                  "to one recipe at a time\n");
+          load_warning_ = true;
+        }
+        if (LoadAllowsJob(g_flags.load_limit, active_jobs_, sample)) {
+          ++active_jobs_;
+          return true;
+        }
+      }
+      // Load can drop without a recipe completing. Poll with a bounded wait
+      // that also makes cancellation responsive; never hold a FIFO token here.
+      job_cv_.wait_for(lock, std::chrono::milliseconds(100));
+    }
+    return false;
   }
 
   std::unique_lock<std::mutex> LockRecursiveCommand() {
@@ -1090,6 +1119,7 @@ class Executor {
   std::condition_variable job_cv_;
   int job_limit_;
   int active_jobs_;
+  bool load_warning_ = false;
   std::string shell_;
   std::string shellflag_;
   uint64_t num_commands_;

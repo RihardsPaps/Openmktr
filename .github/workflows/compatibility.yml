@@ -9,6 +9,17 @@ on:
       - 'validation/compatibility/**'
       - 'tests/ninja_jobserver.py'
       - 'tests/bench.py'
+      - 'packaging/gentoo/**'
+      - 'tests/portage.py'
+      - 'tests/load_limits.py'
+      - 'tests/portage_validation.py'
+      - 'src/load_limit*'
+      - 'src/flags.*'
+      - 'src/exec.cc'
+      - 'src/fileutil.*'
+      - 'src/command.cc'
+      - 'src/main.cc'
+      - 'src/ninja.cc'
 
 permissions:
   contents: read
@@ -33,6 +44,17 @@ jobs:
           docker run --rm openmktr-compat 2>&1 | tee tests.log
       - name: Publish phase and end-to-end benchmark samples
         run: docker run --rm openmktr-compat python3 tests/bench.py ./omktr > benchmark.json
+      - name: Test opt-in Portage lifecycle and local overlay
+        if: matrix.environment == 'gentoo'
+        run: |
+          mkdir -p portage-evidence
+          image_id=$(docker image inspect --format '{{.Id}}' openmktr-compat)
+          docker run --rm --cap-add SYS_ADMIN --cap-add NET_ADMIN \
+            --security-opt seccomp=unconfined \
+            -e OMKTR_PORTAGE_VALIDATION=1 \
+            -e OMKTR_VALIDATION_IMAGE_ID="$image_id" \
+            -v "$PWD/portage-evidence:/portage-evidence" openmktr-compat \
+            python3 validation/compatibility/portage.py --real-packages
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -40,6 +62,7 @@ jobs:
           path: |
             *.log
             benchmark.json
+            portage-evidence/
   gnu-reference:
     runs-on: ubuntu-latest
     timeout-minutes: 30

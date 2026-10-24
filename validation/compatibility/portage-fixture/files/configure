@@ -1,0 +1,13 @@
+#!/bin/sh
+# SPDX-License-Identifier: MPL-2.0
+set -eu
+if [ "${1:-}" = --help ]; then
+  printf '%s\n' 'Openmktr lifecycle fixture configure'
+  exit 0
+fi
+printf '%s' "${EBUILD_PHASE:-}" > configure-phase
+printf '%s' "${CC:-}" > configure-cc
+"${MAKE:-make}" -s -f probe.mk probe
+cp Makefile.in Makefile
+printf '%s\n' 'FIXTURE_VERSION = 1' > config.mk
+printf '%s\n' 'unrelated graph' > build.ninja

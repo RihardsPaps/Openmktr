@@ -1,0 +1,31 @@
+#!/bin/sh
+# Copyright 2026 Rihards Paps and Haralds Paps
+# SPDX-License-Identifier: MPL-2.0
+
+set -eu
+case ${OMKTR_PORTAGE_MODE:-direct} in
+  direct|ninja) ;;
+  *) printf '%s\n' 'omktr-portage: OMKTR_PORTAGE_MODE must be direct or ninja' >&2
+     exit 2 ;;
+esac
+
+# Portage configuration uses an absolute pathname. Also permit PATH invocation
+# for diagnostics, without changing the caller's recipe working directory.
+wrapper=$0
+case $wrapper in
+  */*) ;;
+  *) wrapper=$(command -v "$wrapper") ;;
+esac
+bindir=$(CDPATH= cd -P "$(dirname "$wrapper")" && pwd)
+MAKE=$bindir/omktr
+export MAKE
+if [ ! -x "$MAKE" ]; then
+  printf 'omktr-portage: sibling executable is missing: %s\n' "$MAKE" >&2
+  exit 127
+fi
+
+if [ "${OMKTR_PORTAGE_MODE:-direct}" = ninja ] &&
+   [ "${EBUILD_PHASE:-}" = compile ]; then
+  exec "$MAKE" build "$@"
+fi
+exec "$MAKE" "$@"

@@ -113,6 +113,9 @@ jobs:
             out/sanitized/find_test
             out/sanitized/ninja_test
             out/sanitized/strutil_test
+            out/sanitized/load_limit_test
+            OMKTR_BINARY=/workspace/omktr-sanitized python tests/portage.py
+            OMKTR_BINARY=/workspace/omktr-sanitized python tests/load_limits.py
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/correctness.py
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/make_compat_regressions.py'
       - name: Archive exact source and package tested binary

@@ -3,6 +3,7 @@
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Add build explanations and opt-in compatibility diagnostics.
+// Support inherited and command-line load-average limits.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -96,6 +97,8 @@ struct Flags {
   const char* working_dir;  // -C <dir>
   int num_cpus;
   int num_jobs;
+  double load_limit = -1;
+  bool load_limit_set = false;
   int make_level = 0;
   int remote_num_jobs;
   std::string executable_path;
@@ -110,8 +113,12 @@ struct Flags {
   std::vector<Pattern> traced_variables_pattern;
 
   void Parse(int argc, char** argv);
+  std::string LoadLimitOption() const;
 };
 
 extern Flags g_flags;
+
+// Accept finite nonnegative limits, including representable subnormal values.
+double ParseLoadLimit(const char* value);
 
 #endif  // FLAGS_H_

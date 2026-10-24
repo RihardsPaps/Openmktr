@@ -1,4 +1,5 @@
 > FORK MODIFICATION NOTICE (2026)
+> Added an opt-in Gentoo overlay, Portage adapter, and load-average limits.
 > Added automatic Ninja build usage, locking, and generated-file safety guidance.
 > Added conservative recursive no-op caching and shared Ninja recipe limits.
 > Added optional compatibility lanes and phase/end-to-end benchmark guidance.
@@ -41,6 +42,7 @@ does not replace the reference gate.
 | Ninja generation | Turn evaluated Makefile rules into a Ninja graph and generated launcher. |
 | Regeneration checks | Reuse a generated graph when its recorded inputs remain current. |
 | Recursive builds | Run child Openmktr builds with shared job limits. |
+| Opt-in Portage integration | Use a local Gentoo overlay and select direct or experimental Ninja compilation per package. |
 | GNU-free project toolchain | Build, test, and run Openmktr with LLVM, musl, libc++, Ninja, Python, and POSIX shell tools. |
 
 Openmktr is an actively developed Makefile translator, with direct and Ninja
@@ -262,6 +264,11 @@ working directory used for generation.
 
 ## Everyday usage
 
+Gentoo users can install the live ebuild and opt selected packages into their
+normal Portage lifecycle using the [local overlay and adapter](packaging/gentoo/README.md).
+Direct execution is the default; experimental Ninja compilation is available
+per package. Installing the tool does not activate any package automatically.
+
 These examples assume `omktr` is on your `PATH` and you are in the project you
 want to build. Otherwise, use the executable's absolute path.
 
@@ -296,6 +303,7 @@ the working directory for the build's recipes.
 | `-f FILE` | Read a Makefile; `-f -` reads standard input. |
 | `-C DIR` | Change the working directory before processing the build. |
 | `-jN` | Set direct execution concurrency. For Ninja builds, pass `-jN` to the launcher. |
+| `-lN` | Delay additional recipes while load average is at least N; one recipe can always progress. Zero serializes; bare `-l` clears the limit. |
 | `-k` | Continue independent work after recipe failures. |
 | `-n` | Print ordinary recipes without executing them. Recursive Make commands and recipes marked `+` can still run. |
 | `-q` | Check whether targets need building. |
@@ -439,10 +447,13 @@ Inside Chimera, run the standard checks with:
 
 ```sh
 ninja -f build.ninja -j4 omktr tests
-out/find_test && out/ninja_test && out/strutil_test
+out/find_test && out/ninja_test && out/strutil_test && out/load_limit_test
 python tests/version_generator.py
 python tests/correctness.py
 python tests/make_compat_regressions.py
+python tests/portage.py
+python tests/load_limits.py
+python tests/portage_validation.py
 python tests/regression.py
 sh testcase/dump/run.sh
 ```

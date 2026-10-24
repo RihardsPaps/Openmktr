@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Preserve live Ninja load limits across deferred recursive environments.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -132,7 +133,8 @@ static bool IsShellIdentifierCommand(std::string_view name) {
 // ownership to one child, so a saved make export must not duplicate it.
 static bool IsRecursiveTransportVariable(std::string_view name) {
   return name == "MAKEFLAGS" || name == "MAKEOVERRIDES" ||
-         name == "MAKELEVEL" || name == "KATI_JOBSERVER_RESERVED";
+         name == "MAKELEVEL" || name == "KATI_JOBSERVER_RESERVED" ||
+         name == "KATI_NINJA_LOAD_LIMIT" || name == "KATI_NINJA_LOAD_STATE";
 }
 
 // Recursive commands executed directly by Kati do not pass through the
@@ -258,6 +260,8 @@ static void ExportAllVariables(Command* command, Evaluator* ev) {
   for (std::string_view name_view : GetSymbolNames(
            [](Var* var) { return var->IsDefined() && !var->Obsolete(); })) {
     if (name_view == "MAKELEVEL" || name_view == "KATI_JOBSERVER_RESERVED" ||
+        name_view == "KATI_NINJA_LOAD_LIMIT" ||
+        name_view == "KATI_NINJA_LOAD_STATE" ||
         !IsShellIdentifierCommand(name_view) ||
         !emitted.insert(std::string(name_view)).second)
       continue;

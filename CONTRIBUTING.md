@@ -47,20 +47,25 @@ with the listed build requirements:
 
 ```sh
 ninja -f build.ninja -j4 omktr tests
-out/find_test && out/ninja_test && out/strutil_test
+out/find_test && out/ninja_test && out/strutil_test && out/load_limit_test
 python tests/version_generator.py
 python tests/correctness.py
 python tests/make_compat_regressions.py
+python tests/portage.py
+python tests/load_limits.py
+python tests/portage_validation.py
 python tests/regression.py
 sh testcase/dump/run.sh
 ```
 
 | Check | Coverage |
 | --- | --- |
-| C++ unit binaries | Find emulation, Ninja helpers, and string utilities. |
+| C++ unit binaries | Find emulation, Ninja helpers, string utilities, and load admission. |
 | `version_generator.py` | Build revision generation, including archives without Git. |
 | `correctness.py` | Incremental builds, failures, exports, regeneration, and job limits. |
 | `make_compat_regressions.py` | Dependency, rule, variable, restart, and OpenWrt image-refresh regressions. |
+| `portage.py` and `load_limits.py` | Portable adapter behavior, load scheduling, recursive overrides, cancellation, and FIFO token return. |
+| `portage_validation.py` | Evidence isolation, failure status, and timeout accounting without requiring Portage. |
 | `regression.py` | Checked-in direct/Ninja snapshots and converted POSIX shell fixtures. |
 | `testcase/dump/run.sh` | Include-dump smoke test. |
 
@@ -120,6 +125,9 @@ ninja -f build.sanitizer.ninja -j4 omktr-sanitized tests
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/find_test
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/ninja_test
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/strutil_test
+ASAN_OPTIONS=detect_leaks=0 out/sanitized/load_limit_test
+ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/portage.py
+ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/load_limits.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/correctness.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/make_compat_regressions.py
 ```

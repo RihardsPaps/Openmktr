@@ -2,6 +2,7 @@
 # Changed by the Openmktr fork, maintained by Rihards Paps and
 # Haralds Paps. Adapted build, CI, or repository configuration for the GNU-free fork.
 # Added an isolated external differential incremental campaign gate.
+# Include load admission and adapter checks with sanitized executors.
 # Upstream material retains its Apache-2.0 terms. Fork modifications are
 # covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 # at the repository root. Original notices below remain applicable.
@@ -68,6 +69,9 @@ jobs:
             ninja -f build.sanitizer.ninja -j4 omktr-sanitized tests &&
             out/sanitized/find_test && out/sanitized/ninja_test &&
             out/sanitized/strutil_test &&
+            out/sanitized/load_limit_test &&
+            OMKTR_BINARY=/workspace/omktr-sanitized python tests/portage.py &&
+            OMKTR_BINARY=/workspace/omktr-sanitized python tests/load_limits.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/correctness.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/make_compat_regressions.py' 2>&1 | tee sanitizer.log
       - uses: actions/upload-artifact@v4
