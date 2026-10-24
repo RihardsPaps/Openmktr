@@ -125,3 +125,9 @@ timings, compiler-cache inputs, output equivalence and upstream tests. This is
 not part of the ordinary compatibility lane or a blanket package-cache safety
 claim. Run `python tests/cross_version_cache.py` for the GNU-free evidence
 accounting checks; ccache and Portage are needed only for the external campaign.
+
+The bounded `cache_path_probe.py` follow-up replays three real xz objects
+against old-version-only caches, with explicit positive controls and uncached
+new-state comparisons. Its path profiles produced no cross-version hits;
+the investigation stopped before the conditional C++ benchmark. See the
+same report for the evidence, limitations and retained-container reproduction.

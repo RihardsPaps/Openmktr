@@ -6,17 +6,47 @@
 import importlib.util
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 HERE = Path(__file__).resolve().parents[1] / 'validation/compatibility'
 SPEC = importlib.util.spec_from_file_location('reuse_campaign', HERE / 'cross_version_cache.py')
 CACHE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CACHE)
+SPEC = importlib.util.spec_from_file_location('cache_path_probe', HERE / 'cache_path_probe.py')
+PROBE = importlib.util.module_from_spec(SPEC)
+with patch.dict(sys.modules, {'cross_version_cache': CACHE}):
+    SPEC.loader.exec_module(PROBE)
 
 
 class CacheEvidenceTests(unittest.TestCase):
+    def test_path_qualification_requires_correct_cross_version_hits(self):
+        row = {'object_equal': True, 'diagnostics_equal': True, 'dependencies_equal': True,
+               'upgrade_stats': {'preprocessed_cache_hit': 1}}
+        self.assertTrue(PROBE.qualifies([row]))
+        self.assertFalse(PROBE.qualifies([]))
+        # A correct miss or a same-directory replay cannot qualify relocation.
+        self.assertFalse(PROBE.qualifies([row | {'upgrade_stats': {'cache_miss': 1},
+                                                 'same_directory_stats': {'preprocessed_cache_hit': 1}}]))
+        for key in ('object_equal', 'diagnostics_equal', 'dependencies_equal'):
+            self.assertFalse(PROBE.qualifies([row | {key: False}]))
+
+    def test_dependency_rewriting_must_preserve_resolved_coverage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cwd = root / 'new/build'
+            absolute = (f'unit.o: {root}/new/header.h ' + '\\\n' +
+                        f' {root}/new/source.c\n')
+            relative = 'unit.o: ../header.h ../source.c\n'
+            stale = 'unit.o: ../../old/header.h ../source.c\n'
+            self.assertEqual(PROBE.dependency_paths(absolute, cwd),
+                             PROBE.dependency_paths(relative, cwd))
+            self.assertNotEqual(PROBE.dependency_paths(absolute, cwd),
+                                PROBE.dependency_paths(stale, cwd))
+
     def test_selected_binary_does_not_claim_ebuild_installation_tests(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'evidence'

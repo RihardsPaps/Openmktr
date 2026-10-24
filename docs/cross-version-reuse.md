@@ -18,9 +18,10 @@ accounting without installing ccache or Portage.
 
 The tested conservative ccache configuration produced correct outputs but
 increased median full-build time by **4.3% to 12.5%**. These two small package
-upgrades do not justify implementing a custom artifact cache. The next useful
-experiment is to qualify existing-cache path handling, including depfiles,
-before extending Openmktr's responsibilities.
+upgrades do not justify implementing a custom artifact cache. The bounded
+path-handling follow-up below also failed to qualify cross-version object
+reuse. **Stop this investigation at that gate**; a compilation-heavy C++
+upgrade was conditional on successful xz reuse and was not run.
 
 All **102 controlled combinations** and **120 measured new-version builds**
 passed. Each of the eight package/mode/path combinations has five samples
@@ -82,14 +83,126 @@ evidence and are excluded from the reported measurements.
   dependency coverage comes from the controlled fixtures. No broader real
   package incremental guarantee follows from these fresh builds.
 
-The useful next step is an explicitly opt-in qualification of ccache's
-directory handling on absolute-path builds, with the same debug, macro,
-dependency-file and clean-build comparisons. `CCACHE_BASEDIR` is a candidate
-for that subsequent experiment, with its documented caveats. A custom layer
-would need evidence of reusable work still unavailable through existing
-tools, and complete input tracking for that work. These results supply no
-such justification yet. Expensive C++ builds and other package upgrades may
-have different results; neither their performance nor their safety is claimed.
+These initial results motivated a bounded qualification of ccache's directory
+handling on absolute-path builds, recorded below. A custom layer would need
+evidence of reusable work still unavailable through existing tools, and
+complete input tracking for that work. These results supply no such
+justification. Expensive C++ builds and other package upgrades may have
+different results; neither their performance nor their safety is claimed.
+
+### Bounded path follow-up — stop decision
+
+The follow-up replayed three corresponding real liblzma compilations from
+the retained xz 5.8.3 and 5.8.4 configured trees: `alone_decoder`,
+`vli_decoder` and `crc32_fast`. It used ccache 4.14 and the original pinned
+Clang/environment. Release sources, generated configuration and ebuilds
+were not edited. This was an untimed object feasibility probe, not another
+package performance measurement.
+
+Each profile tested all three objects both without dependency generation
+and with explicit `-MD -MF` generation, for **18 real-upgrade comparisons**.
+A second set of **18 relocation-only controls** copied identical old content
+into both versioned layouts. This separates path constraints from actual
+changes in the new release. The results were the same in both workloads:
+
+| Profile, retaining the original Clang prefix maps | Cross-version hits | Exact object matches | Dependency coverage matches |
+| --- | ---: | ---: | ---: |
+| `CCACHE_BASEDIR` unset | 0 / 6 | 6 / 6 | 3 / 3 |
+| Common parent `/var/tmp/portage/app-arch` | 0 / 6 | 0 / 6 | 3 / 3 |
+| Each version's own `work` directory | 0 / 6 | 0 / 6 | 3 / 3 |
+
+For each comparison, the probe compiled the new state uncached, populated a
+fresh private cache with that old-version compilation only, verified an
+identical same-directory replay hit, restored the old-only cache, then
+compiled the new state through ccache. **All 18 same-directory positive
+controls hit and matched their seed objects, diagnostics and dependencies.**
+Another 18 same-directory controls passed in the relocation-only workload.
+Both experiments completed successfully, but no profile qualified for the
+next stage: a passing experiment status is not a passing cache configuration.
+
+Ccache's relative rewriting left the versioned source-directory component
+in the compiler input, for example:
+
+```text
+../../../xz-5.8.3/src/liblzma/common/alone_decoder.c
+../../../xz-5.8.4/src/liblzma/common/alone_decoder.c
+```
+
+In all 18 relocation-only input comparisons, substituting the version in
+the recorded debug-input text removed every difference. This substitution
+was analysis only; it never changed a compiler invocation, source, cache
+input or qualification criterion. The real upgrade retained other differences,
+including changed declarations in `common.h` and error cleanup code in
+`alone_decoder.c`. Those misses cannot all be attributed to paths, and
+path normalization alone would not guarantee reuse of these real upgrades.
+
+The base-directory profiles also changed compiler-visible
+paths before the existing absolute Clang prefix maps could match them.
+`llvm-dwarfdump` showed the uncached new object's `DW_AT_name` as
+`/openmktr-src/src/liblzma/common/alone_decoder.c`, versus
+`../../../xz-5.8.4/src/liblzma/common/alone_decoder.c` with `CCACHE_BASEDIR`.
+All 12 mismatching objects in each workload became byte-identical to their references after
+`llvm-objcopy --strip-debug` in separate diagnostic copies. That explains
+the differences; stripping debug data is not an accepted repair or a weaker
+qualification criterion. These were cache misses followed by changed
+compiler path behavior, not evidence of stale cache hits or changed machine
+code.
+
+Diagnostics matched in all 36 comparisons. All 18 emitted new-state
+depfiles resolved to exactly the same existing input paths as the uncached
+reference; textual absolute/relative spelling differed. No cross-version
+restoration succeeded, so this establishes no post-restoration incremental,
+file-macro, link, runtime or end-to-end performance qualification for the
+new base-directory profiles. Further safety fixtures and the C++ benchmark
+were deliberately not run after this failed feasibility gate.
+
+**Recommendation: stop further cross-version cache work for now.** Retain
+the optional harness and evidence. Reopen only for a concrete costly
+workload that justifies another separately scoped experiment. Neither these
+misses nor the original slowdown justify a custom cache implementation.
+
+The [follow-up results](cross-version-path-results.json) retain every
+comparison, per-call counters, input identities and the explicit stop
+decision. Full evidence, including original objects, depfiles, DWARF dumps,
+ccache debug inputs and old/new input diffs, remains under
+`validation/logs/cross-version-followup-20261024/xz-probe-final/` and
+`validation/logs/cross-version-followup-20261024/xz-relocation-control/`.
+The immutable real-upgrade run used the first probe snapshot; the subsequent
+snapshot added the relocation-only control and computed the common parent
+from each recorded path. Both snapshots and their hashes are retained.
+Eight portable accounting/failure tests and eight Portage evidence tests
+passed in Chimera with the current checkout mounted read-only. No C++ runtime
+code changed; the full runtime gate was not rerun for this follow-up.
+
+To reproduce, first retain the original campaign container and its matching
+evidence. The probe requires both versioned configured trees at the paths in
+the compiler journals. If those are unavailable, recreate a passed xz campaign
+using the preceding reproduction procedure with `--pair xz-utils --mode ninja
+--profile normalized --repeats 1`, retaining its container and evidence.
+Then run the probe in a disposable filesystem copy:
+
+```sh
+docker commit omktr-cross-version-qualified openmktr-reuse-path-inputs
+image_id=$(docker image inspect --format '{{.Id}}' openmktr-reuse-path-inputs)
+mkdir -p followup-evidence
+docker run --rm -e OMKTR_PORTAGE_VALIDATION=1 \
+  -e OMKTR_VALIDATION_IMAGE_ID="$image_id" \
+  -v "$PWD:/candidate:ro" \
+  -v "$PWD/validation/logs/cross-version-20261024/qualified:/prior:ro" \
+  -v "$PWD/followup-evidence:/followup" \
+  --entrypoint python3 "$image_id" \
+  /candidate/validation/compatibility/cache_path_probe.py \
+  --prior /prior --output /followup/xz-probe
+```
+
+Use the corresponding retained container name and evidence path if
+recreating the input campaign. Each invocation requires a fresh output and
+workspace. Repeat in another disposable copy with `--relocation-only` and
+`--output /followup/xz-relocation-control` for the identical-content control.
+The recorded derived image was
+`sha256:e7b211046f7fecc9c0d32c270179ea167f119bfdb927d33279ef9d5e3efc3ba3`.
+This probe executes compiler calls only; it does not run Portage phases or
+need the namespace permissions used by the full package campaign.
 
 ### Validation and evidence correction
 
