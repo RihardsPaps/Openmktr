@@ -54,6 +54,7 @@ python tests/make_compat_regressions.py
 python tests/portage.py
 python tests/load_limits.py
 python tests/portage_validation.py
+python tests/cross_version_cache.py
 python tests/regression.py
 sh testcase/dump/run.sh
 ```
@@ -66,6 +67,7 @@ sh testcase/dump/run.sh
 | `make_compat_regressions.py` | Dependency, rule, variable, restart, and OpenWrt image-refresh regressions. |
 | `portage.py` and `load_limits.py` | Portable adapter behavior, load scheduling, recursive overrides, cancellation, and FIFO token return. |
 | `portage_validation.py` | Evidence isolation, failure status, and timeout accounting without requiring Portage. |
+| `cross_version_cache.py` | Cross-version cache evidence comparisons, seed isolation, and benchmark accounting without requiring ccache. |
 | `regression.py` | Checked-in direct/Ninja snapshots and converted POSIX shell fixtures. |
 | `testcase/dump/run.sh` | Include-dump smoke test. |
 
@@ -169,6 +171,10 @@ native cached children, including the available CPU affinity by default.
 Use `--cache-kind ninja` to measure explicit `build` children instead.
 The [investigation guide](docs/recursive-cache.md) documents the cache
 safety boundaries, measurement limits and recorded results.
+
+For opt-in compiler-cache experiments across fresh Portage version directories,
+see [cross-version reuse](docs/cross-version-reuse.md). That external campaign
+is separate from the recursive no-op cache and the portable PR gate.
 
 [PR #1](https://github.com/RihardsPaps/Openmktr/pull/1)
 records the original C++ comparison, test results, and GNU dependency audit.
