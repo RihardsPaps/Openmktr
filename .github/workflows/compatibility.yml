@@ -50,7 +50,7 @@ jobs:
           mkdir -p portage-evidence
           image_id=$(docker image inspect --format '{{.Id}}' openmktr-compat)
           docker run --rm --cap-add SYS_ADMIN --cap-add NET_ADMIN \
-            --security-opt seccomp=unconfined \
+            --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
             -e OMKTR_PORTAGE_VALIDATION=1 \
             -e OMKTR_VALIDATION_IMAGE_ID="$image_id" \
             -v "$PWD/portage-evidence:/portage-evidence" openmktr-compat \

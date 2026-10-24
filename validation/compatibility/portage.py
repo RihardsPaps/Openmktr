@@ -40,7 +40,8 @@ def namespace_warning(log):
     # actual Portage diagnostic line, including its dependency-progress prefix.
     plain = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', log)
     return re.search(r'(?m)^(?:\s*\*?\s*|Calculating dependencies \.\.\.)'
-                     r'Unable to (?:unshare|configure loopback interface):', plain) is not None
+                     r'Unable to (?:unshare|configure loopback interface|mount new /proc):',
+                     plain) is not None
 
 
 @contextmanager
@@ -94,7 +95,8 @@ def run(args, output, name, *, cwd=None, env=None, success=True, timeout=3600):
     if namespace_warning(log_text):
         raise RuntimeError('Portage namespace sandboxes could not start; run the '
                            'container with --cap-add SYS_ADMIN --cap-add NET_ADMIN '
-                           '--security-opt seccomp=unconfined; see ' + str(output))
+                           '--security-opt seccomp=unconfined '
+                           '--security-opt apparmor=unconfined; see ' + str(output))
     if (record['exit_status'] == 0) != success:
         raise RuntimeError(f'{name}: unexpected exit {record["exit_status"]}; see {output}')
 

@@ -56,7 +56,7 @@ these lanes. Both environments run the portable `tests/portage.py` and
 
 ```sh
 docker run --rm --cap-add SYS_ADMIN --cap-add NET_ADMIN \
-  --security-opt seccomp=unconfined \
+  --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
   -e OMKTR_PORTAGE_VALIDATION=1 \
   -e OMKTR_VALIDATION_IMAGE_ID="$(docker image inspect --format '{{.Id}}' openmktr-gentoo)" \
   -v "$PWD/portage-evidence:/portage-evidence" openmktr-gentoo \
@@ -78,8 +78,10 @@ The tool's installation must create no activation settings. The adapter's
 portable checks cover argument quoting and signal propagation separately.
 
 The container permissions allow Portage to create its IPC, network, and PID
-namespace sandboxes and bring up the isolated loopback interface. The harness
-explicitly enables those features and fails if Portage reports that it cannot
+namespace sandboxes and bring up the isolated loopback interface. Portage
+also needs AppArmor to permit mounting `/proc` inside its PID sandbox;
+Docker's default profile on Ubuntu CI hosts blocks that mount.
+The harness explicitly enables those features and fails if Portage reports that it cannot
 start them. These permissions are only for this disposable
 external test container; the portable test image does not need them.
 

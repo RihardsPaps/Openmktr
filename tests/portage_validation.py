@@ -96,6 +96,15 @@ class EvidenceTests(unittest.TestCase):
             PORTAGE.verify_real_phases(log.replace('/usr/bin/omktr-portage -j4', 'make -j4')
                                        + '/usr/bin/omktr-portage install\n', 'package')
 
+    def test_pid_sandbox_mount_failure_has_actionable_diagnostic(self):
+        with self.assertRaisesRegex(RuntimeError, 'apparmor=unconfined'):
+            with PORTAGE.evidence_run(self.output):
+                PORTAGE.run([sys.executable, '-c',
+                             'print("Unable to mount new /proc: 32"); raise SystemExit(1)'],
+                            self.output, 'pid-sandbox')
+        self.assertEqual(self.records()[0]['exit_status'], 1)
+        self.assertEqual(self.result()['status'], 'failed')
+
     def test_namespace_diagnostics_are_not_matched_inside_echoed_commands(self):
         diagnostic = 'Unable to configure loopback interface: EPERM'
         self.assertFalse(PORTAGE.namespace_warning('+ python -c print(' + repr(diagnostic) + ')'))
