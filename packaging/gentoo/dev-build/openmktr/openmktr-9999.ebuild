@@ -6,7 +6,7 @@ LLVM_COMPAT=( {19..22} )
 PYTHON_COMPAT=( python3_{11..14} )
 NINJA=ninja-reference
 
-inherit git-r3 llvm-r2 ninja-utils python-any-r1
+inherit git-r3 llvm-r2 ninja-utils python-single-r1
 
 DESCRIPTION="Makefile executor and Ninja graph generator with opt-in Portage integration"
 HOMEPAGE="https://github.com/RihardsPaps/Openmktr"
@@ -17,9 +17,11 @@ LICENSE="MPL-2.0 Apache-2.0"
 SLOT="0"
 KEYWORDS=""
 IUSE="test"
+REQUIRED_USE="${PYTHON_REQUIRED_USE}"
 RESTRICT="!test? ( test )"
 
 RDEPEND="llvm-runtimes/libcxx:=
+	${PYTHON_DEPS}
 	>=dev-build/ninja-1.13"
 DEPEND="llvm-runtimes/libcxx:="
 BDEPEND="${PYTHON_DEPS}
@@ -31,7 +33,7 @@ BDEPEND="${PYTHON_DEPS}
 
 pkg_setup() {
 	llvm-r2_pkg_setup
-	python-any-r1_pkg_setup
+	python-single-r1_pkg_setup
 }
 
 src_configure() {
@@ -58,15 +60,21 @@ src_test() {
 	"${PYTHON}" tests/portage_validation.py || die
 	"${PYTHON}" tests/load_limits.py || die
 	"${PYTHON}" tests/correctness.py || die
+	"${PYTHON}" tests/workspace.py || die
 	"${PYTHON}" tests/make_compat_regressions.py || die
 	sh testcase/dump/run.sh || die
 }
 
 src_install() {
 	dobin omktr packaging/gentoo/omktr-portage
+	python_fix_shebang tools/omktr_workspace.py
+	newbin tools/omktr_workspace.py omktr-workspace
+	insinto /usr/share/openmktr
+	doins packaging/gentoo/workspace-hooks.sh
 	dodoc README.md NOTICE LICENSE LICENSES/Apache-2.0.txt
 	dodoc LICENSES/upstream-AUTHORS.txt LICENSES/upstream-CONTRIBUTORS.txt
 	dodoc docs/LICENSING.md
+	dodoc docs/workspaces.md
 	docinto portage
 	dodoc packaging/gentoo/README.md
 	dodoc -r packaging/gentoo/examples

@@ -1,5 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
 // Preserve live Ninja load limits across deferred recursive environments.
+// Preserve literal saved compiler commands when resolving deferred assignments.
+// Accept recursive assignment operators when expanding deferred values.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -58,9 +60,41 @@ static std::string ExpandDeferredAssignments(std::string_view input,
   std::string output;
   output.reserve(input.size());
   char quote = 0;
+  size_t word_start = 0;
+
+  auto assignment_prefix = [&](size_t end) {
+    std::string_view prefix = input.substr(word_start, end - word_start);
+    // Accept 'CC=$(VALUE)' and CC='$(VALUE)', but not an equals sign
+    // embedded in arbitrary quoted data such as a saved compiler command.
+    if (!prefix.empty() && prefix.front() == '\'')
+      prefix.remove_prefix(1);
+    if (!prefix.empty() && prefix.back() == '\'')
+      prefix.remove_suffix(1);
+    if (prefix.empty() || prefix.back() != '=')
+      return false;
+    prefix.remove_suffix(1);
+    if (!prefix.empty() &&
+        (prefix.back() == '+' || prefix.back() == ':' || prefix.back() == '?'))
+      prefix.remove_suffix(1);
+    if (prefix.empty() ||
+        !(isalpha(static_cast<unsigned char>(prefix.front())) ||
+          prefix.front() == '_'))
+      return false;
+    return std::all_of(prefix.begin(), prefix.end(),
+                       [](unsigned char c) { return isalnum(c) || c == '_'; });
+  };
 
   for (size_t i = 0; i < input.size(); ++i) {
     char c = input[i];
+    if (c == '\\' && quote != '\'') {
+      output += c;
+      if (i + 1 < input.size())
+        output += input[++i];
+      continue;
+    }
+    if (quote == 0 && (isspace(static_cast<unsigned char>(c)) || c == ';' ||
+                       c == '|' || c == '&' || c == '(' || c == ')'))
+      word_start = i + 1;
     if (c == '\'' || c == '"' || c == '`') {
       if (quote == 0)
         quote = c;
@@ -71,7 +105,7 @@ static std::string ExpandDeferredAssignments(std::string_view input,
     }
 
     if (c == '$' && i + 1 < input.size() && input[i + 1] == '(' &&
-        quote == '\'' && !output.empty() && output.back() == '=') {
+        quote == '\'' && assignment_prefix(i)) {
       size_t end = i + 2;
       int depth = 1;
       while (end < input.size() && depth != 0) {

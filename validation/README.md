@@ -72,6 +72,57 @@ Those are synthetic fixtures, not incremental FFmpeg or Linux measurements.
 Historical results retain their original execution-only meaning; rerun this
 helper to obtain end-to-end totals rather than inferring them from old reports.
 
+For paired Openmktr baseline/candidate comparisons on the same Linux builder,
+use `benchmark_ninja.py`. It needs Python 3.12+, Ninja, Clang 18 by default, and the
+unmodified `ffmpeg-7.1.1.tar.xz` or `linux-6.12.tar.xz` release archive:
+
+```sh
+python3 validation/benchmark_ninja.py --root /disposable/report/ffmpeg \
+  --archives /path/to/archives --project ffmpeg \
+  --baseline /path/to/baseline/omktr --baseline-revision BASE_REVISION \
+  --candidate /path/to/candidate/omktr --candidate-revision CANDIDATE_REVISION
+```
+
+Repeat with `--project linux` and a new report directory. `--project synthetic`
+needs no archive and checks controlled included-file content changes. Defaults
+are both `omktr build` and legacy generation/launcher entry points, `-j8` and
+`-j16`, two discarded warmup pairs, and seven measured pairs. Baseline/candidate
+order alternates; each pair starts with fresh configured build directories.
+Build both tools with the same compiler, libraries, optimisation and link flags.
+Run performance workloads sequentially without simultaneous test/build jobs.
+
+Each clean build is followed by no-op, touched-source, missing-object and
+Makefile timestamp-change invocations. Source timestamps are restored; release
+contents are never edited. Configuration and verification are outside the build
+timer. Legacy runs record separate generation/regeneration and execution times;
+single-command runs record the complete invocation. Reports retain commands,
+statuses, binary/archive/configuration hashes, raw samples including warmups,
+object changes, graph bytes, and source-content/symlink integrity checks. Release
+artifacts must match between tools and incremental scenarios. FFmpeg also runs
+the encode smoke check. Candidate no-op object rebuilds and unrelated-object
+changes fail validation. Baseline no-op work is retained as performance-defect
+evidence, rather than excused in the candidate.
+
+`report.json` includes paired improvements and a deterministic bootstrap interval
+for their median. Fewer than seven complete measured pairs cannot support an
+improvement/regression flag; incomplete pairs never enter comparisons. Treat
+intervals as workload evidence, not universal performance guarantees, and inspect
+any apparent regression with a separate repeated run. Failed commands remain in
+`commands.jsonl`; a failed run retains its partial report. Existing reports are
+never overwritten. Collect execution traces and graph/statistics diagnostics in
+separate runs, outside these timing samples.
+
+The [recorded comparison](../docs/ninja-performance.md) and
+[individual samples](ninja-performance-results.json) disclose complete runs,
+excluded interference, and incomplete Linux runs caused by baseline compiler
+crashes. They do not establish the full clean/incremental acceptance objective.
+The [PR candidate recheck](pr-performance-results.json) separately records the
+submitted source hashes, complete synthetic matrix and FFmpeg build/j16 repeat.
+`--llvm-version 19` selects version-suffixed LLVM 19 tools. The isolated
+[`ninja/Dockerfile.llvm19`](ninja/Dockerfile.llvm19) supplies external release
+prerequisites; use identical baseline/candidate binaries and explicit matching
+container stack limits. This image does not replace the Chimera gate.
+
 The retained [issue 37 measurements](issue37-results.json) identify each measured
 revision and phase. These selected configurations do not reproduce every detail
 of the original reporter's Gentoo/Ryzen environment.

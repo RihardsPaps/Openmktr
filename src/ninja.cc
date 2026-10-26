@@ -10,6 +10,11 @@
 // Reuse Ninja's default POSIX shell instead of spawning a second shell.
 // Preserve runtime reservation ownership across generated environment files.
 // Clean changed non-precious outputs before interrupted timestamp guards recur.
+// Capture interruption cleanup state in the existing recipe supervisor.
+// Serialize evaluated recipes without a second deferred-assignment expansion.
+// Retain managed-workspace recipe changes without trusting timestamps alone.
+// Preserve trailing background commands inside generated shell guards.
+// Track workspace exports and identities of elided source-only recipes.
 // Limit depfile inference to literal compiler commands; preserve quoted
 // recipes. Reject known Ninja compatibility gaps before publishing a strict
 // graph. Upstream material retains its Apache-2.0 terms. Fork modifications are
@@ -47,6 +52,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <fstream>
 #include <map>
 #include <ostream>
@@ -85,6 +91,21 @@ static std::string ShellQuote(std::string_view s) {
   }
   out += "'";
   return out;
+}
+
+static std::string EncodeShellScript(std::string_view script) {
+  std::string encoded = "eval \"$(printf '%s\\n'";
+  size_t start = 0;
+  while (start <= script.size()) {
+    const size_t end = script.find('\n', start);
+    encoded += " " + ShellQuote(script.substr(start, end == std::string::npos
+                                                         ? std::string::npos
+                                                         : end - start));
+    if (end == std::string::npos)
+      break;
+    start = end + 1;
+  }
+  return encoded + ")\"";
 }
 
 static bool EnsureDirectory(std::string_view path) {
@@ -258,8 +279,15 @@ class NinjaGenerator {
       ERROR("*** cannot create Ninja output directory: %s", g_flags.ninja_dir);
     PopulateNinjaNodes(nodes);
     unlink(GetNinjaStampFilename().c_str());
+    const char* workspace_build = getenv("OMKTR_WORKSPACE_BUILD");
+    const bool managed_workspace = workspace_build && *workspace_build;
+    // Capture exported values once, as env.sh does, before including their
+    // exact bytes in workspace commands and recipe identities.
+    if (managed_workspace)
+      GenerateShell();
     GenerateNinja();
-    GenerateShell();
+    if (!managed_workspace)
+      GenerateShell();
     GenerateStamp(orig_args);
   }
 
@@ -376,41 +404,9 @@ class NinjaGenerator {
           break;
 
         case '$':
-          // A recursive make command may deliberately defer a make
-          // reference with '$$' so that the child make sees it as a
-          // command-line assignment, e.g. CXX=$$(RAW_CXX).  Once the recipe
-          // is serialized into Ninja there is no make expansion left in the
-          // child process.  Resolve such assignment values while the parent
-          // evaluator is still available; otherwise the child receives an
-          // empty override and masks its own compiler definition.
-          if (in[1] == '(' && quote == '\'' && cmd_buf->size() > orig_size &&
-              (*cmd_buf)[cmd_buf->size() - 1] == '=') {
-            const char* end = in + 2;
-            int depth = 1;
-            while (*end && depth != 0) {
-              if (*end == '(')
-                depth++;
-              else if (*end == ')')
-                depth--;
-              end++;
-            }
-
-            if (depth == 0) {
-              std::string name(in + 2, end - in - 3);
-              Var* var = ev_->LookupVar(Intern(name));
-              if (var != nullptr && var->IsDefined()) {
-                const std::string value = var->Eval(ev_);
-                for (char c : value) {
-                  if (c == '$')
-                    *cmd_buf += "$$";
-                  else
-                    *cmd_buf += c;
-                }
-                in = end - 1;
-                break;
-              }
-            }
-          }
+          // CommandEvaluator has resolved deferred assignment overrides.
+          // Any remaining dollars are recipe data, including $(pound) in
+          // saved compiler commands. Only escape them for Ninja here.
           *cmd_buf += "$$";
           break;
 
@@ -464,6 +460,22 @@ class NinjaGenerator {
         break;
       }
       cmd_buf->resize(cmd_buf->size() - 1);
+    }
+
+    // A background list already ends with a shell separator. Finish it with
+    // a builtin no-op so guards and recipe joins can append their own ';' or
+    // '&&' without producing invalid '&;' or '& &&' syntax. Its exit status
+    // remains zero, as it was for the asynchronous list.
+    if (quote == 0 && cmd_buf->size() > orig_size && cmd_buf->back() == '&') {
+      size_t end = cmd_buf->size() - 1;
+      size_t backslashes = 0;
+      while (end > orig_size && (*cmd_buf)[end - 1] == '\\') {
+        ++backslashes;
+        --end;
+      }
+      if (backslashes % 2 == 0 &&
+          (end == orig_size || (*cmd_buf)[end - 1] != '&'))
+        *cmd_buf += " :";
     }
 
     return std::string_view(cmd_buf->data() + orig_size,
@@ -559,21 +571,8 @@ class NinjaGenerator {
       }
 
       std::string encoded_script;
-      if (preserve_newlines) {
-        encoded_script = "eval \"$(printf '%s\\n'";
-        size_t start = 0;
-        while (start <= c.cmd.size()) {
-          const size_t end = c.cmd.find('\n', start);
-          encoded_script +=
-              " " + ShellQuote(c.cmd.substr(start, end == std::string::npos
-                                                       ? std::string::npos
-                                                       : end - start));
-          if (end == std::string::npos)
-            break;
-          start = end + 1;
-        }
-        encoded_script += ")\"";
-      }
+      if (preserve_newlines)
+        encoded_script = EncodeShellScript(c.cmd);
       const char* in =
           preserve_newlines ? encoded_script.c_str() : c.cmd.c_str();
       while (isspace(*in))
@@ -674,11 +673,15 @@ class NinjaGenerator {
     // "%.h:; @:". It is an input, not a generated output: declaring it as an
     // output would make "ninja -t clean" delete the source file.
     struct stat existing_output;
-    if (!node->is_phony && node->deps.empty() && node->order_onlys.empty() &&
+    const bool elided_source_recipe =
+        !node->is_phony && node->deps.empty() && node->order_onlys.empty() &&
         node->validations.empty() && commands.size() == 1 &&
         !commands.front().echo && commands.front().cmd == ":" &&
         stat(node->output.c_str(), &existing_output) == 0 &&
-        S_ISREG(existing_output.st_mode))
+        S_ISREG(existing_output.st_mode);
+    const char* workspace_build = getenv("OMKTR_WORKSPACE_BUILD");
+    const bool managed_workspace = workspace_build && *workspace_build;
+    if (elided_source_recipe && !managed_workspace)
       return;
 
     std::string rule_name = "phony";
@@ -711,44 +714,81 @@ class NinjaGenerator {
       // valid shell no-op, including when the leaf-output guard is added.
       if (cmd_buf.empty())
         cmd_buf = ":";
+      // env.sh alone is invisible to Ninja's command hash. Repeat its stable
+      // global exports here so an environment change schedules this edge and
+      // makes its full recipe identity differ. Keep this after depfile
+      // inference, which expects a literal compiler command, and before the
+      // target-specific export prefixes already present in cmd_buf.
+      if (managed_workspace)
+        cmd_buf = EscapeNinja(workspace_environment_) + cmd_buf;
+      std::string recipe_state;
+      if (managed_workspace && !node->is_phony) {
+        if (workspace_recipe_dir_.empty()) {
+          workspace_recipe_dir_ = GetFilename(".recipes%s");
+          if (!EnsureDirectory(workspace_recipe_dir_))
+            ERROR("cannot create workspace recipe directory: %s",
+                  workspace_recipe_dir_.c_str());
+        }
+        uint64_t key = UINT64_C(14695981039346656037);
+        for (unsigned char c : node->output.str()) {
+          key ^= c;
+          key *= UINT64_C(1099511628211);
+        }
+        std::ostringstream name;
+        name << workspace_recipe_dir_ << '/' << std::hex << key;
+        recipe_state = name.str();
+        size_t collision = 0;
+        while (!recipe_state_paths_.insert(recipe_state).second)
+          recipe_state = name.str() + "." + std::to_string(++collision);
+        if (recipe_state.front() != '/')
+          recipe_state = working_dir_ + "/" + recipe_state;
+        // Full bytes, including the output name, are compared at execution.
+        // Filename hashes only select storage; collisions can cause extra
+        // rebuilds across graph reordering, never identity equality.
+        std::string identity = "OMKTR_RECIPE1\n" + node->output.str();
+        for (const std::string& part : {command_shell, command_shellflag,
+                                        has_depfile ? depfile : "", cmd_buf}) {
+          identity += '\0';
+          identity += part;
+        }
+        WriteNinjaRecipeState(recipe_state, identity);
+        if (elided_source_recipe) {
+          // The existing file satisfies this no-op rule without execution.
+          // Retain that baseline so replacing ':' with a real recipe can
+          // invalidate it, while keeping the source out of Ninja's outputs.
+          WriteNinjaRecipeState(recipe_state + ".success", identity);
+          return;
+        }
+      }
+      const std::string recipe_unchanged =
+          recipe_state.empty() ? ""
+          : has_depfile        ? "false && "
+                               : "[ \"$${KATI_RECIPE_CHANGED:-0}\" != 1 ] && ";
+      // Make's declared prerequisite list omits Ninja's depfile inputs. Never
+      // let it suppress a scheduled compiler recipe in a managed workspace.
+      // Keep commands stable before/after first output creation and restore.
+      const bool make_freshness_guard = recipe_state.empty() || !has_depfile;
       // Internal cleanup helpers are ordinary commands, not recursive makes.
       // Classify the actual recipe before adding those executable references.
       use_local_pool = IsRecursiveKatiCommand(cmd_buf);
+      // The helper already supervises the recipe process. Record the output
+      // there after admission instead of launching another copy of the tool
+      // and a shell subshell/trap wrapper for every file recipe. An absolute
+      // path also works when the recipe itself changes its working directory.
+      std::string cleanup_output;
       if (!node->is_phony && !node->precious && cmd_buf != ":") {
-        // Keep this inside the freshness guards: merely checking an existing
-        // output must not arm cleanup. A separate subshell keeps recipe exit,
-        // exec, errexit and user traps from bypassing the supervising shell.
-        const std::string tool = ShellQuote(GetExecutablePath());
-        const std::string output = ShellQuote(node->output.str());
-        const std::string cleanup = "kati_cleanup_output";
-        std::string supervise = "kati_output_stamp=$$(" + tool +
-                                " --internal-output-stamp " + output +
-                                ") || exit $$?; kati_cleanup_output() { " +
-                                tool + " --internal-delete-changed-output " +
-                                output + " \"$$kati_output_stamp\"; }; ";
-        for (const auto& signal :
-             {std::make_pair("HUP", 129), std::make_pair("INT", 130),
-              std::make_pair("QUIT", 131), std::make_pair("TERM", 143)}) {
-          supervise +=
-              "trap " +
-              ShellQuote(cleanup + "; exit " + std::to_string(signal.second)) +
-              " " + signal.first + "; ";
-        }
-        supervise += "trap " +
-                     ShellQuote(
-                         "kati_recipe_status=$$?; "
-                         "case $$kati_recipe_status in 129|130|131|143) " +
-                         cleanup + ";; esac") +
-                     " 0; ";
-        cmd_buf = supervise + "( " + cmd_buf + " )";
+        cleanup_output = std::string(node->output.str());
+        if (cleanup_output.front() != '/')
+          cleanup_output = working_dir_ + "/" + cleanup_output;
       }
       if (vpath_output) {
         const std::string output = ShellQuote(node->output.str());
         const std::string provider = ShellQuote(node->vpath_provider.str());
-        std::string current = "if { [ ! -e " + output + " ] || [ -L " + output +
-                              " ]; } && [ -e " + provider + " ]";
-        std::string local_current =
-            "if [ -e " + output + " ] && [ ! -L " + output + " ]";
+        std::string current = "if " + recipe_unchanged + "{ [ ! -e " + output +
+                              " ] || [ -L " + output + " ]; } && [ -e " +
+                              provider + " ]";
+        std::string local_current = "if " + recipe_unchanged + "[ -e " +
+                                    output + " ] && [ ! -L " + output + " ]";
         for (const NamedDepNode& dep : node->deps) {
           // A prerequisite-only rule retains its provider even when a
           // prerequisite is newer: there is no recipe to replace it.
@@ -788,15 +828,17 @@ class NinjaGenerator {
           [](const NamedDepNode& dep) { return dep.second->is_phony; });
       // Order-only prerequisites may run, but they do not make an existing
       // output stale. Ninja has no prior build-log entry for such an output.
-      if (!vpath_output && !node->is_phony && node->deps.empty() &&
-          node->validations.empty()) {
-        cmd_buf = "if [ -e " + ShellQuote(node->output.str()) +
-                  " ]; then :; else " + cmd_buf + "; fi";
-      } else if (!vpath_output && !node->is_phony && !node->deps.empty() &&
-                 !has_phony_input && node->validations.empty() &&
-                 Exists(node->output.str())) {
+      if (make_freshness_guard && !vpath_output && !node->is_phony &&
+          node->deps.empty() && node->validations.empty()) {
+        cmd_buf = "if " + recipe_unchanged + "[ -e " +
+                  ShellQuote(node->output.str()) + " ]; then :; else " +
+                  cmd_buf + "; fi";
+      } else if (make_freshness_guard && !vpath_output && !node->is_phony &&
+                 !node->deps.empty() && !has_phony_input &&
+                 node->validations.empty() && Exists(node->output.str())) {
         const std::string output = ShellQuote(node->output.str());
-        std::string current = "if [ -e " + output + " ]";
+        std::string current =
+            "if " + recipe_unchanged + "[ -e " + output + " ]";
         for (const NamedDepNode& dep : node->deps) {
           const std::string input = ShellQuote(dep.first.str());
           current += " && [ -e " + input + " ] && [ ! " + input + " -nt " +
@@ -837,12 +879,12 @@ class NinjaGenerator {
       // set at recipe time and skip only when the edge is stale solely due to
       // a low-resolution prerequisite within the same second.
       const std::string output = ShellQuote(node->output.str());
-      if (!node->low_resolution_inputs.empty()) {
-        std::string guard = "if " + ShellQuote(GetExecutablePath()) +
-                            " --internal-low-resolution-up-to-date " + output +
-                            " " + std::to_string(node->actual_inputs.size()) +
-                            " " +
-                            std::to_string(node->low_resolution_inputs.size());
+      if (make_freshness_guard && !node->low_resolution_inputs.empty()) {
+        std::string guard =
+            "if " + recipe_unchanged + ShellQuote(GetExecutablePath()) +
+            " --internal-low-resolution-up-to-date " + output + " " +
+            std::to_string(node->actual_inputs.size()) + " " +
+            std::to_string(node->low_resolution_inputs.size());
         for (Symbol input : node->actual_inputs)
           guard += " " + ShellQuote(input.str());
         for (Symbol input : node->low_resolution_inputs)
@@ -864,16 +906,24 @@ class NinjaGenerator {
       const bool token_recipe =
           !use_local_pool &&
           !(commands.size() == 1 && commands.front().cmd == ":");
-      const bool helper_recipe = token_recipe || use_local_pool;
+      const bool helper_recipe = token_recipe || use_local_pool ||
+                                 !cleanup_output.empty() ||
+                                 !recipe_state.empty();
       const char* recipe_helper = token_recipe
                                       ? " --internal-run-recipe "
                                       : " --internal-run-recursive-recipe ";
       const bool recipe_in_rsp = cmd_buf.size() > 100 * 1000;
+      const std::string cleanup_arg =
+          recipe_state.empty()
+              ? (cleanup_output.empty() ? "" : " " + ShellQuote(cleanup_output))
+              : " " + ShellQuote(cleanup_output) + " " +
+                    ShellQuote(recipe_state);
       if (helper_recipe && !recipe_in_rsp) {
         cmd_buf = "cd " + ShellQuote(working_dir_) + " && " +
                   EscapeNinja(ShellQuote(GetExecutablePath())) + recipe_helper +
                   ShellQuote(command_shell) + " " +
-                  ShellQuote(command_shellflag) + " " + ShellQuote(cmd_buf);
+                  ShellQuote(command_shellflag) + " " + ShellQuote(cmd_buf) +
+                  EscapeNinja(cleanup_arg);
       }
       std::string rule_key = description;
       rule_key += '\0';
@@ -919,7 +969,8 @@ class NinjaGenerator {
             out << " command = " << EscapeNinja(ShellQuote(GetExecutablePath()))
                 << recipe_helper << ShellQuote(command_shell) << ' '
                 << ShellQuote(command_shellflag) << ' '
-                << ShellQuote(source_rspfile) << "\n";
+                << ShellQuote(source_rspfile) << EscapeNinja(cleanup_arg)
+                << "\n";
           } else {
             out << " command = " << (helper_recipe ? "/bin/sh" : command_shell)
                 << ' ' << (helper_recipe ? "-c" : command_shellflag) << ' '
@@ -1300,12 +1351,14 @@ class NinjaGenerator {
     fprintf(fp, "\n");
 
     std::unordered_set<std::string> emitted_exports;
+    std::map<std::string, std::string> workspace_exports;
     emitted_exports.insert("MAKELEVEL");
     fprintf(fp, "export MAKELEVEL=%d\n", g_flags.make_level + 1);
     for (const auto& [symbol, is_exported] : ev_->exports()) {
       if (symbol.str() == "MAKELEVEL" ||
           symbol.str() == "KATI_JOBSERVER_RESERVED" ||
           symbol.str() == "KATI_NINJA_LOAD_LIMIT" ||
+          symbol.str() == "KATI_RECIPE_CHANGED" ||
           symbol.str() == "KATI_NINJA_LOAD_STATE")
         continue;
       if (!IsShellIdentifier(symbol.str())) {
@@ -1320,11 +1373,23 @@ class NinjaGenerator {
         const std::string quoted_val = ShellQuote(val);
         fprintf(fp, "export %s=%s\n", quoted_symbol.c_str(),
                 quoted_val.c_str());
+        if (symbol.str() != "MAKE" && symbol.str() != "MAKEFLAGS" &&
+            symbol.str() != "MAKEOVERRIDES")
+          workspace_exports[symbol.str()] =
+              "export " + quoted_symbol + "=" + quoted_val + "; ";
       } else {
         const std::string quoted_symbol = ShellQuote(symbol.str());
         fprintf(fp, "unset %s\n", quoted_symbol.c_str());
+        if (symbol.str() != "MAKE" && symbol.str() != "MAKEFLAGS" &&
+            symbol.str() != "MAKEOVERRIDES")
+          workspace_exports[symbol.str()] = "unset " + quoted_symbol + "; ";
       }
     }
+    workspace_environment_.clear();
+    for (const auto& [name, command] : workspace_exports)
+      workspace_environment_ += command;
+    if (workspace_environment_.find('\n') != std::string::npos)
+      workspace_environment_ = EncodeShellScript(workspace_environment_) + "; ";
 
     // GNU make always propagates these special recursive-make variables.
     // They are not consistently represented as ordinary user exports in
@@ -1576,6 +1641,9 @@ class NinjaGenerator {
   CommandEvaluator ce_;
   Evaluator* ev_;
   SymbolSet done_;
+  std::unordered_set<std::string> recipe_state_paths_;
+  std::string workspace_recipe_dir_;
+  std::string workspace_environment_;
   std::unordered_set<std::string> active_nodes_;
   std::unordered_set<std::string> cycle_edges_;
   int rule_id_;

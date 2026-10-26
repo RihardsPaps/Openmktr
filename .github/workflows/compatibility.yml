@@ -11,6 +11,8 @@ on:
       - 'tests/bench.py'
       - 'packaging/gentoo/**'
       - 'tests/portage.py'
+      - 'tests/workspace.py'
+      - 'tools/omktr_workspace.py'
       - 'tests/load_limits.py'
       - 'tests/portage_validation.py'
       - 'src/load_limit*'
@@ -49,7 +51,7 @@ jobs:
         run: |
           mkdir -p portage-evidence
           image_id=$(docker image inspect --format '{{.Id}}' openmktr-compat)
-          docker run --rm --cap-add SYS_ADMIN --cap-add NET_ADMIN \
+          docker run --rm --cap-add SYS_ADMIN --cap-add NET_ADMIN --cap-add SYS_PTRACE \
             --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
             -e OMKTR_PORTAGE_VALIDATION=1 \
             -e OMKTR_VALIDATION_IMAGE_ID="$image_id" \

@@ -41,6 +41,7 @@ does not replace the reference gate.
 | Direct execution | Build requested Makefile targets with parallel recipe scheduling. |
 | Ninja generation | Turn evaluated Makefile rules into a Ninja graph and generated launcher. |
 | Regeneration checks | Reuse a generated graph when its recorded inputs remain current. |
+| Persistent workspaces | Retain source paths, objects and Ninja state across prepared release directories; compress inactive workspaces. |
 | Recursive builds | Run child Openmktr builds with shared job limits. |
 | Opt-in Portage integration | Use a local Gentoo overlay and select direct or experimental Ninja compilation per package. |
 | GNU-free project toolchain | Build, test, and run Openmktr with LLVM, musl, libc++, Ninja, Python, and POSIX shell tools. |
@@ -264,6 +265,14 @@ working directory used for generation.
 
 ## Everyday usage
 
+Use `omktr workspace run --name PROJECT --source PREPARED_SOURCE` to retain a
+version-independent build location. Repeat without `--source` for a hot
+incremental build, or supply a new prepared release to synchronize changed
+inputs. `omktr workspace pack --name PROJECT` compresses inactive source and
+build state; the next run restores it automatically. These optional commands
+require Python 3.11+ with `lzma`; see [persistent workspaces](docs/workspaces.md)
+for configuration, dependency tracking and the opt-in Portage profile.
+
 Gentoo users can install the live ebuild and opt selected packages into their
 normal Portage lifecycle using the [local overlay and adapter](packaging/gentoo/README.md).
 Direct execution is the default; experimental Ninja compilation is available
@@ -438,6 +447,9 @@ citing a result. The helpers target a specific recorded environment and do
 not replace the portable CI checks.
 
 ## Validation and performance
+
+The [Ninja performance report](docs/ninja-performance.md) records incremental
+gains, workspace compression results and the incomplete Linux comparison.
 
 The portable pull-request gate is defined in
 [cpp-ci.yml](.github/workflows/cpp-ci.yml). It builds and tests the Chimera

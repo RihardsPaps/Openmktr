@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Avoid redundant VPATH filesystem probes for already resolved graph edges.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed implicit pattern matching, build execution, and portability.
@@ -971,28 +972,27 @@ class DepBuilder {
   }
 
   void ResolveVpathInputs(std::vector<Symbol>* inputs) {
+    if (ev_->vpaths().empty())
+      return;
     for (Symbol& input : *inputs) {
-      // A directory can be both a VPATH-visible source directory and a
-      // recursive output target. Preserve the target-side spelling when Kati
-      // already has a rule for it; otherwise VPATH would replace it with the
-      // source path and bypass the recursive child build.
-      struct stat st;
-      if (phony_.exists(input) ||
-          (stat(input.str().c_str(), &st) == 0 && S_ISDIR(st.st_mode)))
+      // Rules and implicit candidates retain their logical target name.
+      // Decide that before probing the filesystem: depfiles can mention the
+      // same rule-bearing header on thousands of incoming edges.
+      if (phony_.exists(input) || rules_.find(input) != rules_.end())
         continue;
-      auto found_rule = rules_.find(input);
-      std::string resolved = ev_->ResolveVpath(input);
-      if (found_rule != rules_.end()) {
-        // Keep rule-bearing targets in the graph. Their implicit, order-only,
-        // and double-colon dependencies must still be visited even when a
-        // VPATH copy is currently usable.
-        continue;
-      }
       // A matching implicit rule may create this target in the build tree.
       // Replacing it with its source-tree provider would make that rule write
       // back into the source tree and bypass the intended target path.
       if (!GetImplicitRuleCandidates(implicit_rules_.get(), input).empty())
         continue;
+      // A directory can be both a VPATH-visible source directory and a
+      // recursive output target. Preserve the target-side spelling when Kati
+      // already has a rule for it; otherwise VPATH would replace it with the
+      // source path and bypass the recursive child build.
+      struct stat st;
+      if (stat(input.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
+        continue;
+      std::string resolved = ev_->ResolveVpath(input);
       if (!resolved.empty()) {
         // A VPATH match can itself be a directory in the source tree.  Keep
         // the logical target name in that case: it may be supplied by a
@@ -2359,12 +2359,16 @@ class DepBuilder {
     for (Symbol& input : n->actual_inputs) {
       DepNode* c = build_prerequisite(input);
       Symbol graph_input = canonical_symbol(input);
-      const std::string provider = ev_->ResolveVpath(input);
-      if (!provider.empty() && c->output == Intern(provider) &&
-          !(c->output == input) && !c->has_rule) {
-        graph_input = canonical_symbol(c->output);
-        if (g_flags.generate_ninja)
-          input = c->output;
+      // Only an unruled, differently named provider can replace this edge.
+      // Most prerequisites already name their resolved node; probing VPATH
+      // again for every incoming edge repeats stat/readlink work for headers.
+      if (!(c->output == input) && !c->has_rule) {
+        const std::string provider = ev_->ResolveVpath(input);
+        if (!provider.empty() && c->output == Intern(provider)) {
+          graph_input = canonical_symbol(c->output);
+          if (g_flags.generate_ninja)
+            input = c->output;
+        }
       }
       inherit_rule_vars(c, n);
       n->deps.push_back({graph_input, c});
@@ -2424,12 +2428,13 @@ class DepBuilder {
     for (Symbol& input : n->actual_order_only_inputs) {
       DepNode* c = build_prerequisite(input);
       Symbol graph_input = canonical_symbol(input);
-      const std::string provider = ev_->ResolveVpath(input);
-      if (!provider.empty() && c->output == Intern(provider) &&
-          !(c->output == input) && !c->has_rule) {
-        graph_input = canonical_symbol(c->output);
-        if (g_flags.generate_ninja)
-          input = c->output;
+      if (!(c->output == input) && !c->has_rule) {
+        const std::string provider = ev_->ResolveVpath(input);
+        if (!provider.empty() && c->output == Intern(provider)) {
+          graph_input = canonical_symbol(c->output);
+          if (g_flags.generate_ninja)
+            input = c->output;
+        }
       }
       inherit_rule_vars(c, n);
       n->order_onlys.push_back({graph_input, c});

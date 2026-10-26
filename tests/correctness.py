@@ -17,6 +17,91 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_background_recipes_remain_valid_inside_freshness_guards(self):
+        for mode in ("direct", "ninja"):
+            for existing in (False, True):
+                with self.subTest(mode=mode, existing=existing):
+                    output = self.directory / "output"
+                    output.unlink(missing_ok=True)
+                    (self.directory / "input").write_text("source")
+                    prerequisites = "input" if existing else ""
+                    self.makefile(f"all: output\noutput: {prerequisites}\n"
+                                  "\t@printf hello > output &\n")
+                    if existing:
+                        output.write_text("old")
+                        os.utime(output, ns=(100, 100))
+                    if mode == "direct":
+                        self.direct()
+                    else:
+                        self.ninja()
+                    self.assertEqual(output.read_text(), "hello")
+
+    def test_trailing_literal_ampersands_remain_recipe_data(self):
+        for value in ("\\&", "'&'", '"&"'):
+            with self.subTest(value=value):
+                (self.directory / "output").unlink(missing_ok=True)
+                self.makefile(f"all: output\noutput:\n\t@> output printf '%s' {value}\n")
+                self.ninja()
+                self.assertEqual((self.directory / "output").read_text(), "&")
+
+    def test_saved_compiler_command_retains_literal_hash_escape(self):
+        self.makefile(
+            "pound := \\#\nsquote := '\n"
+            "quote = $(subst $(squote),'\\$(squote)',$1)\n"
+            "compile = printf \"value=\\#hash\" > output\n"
+            "saved = $(call quote,$(subst $(pound),$$(pound),$(compile)))\n"
+            "difference = $(filter-out $(compile),$(previous)) "
+            "$(filter-out $(previous),$(compile))\n"
+            "-include output.cmd\n.PHONY: all force\nall: output\n"
+            "output: force\n\t@$(if $(strip $(difference)),"
+            "$(compile); printf x >> runs; "
+            "printf '%s\\n' 'previous := $(saved)' > output.cmd,:)\n")
+        for mode in ("direct", "ninja"):
+            with self.subTest(mode=mode):
+                for name in ("output", "output.cmd", "runs"):
+                    (self.directory / name).unlink(missing_ok=True)
+                for _ in range(3):
+                    if mode == "direct":
+                        self.direct("all")
+                    else:
+                        self.direct("build", "-j2", "all")
+                self.assertEqual((self.directory / "output").read_text(), "value=#hash")
+                self.assertIn("$(pound)", (self.directory / "output.cmd").read_text())
+                self.assertEqual((self.directory / "runs").read_text(), "x")
+
+    def test_deferred_recursive_compiler_assignment_still_expands(self):
+        (self.directory / "child.mk").write_text(
+            "all:\n\t@$(TOOL) '%s' done > result\n")
+        for assignment in ("'TOOL=$$(RAW_TOOL)'", "TOOL='$$(RAW_TOOL)'"):
+            for mode in ("direct", "ninja"):
+                with self.subTest(assignment=assignment, mode=mode):
+                    self.makefile("RAW_TOOL := printf\nall:\n"
+                                  f"\t@$(MAKE) -f child.mk {assignment}\n")
+                    if mode == "direct":
+                        self.direct("all")
+                    else:
+                        self.direct("build", "-j2", "all")
+                    self.assertEqual((self.directory / "result").read_text(), "done")
+
+    def test_deferred_recursive_assignment_operators_preserve_values(self):
+        (self.directory / "child.mk").write_text(
+            "all:\n\t@printf '%s' '$(CFLAGS)' > result\n")
+        for operator in ("=", "+=", ":=", "?="):
+            for quoted in ("'CFLAGS{op}$$(EXTRA_FLAGS)'",
+                           "CFLAGS{op}'$$(EXTRA_FLAGS)'"):
+                for mode in ("direct", "ninja"):
+                    with self.subTest(operator=operator, quoted=quoted, mode=mode):
+                        (self.directory / "result").unlink(missing_ok=True)
+                        assignment = quoted.format(op=operator)
+                        self.makefile("EXTRA_FLAGS := -DREQUIRED\nall:\n"
+                                      f"\t@$(MAKE) -f child.mk {assignment}\n")
+                        if mode == "direct":
+                            self.direct("all")
+                        else:
+                            self.direct("build", "-j2", "all")
+                        self.assertEqual((self.directory / "result").read_text(),
+                                         "-DREQUIRED")
+
     def test_inferred_depfile_preserves_compiler_failure(self):
         self.makefile("out.o: source.c\n"
                       "\t@clang -c -MMD -MF deps.d -o $@ $<\n")
@@ -1312,6 +1397,92 @@ class BuildCorrectness(unittest.TestCase):
                                 self.direct("all")
                             self.assertEqual(output.read_text(), "partial")
                             self.assertEqual(output.stat().st_mtime_ns, stamp)
+
+    def test_ninja_cleanup_preserves_recipe_traps_and_signal_exit_status(self):
+        for code in (7, 129, 130, 131, 143):
+            with self.subTest(code=code):
+                self.makefile(
+                    ".PHONY: force\nall: result\nresult: force\n"
+                    "\t@trap 'printf trapped > trap-result' 0; "
+                    f"printf partial > result; exit {code}\n")
+                (self.directory / "result").write_text("old")
+                self.direct("--ninja", "all")
+                status, output = self.run_command(
+                    "sh", "./ninja.sh", "-j2", success=False)
+                self.assertNotEqual(status, 0, output)
+                self.assertEqual((self.directory / "trap-result").read_text(),
+                                 "trapped")
+                self.assertEqual((self.directory / "result").exists(), code == 7)
+                graph = (self.directory / "build.ninja").read_text()
+                self.assertNotIn("--internal-output-stamp", graph)
+                self.assertNotIn("kati_cleanup_output", graph)
+
+    def test_ninja_cleanup_does_not_arm_before_job_admission(self):
+        output = self.directory / "result"
+        output.write_text("original")
+        fifo = self.directory / "jobserver"
+        os.mkfifo(fifo)
+        fd = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+        self.addCleanup(os.close, fd)
+        env = os.environ.copy()
+        env["KATI_JOBSERVER_FIFO"] = str(fifo)
+        env.pop("KATI_JOBSERVER_RESERVED", None)
+        child = subprocess.Popen(
+            [str(KATI), "--internal-run-recipe", "/bin/sh", "-c",
+             "printf ran > recipe-ran", str(output)], cwd=self.directory,
+            env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        try:
+            time.sleep(0.1)
+            self.assertIsNone(child.poll())
+            output.write_text("changed by another process")
+            child.send_signal(signal.SIGTERM)
+            child.communicate(timeout=5)
+            self.assertNotEqual(child.returncode, 0)
+            self.assertEqual(output.read_text(), "changed by another process")
+            self.assertFalse((self.directory / "recipe-ran").exists())
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.communicate()
+
+    def test_ninja_cleanup_handles_quoted_outputs_and_response_files(self):
+        for size in (1, 110_000):
+            with self.subTest(size=size):
+                self.makefile(
+                    ".PHONY: force\nall: odd\\ $$\\ name\n"
+                    "odd\\ $$\\ name: force\n\t@printf '%s' '" + "x" * size +
+                    "' > '$@'; exit 130\n")
+                self.direct("--ninja", "all")
+                status, output = self.run_command(
+                    "sh", "./ninja.sh", "-j2", success=False)
+                self.assertNotEqual(status, 0, output)
+                self.assertFalse((self.directory / "odd $ name").exists())
+                if size > 100_000:
+                    self.assertIn(" rspfile =", (self.directory / "build.ninja").read_text())
+
+    def test_ninja_cleanup_reports_interruption_when_recipe_traps_it(self):
+        output = self.directory / "odd $ output"
+        output.write_text("old")
+        command = ("trap 'exit 0' TERM; printf partial > 'odd $ output'; "
+                   "printf ready > ready; while :; do sleep 0.05; done")
+        child = subprocess.Popen(
+            [str(KATI), "--internal-run-recipe", "/bin/sh", "-c", command,
+             str(output)], cwd=self.directory, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT)
+        try:
+            deadline = time.monotonic() + 5
+            while not (self.directory / "ready").exists() and child.poll() is None:
+                self.assertLess(time.monotonic(), deadline)
+                time.sleep(0.01)
+            self.assertTrue((self.directory / "ready").exists())
+            child.send_signal(signal.SIGTERM)
+            child.communicate(timeout=5)
+            self.assertEqual(child.returncode, 128 + signal.SIGTERM)
+            self.assertFalse(output.exists())
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.communicate()
 
     def test_direct_termination_reaches_recipe_descendants(self):
         self.makefile("all: result\nresult:\n"

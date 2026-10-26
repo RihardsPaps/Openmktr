@@ -23,6 +23,9 @@ LICENSE_FILES = (
     'LICENSES/upstream-AUTHORS.txt', 'LICENSES/upstream-CONTRIBUTORS.txt',
     'docs/LICENSING.md',
 )
+SUPPORT_FILES = {'bin/omktr-workspace': 'tools/omktr_workspace.py',
+                 'docs/workspaces.md': 'docs/workspaces.md',
+                 'packaging/gentoo/README.md': 'packaging/gentoo/README.md'}
 
 
 def musl_interpreter(data):
@@ -66,6 +69,11 @@ def package(version, revision, repository, output):
             files[name] = data
         if archive.read(f'{prefix}/src/main.cc') != (ROOT / 'src/main.cc').read_bytes():
             raise ValueError('Source archive differs from build tree: src/main.cc')
+        for destination, source_name in SUPPORT_FILES.items():
+            data = archive.read(f'{prefix}/{source_name}')
+            if data != (ROOT / source_name).read_bytes():
+                raise ValueError(f'Source archive differs from build tree: {source_name}')
+            files[destination] = data
 
     binary = ROOT / 'omktr'
     version_output = subprocess.check_output([str(binary), '--version'], text=True)
@@ -84,6 +92,9 @@ image from Dockerfile. It requires musl and compatible LLVM libc++ runtime
 libraries. It is not a standalone binary for glibc Linux. Install the matching
 runtime libraries from your musl distribution. Ninja is required for generated
 graphs; recipes use the shell and tools supplied by your Makefile.
+The optional `omktr workspace` frontend additionally requires Python 3.11 or
+newer with its standard-library lzma module. See docs/workspaces.md for persistent
+incremental workspaces and idle compression.
 
 Extract this archive, then run ./{prefix}/bin/omktr --version. Keep the accompanying
 LICENSE, NOTICE, LICENSES/, and docs/LICENSING.md when redistributing it.
@@ -104,7 +115,7 @@ Build-time runtime dependencies (paths refer to the test container):
         for name, data in files.items():
             info = tarfile.TarInfo(f'{prefix}/{name}')
             info.size = len(data)
-            info.mode = 0o755 if name == 'bin/omktr' else 0o644
+            info.mode = 0o755 if name.startswith('bin/') else 0o644
             archive.addfile(info, io.BytesIO(data))
 
     # Verify the distributed bytes and executable permissions before upload.
@@ -113,7 +124,7 @@ Build-time runtime dependencies (paths refer to the test container):
             member = archive.getmember(f'{prefix}/{name}')
             if archive.extractfile(member).read() != data:
                 raise ValueError(f'Archive verification failed: {name}')
-            if name == 'bin/omktr' and member.mode != 0o755:
+            if name.startswith('bin/') and member.mode != 0o755:
                 raise ValueError('Archived binary is not executable')
     checksums = ''.join(
         f'{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n'

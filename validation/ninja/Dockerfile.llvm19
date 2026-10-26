@@ -1,0 +1,12 @@
+# Copyright 2026 Rihards Paps and Haralds Paps
+# SPDX-License-Identifier: MPL-2.0
+# Isolated external release campaign. GNU release prerequisites stay here;
+# the project's supported build and test gate remains the Chimera Dockerfile.
+FROM ubuntu:24.04
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    clang-19 lld-19 llvm-19 python3 ninja-build libc6-dev libelf-dev libssl-dev \
+    flex bison bc perl pkg-config make mawk diffutils gzip xz-utils cpio ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /campaign
+COPY validation/benchmark_ninja.py /campaign/benchmark_ninja.py
+CMD ["sleep", "43200"]
