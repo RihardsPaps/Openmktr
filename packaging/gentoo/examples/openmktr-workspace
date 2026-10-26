@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MPL-2.0
+# Optional, qualified Make-based packages only. The cache must already be
+# writable by the portage build user. Merge hooks if you already define them.
+export MAKE="/usr/bin/omktr-portage"
+export OMKTR_PORTAGE_MODE="ninja"
+export OMKTR_WORKSPACE_ROOT="/var/cache/openmktr/workspaces"
+# Portage normally disables Automake dependency tracking. Retained objects
+# require its header prerequisites; econf passes these explicit options last.
+export EXTRA_ECONF="${EXTRA_ECONF} --enable-dependency-tracking"

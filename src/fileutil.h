@@ -6,6 +6,8 @@
 // Expose validation of inherited FIFO jobservers for recursive scheduling.
 // Share signal handling and interrupted-output identity checks across modes.
 // Expose process-owned load-admission slots for generated Ninja recipes.
+// Allow recipe supervision to clean changed outputs on interruption.
+// Preserve exact managed-workspace recipe identities across Ninja generations.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -43,6 +45,8 @@ double GetTimestamp(std::string_view f);
 // Identity includes ctime so timestamp-preserving replacements invalidate
 // caches.
 std::string GetFileIdentity(std::string_view path);
+bool ReadNinjaRecipeState(const std::string& path, std::string* state);
+void WriteNinjaRecipeState(const std::string& path, const std::string& state);
 
 // Installed before executor workers start and restored after they stop.
 // The handler only records a signal; recipe waiters forward it and reap jobs.
@@ -67,6 +71,8 @@ enum struct RedirectStderr {
   DEV_NULL,
 };
 
+// A nonempty cleanup_output is stamped after job admission and removed only
+// when interruption changes that regular file. Empty preserves ordinary calls.
 int RunCommand(const std::string& shell,
                const std::string& shellflag,
                const std::string& cmd,
@@ -76,7 +82,8 @@ int RunCommand(const std::string& shell,
                const std::function<void(std::string_view)>& on_output = {},
                int make_level = -1,
                const std::vector<std::string>* extra_env = nullptr,
-               const std::vector<std::string>* unset_env = nullptr);
+               const std::vector<std::string>* unset_env = nullptr,
+               std::string_view cleanup_output = {});
 
 // Check that the inherited jobserver can be opened as a read/write FIFO.
 bool IsKatiJobserverAvailable();

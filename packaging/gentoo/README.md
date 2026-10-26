@@ -36,8 +36,8 @@ uses files, append the lines to those files. Preserve existing configuration;
 do not replace a file with a directory or overwrite its contents.
 
 Then run `emerge --ask dev-build/openmktr::openmktr`. The ebuild installs
-`/usr/bin/omktr` and `/usr/bin/omktr-portage` together and declares the LLVM,
-libc++, Python build requirements and Ninja runtime dependency. It honors
+`/usr/bin/omktr`, `/usr/bin/omktr-portage`, and the workspace helper together.
+It declares LLVM/libc++ build requirements and Python/Ninja runtime dependencies. It honors
 `CPPFLAGS`, `CXXFLAGS`, and `LDFLAGS` while selecting C++17, libc++, and LLD.
 The Gentoo build invokes `/usr/bin/ninja-reference` explicitly at runtime and
 requires Ninja 1.13 or newer. Your system's `ninja` alternative may remain Samurai;
@@ -102,6 +102,34 @@ hard-coded `make`, ebuilds that replace `MAKE`, or Meson/CMake Ninja builds.
 Unsupported options fail visibly; there is no automatic GNU Make retry.
 Ninja mode retains `omktr build`'s restrictions, including question and touch
 modes during compilation. Use the direct environment for such packages.
+
+## Persistent version-independent workspaces
+
+Merge the installed `openmktr-workspace.bashrc` snippet into
+`/etc/portage/bashrc`. It loads the workspace phase hooks only for packages
+selected by the environment below. `package.env` itself accepts variable
+settings rather than shell functions.
+
+For qualified Make-based packages, the additional `openmktr-workspace` example
+retains prepared sources, objects and Ninja state across Portage versioned work
+directories. Create `/var/cache/openmktr/workspaces` owned and writable by the
+`portage` build user, copy the installed environment example into
+`/etc/portage/env/`, and select it per package with `package.env`. Merge its phase
+hooks with any existing custom hooks. Installation never activates this profile.
+
+The profile uses native EAPI 8 `S`/`B` layouts, Ninja compilation and enabled
+Automake dependency tracking. It preserves Portage's normal preparation,
+configuration, test and staged-install phases. Compiler/configuration/dependency
+changes select separate profiles. Ownership checks prevent overlapping versions
+from silently replacing active sources. Known disabled Automake dependency
+tracking is rejected; other Makefiles must provide complete prerequisites.
+Projects with additional versioned build paths need separate qualification.
+
+`omktr workspace gc --root /var/cache/openmktr/workspaces --idle-seconds 3600`
+compresses idle profiles; `pack --name CATEGORY/PN:SLOT:CHOST --root ...` packs a
+selected profile immediately. The next prepared build restores it before use.
+See [workspace usage and compression](../../docs/workspaces.md) for standalone
+commands, cache ownership, configuration isolation and recovery behavior.
 
 ## Load limits and troubleshooting
 

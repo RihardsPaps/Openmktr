@@ -44,7 +44,7 @@ class ReleasePackagingTest(unittest.TestCase):
         self.root = Path(self.directory.name)
         self.output = self.root / 'dist'
         self.output.mkdir()
-        for name in (*RELEASE.LICENSE_FILES, 'src/main.cc'):
+        for name in (*RELEASE.LICENSE_FILES, 'src/main.cc', *RELEASE.SUPPORT_FILES.values()):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(f'fixture: {name}', encoding='utf-8')
@@ -66,7 +66,7 @@ class ReleasePackagingTest(unittest.TestCase):
 
     def write_source(self, corrupt_license=False):
         with zipfile.ZipFile(self.source, 'w') as archive:
-            for name in (*RELEASE.LICENSE_FILES, 'src/main.cc'):
+            for name in (*RELEASE.LICENSE_FILES, 'src/main.cc', *RELEASE.SUPPORT_FILES.values()):
                 data = (self.root / name).read_bytes()
                 if corrupt_license and name == 'LICENSE':
                     data = b'wrong license'
@@ -88,6 +88,10 @@ class ReleasePackagingTest(unittest.TestCase):
             binary = archive.getmember(f'openmktr-{VERSION}/bin/omktr')
             self.assertEqual(binary.mode, 0o755)
             self.assertEqual(archive.extractfile(binary).read(), elf_binary())
+            helper = archive.getmember(f'openmktr-{VERSION}/bin/omktr-workspace')
+            self.assertEqual(helper.mode, 0o755)
+            self.assertEqual(archive.extractfile(helper).read(),
+                             (self.root / 'tools/omktr_workspace.py').read_bytes())
             readme = archive.extractfile(f'openmktr-{VERSION}/README.txt').read().decode()
             self.assertIn(f'/releases/download/{VERSION}/{self.source.name}', readme)
             self.assertIn('dynamically linked', readme)

@@ -55,6 +55,9 @@ python tests/portage.py
 python tests/load_limits.py
 python tests/portage_validation.py
 python tests/cross_version_cache.py
+python tests/ninja_benchmark.py
+python tests/workspace.py
+python tests/release_packaging.py
 python tests/regression.py
 sh testcase/dump/run.sh
 ```
@@ -68,6 +71,8 @@ sh testcase/dump/run.sh
 | `portage.py` and `load_limits.py` | Portable adapter behavior, load scheduling, recursive overrides, cancellation, and FIFO token return. |
 | `portage_validation.py` | Evidence isolation, failure status, and timeout accounting without requiring Portage. |
 | `cross_version_cache.py` | Cross-version cache evidence comparisons, seed isolation, and benchmark accounting without requiring ccache. |
+| `ninja_benchmark.py` | Paired performance samples, failed-command evidence, and source-integrity accounting without release builds. |
+| `workspace.py` | Stable source paths, selective recompilation, recipe changes, configuration isolation, compression and corruption recovery. |
 | `regression.py` | Checked-in direct/Ninja snapshots and converted POSIX shell fixtures. |
 | `testcase/dump/run.sh` | Include-dump smoke test. |
 
@@ -131,6 +136,7 @@ ASAN_OPTIONS=detect_leaks=0 out/sanitized/load_limit_test
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/portage.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/load_limits.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/correctness.py
+ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/workspace.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/make_compat_regressions.py
 ```
 

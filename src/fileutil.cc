@@ -2,6 +2,8 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Supervise Ninja interruption cleanup without a separate timestamp process.
+// Atomically retain exact managed-workspace recipe identities.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Preserve shell parsing of multi-option flags in recipe supervisors.
 // Prevent recipe exports from duplicating a live jobserver reservation.
@@ -139,6 +141,45 @@ std::string GetOutputStamp(std::string_view path) {
 #endif
   return std::to_string(st.st_dev) + ":" + std::to_string(st.st_ino) + ":" +
          std::to_string(mtime.tv_sec) + ":" + std::to_string(mtime.tv_nsec);
+}
+
+bool ReadNinjaRecipeState(const std::string& path, std::string* state) {
+  FILE* stream = fopen(path.c_str(), "rb");
+  if (!stream)
+    return false;
+  state->clear();
+  char buffer[8192];
+  size_t count;
+  while ((count = fread(buffer, 1, sizeof(buffer), stream)) != 0) {
+    if (state->size() + count > 256 * 1024 * 1024) {
+      fclose(stream);
+      return false;
+    }
+    state->append(buffer, count);
+  }
+  const bool valid = !ferror(stream) && HasPrefix(*state, "OMKTR_RECIPE1\n");
+  fclose(stream);
+  return valid;
+}
+
+void WriteNinjaRecipeState(const std::string& path, const std::string& state) {
+  std::string previous;
+  if (ReadNinjaRecipeState(path, &previous) && previous == state)
+    return;
+  std::string temporary = path + ".tmp.XXXXXX";
+  const int fd = mkstemp(temporary.data());
+  if (fd < 0)
+    PERROR("create Ninja recipe state failed");
+  size_t written = 0;
+  while (written < state.size()) {
+    const ssize_t count =
+        HANDLE_EINTR(write(fd, state.data() + written, state.size() - written));
+    if (count <= 0)
+      PERROR("write Ninja recipe state failed");
+    written += count;
+  }
+  if (close(fd) != 0 || rename(temporary.c_str(), path.c_str()) != 0)
+    PERROR("publish Ninja recipe state failed");
 }
 
 std::string GetFileIdentity(std::string_view path) {
@@ -348,7 +389,8 @@ int RunCommand(const std::string& shell,
                const std::function<void(std::string_view)>& on_output,
                int make_level,
                const std::vector<std::string>* extra_env,
-               const std::vector<std::string>* unset_env) {
+               const std::vector<std::string>* unset_env,
+               std::string_view cleanup_output) {
   if (GetBuildSignal() != 0)
     return GetBuildSignal();
   // Kbuild uses thousands of dummy recipes. The default shell's ':' has no
@@ -519,6 +561,8 @@ int RunCommand(const std::string& shell,
   }
 
   pid_t pid;
+  const std::string output_stamp =
+      cleanup_output.empty() ? "" : GetOutputStamp(cleanup_output);
   err = posix_spawn(&pid, argv[0], &action, &attr, const_cast<char**>(argv),
                     custom_env ? child_env.data() : environ);
   if (err != 0) {
@@ -596,6 +640,16 @@ int RunCommand(const std::string& shell,
   }
   if (!recipe_path.empty() && unlink(recipe_path.c_str()) != 0)
     PERROR("unlink recipe failed");
+
+  // Shell traps used by older generated graphs cleaned up these four signal
+  // statuses, including explicit `exit 130` and similar recipe failures.
+  // Keep that behavior even if a recipe installs its own traps or uses exec.
+  const int code = WIFEXITED(status)     ? WEXITSTATUS(status)
+                   : WIFSIGNALED(status) ? 128 + WTERMSIG(status)
+                                         : 0;
+  if (!cleanup_output.empty() && (GetBuildSignal() != 0 || code == 129 ||
+                                  code == 130 || code == 131 || code == 143))
+    DeleteChangedOutput(cleanup_output, output_stamp);
 
   ReleaseKatiJobToken(job_token);
   return status;

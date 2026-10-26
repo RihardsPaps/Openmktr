@@ -3,6 +3,9 @@
 // Supervise per-launcher load state and normalize options before Ninja's --.
 // Add a locked, regenerating single-command Ninja build supervisor.
 // Expose native output stamps for generated recipes' interruption cleanup.
+// Pass Ninja output cleanup to the existing native recipe supervisor.
+// Dispatch optional persistent-workspace management to the Python frontend.
+// Let changed workspace recipes bypass initial-file timestamp guards.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -1527,8 +1530,20 @@ static int HandleFileRead(int argc, char** argv) {
   return 0;
 }
 
+static bool IsWorkspaceAction(const char* argument) {
+  for (const char* action :
+       {"run", "path", "status", "pack", "unpack", "gc", "portage-prepare",
+        "portage-enter", "--help", "-h"}) {
+    if (!strcmp(action, argument))
+      return true;
+  }
+  return false;
+}
+
 int main(int argc, char* argv[]) {
   g_argv = argv;
+  // This is live per-recipe supervision state, never a recursive make input.
+  unsetenv("KATI_RECIPE_CHANGED");
   // Recursive invocations isolate omktr from a target project's runtime
   // libraries while it is being loaded. Restore that runtime environment
   // after the loader has started this process; recipes executed by this child
@@ -1540,22 +1555,64 @@ int main(int argc, char* argv[]) {
   }
 
   if (argc >= 2) {
-    if (!strcmp(argv[1], "--internal-run-ninja") && argc >= 4) {
+    // Keep `omktr workspace` available as an ordinary Make target. The
+    // frontend is selected only by an explicit workspace action or help.
+    if (argc >= 3 && !strcmp(argv[1], "workspace") &&
+        IsWorkspaceAction(argv[2])) {
+      const std::string executable = GetExecutablePath();
+      const std::string directory = executable.substr(0, executable.rfind('/'));
+      std::string helper = directory + "/omktr-workspace";
+      const bool installed_helper = access(helper.c_str(), X_OK) == 0;
+      if (!installed_helper)
+        helper = directory + "/tools/omktr_workspace.py";
+      if (access(helper.c_str(), R_OK) != 0)
+        ERROR("workspace frontend is missing beside %s", executable.c_str());
+      setenv("OMKTR_WORKSPACE_TOOL", executable.c_str(), 1);
+      std::vector<char*> arguments;
+      if (!installed_helper)
+        arguments.push_back(const_cast<char*>("python3"));
+      arguments.push_back(helper.data());
+      arguments.insert(arguments.end(), argv + 2, argv + argc);
+      arguments.push_back(nullptr);
+      execvp(arguments.front(), arguments.data());
+      PERROR("execute workspace frontend");
+    } else if (!strcmp(argv[1], "--internal-run-ninja") && argc >= 4) {
       return HandleRunNinja(argc, argv);
     } else if ((!strcmp(argv[1], "--internal-run-recipe") ||
                 !strcmp(argv[1], "--internal-run-recursive-recipe")) &&
-               argc == 5) {
+               (argc == 5 || argc == 6 || argc == 7)) {
       ScopedBuildSignals signals;
       const int load_slot = AcquireNinjaLoadSlot();
-      const int status =
-          RunCommand(argv[2], argv[3], argv[4], RedirectStderr::NONE, nullptr,
-                     !strcmp(argv[1], "--internal-run-recipe"),
-                     [](std::string_view output) {
-                       fwrite(output.data(), 1, output.size(), stdout);
-                       fflush(stdout);
-                     });
+      std::string recipe_state;
+      if (argc == 7) {
+        if (!ReadNinjaRecipeState(argv[6], &recipe_state))
+          ERROR(
+              "missing or invalid workspace recipe state; regenerate the Ninja "
+              "graph");
+        std::string previous;
+        const std::string success_file = std::string(argv[6]) + ".success";
+        const bool recorded = ReadNinjaRecipeState(success_file, &previous);
+        if (!recorded && Exists(success_file))
+          ERROR(
+              "invalid successful workspace recipe state; regenerate the "
+              "workspace");
+        setenv("KATI_RECIPE_CHANGED",
+               recorded && previous != recipe_state ? "1" : "0", 1);
+      }
+      const int status = RunCommand(
+          argv[2], argv[3], argv[4], RedirectStderr::NONE, nullptr,
+          !strcmp(argv[1], "--internal-run-recipe"),
+          [](std::string_view output) {
+            fwrite(output.data(), 1, output.size(), stdout);
+            fflush(stdout);
+          },
+          -1, nullptr, nullptr, argc >= 6 ? argv[5] : "");
       if (load_slot >= 0)
         close(load_slot);
+      if (GetBuildSignal() != 0)
+        return 128 + GetBuildSignal();
+      if (argc == 7 && WIFEXITED(status) && WEXITSTATUS(status) == 0)
+        WriteNinjaRecipeState(std::string(argv[6]) + ".success", recipe_state);
       return WIFEXITED(status)     ? WEXITSTATUS(status)
              : WIFSIGNALED(status) ? 128 + WTERMSIG(status)
                                    : 1;

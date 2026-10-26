@@ -94,7 +94,7 @@ def run(args, output, name, *, cwd=None, env=None, success=True, timeout=3600):
     log_text = (output / (name + '.log')).read_text(errors='replace')
     if namespace_warning(log_text):
         raise RuntimeError('Portage namespace sandboxes could not start; run the '
-                           'container with --cap-add SYS_ADMIN --cap-add NET_ADMIN '
+                           'container with --cap-add SYS_ADMIN --cap-add NET_ADMIN --cap-add SYS_PTRACE '
                            '--security-opt seccomp=unconfined '
                            '--security-opt apparmor=unconfined; see ' + str(output))
     if (record['exit_status'] == 0) != success:
@@ -345,6 +345,8 @@ def lifecycle(output, result, real_packages):
                     assert not installed.exists()
             if real_packages:
                 qualify_real_packages(real_packages, output, config, cleanup, result)
+            run(['python3', str(ROOT / 'validation/compatibility/portage_workspace.py'),
+                 '--output', str(output / 'workspaces')], output, 'retained-workspaces')
             run(['emerge', '--unmerge', 'dev-build/openmktr'], output, 'unmerge-openmktr')
             assert not Path('/usr/bin/omktr-portage').exists()
             assert not Path('/usr/bin/omktr').exists()

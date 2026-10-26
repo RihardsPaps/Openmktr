@@ -55,7 +55,7 @@ these lanes. Both environments run the portable `tests/portage.py` and
 `tests/load_limits.py` suites. The Gentoo job additionally runs:
 
 ```sh
-docker run --rm --cap-add SYS_ADMIN --cap-add NET_ADMIN \
+docker run --rm --cap-add SYS_ADMIN --cap-add NET_ADMIN --cap-add SYS_PTRACE \
   --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
   -e OMKTR_PORTAGE_VALIDATION=1 \
   -e OMKTR_VALIDATION_IMAGE_ID="$(docker image inspect --format '{{.Id}}' openmktr-gentoo)" \
@@ -77,8 +77,15 @@ must still use reference Ninja for its supported load-limit semantics.
 The tool's installation must create no activation settings. The adapter's
 portable checks cover argument quoting and signal propagation separately.
 
+The installed helper also runs `portage_workspace.py`: three original fixture
+releases check object reuse across identical versions, selective rebuilding
+after a content change, normal Portage cleanup, and compression/restore between
+versions. This covers the retained-workspace lifecycle, not arbitrary ebuilds.
+
 The container permissions allow Portage to create its IPC, network, and PID
-namespace sandboxes and bring up the isolated loopback interface. Portage
+namespace sandboxes and bring up the isolated loopback interface. `SYS_PTRACE`
+allows its sandbox tracer to follow maintenance that drops to the cache owner.
+Portage
 also needs AppArmor to permit mounting `/proc` inside its PID sandbox;
 Docker's default profile on Ubuntu CI hosts blocks that mount.
 The harness explicitly enables those features and fails if Portage reports that it cannot

@@ -1,5 +1,8 @@
 // FORK MODIFICATION NOTICE (2026)
 // Preserve live Ninja load limits across deferred recursive environments.
+// Preserve literal saved compiler commands when resolving deferred assignments.
+// Accept recursive assignment operators when expanding deferred values.
+// Exclude recipe control prefixes when recognizing deferred assignments.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -46,6 +49,11 @@ extern char** environ;
 
 namespace {
 
+static void ParseCommandPrefixes(std::string_view* s,
+                                 bool* echo,
+                                 bool* ignore_error,
+                                 bool* force_run);
+
 // Recursive make recipes sometimes pass a deferred make variable as a
 // command-line assignment, for example 'CXX=$$(RAW_CXX_FOR_TARGET)'.  The
 // recipe evaluator turns '$$' into a literal '$'; when the command is later
@@ -58,9 +66,52 @@ static std::string ExpandDeferredAssignments(std::string_view input,
   std::string output;
   output.reserve(input.size());
   char quote = 0;
+  size_t word_start = 0;
+  // Prefix flags are still present until the caller builds its Command.
+  // Reuse the same parser to identify the first actual shell word without
+  // removing flags or changing their echo/error/force behavior here.
+  std::string_view command = input;
+  bool ignored_echo = true;
+  bool ignored_error = false;
+  bool ignored_force_run = false;
+  ParseCommandPrefixes(&command, &ignored_echo, &ignored_error,
+                       &ignored_force_run);
+  const size_t command_start = input.size() - command.size();
+
+  auto assignment_prefix = [&](size_t end) {
+    const size_t start = std::max(word_start, command_start);
+    std::string_view prefix = input.substr(start, end - start);
+    // Accept 'CC=$(VALUE)' and CC='$(VALUE)', but not an equals sign
+    // embedded in arbitrary quoted data such as a saved compiler command.
+    if (!prefix.empty() && prefix.front() == '\'')
+      prefix.remove_prefix(1);
+    if (!prefix.empty() && prefix.back() == '\'')
+      prefix.remove_suffix(1);
+    if (prefix.empty() || prefix.back() != '=')
+      return false;
+    prefix.remove_suffix(1);
+    if (!prefix.empty() &&
+        (prefix.back() == '+' || prefix.back() == ':' || prefix.back() == '?'))
+      prefix.remove_suffix(1);
+    if (prefix.empty() ||
+        !(isalpha(static_cast<unsigned char>(prefix.front())) ||
+          prefix.front() == '_'))
+      return false;
+    return std::all_of(prefix.begin(), prefix.end(),
+                       [](unsigned char c) { return isalnum(c) || c == '_'; });
+  };
 
   for (size_t i = 0; i < input.size(); ++i) {
     char c = input[i];
+    if (c == '\\' && quote != '\'') {
+      output += c;
+      if (i + 1 < input.size())
+        output += input[++i];
+      continue;
+    }
+    if (quote == 0 && (isspace(static_cast<unsigned char>(c)) || c == ';' ||
+                       c == '|' || c == '&' || c == '(' || c == ')'))
+      word_start = i + 1;
     if (c == '\'' || c == '"' || c == '`') {
       if (quote == 0)
         quote = c;
@@ -71,7 +122,7 @@ static std::string ExpandDeferredAssignments(std::string_view input,
     }
 
     if (c == '$' && i + 1 < input.size() && input[i + 1] == '(' &&
-        quote == '\'' && !output.empty() && output.back() == '=') {
+        quote == '\'' && assignment_prefix(i)) {
       size_t end = i + 2;
       int depth = 1;
       while (end < input.size() && depth != 0) {
@@ -351,11 +402,6 @@ void AutoAtVar::Eval(Evaluator*, std::string* s) const {
   if (n)
     *s += n->lexical_output.str();
 }
-
-static void ParseCommandPrefixes(std::string_view* s,
-                                 bool* echo,
-                                 bool* ignore_error,
-                                 bool* force_run);
 
 static bool IsVpathSourceAlias(const DepNode* node) {
   if (node->cmds.empty())
