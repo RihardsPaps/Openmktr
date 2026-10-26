@@ -15,9 +15,9 @@ identifies their hashes. Original measurement paths are recorded; disposable
 build/source copies are removed after saving and verifying the raw evidence.
 These results describe this builder and configuration.
 
-## PR candidate recheck, 26 October 2026
+## Pre-review candidate recheck, 26 October 2026
 
-The submitted native candidate is identified by SHA-256
+The native candidate benchmarked before the recipe-prefix review fix has SHA-256
 `272872a9169d6791c315ba23ded1f9a64612133b8cca439ff29d5a6618c9ad0a`.
 It includes the later assignment-operator, background-recipe, workspace-export
 and dummy-recipe identity fixes. The helper also includes subsequent source-sync
@@ -85,6 +85,27 @@ test-process variable. All 173 correctness cases passed with Portage's CFLAGS
 after the correction. This follow-up changes tests only; native and helper code
 are unchanged, so the measured binary and results still apply. The current
 report preserves the measurement snapshot and identifies the later test hash.
+
+Codex review subsequently identified deferred assignments directly following
+recipe flags such as `@TOOL='$$(RAW_TOOL)'`. Assignment recognition now uses the
+existing recipe-prefix parser to find the first shell word while retaining the
+original flags for normal command handling. The new test failed in all 48
+direct/Ninja, ordinary/`.ONESHELL`, first/later-line and combined-prefix cases
+before the fix and passes afterward. The full local gate passes 174 correctness
+cases, 22 workspace cases and all 858 snapshots, with changed C++ formatting
+and diff checks passing.
+
+The review-follow-up native binary has SHA-256
+`5d2d96950615b9a9b861eb993548e99b2f1cde4f10cd71538bbbd9f274adb1ed`.
+Its matched-toolchain seven-repeat supplemental overhead comparison and a fresh
+complete paired synthetic matrix are recorded under
+`recipe_prefix_review_followup` in the PR report. These new measurements retain
+their own samples and raw-evidence hash. Clean paired median gains were
+20.62–24.51%, with positive intervals. All incremental point estimates were
+positive, but legacy/j8 no-op had an interval crossing zero. No supported
+regression appeared. The FFmpeg figures above remain
+measurements of the pre-review `272872a9` binary; the full release matrix was
+not rerun after this correctness fix.
 
 The complete Linux matrix remains unverified. The NAS comparison was still
 running with the earlier `a7cea354` candidate when this report was prepared and

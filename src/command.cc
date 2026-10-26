@@ -2,6 +2,7 @@
 // Preserve live Ninja load limits across deferred recursive environments.
 // Preserve literal saved compiler commands when resolving deferred assignments.
 // Accept recursive assignment operators when expanding deferred values.
+// Exclude recipe control prefixes when recognizing deferred assignments.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -48,6 +49,11 @@ extern char** environ;
 
 namespace {
 
+static void ParseCommandPrefixes(std::string_view* s,
+                                 bool* echo,
+                                 bool* ignore_error,
+                                 bool* force_run);
+
 // Recursive make recipes sometimes pass a deferred make variable as a
 // command-line assignment, for example 'CXX=$$(RAW_CXX_FOR_TARGET)'.  The
 // recipe evaluator turns '$$' into a literal '$'; when the command is later
@@ -61,9 +67,20 @@ static std::string ExpandDeferredAssignments(std::string_view input,
   output.reserve(input.size());
   char quote = 0;
   size_t word_start = 0;
+  // Prefix flags are still present until the caller builds its Command.
+  // Reuse the same parser to identify the first actual shell word without
+  // removing flags or changing their echo/error/force behavior here.
+  std::string_view command = input;
+  bool ignored_echo = true;
+  bool ignored_error = false;
+  bool ignored_force_run = false;
+  ParseCommandPrefixes(&command, &ignored_echo, &ignored_error,
+                       &ignored_force_run);
+  const size_t command_start = input.size() - command.size();
 
   auto assignment_prefix = [&](size_t end) {
-    std::string_view prefix = input.substr(word_start, end - word_start);
+    const size_t start = std::max(word_start, command_start);
+    std::string_view prefix = input.substr(start, end - start);
     // Accept 'CC=$(VALUE)' and CC='$(VALUE)', but not an equals sign
     // embedded in arbitrary quoted data such as a saved compiler command.
     if (!prefix.empty() && prefix.front() == '\'')
@@ -385,11 +402,6 @@ void AutoAtVar::Eval(Evaluator*, std::string* s) const {
   if (n)
     *s += n->lexical_output.str();
 }
-
-static void ParseCommandPrefixes(std::string_view* s,
-                                 bool* echo,
-                                 bool* ignore_error,
-                                 bool* force_run);
 
 static bool IsVpathSourceAlias(const DepNode* node) {
   if (node->cmds.empty())

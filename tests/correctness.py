@@ -107,6 +107,26 @@ class BuildCorrectness(unittest.TestCase):
                         self.assertEqual((self.directory / "result").read_text(),
                                          "-DREQUIRED")
 
+    def test_deferred_assignments_after_recipe_prefixes(self):
+        (self.directory / "child.mk").write_text(
+            "all:\n\t@$(TOOL) '%s' done > result\n")
+        for oneshell in (False, True):
+            for preceding in ("", "\t@:\n"):
+                for prefix in ("@", "+", "-", "@+-", "+ @ -", "  @+-"):
+                    for mode in ("direct", "ninja"):
+                        with self.subTest(oneshell=oneshell, preceding=preceding,
+                                          prefix=prefix, mode=mode):
+                            (self.directory / "result").unlink(missing_ok=True)
+                            self.makefile((".ONESHELL:\n" if oneshell else "") +
+                                          "RAW_TOOL := printf\nall:\n" + preceding +
+                                          f"\t{prefix}TOOL='$$(RAW_TOOL)' $(MAKE) -f child.mk\n")
+                            if mode == "direct":
+                                self.direct("all")
+                            else:
+                                self.direct("build", "-j2", "all")
+                            self.assertEqual((self.directory / "result").read_text(),
+                                             "done")
+
     def test_inferred_depfile_preserves_compiler_failure(self):
         self.makefile("out.o: source.c\n"
                       "\t@clang -c -MMD -MF deps.d -o $@ $<\n")
