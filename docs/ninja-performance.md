@@ -78,6 +78,14 @@ incremental-harness cases, changed C++ formatting, actionlint checks of all thre
 changed workflows, and diff checks passed. This records local validation;
 remote checks are reported on the PR.
 
+Gentoo's first PR run exposed an environment assumption in the new deferred
+assignment test: Portage exports `CFLAGS=-O2 -pipe`, while the test requires an
+initially undefined child variable. The fixture now clears and restores that
+test-process variable. All 173 correctness cases passed with Portage's CFLAGS
+after the correction. This follow-up changes tests only; native and helper code
+are unchanged, so the measured binary and results still apply. The current
+report preserves the measurement snapshot and identifies the later test hash.
+
 The complete Linux matrix remains unverified. The NAS comparison was still
 running with the earlier `a7cea354` candidate when this report was prepared and
 does not establish acceptance for the submitted candidate. Kernel boot, the full

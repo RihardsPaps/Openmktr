@@ -23183,5 +23183,17 @@
     "path": "validation/logs/pr-review/paired-raw-evidence.tar.xz",
     "sha256": "c4eb297c1750e2e4f8e19a3de63067b4da81dfecf87a2b82ba4e932824b72e86",
     "bytes": 336912
+  },
+  "post_measurement_test_fix": {
+    "reason": "Gentoo USE=test exports CFLAGS=-O2 -pipe. The new deferred-assignment test requires an initially undefined CFLAGS; it now clears and restores only that test process environment variable.",
+    "runtime_changes": false,
+    "measured_native_and_helper_sources_unchanged": true,
+    "validation": "PASS: all 173 correctness cases with CFLAGS=-O2 -pipe against the measured native code",
+    "submitted_test_source": {
+      "path": "tests/correctness.py",
+      "raw_sha256": "28f75d67c74d036c40a77f5e7eb63c0c1d55a2cad1a45f4258641e57186c660b",
+      "lf_sha256": "28f75d67c74d036c40a77f5e7eb63c0c1d55a2cad1a45f4258641e57186c660b"
+    },
+    "original_manifest_scope": "manifest.sources retains the exact pre-follow-up measurement snapshot; submitted_test_source identifies the later test-only change"
   }
 }

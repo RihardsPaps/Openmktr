@@ -84,6 +84,11 @@ class BuildCorrectness(unittest.TestCase):
                     self.assertEqual((self.directory / "result").read_text(), "done")
 
     def test_deferred_recursive_assignment_operators_preserve_values(self):
+        # These cases start with an undefined child variable. Portage exports
+        # CFLAGS, which += must retain and ?= must leave unchanged.
+        inherited_cflags = os.environ.pop("CFLAGS", None)
+        if inherited_cflags is not None:
+            self.addCleanup(os.environ.__setitem__, "CFLAGS", inherited_cflags)
         (self.directory / "child.mk").write_text(
             "all:\n\t@printf '%s' '$(CFLAGS)' > result\n")
         for operator in ("=", "+=", ":=", "?="):
