@@ -1,7 +1,9 @@
 // FORK MODIFICATION NOTICE (2026)
-// Forward load limits to Ninja and normalize recursive Make load options.
-// Supervise per-launcher load state and normalize options before Ninja's --.
-// Add a locked, regenerating single-command Ninja build supervisor.
+// Add configurable Ninja graph optimizations and content-preserving output
+// generation. Forward load limits to Ninja and normalize recursive Make load
+// options. Keep private graph controls out of Make variables and recipe
+// exports. Supervise per-launcher load state and normalize options before
+// Ninja's --. Add a locked, regenerating single-command Ninja build supervisor.
 // Expose native output stamps for generated recipes' interruption cleanup.
 // Pass Ninja output cleanup to the existing native recipe supervisor.
 // Dispatch optional persistent-workspace management to the Python frontend.
@@ -57,7 +59,11 @@
 #include "find.h"
 #include "flags.h"
 #include "func.h"
+#include "graph_import.h"
+#include "graph_optimization.h"
 #include "log.h"
+#include "monitor.h"
+#include "native_observation.h"
 #include "ninja.h"
 #include "parser.h"
 #include "recursive_cache.h"
@@ -183,7 +189,11 @@ static int HandleBuild(int argc, char** argv) {
     if (sigaction(sig, &action, nullptr) != 0)
       PERROR("install build signal handler");
 
-  int status = BuildSubprocess(generation, invocation_dir);
+  int status;
+  {
+    ScopedTimeReporter tr("graph validation and generation time");
+    status = BuildSubprocess(generation, invocation_dir);
+  }
   if (status == 0) {
     std::string launcher = GetNinjaShellScriptFilename();
     std::string jobs = "-j" + std::to_string(g_flags.num_jobs);
@@ -196,6 +206,7 @@ static int HandleBuild(int argc, char** argv) {
       ninja.push_back(const_cast<char*>("-n"));
     if (g_flags.keep_going)
       ninja.push_back(const_cast<char*>("-k0"));
+    ScopedTimeReporter tr("Ninja execution time");
     status = BuildSubprocess(ninja, nullptr);
   }
   close(lock_fd);
@@ -832,6 +843,15 @@ static int Run(const std::vector<Symbol>& targets,
                const std::string& orig_args,
                const std::string& invocation_dir) {
   double start_time = GetTime();
+  LOG_STAT("graph optimization settings: %s",
+           g_flags.GraphOptimizationIdentity().c_str());
+  if (g_flags.import_root) {
+    std::vector<std::string> files;
+    if (g_flags.is_dry_run || g_flags.is_touch || g_flags.is_question ||
+        g_flags.keep_going || g_flags.load_limit_set ||
+        !StaticImportSources(&files))
+      return 3;
+  }
   RecursiveCache recursive_cache(orig_args);
   if (!g_flags.explain && recursive_cache.Reuse())
     return 0;
@@ -886,6 +906,8 @@ static int Run(const std::vector<Symbol>& targets,
       const std::string_view entry(*p);
       const size_t equal_pos = entry.find('=');
       const std::string_view name = entry.substr(0, equal_pos);
+      if (name == "KATI_GRAPH_SETTINGS")
+        continue;
       const bool internal_make_variable =
           name == "MAKEFLAGS" || name == "MAKEOVERRIDES" ||
           name == "MAKELEVEL" || name == "MFLAGS" || name == "SHELL" ||
@@ -1051,6 +1073,8 @@ static int Run(const std::vector<Symbol>& targets,
         goto includes_done;
 
       std::vector<NamedDepNode> include_nodes;
+      std::unordered_map<std::string, std::string> include_observations;
+      bool include_observations_valid = false;
 
       {
         ScopedFrame frame(
@@ -1062,8 +1086,12 @@ static int Run(const std::vector<Symbol>& targets,
         // synthetic directory edges here can introduce a cycle through a
         // project's prepare target before the include has been generated.
         ev.RefreshVpath();
+        ScopedFileObservations observations(
+            g_flags.GraphOptimizationEnabled("includes"));
         MakeDep(&ev, ev.rules(), ev.rule_vars(), include_targets,
                 &include_nodes, false);
+        include_observations_valid = observations.valid();
+        include_observations = observations.Identities();
       }
 
       // Optional includes without a producing rule are valid and must remain
@@ -1078,7 +1106,7 @@ static int Run(const std::vector<Symbol>& targets,
           continue;
         // The next invocation must remake includes before it can establish
         // graph validity, even if the include itself has not changed yet.
-        MakefileCacheManager::Get().RequireEvaluation();
+        MakefileCacheManager::Get().RequireIncludeEvaluation();
         const DepNode* makefile_node = include.second;
         bool unconditional = false;
         for (size_t group = 0;
@@ -1149,6 +1177,8 @@ static int Run(const std::vector<Symbol>& targets,
           const bool touch_mode = g_flags.is_touch;
           g_flags.is_touch = false;
           include_result = Exec(include_remake_nodes, &ev);
+          if (include_result.needs_build)
+            InvalidateEvaluationFilesystemQueries();
           if (g_flags.explain && include_result.needs_build)
             ERROR(
                 "--explain: generated Makefiles need rebuilding; run a "
@@ -1173,11 +1203,63 @@ static int Run(const std::vector<Symbol>& targets,
             includes_changed = true;
         }
         if (!includes_changed) {
+          // A complete, unchanged explicit include graph can certify that
+          // remaking it is a no-op. Recording every node in the normal stamp
+          // binds this proof to its producing rules and dependency identities.
+          // Implicit/VPATH searches need negative probes before admission.
+          if (g_flags.generate_ninja && !g_flags.explain &&
+              g_flags.GraphOptimizationEnabled("includes") &&
+              !include_result.needs_build && include_observations_valid &&
+              deferred_include_nodes.empty() && ev.vpaths().empty() &&
+              !MakefileCacheManager::Get().has_observable_evaluation()) {
+            std::vector<const DepNode*> pending;
+            for (const auto& root : include_remake_nodes)
+              pending.push_back(root.second);
+            std::unordered_set<const DepNode*> visited;
+            std::vector<std::string> files;
+            bool eligible = true;
+            while (!pending.empty() && eligible) {
+              const DepNode* node = pending.back();
+              pending.pop_back();
+              if (!visited.insert(node).second)
+                continue;
+              struct stat st;
+              eligible =
+                  !node->is_phony && !node->is_notparallel &&
+                  !node->vpath_provider.IsValid() &&
+                  node->implicit_outputs.empty() && node->validations.empty() &&
+                  node->double_colon_group_for_cmd.empty() &&
+                  node->low_resolution_inputs.empty() &&
+                  stat(node->output.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+              if (!eligible)
+                break;
+              files.push_back(node->output.str());
+              for (const auto& input : node->deps)
+                pending.push_back(input.second);
+              for (const auto& input : node->order_onlys)
+                pending.push_back(input.second);
+            }
+            for (const auto& observation : include_observations)
+              if (observation.second == "unreadable" ||
+                  GetFileIdentity(observation.first) != observation.second)
+                eligible = false;
+            if (eligible) {
+              auto& cache = MakefileCacheManager::Get();
+              for (const auto& observation : include_observations)
+                cache.AddExtraFileDep(observation.first);
+              for (const std::string& file : files)
+                cache.AddExtraFileDep(file);
+              cache.CertifyIncludeEvaluation();
+              LOG_STAT("include certificate: %zu nodes", files.size());
+            }
+          }
           if (!deferred_include_nodes.empty()) {
             const bool touch_mode = g_flags.is_touch;
             g_flags.is_touch = false;
             const ExecResult deferred_result =
                 Exec(deferred_include_nodes, &ev);
+            if (deferred_result.needs_build)
+              InvalidateEvaluationFilesystemQueries();
             g_flags.is_touch = touch_mode;
             if (deferred_result.failed && !g_flags.keep_going) {
               ev.Finish();
@@ -1252,6 +1334,8 @@ static int Run(const std::vector<Symbol>& targets,
           ev.Enter(FrameType::PHASE, "*dependency analysis*", Loc()));
 
       ScopedTimeReporter tr("make dep time");
+      ScopedFileObservations observations(
+          g_flags.GraphOptimizationEnabled("evaluation"));
 
       ev.RefreshVpath();
       MakeDep(&ev, ev.rules(), ev.rule_vars(), targets, &nodes);
@@ -1296,6 +1380,8 @@ static int Run(const std::vector<Symbol>& targets,
 
     for (const auto& p : ev.exports()) {
       const Symbol name = p.first;
+      if (name.str() == "KATI_GRAPH_SETTINGS")
+        continue;
 
       if (p.second) {
         // LookupVar can still expose the environment-origin object that was
@@ -1541,6 +1627,9 @@ static bool IsWorkspaceAction(const char* argument) {
 }
 
 int main(int argc, char* argv[]) {
+  if (argc == 4 && strcmp(argv[1], "--internal-native-find") == 0 &&
+      (strcmp(argv[3], "0") == 0 || strcmp(argv[3], "1") == 0))
+    return NativeFindWorker(argv[2], strcmp(argv[3], "1") == 0);
   g_argv = argv;
   // This is live per-recipe supervision state, never a recursive make input.
   unsetenv("KATI_RECIPE_CHANGED");
@@ -1555,6 +1644,12 @@ int main(int argc, char* argv[]) {
   }
 
   if (argc >= 2) {
+    if (argc == 3 && !strcmp(argv[1], "monitor") &&
+        (!strcmp(argv[2], "start") || !strcmp(argv[2], "status") ||
+         !strcmp(argv[2], "stop")))
+      return MonitorCommand(argv[2]);
+    if (!strcmp(argv[1], "write-if-changed") && argc >= 4)
+      return WriteIfChanged(argc - 2, argv + 2);
     // Keep `omktr workspace` available as an ordinary Make target. The
     // frontend is selected only by an explicit workspace action or help.
     if (argc >= 3 && !strcmp(argv[1], "workspace") &&

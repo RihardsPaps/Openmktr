@@ -428,7 +428,7 @@ class Workspace(unittest.TestCase):
 
         build()
         directory = self.directory()
-        self.assertIn(" depfile = a.d.tmp\n",
+        self.assertIn("omktr_depfile = a.d.tmp\n",
                       (directory / ".openmktr/build.ninja").read_text())
         original = (directory / "a.o").read_bytes()
         stamp = (directory / "a.o").stat().st_mtime_ns

@@ -1,10 +1,11 @@
 // FORK MODIFICATION NOTICE (2026)
-// Changed by the Openmktr fork, maintained by Rihards Paps and
-// Haralds Paps.
-// Changed build execution, evaluation, or portability for this fork.
+// Track and validate incremental evaluation, include proofs and imported Ninja
+// graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
+// Paps. Changed build execution, evaluation, or portability for this fork.
 // Supervise Ninja interruption cleanup without a separate timestamp process.
 // Atomically retain exact managed-workspace recipe identities.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
+// Bypass cache bookkeeping in observation regions overlapping active effects.
 // Preserve shell parsing of multi-option flags in recipe supervisors.
 // Prevent recipe exports from duplicating a live jobserver reservation.
 // Elide pure no-op commands for the default POSIX shell and flags.
@@ -47,6 +48,7 @@
 #include <unistd.h>
 #include <algorithm>
 #include <atomic>
+#include <deque>
 #include <vector>
 
 #if defined(__APPLE__)
@@ -63,10 +65,149 @@
 
 extern char** environ;
 
+namespace {
+std::atomic<uint64_t> filesystem_epoch{0};
+std::atomic<size_t> filesystem_effects{0};
+}  // namespace
+
+uint64_t FilesystemObservationEpoch() {
+  return filesystem_epoch.load(std::memory_order_acquire);
+}
+
+bool FilesystemEffectsActive() {
+  return filesystem_effects.load(std::memory_order_acquire) != 0;
+}
+
+ScopedFilesystemEffect::ScopedFilesystemEffect() {
+  filesystem_effects.fetch_add(1, std::memory_order_acq_rel);
+  InvalidateFileObservations();
+}
+
+ScopedFilesystemEffect::~ScopedFilesystemEffect() {
+  InvalidateFileObservations();
+  filesystem_effects.fetch_sub(1, std::memory_order_release);
+}
+
+struct FileObservationState {
+  struct Observation {
+    struct stat metadata;
+    int error;
+  };
+  std::unordered_map<std::string, Observation> files;
+  bool valid = true;
+  uint64_t epoch = FilesystemObservationEpoch();
+  size_t hits = 0;
+  size_t misses = 0;
+  size_t fallbacks = 0;
+};
+thread_local FileObservationState* ScopedFileObservations::active_ = nullptr;
+
+FileObservationCache::~FileObservationCache() {
+  if (state_)
+    LOG_STAT("recipe metadata probes: %zu hits, %zu misses, %zu fallbacks",
+             state_->hits, state_->misses, state_->fallbacks);
+  if (effect_bypasses_)
+    LOG_STAT("recipe metadata expansion bypasses: %zu", effect_bypasses_);
+}
+
+ScopedFileObservations::ScopedFileObservations(bool enabled,
+                                               FileObservationCache* cache)
+    : previous_(active_) {
+  if (!enabled)
+    return;
+  // An already-running effect makes every probe uncertain. Use ordinary
+  // probes for this entire region instead of checking the unusable cache on
+  // each lookup. An enclosing observation cannot certify omitted probes.
+  if (FilesystemEffectsActive()) {
+    if (cache)
+      ++cache->effect_bypasses_;
+    if (previous_)
+      previous_->valid = false;
+    active_ = nullptr;
+    return;
+  }
+  if (cache) {
+    if (!cache->state_)
+      cache->state_ = std::make_shared<FileObservationState>();
+    state_ = cache->state_;
+  } else {
+    state_ = std::make_shared<FileObservationState>();
+  }
+  active_ = state_.get();
+}
+ScopedFileObservations::~ScopedFileObservations() {
+  active_ = previous_;
+}
+bool ScopedFileObservations::valid() const {
+  return state_ && state_->valid &&
+         state_->epoch == FilesystemObservationEpoch() &&
+         filesystem_effects.load(std::memory_order_acquire) == 0;
+}
+std::unordered_map<std::string, std::string>
+ScopedFileObservations::Identities() const {
+  std::unordered_map<std::string, std::string> result;
+  if (!state_)
+    return result;
+  for (const auto& file : state_->files) {
+    result[file.first] = file.second.error == 0
+                             ? GetFileIdentityFromStat(file.second.metadata)
+                         : file.second.error == ENOENT ? "missing"
+                                                       : "unreadable";
+  }
+  return result;
+}
+bool ObserveFile(const char* path, struct stat* st) {
+  auto* state = ScopedFileObservations::active_;
+  if (!state)
+    return stat(path, st) == 0;
+  const uint64_t epoch = FilesystemObservationEpoch();
+  if (state->epoch != epoch) {
+    state->files.clear();
+    state->valid = false;
+    state->epoch = epoch;
+  }
+  if (filesystem_effects.load(std::memory_order_acquire)) {
+    ++state->fallbacks;
+    state->valid = false;
+    state->files.clear();
+    return stat(path, st) == 0;
+  }
+  auto found = state->files.find(path);
+  if (found == state->files.end()) {
+    if (state->files.size() >= 100000) {
+      state->valid = false;
+      return stat(path, st) == 0;
+    }
+    ++state->misses;
+    FileObservationState::Observation observation{};
+    observation.error = stat(path, &observation.metadata) == 0 ? 0 : errno;
+    found = state->files.emplace(path, observation).first;
+  } else {
+    ++state->hits;
+  }
+  if (FilesystemObservationEpoch() != epoch ||
+      filesystem_effects.load(std::memory_order_acquire)) {
+    state->files.clear();
+    state->valid = false;
+    ++state->fallbacks;
+    return stat(path, st) == 0;
+  }
+  *st = found->second.metadata;
+  errno = found->second.error;
+  return found->second.error == 0;
+}
+void InvalidateFileObservations() {
+  filesystem_epoch.fetch_add(1, std::memory_order_acq_rel);
+  if (auto* state = ScopedFileObservations::active_) {
+    state->valid = false;
+    state->files.clear();
+  }
+}
+
 bool Exists(std::string_view filename) {
   CHECK(filename.size() < PATH_MAX);
   struct stat st;
-  if (stat(std::string(filename).c_str(), &st) < 0) {
+  if (!ObserveFile(std::string(filename).c_str(), &st)) {
     return false;
   }
   return true;
@@ -83,7 +224,7 @@ double GetTimestampFromStat(const struct stat& st) {
 double GetTimestamp(std::string_view filename) {
   CHECK(filename.size() < PATH_MAX);
   struct stat st;
-  if (stat(std::string(filename).c_str(), &st) < 0) {
+  if (!ObserveFile(std::string(filename).c_str(), &st)) {
     return -2.0;
   }
   return GetTimestampFromStat(st);
@@ -186,6 +327,10 @@ std::string GetFileIdentity(std::string_view path) {
   struct stat st;
   if (stat(std::string(path).c_str(), &st) != 0)
     return errno == ENOENT ? "missing" : "unreadable";
+  return GetFileIdentityFromStat(st);
+}
+
+std::string GetFileIdentityFromStat(const struct stat& st) {
 #if defined(__APPLE__)
   const auto mt = st.st_mtimespec;
   const auto ct = st.st_ctimespec;
@@ -200,6 +345,7 @@ std::string GetFileIdentity(std::string_view path) {
 }
 
 void DeleteChangedOutput(std::string_view path, const std::string& previous) {
+  ScopedFilesystemEffect effect;
   const std::string current = GetOutputStamp(path);
   if (current != "missing" && current != previous)
     unlink(std::string(path).c_str());
@@ -398,6 +544,8 @@ int RunCommand(const std::string& shell,
   // jobserver token. Custom interpreters/flags can have observable behavior.
   if (shell == "/bin/sh" && shellflag == "-c" && cmd == ":")
     return 0;
+
+  ScopedFilesystemEffect effect;
 
   // A recipe owns one jobserver slot while its shell runs. Pass that slot to
   // nested Kati processes started indirectly by scripts or configure tests.
@@ -683,13 +831,18 @@ class GlobCache {
  public:
   ~GlobCache() { Clear(); }
   const GlobMap::mapped_type& Get(std::string_view pat) {
+    const uint64_t filesystem_epoch = FilesystemObservationEpoch();
+    if (filesystem_epoch != filesystem_epoch_ || FilesystemEffectsActive()) {
+      Invalidate();
+      filesystem_epoch_ = filesystem_epoch;
+    }
     // WordScanner returns views into a larger expansion buffer.  Materialize
     // the cache key before calling any C API: pat.data() is not required to
     // point at a NUL-terminated string.
     std::string key(pat);
-    auto [it, inserted] = cache_.try_emplace(key);
-    auto& files = it->second;
-    if (inserted) {
+    auto& cached = live_[key];
+    if (cached.epoch != epoch_) {
+      GlobMap::mapped_type files;
       if (strcspn(key.c_str(), "?*[\\") != key.size()) {
         glob_t gl = {};
         int result = glob(key.c_str(), 0, NULL, &gl);
@@ -706,16 +859,61 @@ class GlobCache {
         if (Exists(key))
           files.push_back(key);
       }
+      auto [observation, first] =
+          observations_.try_emplace(key, std::move(files));
+      if (first) {
+        cached.files = &observation->second;
+      } else {
+        if (observation->second != files)
+          inconsistent_ = true;
+        if (!cached.files || *cached.files != files) {
+          if (observation->second == files) {
+            cached.files = &observation->second;
+          } else {
+            changed_.emplace_back(std::move(files));
+            cached.files = &changed_.back();
+          }
+        }
+      }
+      cached.epoch = epoch_;
     }
-    return files;
+    if (filesystem_epoch != FilesystemObservationEpoch() ||
+        FilesystemEffectsActive())
+      inconsistent_ = true;
+    return *cached.files;
   }
 
-  const GlobMap& GetAll() const { return cache_; }
+  const GlobMap& GetAll() const { return observations_; }
+  bool inconsistent() const { return inconsistent_; }
 
-  void Clear() { cache_.clear(); }
+  void Invalidate() {
+    if (++epoch_ == 0) {
+      epoch_ = 1;
+      for (auto& entry : live_)
+        entry.second.epoch = 0;
+    }
+  }
+
+  void Clear() {
+    live_.clear();
+    observations_.clear();
+    changed_.clear();
+    epoch_ = 1;
+    inconsistent_ = false;
+  }
 
  private:
-  GlobMap cache_;
+  struct Result {
+    size_t epoch = 0;
+    const GlobMap::mapped_type* files = nullptr;
+  };
+  std::unordered_map<std::string, Result> live_;
+  GlobMap observations_;
+  // Includes may still be iterating an earlier snapshot when an effect runs.
+  std::deque<GlobMap::mapped_type> changed_;
+  size_t epoch_ = 1;
+  bool inconsistent_ = false;
+  uint64_t filesystem_epoch_ = 0;
 };
 
 static GlobCache g_gc;
@@ -732,4 +930,12 @@ const GlobMap& GetAllGlobCache() {
 
 void ClearGlobCache() {
   g_gc.Clear();
+}
+
+void InvalidateGlobCache() {
+  g_gc.Invalidate();
+}
+
+bool HasInconsistentGlobObservations() {
+  return g_gc.inconsistent();
 }

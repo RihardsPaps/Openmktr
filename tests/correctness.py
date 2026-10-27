@@ -418,6 +418,14 @@ class BuildCorrectness(unittest.TestCase):
         (self.directory / "Makefile").write_text(text, encoding="utf-8")
 
     def run_command(self, *args, success=True):
+        profile = os.environ.get("OMKTR_TEST_GRAPH_PROFILE")
+        if (profile and args and args[0] == str(KATI) and
+                ("--ninja" in args or (len(args) > 1 and args[1] == "build")) and
+                not any(arg.startswith("--graph_optimizations=") for arg in args)):
+            if profile not in ("off", "safe", "aggressive"):
+                raise ValueError("Invalid OMKTR_TEST_GRAPH_PROFILE")
+            insertion = args.index("--") if "--" in args else len(args)
+            args = (*args[:insertion], f"--graph_optimizations={profile}", *args[insertion:])
         result = subprocess.run(
             args, cwd=self.directory, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, timeout=15, check=False,
@@ -837,7 +845,8 @@ class BuildCorrectness(unittest.TestCase):
         commands = [line for line in graph.splitlines()
                     if line.startswith(" command = ")]
         self.assertEqual(len(commands), 1, graph)
-        self.assertTrue(commands[0].startswith(" command = cd "), commands[0])
+        expanded = self.run_command("ninja", "-t", "commands")[1]
+        self.assertTrue(expanded.lstrip().startswith("cd "), expanded)
         self.run_command("sh", "./ninja.sh", "-j2")
         self.assertEqual((self.directory / "result").read_text(), expected)
 

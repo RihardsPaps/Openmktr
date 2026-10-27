@@ -1,3 +1,9 @@
+// FORK MODIFICATION NOTICE (2026)
+// Invalidate native filesystem query epochs after ordered effects.
+// Changed by the Openmktr fork, maintained by Rihards Paps and Haralds Paps.
+// Upstream material retains its Apache-2.0 terms. Fork modifications use
+// Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE.
+//
 // Copyright 2015 Google Inc. All rights reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -57,5 +63,14 @@ struct CommandResult {
 };
 
 const std::vector<CommandResult*>& GetShellCommandResults();
+void InvalidateEvaluationFilesystemQueries();
+void ReplayNativeFileRead(Evaluator* evaluator,
+                          const std::string& filename,
+                          bool missing);
+bool ReplayNativeFind(Evaluator* evaluator,
+                      const std::string& shell,
+                      const std::string& shellflag,
+                      const std::string& command,
+                      const std::string& packet);
 
 #endif  // FUNC_H_

@@ -1,6 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
+// Replay simple-variable append operands through the normalized state program.
 // Changed build execution, evaluation, or portability for this fork.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
@@ -176,8 +177,7 @@ void SimpleVar::Eval(Evaluator* ev, std::string* s) const {
 }
 
 void SimpleVar::AppendVar(Evaluator* ev, Value* v) {
-  std::string buf;
-  v->Eval(ev, &buf);
+  std::string buf = ev->EvalOperand(v);
   if (buf.empty())
     return;
   if (TargetAppend())

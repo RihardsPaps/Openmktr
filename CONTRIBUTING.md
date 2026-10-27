@@ -50,6 +50,8 @@ ninja -f build.ninja -j4 omktr tests
 out/find_test && out/ninja_test && out/strutil_test && out/load_limit_test
 python tests/version_generator.py
 python tests/correctness.py
+python tests/graph_optimizations.py
+OMKTR_TEST_GRAPH_PROFILE=aggressive python tests/correctness.py
 python tests/make_compat_regressions.py
 python tests/portage.py
 python tests/load_limits.py
@@ -136,6 +138,8 @@ ASAN_OPTIONS=detect_leaks=0 out/sanitized/load_limit_test
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/portage.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/load_limits.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/correctness.py
+ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/graph_optimizations.py
+ASAN_OPTIONS=detect_leaks=0 OMKTR_TEST_GRAPH_PROFILE=aggressive OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/correctness.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/workspace.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/make_compat_regressions.py
 ```

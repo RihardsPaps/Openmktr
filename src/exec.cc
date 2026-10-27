@@ -7,6 +7,8 @@
 // Remove changed non-precious recipe outputs on build interruption.
 // Report resolved recipes and freshness decisions in explanation mode.
 // Throttle recipe admission by load average without blocking forward progress.
+// Invalidate shared recipe-expansion observations around filesystem effects.
+// Let dependency waiters run lower-rank work without creating false cycles.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -51,6 +53,7 @@
 #include <string_view>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -62,6 +65,7 @@
 #include "flags.h"
 #include "load_limit.h"
 #include "log.h"
+#include "stats.h"
 #include "strutil.h"
 #include "symtab.h"
 #include "var.h"
@@ -123,12 +127,37 @@ static bool IsRecursiveKatiCommandMarker(const std::string& command) {
   return false;
 }
 
+constexpr size_t kUnknownDependencyRank = std::numeric_limits<size_t>::max();
+thread_local size_t active_dependency_rank = kUnknownDependencyRank;
+thread_local size_t active_dependency_nodes = 0;
+
+class ScopedDependencyRank {
+ public:
+  explicit ScopedDependencyRank(size_t rank)
+      : previous_(active_dependency_rank) {
+    active_dependency_rank =
+        std::min(previous_, rank == kUnknownDependencyRank ? 0 : rank);
+    ++active_dependency_nodes;
+  }
+  ~ScopedDependencyRank() {
+    --active_dependency_nodes;
+    active_dependency_rank = previous_;
+  }
+
+ private:
+  size_t previous_;
+};
+
 class WorkerPool {
  public:
   struct Task {
-    explicit Task(std::function<double()> f)
-        : function(std::move(f)), result(0), complete(false) {}
+    Task(std::function<double()> f, size_t dependency_rank)
+        : function(std::move(f)),
+          rank(dependency_rank),
+          result(0),
+          complete(false) {}
     std::function<double()> function;
+    size_t rank;
     double result;
     bool complete;
   };
@@ -145,12 +174,13 @@ class WorkerPool {
       stopping_ = true;
     }
     cv_.notify_all();
+    work_cv_.notify_all();
     for (std::thread& worker : workers_)
       worker.join();
   }
 
-  TaskHandle Submit(std::function<double()> function) {
-    TaskHandle task = std::make_shared<Task>(std::move(function));
+  TaskHandle Submit(std::function<double()> function, size_t rank) {
+    TaskHandle task = std::make_shared<Task>(std::move(function), rank);
     {
       std::lock_guard<std::mutex> lock(mu_);
       CHECK(!stopping_);
@@ -161,7 +191,8 @@ class WorkerPool {
       if (static_cast<int>(workers_.size()) < max_workers_)
         workers_.emplace_back([this]() { WorkerLoop(); });
     }
-    cv_.notify_one();
+    work_cv_.notify_one();
+    cv_.notify_all();
     return task;
   }
 
@@ -176,21 +207,69 @@ class WorkerPool {
           return target->result;
         auto queued = queued_.find(target.get());
         if (queued == queued_.end()) {
-          cv_.wait(lock, [&]() {
-            return target->complete || queued_.count(target.get()) != 0;
-          });
-          continue;
+          auto other = EligibleTask();
+          if (other != tasks_.end()) {
+            task = std::move(*other);
+            tasks_.erase(other);
+            queued_.erase(task.get());
+            ++cooperative_tasks_;
+          } else {
+            cv_.wait(lock, [&]() {
+              return target->complete || queued_.count(target.get()) != 0 ||
+                     EligibleTask() != tasks_.end();
+            });
+            continue;
+          }
+        } else {
+          task = std::move(*queued->second);
+          tasks_.erase(queued->second);
+          queued_.erase(queued);
         }
-        task = std::move(*queued->second);
-        tasks_.erase(queued->second);
-        queued_.erase(queued);
       }
       RunTask(task);
     }
   }
 
+  bool HasEligibleWork() {
+    std::lock_guard<std::mutex> lock(mu_);
+    return EligibleTask() != tasks_.end();
+  }
+
+  bool RunEligibleWork() {
+    TaskHandle task;
+    {
+      std::lock_guard<std::mutex> lock(mu_);
+      auto other = EligibleTask();
+      if (other == tasks_.end())
+        return false;
+      task = std::move(*other);
+      tasks_.erase(other);
+      queued_.erase(task.get());
+      ++cooperative_tasks_;
+    }
+    RunTask(task);
+    return true;
+  }
+
+  size_t CooperativeTasks() const { return cooperative_tasks_.load(); }
+
  private:
+  std::list<TaskHandle>::iterator EligibleTask() {
+    // Strict rank descent rules out waiting on any node this thread owns.
+    // Borrowing an arbitrary task can otherwise manufacture a same-thread
+    // cycle in an acyclic graph. Bound additional helping on deep graphs.
+    if (active_dependency_nodes >= 128)
+      return tasks_.end();
+    return std::find_if(tasks_.begin(), tasks_.end(),
+                        [](const TaskHandle& task) {
+                          return task->rank < active_dependency_rank;
+                        });
+  }
+
   void RunTask(const TaskHandle& task) {
+    // Also descend for a borrowed duplicate whose node is owned elsewhere;
+    // otherwise such duplicates could recursively borrow one another.
+    ScopedDependencyRank dependency_rank(task->rank);
     const double result = task->function();
     {
       std::lock_guard<std::mutex> lock(mu_);
@@ -205,7 +284,7 @@ class WorkerPool {
       TaskHandle task;
       {
         std::unique_lock<std::mutex> lock(mu_);
-        cv_.wait(lock, [this]() { return stopping_ || !tasks_.empty(); });
+        work_cv_.wait(lock, [this]() { return stopping_ || !tasks_.empty(); });
         if (stopping_ && tasks_.empty())
           return;
         task = std::move(tasks_.front());
@@ -218,11 +297,13 @@ class WorkerPool {
 
   std::mutex mu_;
   std::condition_variable cv_;
+  std::condition_variable work_cv_;
   std::list<TaskHandle> tasks_;
   std::unordered_map<Task*, std::list<TaskHandle>::iterator> queued_;
   std::vector<std::thread> workers_;
   int max_workers_;
   bool stopping_;
+  std::atomic<size_t> cooperative_tasks_{0};
 };
 
 class Executor {
@@ -416,10 +497,19 @@ class Executor {
             return kProcessing;
           }
           waiting_on_[current_thread] = n.output;
-          state_cv_.wait(lock, [&] {
-            auto current = done_.find(n.output);
-            return current == done_.end() || !current->second.processing;
-          });
+          if (worker_pool_.HasEligibleWork()) {
+            // This thread is doing work while helping, not waiting on n.
+            // Retaining the old wait-for entry would invent cross-thread
+            // cycles when n itself needs the borrowed task.
+            waiting_on_.erase(current_thread);
+            lock.unlock();
+            worker_pool_.RunEligibleWork();
+            lock.lock();
+            continue;
+          }
+          // Submission also notifies under state_mu_, so a newly queued task
+          // cannot be missed between the eligibility check and this wait.
+          state_cv_.wait(lock);
           waiting_on_.erase(current_thread);
           // A skipped intermediate is erased because the decision belongs to
           // one parent. Retry acquisition for this parent's freshness needs.
@@ -435,6 +525,7 @@ class Executor {
         break;
       }
     }
+    ScopedDependencyRank dependency_rank(DependencyRank(n.output));
     // Evaluator tracing uses one process-global stack.  Parallel workers
     // cannot push/pop that stack concurrently; doing so corrupts the stack
     // and can crash while expanding pattern rules.  Recipe expansion remains
@@ -514,17 +605,22 @@ class Executor {
       // running this node's recipe.  Limiting this to leaves serialized
       // recursive/aggregate builds and made Ninja -jN effectively single
       // threaded at the top of large graphs.
-      // Worker tasks expand descendants inline.  Otherwise every worker can
-      // wait for a task owned by another waiting worker, starving the finite
-      // pool even though the dependency graph itself is acyclic.
+      // Waiters cooperate on lower-rank tasks. Merely waiting for an already
+      // owned node leaves its independent descendants queued behind blocked
+      // workers, even though the dependency graph itself is acyclic.
       if (parallel_ && n.deps.size() + n.order_onlys.size() > 1) {
         children.emplace_back(
             worker_pool_.Submit(
                 [this, child = d.second, output = n.output, ancestry, &n]() {
                   return ExecNode(*child, output.c_str(), ancestry, &n);
-                }),
+                },
+                DependencyRank(d.second->output)),
             d.second->is_phony, order_only, is_low_resolution(d.first),
             d.second->output);
+        {
+          std::lock_guard<std::mutex> lock(state_mu_);
+          state_cv_.notify_all();
+        }
       } else {
         double ts = ExecNode(*d.second, n.output.c_str(), ancestry, &n);
         if (IsFailed(d.second->output))
@@ -650,6 +746,7 @@ class Executor {
         (group_needs_build.empty() ||
          std::any_of(group_needs_build.begin(), group_needs_build.end(),
                      [](bool dirty) { return dirty; }))) {
+      ScopedFilesystemEffect effect;
       if (n.vpath_provider.IsValid()) {
         n.vpath_discarded.store(true, std::memory_order_release);
         struct stat st;
@@ -720,6 +817,7 @@ class Executor {
                             : output_ts;
 
     if (n.vpath_provider.IsValid() && (n.is_phony || !n.cmds.empty())) {
+      ScopedFilesystemEffect effect;
       n.vpath_discarded.store(true, std::memory_order_release);
       struct stat st;
       if (!g_flags.is_dry_run && !g_flags.is_question &&
@@ -1015,6 +1113,8 @@ class Executor {
   }
 
   void RunRoots(const std::vector<NamedDepNode>& roots) {
+    if (parallel_ && job_limit_ > 1)
+      PrepareDependencyRanks(roots);
     // A single aggregate root already fans out through ExecNode(). Root-level
     // dispatch is useful only when the caller requested several independent
     // goals; keeping the single-root path unchanged avoids consuming one
@@ -1028,11 +1128,18 @@ class Executor {
     std::vector<WorkerPool::TaskHandle> futures;
     for (const auto& root : roots) {
       futures.emplace_back(worker_pool_.Submit(
-          [this, node = root.second]() { return ExecNode(*node, nullptr); }));
+          [this, node = root.second]() { return ExecNode(*node, nullptr); },
+          DependencyRank(root.second->output)));
+      {
+        std::lock_guard<std::mutex> lock(state_mu_);
+        state_cv_.notify_all();
+      }
     }
     for (const auto& future : futures)
       worker_pool_.Wait(future);
   }
+
+  size_t CooperativeTasks() const { return worker_pool_.CooperativeTasks(); }
 
   bool WasBuilt(Symbol output) {
     std::lock_guard<std::mutex> lock(state_mu_);
@@ -1040,6 +1147,71 @@ class Executor {
   }
 
  private:
+  void PrepareDependencyRanks(const std::vector<NamedDepNode>& roots) {
+    COLLECT_STATS("executor dependency ranks");
+    std::unordered_map<Symbol, std::vector<Symbol>> dependencies;
+    std::unordered_set<const DepNode*> seen;
+    std::vector<const DepNode*> pending;
+    for (const auto& root : roots)
+      pending.push_back(root.second);
+    while (!pending.empty()) {
+      const DepNode* node = pending.back();
+      pending.pop_back();
+      if (!seen.insert(node).second)
+        continue;
+      // Ownership is keyed by output, so merge every representation before
+      // ranking; two scopes of the same output must never get different ranks.
+      auto& inputs = dependencies[node->output];
+      auto append = [&](const auto& edges) {
+        for (const auto& edge : edges) {
+          inputs.push_back(edge.second->output);
+          pending.push_back(edge.second);
+        }
+      };
+      append(node->deps);
+      append(node->order_onlys);
+      append(node->validations);
+    }
+    std::unordered_map<Symbol, unsigned char> colors;
+    std::vector<std::pair<Symbol, size_t>> stack;
+    for (const auto& item : dependencies) {
+      if (colors[item.first] != 0)
+        continue;
+      colors[item.first] = 1;
+      stack.emplace_back(item.first, 0);
+      while (!stack.empty()) {
+        auto& frame = stack.back();
+        const auto& inputs = dependencies.at(frame.first);
+        if (frame.second < inputs.size()) {
+          Symbol input = inputs[frame.second++];
+          if (colors[input] == 1) {
+            // Ordinary evaluation retains its established circular-edge
+            // diagnostics. Never use speculative ranks for a cyclic graph.
+            dependency_ranks_.clear();
+            return;
+          }
+          if (colors[input] == 0) {
+            colors[input] = 1;
+            stack.emplace_back(input, 0);
+          }
+          continue;
+        }
+        size_t rank = 0;
+        for (Symbol input : inputs)
+          rank = std::max(rank, dependency_ranks_.at(input) + 1);
+        dependency_ranks_[frame.first] = rank;
+        colors[frame.first] = 2;
+        stack.pop_back();
+      }
+    }
+  }
+
+  size_t DependencyRank(Symbol output) const {
+    auto found = dependency_ranks_.find(output);
+    return found == dependency_ranks_.end() ? kUnknownDependencyRank
+                                            : found->second;
+  }
+
   struct NodeState {
     bool processing;
     double timestamp;
@@ -1099,12 +1271,15 @@ class Executor {
 
   void DeleteFailedOutput(const DepNode& node, double previous_ts) {
     if (node.delete_on_error && !node.precious &&
-        GetTimestamp(node.output.str()) != previous_ts)
+        GetTimestamp(node.output.str()) != previous_ts) {
+      ScopedFilesystemEffect effect;
       unlink(node.output.c_str());
+    }
   }
 
   CommandEvaluator ce_;
   std::unordered_map<Symbol, NodeState> done_;
+  std::unordered_map<Symbol, size_t> dependency_ranks_;
   std::unordered_set<Symbol> built_outputs_;
   // Protected by state_mu_.  Each entry describes the dependency currently
   // awaited by a worker, allowing parallel cycles to be diagnosed instead of
@@ -1150,6 +1325,7 @@ ExecResult Exec(const std::vector<NamedDepNode>& roots,
   }
   Executor executor(ev, parallel);
   executor.RunRoots(roots);
+  LOG_STAT("executor cooperative tasks: %zu", executor.CooperativeTasks());
   std::unordered_set<Symbol> visited;
   std::vector<DepNode*> pending;
   for (const auto& root : roots)
@@ -1161,6 +1337,7 @@ ExecResult Exec(const std::vector<NamedDepNode>& roots,
       continue;
     if (node->intermediate && !g_flags.is_dry_run && !g_flags.is_question &&
         executor.WasBuilt(node->output)) {
+      ScopedFilesystemEffect effect;
       unlink(node->output.str().c_str());
     }
     for (const auto& dep : node->deps)

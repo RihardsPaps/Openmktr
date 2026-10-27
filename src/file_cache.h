@@ -1,7 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
-// Changed by the Openmktr fork, maintained by Rihards Paps and
-// Haralds Paps.
-// Changed build execution, evaluation, or portability for this fork.
+// Track and validate incremental evaluation, include proofs and imported Ninja
+// graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
+// Paps. Changed build execution, evaluation, or portability for this fork.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
@@ -36,8 +36,24 @@ class MakefileCacheManager {
   const Makefile& ReadStdinMakefile();
   void GetAllFilenames(std::unordered_set<std::string>* out);
   void AddExtraFileDep(std::string_view dep);
+  void AddGeneratedGraphDep(const std::string& dep) {
+    extra_file_deps_.insert(dep);
+    generated_graph_deps_.insert(dep);
+  }
+  bool IsGeneratedGraphDep(const std::string& dep) const {
+    return generated_graph_deps_.count(dep) != 0;
+  }
   void RequireEvaluation() { require_evaluation_ = true; }
-  bool requires_evaluation() const { return require_evaluation_; }
+  void RequireIncludeEvaluation() { require_include_evaluation_ = true; }
+  void CertifyIncludeEvaluation() {
+    require_include_evaluation_ = false;
+    includes_certified_ = true;
+  }
+  bool includes_certified() const { return includes_certified_; }
+  bool requires_evaluation() const {
+    return require_evaluation_ || require_include_evaluation_;
+  }
+  bool has_observable_evaluation() const { return require_evaluation_; }
 
   static MakefileCacheManager& Get();
 
@@ -48,7 +64,10 @@ class MakefileCacheManager {
   std::unordered_map<std::string, Makefile> cache_;
   std::unique_ptr<Makefile> stdin_makefile_;
   std::unordered_set<std::string> extra_file_deps_;
+  std::unordered_set<std::string> generated_graph_deps_;
   bool require_evaluation_ = false;
+  bool require_include_evaluation_ = false;
+  bool includes_certified_ = false;
 };
 
 #endif  // FILE_CACHE_H_

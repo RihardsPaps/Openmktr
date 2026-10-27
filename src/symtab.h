@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Add non-mutating symbol lookup for incremental dependency validation.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -228,6 +229,8 @@ extern Symbol kAllowRulesSym;
 extern Symbol kKatiReadonlySym;
 
 Symbol Intern(std::string_view s);
+// Return an invalid symbol without interning an absent name.
+Symbol FindSymbol(std::string_view s);
 
 std::string JoinSymbols(const std::vector<Symbol>& syms, const char* sep);
 

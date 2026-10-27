@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Track file identities and derived call/foreach bindings for state replay.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed pattern substitution, build execution, evaluation, and portability.
@@ -25,6 +26,7 @@
 // +build ignore
 
 #include "func.h"
+#include "incremental_eval.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -46,8 +48,10 @@
 #include "file_cache.h"
 #include "fileutil.h"
 #include "find.h"
+#include "graph_optimization.h"
 #include "loc.h"
 #include "log.h"
+#include "native_observation.h"
 #include "parser.h"
 #include "stats.h"
 #include "stmt.h"
@@ -362,6 +366,14 @@ void WildcardFunc(const std::vector<Value*>& args,
   WordWriter ww(s);
   for (std::string_view tok : WordScanner(pat)) {
     const auto& files = Glob(tok);
+    if (ev->incremental_evaluator()->Observing()) {
+      std::string observation;
+      AppendGraphString("glob", &observation);
+      AppendGraphString(tok, &observation);
+      for (const auto& file : files)
+        AppendGraphString(file, &observation);
+      ev->incremental_evaluator()->Observe(std::move(observation));
+    }
     for (const std::string& file : files) {
       ww.Write(file);
     }
@@ -550,12 +562,21 @@ static bool HasNoIoInShellScript(const std::string& cmd) {
   return false;
 }
 
-static int ShellFuncImpl(const std::string& shell,
+void InvalidateFilesystemQueriesImpl() {
+  InvalidateFileObservations();
+  InvalidateGlobCache();
+  if (FindEmulator::Get())
+    FindEmulator::Get()->InvalidateCache();
+}
+
+static int ShellFuncImpl(Evaluator* ev,
+                         const std::string& shell,
                          const std::string& shellflag,
                          const std::string& cmd,
                          const Loc& loc,
                          std::string* s,
-                         FindCommand** fc) {
+                         FindCommand** fc,
+                         std::string* observed_packet = nullptr) {
   LOG("ShellFunc: %s", cmd.c_str());
 
 #ifdef TEST_FIND_EMULATOR
@@ -565,6 +586,18 @@ static int ShellFuncImpl(const std::string& shell,
   if (FindEmulator::Get()) {
     *fc = new FindCommand();
     if ((*fc)->Parse(cmd)) {
+      if (observed_packet && ev->incremental_evaluator()->Observing()) {
+        std::unique_ptr<FindCommand> fresh;
+        if (QueryNativeFind(cmd, observed_packet) &&
+            DecodeNativeFind(cmd, *observed_packet, s, &fresh)) {
+          delete *fc;
+          *fc = fresh.release();
+          return 0;
+        }
+        observed_packet->clear();
+        ev->incremental_evaluator()->Effect();
+        FindEmulator::Get()->InvalidateCache();
+      }
 #ifdef TEST_FIND_EMULATOR
       if (FindEmulator::Get()->HandleFind(cmd, **fc, loc, &out2)) {
         need_check = true;
@@ -580,7 +613,9 @@ static int ShellFuncImpl(const std::string& shell,
   }
 
   COLLECT_STATS_WITH_SLOW_REPORT("func shell time", cmd.c_str());
+  ev->incremental_evaluator()->Effect();
   int status = RunCommand(shell, shellflag, cmd, RedirectStderr::NONE, s);
+  InvalidateFilesystemQueriesImpl();
   FormatForCommandSubstitution(s);
 
 #ifdef TEST_FIND_EMULATOR
@@ -618,6 +653,20 @@ bool ShouldStoreCommandResult(std::string_view cmd) {
   return true;
 }
 
+void ObserveNativeFind(Evaluator* ev,
+                       const std::string& shell,
+                       const std::string& shellflag,
+                       const std::string& command,
+                       const std::string& packet) {
+  if (packet.empty())
+    return;
+  std::string record;
+  for (const auto& field :
+       {std::string("find"), shell, shellflag, command, packet})
+    AppendGraphString(field, &record);
+  ev->incremental_evaluator()->Observe(std::move(record));
+}
+
 void ShellFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
   std::string cmd = args[0]->Eval(ev);
   if (ev->avoid_io() && !HasNoIoInShellScript(cmd)) {
@@ -634,9 +683,11 @@ void ShellFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
       // of shell command while generating the graph and retain its result so
       // the normal Kati regeneration machinery can track it.
       std::string out;
+      std::string packet;
       FindCommand* fc = NULL;
-      int returnCode = ShellFuncImpl(ev->GetShell(), ev->GetShellFlag(), cmd,
-                                     ev->loc(), &out, &fc);
+      int returnCode = ShellFuncImpl(ev, ev->GetShell(), ev->GetShellFlag(),
+                                     cmd, ev->loc(), &out, &fc, &packet);
+      ObserveNativeFind(ev, ev->GetShell(), ev->GetShellFlag(), cmd, packet);
       if (ShouldStoreCommandResult(cmd)) {
         CommandResult* cr = new CommandResult();
         cr->op = (fc == NULL) ? CommandOp::SHELL : CommandOp::FIND;
@@ -654,6 +705,7 @@ void ShellFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
       ShellStatusVar::SetValue(returnCode);
       return;
     }
+    ev->incremental_evaluator()->Effect();
     StripShellComment(&cmd);
     *s += "$(";
     *s += cmd;
@@ -665,8 +717,11 @@ void ShellFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
   std::string shellflag = ev->GetShellFlag();
 
   std::string out;
+  std::string packet;
   FindCommand* fc = NULL;
-  int returnCode = ShellFuncImpl(shell, shellflag, cmd, ev->loc(), &out, &fc);
+  int returnCode =
+      ShellFuncImpl(ev, shell, shellflag, cmd, ev->loc(), &out, &fc, &packet);
+  ObserveNativeFind(ev, shell, shellflag, cmd, packet);
   if (ShouldStoreCommandResult(cmd)) {
     CommandResult* cr = new CommandResult();
     cr->op = (fc == NULL) ? CommandOp::SHELL : CommandOp::FIND,
@@ -677,6 +732,8 @@ void ShellFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
     cr->result = out;
     cr->loc = ev->loc();
     g_command_results.push_back(cr);
+  } else {
+    delete fc;
   }
   *s += out;
   ShellStatusVar::SetValue(returnCode);
@@ -703,7 +760,9 @@ void ShellFuncNoRerun(const std::vector<Value*>& args,
 
   std::string out;
   FindCommand* fc = NULL;
-  int returnCode = ShellFuncImpl(shell, shellflag, cmd, ev->loc(), &out, &fc);
+  int returnCode =
+      ShellFuncImpl(ev, shell, shellflag, cmd, ev->loc(), &out, &fc);
+  delete fc;
   *s += out;
   ShellStatusVar::SetValue(returnCode);
 }
@@ -765,6 +824,10 @@ void CallFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
   static const Symbol tmpvar_names[] = {
       Intern("0"), Intern("1"), Intern("2"), Intern("3"), Intern("4"),
       Intern("5"), Intern("6"), Intern("7"), Intern("8"), Intern("9")};
+  // Each invocation records the same symbol observations, including when the
+  // static names were initialized by an earlier call in this process.
+  for (Symbol name : tmpvar_names)
+    Intern(name.str());
 
   ev->CheckStack();
   const std::string&& func_name_buf = args[0]->Eval(ev);
@@ -772,6 +835,7 @@ void CallFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
   Var* func = ev->LookupVar(func_sym);
   func->Used(ev, func_sym);
   if (!func->IsDefined()) {
+    ev->incremental_evaluator()->Effect();
     KATI_WARN_LOC(ev->loc(), "*warning*: undefined user function: %s",
                   func_sym.c_str());
   }
@@ -781,10 +845,13 @@ void CallFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
         args[i]->Eval(ev), VarOrigin::AUTOMATIC, nullptr, Loc()));
   }
   std::vector<std::unique_ptr<ScopedGlobalVar>> sv;
+  std::vector<std::unique_ptr<EvaluationLocalBinding>> local_bindings;
   // $(0) names the function being called. Forwarding wrappers use it to
   // select another function, and nested calls must restore the outer name.
   SimpleVar called_name(std::string(func_sym.str()), VarOrigin::AUTOMATIC,
                         nullptr, Loc());
+  local_bindings.emplace_back(
+      new EvaluationLocalBinding(ev, "0", &called_name));
   ScopedGlobalVar zero(tmpvar_names[0], &called_name);
   for (size_t i = 1;; i++) {
     std::string s;
@@ -796,6 +863,8 @@ void CallFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
       tmpvar_name_sym = Intern(s);
     }
     if (i < args.size()) {
+      local_bindings.emplace_back(new EvaluationLocalBinding(
+          ev, tmpvar_name_sym.str(), av[i - 1].get()));
       sv.emplace_back(new ScopedGlobalVar(tmpvar_name_sym, av[i - 1].get()));
     } else {
       // We need to blank further automatic vars
@@ -806,6 +875,8 @@ void CallFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
         break;
 
       av.emplace_back(new SimpleVar("", VarOrigin::AUTOMATIC, nullptr, Loc()));
+      local_bindings.emplace_back(new EvaluationLocalBinding(
+          ev, tmpvar_name_sym.str(), av[i - 1].get()));
       sv.emplace_back(new ScopedGlobalVar(tmpvar_name_sym, av[i - 1].get()));
     }
   }
@@ -830,6 +901,7 @@ void ForeachFunc(const std::vector<Value*>& args,
   for (std::string_view tok : WordScanner(list)) {
     std::unique_ptr<SimpleVar> v(
         new SimpleVar(std::string(tok), VarOrigin::AUTOMATIC, nullptr, Loc()));
+    EvaluationLocalBinding binding(ev, varname, v.get());
     ScopedGlobalVar sv(Intern(varname), v.get());
     ww.MaybeAddSeparator();
     args[2]->Eval(ev, s);
@@ -979,13 +1051,37 @@ void ErrorFunc(const std::vector<Value*>& args, Evaluator* ev, std::string*) {
   ev->Error(StringPrintf("*** %s.", a.c_str()));
 }
 
+void ObserveNativeFile(Evaluator* ev,
+                       const std::string& filename,
+                       const std::string& expected) {
+  if (!ev->incremental_evaluator()->Observing())
+    return;
+  struct stat st;
+  const bool regular_or_missing =
+      stat(filename.c_str(), &st) == 0 ? S_ISREG(st.st_mode) : errno == ENOENT;
+  if (!regular_or_missing || expected == "unreadable" ||
+      expected != GetFileIdentity(filename)) {
+    ev->incremental_evaluator()->Effect();
+    return;
+  }
+  std::string record;
+  AppendGraphString("file", &record);
+  AppendGraphString(filename, &record);
+  AppendGraphString(expected, &record);
+  ev->incremental_evaluator()->Observe(std::move(record));
+}
+
 static void FileReadFunc_(Evaluator* ev,
                           const std::string& filename,
                           std::string* s,
                           bool rerun) {
+  if (rerun && ShouldStoreCommandResult(filename))
+    MakefileCacheManager::Get().AddExtraFileDep(filename);
   int fd = open(filename.c_str(), O_RDONLY);
   if (fd < 0) {
     if (errno == ENOENT) {
+      if (rerun)
+        ObserveNativeFile(ev, filename, "missing");
       if (ShouldStoreCommandResult(filename)) {
         CommandResult* cr = new CommandResult();
         cr->op = CommandOp::READ_MISSING;
@@ -1016,9 +1112,12 @@ static void FileReadFunc_(Evaluator* ev,
     ev->Error("*** close failed.");
   }
 
-  if (out.back() == '\n') {
+  if (!out.empty() && out.back() == '\n') {
     out.pop_back();
   }
+
+  if (rerun)
+    ObserveNativeFile(ev, filename, GetFileIdentityFromStat(st));
 
   if (rerun && ShouldStoreCommandResult(filename)) {
     CommandResult* cr = new CommandResult();
@@ -1035,6 +1134,7 @@ static void FileWriteFunc_(Evaluator* ev,
                            bool append,
                            std::string text,
                            bool rerun) {
+  ScopedFilesystemEffect effect;
   FILE* f = fopen(filename.c_str(), append ? "ab" : "wb");
   if (f == NULL) {
     ev->Error(StringPrintf("*** fopen %s failed: %s.", filename.c_str(),
@@ -1048,6 +1148,8 @@ static void FileWriteFunc_(Evaluator* ev,
   if (fclose(f) != 0) {
     ev->Error("*** fclose failed.");
   }
+
+  InvalidateFilesystemQueriesImpl();
 
   if (rerun && ShouldStoreCommandResult(filename)) {
     CommandResult* cr = new CommandResult();
@@ -1081,8 +1183,11 @@ void FileFunc_(const std::vector<Value*>& args,
 
     if (ev->avoid_io()) {
       std::string filename_str(filename);
+      if (rerun)
+        ObserveNativeFile(ev, filename_str, GetFileIdentity(filename_str));
 
       if (rerun && ShouldStoreCommandResult(filename_str)) {
+        MakefileCacheManager::Get().AddExtraFileDep(filename_str);
         CommandResult* cr = new CommandResult();
         cr->op =
             Exists(filename_str) ? CommandOp::READ : CommandOp::READ_MISSING;
@@ -1105,6 +1210,7 @@ void FileFunc_(const std::vector<Value*>& args,
 
     FileReadFunc_(ev, std::string(filename), s, rerun);
   } else if (filename[0] == '>') {
+    ev->incremental_evaluator()->Effect();
     if (ev->avoid_io()) {
       // A recipe-time $(file >name,text) must run when the Ninja edge runs,
       // after automatic variables such as $@ and $^ have been expanded.
@@ -1584,4 +1690,45 @@ const FuncInfo* GetFuncInfo(std::string_view name) {
 
 const std::vector<CommandResult*>& GetShellCommandResults() {
   return g_command_results;
+}
+
+void InvalidateEvaluationFilesystemQueries() {
+  InvalidateFilesystemQueriesImpl();
+}
+
+void ReplayNativeFileRead(Evaluator* ev,
+                          const std::string& filename,
+                          bool missing) {
+  if (!ShouldStoreCommandResult(filename))
+    return;
+  MakefileCacheManager::Get().AddExtraFileDep(filename);
+  CommandResult* result = new CommandResult();
+  result->op = missing ? CommandOp::READ_MISSING : CommandOp::READ;
+  result->cmd = filename;
+  result->loc = ev->loc();
+  g_command_results.push_back(result);
+}
+
+bool ReplayNativeFind(Evaluator* ev,
+                      const std::string& shell,
+                      const std::string& shellflag,
+                      const std::string& command,
+                      const std::string& packet) {
+  std::string value;
+  std::unique_ptr<FindCommand> descriptor;
+  if (!DecodeNativeFind(command, packet, &value, &descriptor))
+    return false;
+  if (ShouldStoreCommandResult(command)) {
+    CommandResult* result = new CommandResult();
+    result->op = CommandOp::FIND;
+    result->shell = shell;
+    result->shellflag = shellflag;
+    result->cmd = command;
+    result->find = std::move(descriptor);
+    result->result = std::move(value);
+    result->loc = ev->loc();
+    g_command_results.push_back(result);
+  }
+  ShellStatusVar::SetValue(0);
+  return true;
 }

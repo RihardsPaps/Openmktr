@@ -28,6 +28,23 @@ class ToyCampaign(incremental.Campaign):
 
 
 class CampaignTests(unittest.TestCase):
+    def test_engine_options_do_not_change_the_reference_or_launcher(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = argparse.Namespace(output=Path(temporary) / "evidence", env=[],
+                                      make=sys.executable, cc=sys.executable,
+                                      omktr=Path(sys.executable), jobs=2, timeout=5,
+                                      omktr_option=["--graph_optimizations=aggressive"])
+            campaign = incremental.Campaign(args)
+            commands = []
+            campaign.run = lambda tree, command, *rest: commands.append(command)
+            for mode in ("make", "direct", "ninja"):
+                campaign.build(Path(temporary), {}, mode, "test")
+            option = "--graph_optimizations=aggressive"
+            self.assertNotIn(option, commands[0])
+            self.assertIn(option, commands[1])
+            self.assertIn(option, commands[2])
+            self.assertNotIn(option, commands[3])
+
     def test_missed_and_unnecessary_are_distinct(self):
         self.assertEqual(incremental.classify({"a", "b"}, {"b", "c"}), {
             "missed_rebuilds": ["a"], "unnecessary_rebuilds": ["c"]})

@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Replay normalized statement programs through ordinary state mutations.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -26,6 +27,8 @@
 
 #include "eval.h"
 #include "expr.h"
+#include "flags.h"
+#include "incremental_eval.h"
 #include "stringprintf.h"
 #include "strutil.h"
 
@@ -35,7 +38,10 @@ Stmt::~Stmt() {}
 
 void Stmt::Eval(Evaluator* ev) const {
   ScopedFrame frame(ev->Enter(FrameType::STATEMENT, "statement", loc_));
+  const bool state = ev->incremental_evaluator()->BeginStatement(this);
   EvalStatement(ev);
+  if (state)
+    ev->incremental_evaluator()->EndStatement();
 }
 
 std::string RuleStmt::DebugString() const {
@@ -82,7 +88,7 @@ std::string AssignStmt::DebugString() const {
 Symbol AssignStmt::GetLhsSymbol(Evaluator* ev) const {
   if (!lhs->IsLiteral()) {
     std::string buf;
-    lhs->Eval(ev, &buf);
+    buf = ev->EvalOperand(lhs);
     return Intern(buf);
   }
 

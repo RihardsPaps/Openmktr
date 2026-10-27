@@ -1,7 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
-// Changed by the Openmktr fork, maintained by Rihards Paps and
-// Haralds Paps.
-// Changed build execution, evaluation, or portability for this fork.
+// Track and validate incremental evaluation, include proofs and imported Ninja
+// graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
+// Paps. Changed build execution, evaluation, or portability for this fork.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -36,6 +36,7 @@
 #include "symtab.h"
 
 class Makefile;
+class IncrementalEvaluator;
 class Rule;
 class Var;
 class Vars;
@@ -126,12 +127,14 @@ class IncludeGraph {
 };
 
 class Evaluator {
+  friend class IncrementalEvaluator;
   friend ScopedFrame;
 
  public:
   Evaluator();
   ~Evaluator();
 
+  IncrementalEvaluator* incremental_evaluator() { return incremental_.get(); }
   bool Start();
   void Finish();
 
@@ -180,6 +183,7 @@ class Evaluator {
   Var* PeekVar(Symbol name);
 
   std::string EvalVar(Symbol name);
+  std::string EvalOperand(const Value* value);
 
   const Loc& loc() const { return loc_; }
   void set_loc(const Loc& loc) { loc_ = loc; }
@@ -290,6 +294,7 @@ class Evaluator {
   std::unordered_map<Symbol, bool> exports_;
   std::set<Symbol> symbols_for_eval_;
 
+  std::unique_ptr<IncrementalEvaluator> incremental_;
   Rule* last_rule_;
   Vars* current_scope_;
 

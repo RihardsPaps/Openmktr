@@ -1,3 +1,9 @@
+// FORK MODIFICATION NOTICE (2026)
+// Invalidate native directory queries after ordered filesystem effects.
+// Changed by the Openmktr fork, maintained by Rihards Paps and Haralds Paps.
+// Upstream material retains its Apache-2.0 terms. Fork modifications use
+// Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE.
+//
 // Copyright 2015 Google Inc. All rights reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1017,6 +1023,7 @@ class FindEmulatorImpl : public FindEmulator {
   FindEmulatorImpl() { g_instance = this; }
 
   virtual ~FindEmulatorImpl() = default;
+  void InvalidateCache() override { dirty_ = true; }
 
   bool CanHandle(std::string_view s) const {
     return (!HasPrefix(s, "/") && !HasPrefix(s, ".repo") &&
@@ -1035,6 +1042,16 @@ class FindEmulatorImpl : public FindEmulator {
                           const FindCommand& fc,
                           const Loc& loc,
                           std::string* out) override {
+    const uint64_t epoch = FilesystemObservationEpoch();
+    if (epoch != filesystem_epoch_ || FilesystemEffectsActive()) {
+      dirty_ = true;
+      filesystem_epoch_ = epoch;
+    }
+    if (dirty_) {
+      delete root_;
+      root_ = new DirentDirNode(nullptr, "");
+      dirty_ = false;
+    }
     if (!CanHandle(fc.chdir)) {
       LOG("FindEmulator: Cannot handle chdir (%.*s): %s", SPF(fc.chdir),
           cmd.c_str());
@@ -1138,6 +1155,8 @@ class FindEmulatorImpl : public FindEmulator {
 
  private:
   DirentNode* root_ = new DirentDirNode(nullptr, "");
+  bool dirty_ = false;
+  uint64_t filesystem_epoch_ = 0;
 };
 
 }  // namespace

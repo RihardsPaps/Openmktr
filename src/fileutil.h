@@ -1,8 +1,9 @@
 // FORK MODIFICATION NOTICE (2026)
-// Changed by the Openmktr fork, maintained by Rihards Paps and
-// Haralds Paps.
-// Changed build execution, evaluation, or portability for this fork.
+// Track and validate incremental evaluation, include proofs and imported Ninja
+// graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
+// Paps. Changed build execution, evaluation, or portability for this fork.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
+// Bypass cache bookkeeping in observation regions overlapping active effects.
 // Expose validation of inherited FIFO jobservers for recursive scheduling.
 // Share signal handling and interrupted-output identity checks across modes.
 // Expose process-owned load-admission slots for generated Ninja recipes.
@@ -32,6 +33,7 @@
 #include <errno.h>
 #include <signal.h>
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -45,6 +47,49 @@ double GetTimestamp(std::string_view f);
 // Identity includes ctime so timestamp-preserving replacements invalidate
 // caches.
 std::string GetFileIdentity(std::string_view path);
+std::string GetFileIdentityFromStat(const struct stat& st);
+struct FileObservationState;
+// Reused only by serialized recipe expansion. Active commands and filesystem
+// effects invalidate it across executor threads through a process-wide epoch.
+class FileObservationCache {
+ public:
+  ~FileObservationCache();
+
+ private:
+  std::shared_ptr<FileObservationState> state_;
+  size_t effect_bypasses_ = 0;
+  friend class ScopedFileObservations;
+};
+
+// Resolver-local observations, optionally retained across pure expansions.
+class ScopedFileObservations {
+ public:
+  explicit ScopedFileObservations(bool enabled = true,
+                                  FileObservationCache* cache = nullptr);
+  ~ScopedFileObservations();
+  bool valid() const;
+  std::unordered_map<std::string, std::string> Identities() const;
+  ScopedFileObservations(const ScopedFileObservations&) = delete;
+  ScopedFileObservations& operator=(const ScopedFileObservations&) = delete;
+
+ private:
+  std::shared_ptr<FileObservationState> state_;
+  FileObservationState* previous_;
+  friend bool ObserveFile(const char*, struct stat*);
+  friend void InvalidateFileObservations();
+  static thread_local FileObservationState* active_;
+};
+bool ObserveFile(const char* path, struct stat* st);
+void InvalidateFileObservations();
+uint64_t FilesystemObservationEpoch();
+bool FilesystemEffectsActive();
+class ScopedFilesystemEffect {
+ public:
+  ScopedFilesystemEffect();
+  ~ScopedFilesystemEffect();
+  ScopedFilesystemEffect(const ScopedFilesystemEffect&) = delete;
+  ScopedFilesystemEffect& operator=(const ScopedFilesystemEffect&) = delete;
+};
 bool ReadNinjaRecipeState(const std::string& path, std::string* state);
 void WriteNinjaRecipeState(const std::string& path, const std::string& state);
 
@@ -110,6 +155,9 @@ const GlobMap::mapped_type& Glob(std::string_view pat);
 const GlobMap& GetAllGlobCache();
 
 void ClearGlobCache();
+// Forget live query results while retaining the invocation's observations.
+void InvalidateGlobCache();
+bool HasInconsistentGlobObservations();
 
 #define HANDLE_EINTR(x)                  \
   ({                                     \

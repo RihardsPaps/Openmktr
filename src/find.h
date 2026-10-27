@@ -1,3 +1,9 @@
+// FORK MODIFICATION NOTICE (2026)
+// Invalidate native directory queries after ordered filesystem effects.
+// Changed by the Openmktr fork, maintained by Rihards Paps and Haralds Paps.
+// Upstream material retains its Apache-2.0 terms. Fork modifications use
+// Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE.
+//
 // Copyright 2015 Google Inc. All rights reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,6 +73,7 @@ class FindEmulator {
 
   static FindEmulator* Get();
   static unsigned int GetNodeCount();
+  virtual void InvalidateCache() = 0;
 
  protected:
   FindEmulator() = default;

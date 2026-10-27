@@ -1,10 +1,11 @@
 // FORK MODIFICATION NOTICE (2026)
-// Changed by the Openmktr fork, maintained by Rihards Paps and
-// Haralds Paps.
-// Changed pattern substitution, build execution, evaluation, and portability.
-// Upstream material retains its Apache-2.0 terms. Fork modifications are
-// covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
-// at the repository root. Original notices below remain applicable.
+// Track and validate incremental evaluation, include proofs and imported Ninja
+// graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
+// Paps. Changed pattern substitution, build execution, evaluation, and
+// portability. Upstream material retains its Apache-2.0 terms. Fork
+// modifications are covered by Mozilla Public License 2.0; see
+// docs/LICENSING.md and NOTICE at the repository root. Original notices below
+// remain applicable.
 
 // Copyright 2015 Google Inc. All rights reserved
 //
@@ -23,7 +24,11 @@
 // +build ignore
 
 #include "expr.h"
+#include "fileutil.h"
+#include "graph_optimization.h"
+#include "incremental_eval.h"
 
+#include <unordered_set>
 #include <vector>
 
 #include "eval.h"
@@ -47,12 +52,24 @@ Value::Value(const Loc& loc) : Evaluable(loc) {}
 
 Value::~Value() {}
 
+std::string_view Value::IncrementalIdentity() const {
+  if (incremental_identity_.empty() &&
+      !AppendIncrementalIdentity(&incremental_identity_))
+    incremental_identity_.clear();
+  return incremental_identity_;
+}
+
 std::string Value::DebugString(const Value* v) {
   return v ? NoLineBreak(v->DebugString_()) : "(null)";
 }
 
 class Literal : public Value {
  public:
+  bool AppendIncrementalIdentity(std::string* data) const override {
+    AppendGraphString("literal", data);
+    AppendGraphString(s_, data);
+    return true;
+  }
   explicit Literal(std::string_view s) : Value(Loc()), s_(s) {}
 
   std::string_view val() const { return s_; }
@@ -75,6 +92,18 @@ class Literal : public Value {
 
 class ValueList : public Value {
  public:
+  bool IsIncrementalCandidate(bool full) const override {
+    return full && vals_.size() >= 4;
+  }
+  bool AppendIncrementalIdentity(std::string* data) const override {
+    AppendGraphString("list", data);
+    for (const Value* child : vals_) {
+      if (child->IncrementalIdentity().empty())
+        return false;
+      AppendGraphString(child->IncrementalIdentity(), data);
+    }
+    return true;
+  }
   ValueList(const Loc& loc) : Value(loc) {}
 
   ValueList(const Loc& loc, Value* v1, Value* v2, Value* v3) : ValueList(loc) {
@@ -111,6 +140,9 @@ class ValueList : public Value {
   }
 
   virtual void Eval(Evaluator* ev, std::string* s) const override {
+    EvaluationRegion region(ev, this, s);
+    if (region.reused())
+      return;
     ev->CheckStack();
     for (Value* v : vals_) {
       v->Eval(ev, s);
@@ -138,6 +170,11 @@ class ValueList : public Value {
 
 class SymRef : public Value {
  public:
+  bool AppendIncrementalIdentity(std::string* data) const override {
+    AppendGraphString("reference", data);
+    AppendGraphString(name_.str(), data);
+    return true;
+  }
   explicit SymRef(const Loc& loc, Symbol n) : Value(loc), name_(n) {}
   virtual ~SymRef() {}
 
@@ -150,6 +187,9 @@ class SymRef : public Value {
   }
 
   virtual void Eval(Evaluator* ev, std::string* s) const override {
+    EvaluationRegion region(ev, this, s);
+    if (region.reused())
+      return;
     ev->CheckStack();
     Var* v = ev->LookupVarForEval(name_);
     v->Used(ev, name_);
@@ -168,6 +208,14 @@ class SymRef : public Value {
 
 class VarRef : public Value {
  public:
+  bool IsIncrementalCandidate(bool full) const override { return full; }
+  bool AppendIncrementalIdentity(std::string* data) const override {
+    if (name_->IncrementalIdentity().empty())
+      return false;
+    AppendGraphString("dynamic-reference", data);
+    AppendGraphString(name_->IncrementalIdentity(), data);
+    return true;
+  }
   explicit VarRef(const Loc& loc, Value* n) : Value(loc), name_(n) {}
   virtual ~VarRef() { delete name_; }
 
@@ -177,6 +225,9 @@ class VarRef : public Value {
   }
 
   virtual void Eval(Evaluator* ev, std::string* s) const override {
+    EvaluationRegion region(ev, this, s);
+    if (region.reused())
+      return;
     ev->CheckStack();
     ev->IncrementEvalDepth();
     const std::string&& name = name_->Eval(ev);
@@ -210,6 +261,16 @@ class VarRef : public Value {
 
 class VarSubst : public Value {
  public:
+  bool IsIncrementalCandidate(bool full) const override { return full; }
+  bool AppendIncrementalIdentity(std::string* data) const override {
+    AppendGraphString("substitution", data);
+    for (const Value* child : {name_, pat_, subst_}) {
+      if (child->IncrementalIdentity().empty())
+        return false;
+      AppendGraphString(child->IncrementalIdentity(), data);
+    }
+    return true;
+  }
   VarSubst(const Loc& loc, Value* n, Value* p, Value* s)
       : Value(loc), name_(n), pat_(p), subst_(s) {}
   virtual ~VarSubst() {
@@ -223,6 +284,9 @@ class VarSubst : public Value {
   }
 
   virtual void Eval(Evaluator* ev, std::string* s) const override {
+    EvaluationRegion region(ev, this, s);
+    if (region.reused())
+      return;
     ev->CheckStack();
     ev->IncrementEvalDepth();
     const std::string&& name = name_->Eval(ev);
@@ -259,6 +323,23 @@ class VarSubst : public Value {
 
 class Func : public Value {
  public:
+  bool IsIncrementalCandidate(bool full) const override {
+    const std::string_view name(fi_->name);
+    return name == "sort" || name == "filter" || name == "filter-out" ||
+           name == "patsubst" || name == "subst" ||
+           (full && (name == "if" || name == "and" || name == "or" ||
+                     name == "join" || name == "wordlist"));
+  }
+  bool AppendIncrementalIdentity(std::string* data) const override {
+    AppendGraphString("function", data);
+    AppendGraphString(fi_->name, data);
+    for (const Value* child : args_) {
+      if (child->IncrementalIdentity().empty())
+        return false;
+      AppendGraphString(child->IncrementalIdentity(), data);
+    }
+    return true;
+  }
   Func(const Loc& loc, const FuncInfo* fi) : Value(loc), fi_(fi) {}
 
   ~Func() {
@@ -269,11 +350,34 @@ class Func : public Value {
   virtual bool IsFunc(Evaluator*) const override { return true; }
 
   virtual void Eval(Evaluator* ev, std::string* s) const override {
+    EvaluationRegion region(ev, this, s);
+    if (region.reused())
+      return;
+    bool barrier = false;
+    if (ev->incremental_evaluator()->enabled()) {
+      const std::string_view function(fi_->name);
+      // State replay classifies operations only while recording. Direct
+      // execution invalidates filesystem epochs at the actual I/O APIs.
+      static const std::unordered_set<std::string_view> pure = {
+          "patsubst",   "strip",    "subst",     "findstring", "filter",
+          "filter-out", "sort",     "word",      "wordlist",   "words",
+          "firstword",  "lastword", "join",      "dir",        "notdir",
+          "suffix",     "basename", "addsuffix", "addprefix",  "if",
+          "and",        "or",       "value",     "origin",     "flavor",
+          "intcmp",     "call",     "foreach"};
+      const bool native_observation =
+          function == "wildcard" || function == "file" || function == "shell";
+      barrier = !native_observation && !pure.count(function);
+      if (barrier)
+        ev->incremental_evaluator()->Effect();
+    }
     ScopedFrame frame(ev->Enter(FrameType::FUNCALL, fi_->name, Location()));
     ev->CheckStack();
     LOG("Invoke func %s(%s)", name(), JoinValues(args_, ",").c_str());
     ev->IncrementEvalDepth();
     fi_->func(args_, ev, s);
+    if (barrier)
+      InvalidateFileObservations();
     ev->DecrementEvalDepth();
   }
 

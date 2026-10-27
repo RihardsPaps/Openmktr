@@ -8,6 +8,8 @@ other platforms are best effort. Read [README.md](README.md) before changing
 build or runtime behavior and [CONTRIBUTING.md](CONTRIBUTING.md) for validation
 commands and source layout.
 
+- Run local development, validation and benchmark workloads on the user's PC.
+  Never access, run work on, or modify the NAS for this project.
 - Keep the project-controlled build, tests, and runtime GNU-free. Use Clang/LLVM, musl,
   libc++, Ninja, Python, and POSIX shell tools. Do not introduce GNU Make, GCC, glibc,
   Bash, or GNU utilities as dependencies. Commands in user-supplied Makefiles are
