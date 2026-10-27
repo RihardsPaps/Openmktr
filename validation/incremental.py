@@ -155,6 +155,8 @@ class Campaign:
     def build(self, tree, project, mode, label, interrupt=None):
         args = project.get("args", ["all"])
         options = ["-j" + str(self.args.jobs)] + args
+        if mode != "make":
+            options += getattr(self.args, "omktr_option", [])
         if mode == "ninja":
             self.run(tree, ["{omktr}", "--ninja", "--regen"] + options,
                      label + "-generate")
@@ -278,6 +280,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True,
                         help="New directory; retains trees, logs and report")
     parser.add_argument("--omktr", type=Path, required=True)
+    parser.add_argument("--omktr-option", action="append", default=[],
+                        help="extra Openmktr option only; repeat with =--OPTION")
     parser.add_argument("--make", default="make")
     parser.add_argument("--cc", default="clang")
     parser.add_argument("--jobs", type=int, default=4)
@@ -314,7 +318,7 @@ def main():
               "manifest": {"path": str(args.manifest.resolve()),
                            "sha256": digest(args.manifest), "content": manifest},
               "selection": {"projects": args.project, "cases": args.case,
-                            "jobs": args.jobs}, "tools": {}}
+                            "jobs": args.jobs, "omktr_options": args.omktr_option}, "tools": {}}
     try:
         for name, tool in campaign.tools.items():
             path = Path(shutil.which(tool) or tool).resolve()

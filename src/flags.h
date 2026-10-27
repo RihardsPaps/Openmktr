@@ -1,5 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
-// Changed by the Openmktr fork, maintained by Rihards Paps and
+// Add configurable Ninja graph optimizations and content-preserving output
+// generation. Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Add build explanations and opt-in compatibility diagnostics.
@@ -33,6 +34,13 @@
 #include "symtab.h"
 
 struct Flags {
+  enum class GraphOptimizations { kOff, kSafe, kAggressive };
+  GraphOptimizations graph_optimizations = GraphOptimizations::kSafe;
+  std::vector<std::string> disabled_graph_optimizations;
+  const char* import_root = nullptr;
+  const char* import_gate = nullptr;
+  bool GraphOptimizationEnabled(std::string_view feature) const;
+  std::string GraphOptimizationIdentity() const;
   enum class OutputSync { kTarget, kLine, kNone, kRecurse };
 
   bool detect_android_echo;
@@ -109,6 +117,9 @@ struct Flags {
   std::vector<std::string> command_line_include_dirs;
   std::vector<Symbol> targets;
   std::vector<std::string_view> cl_vars;
+  // Options/goals identify the invocation; assignment values are validated as
+  // region dependencies so unrelated variable changes retain reusable work.
+  std::string evaluation_context;
   std::vector<std::string> writable;
   std::vector<Pattern> traced_variables_pattern;
 

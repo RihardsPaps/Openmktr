@@ -16,6 +16,7 @@ from pathlib import Path
 import random
 import resource
 import statistics
+import shutil
 import subprocess
 import tarfile
 import time
@@ -35,6 +36,22 @@ def source_manifest(root):
 def objects(root):
     return {str(p.relative_to(root)): (p.stat().st_mtime_ns, p.stat().st_size)
             for p in root.rglob("*.o")}
+
+
+def effective_settings(options):
+    profile = "safe"
+    disabled = set()
+    for option in options:
+        if option.startswith("--graph_optimizations="):
+            profile = option.split("=", 1)[1]
+        elif option.startswith("--disable_graph_optimization="):
+            disabled.add(option.split("=", 1)[1])
+    features = {feature: profile != "off" and feature not in disabled and
+                (profile == "aggressive" or feature not in ("recursive", "monitor"))
+                for feature in ("evaluation", "includes", "recursive", "compact", "monitor")}
+    return dict(profile=profile, enabled=features,
+                general_state_replay=profile == "aggressive" and features["evaluation"],
+                monitor_policy="already-running-only")
 
 
 def paired_summary(rows):
@@ -91,6 +108,16 @@ def main():
     parser.add_argument("--archives", type=Path)
     parser.add_argument("--baseline", type=Path, required=True)
     parser.add_argument("--candidate", type=Path, required=True)
+    parser.add_argument("--baseline-option", action="append", default=[],
+                        help="extra baseline generation option, for same-binary feature ablations")
+    parser.add_argument("--candidate-option", action="append", default=[],
+                        help="extra candidate generation option; repeat with =--OPTION")
+    parser.add_argument("--ninja-dir", type=Path,
+                        help="directory containing the Ninja executable for both variants")
+    parser.add_argument("--toolchain-dir", type=Path,
+                        help="private external LLVM executable directory for both variants")
+    parser.add_argument("--monitor", action="store_true",
+                        help="explicitly start a candidate monitor; include startup in clean timing")
     parser.add_argument("--baseline-revision", required=True)
     parser.add_argument("--candidate-revision", required=True)
     parser.add_argument("--project", choices=("ffmpeg", "linux", "synthetic"), required=True)
@@ -104,6 +131,8 @@ def main():
     args = parser.parse_args()
     if args.samples < 1 or args.warmups < 0 or min(args.jobs) < 1 or args.llvm_version < 1:
         parser.error("positive samples/jobs and nonnegative warmups required")
+    if args.monitor and not effective_settings(args.candidate_option)["enabled"]["monitor"]:
+        parser.error("--monitor requires candidate aggressive mode with monitoring enabled")
     root = args.root.resolve()
     root.mkdir(parents=True, exist_ok=True)
     if (root / "metadata.json").exists():
@@ -111,6 +140,10 @@ def main():
     tools = {k: getattr(args, k).resolve() for k in ("baseline", "candidate")}
     env = dict(HOME=str(Path.home()), USER="benchmark", LOGNAME="benchmark",
                SHELL="/bin/sh", PATH="/usr/bin:/bin")
+    if args.toolchain_dir:
+        env["PATH"] = str(args.toolchain_dir.resolve()) + ":" + env["PATH"]
+    if args.ninja_dir:
+        env["PATH"] = str(args.ninja_dir.resolve()) + ":" + env["PATH"]
     env.update(CCACHE_DISABLE="1", LC_ALL="C", TZ="UTC", SOURCE_DATE_EPOCH="1731888000",
                KBUILD_BUILD_USER="benchmark", KBUILD_BUILD_HOST="benchmark",
                KBUILD_BUILD_VERSION="1", KBUILD_BUILD_TIMESTAMP="Mon Nov 18 00:00:00 UTC 2024")
@@ -118,7 +151,27 @@ def main():
                 for name, command in {"clang": [f"clang-{args.llvm_version}", "--version"],
                                       "ninja": ["ninja", "--version"]}.items()}
     metadata = dict(project=args.project, jobs=args.jobs, samples=args.samples,
+                    candidate_options=args.candidate_option,
+                    baseline_options=args.baseline_option,
+                    candidate_effective_settings=effective_settings(args.candidate_option),
+                    baseline_effective_settings=effective_settings(args.baseline_option)
+                    if args.baseline_option or tools["baseline"] == tools["candidate"]
+                    else "starting revision defaults",
+                    monitor_explicitly_started=args.monitor,
+                    monitor_startup_timing="included in candidate clean invocation" if args.monitor else None,
+                    ninja_directory=str(args.ninja_dir.resolve()) if args.ninja_dir else None,
+                    ninja_bundle_sha256={p.name: digest(p) for p in sorted(args.ninja_dir.resolve().iterdir())
+                                         if p.is_file()} if args.ninja_dir else None,
+                    ninja_executable={"path": shutil.which("ninja", path=env["PATH"]),
+                                      "sha256": digest(Path(shutil.which("ninja", path=env["PATH"])))},
                     llvm_version=args.llvm_version,
+                    toolchain_directory=str(args.toolchain_dir.resolve()) if args.toolchain_dir else None,
+                    toolchain_executable_sha256={p.name: digest(p) for p in
+                        sorted(args.toolchain_dir.resolve().iterdir()) if p.is_file()}
+                        if args.toolchain_dir else None,
+                    toolchain_manifest_sha256=digest(args.toolchain_dir.resolve().parent / "manifest.json")
+                        if args.toolchain_dir and
+                        (args.toolchain_dir.resolve().parent / "manifest.json").is_file() else None,
                     execution_image=os.environ.get("OMKTR_BENCHMARK_IMAGE_ID"),
                     stack_limit_bytes=resource.getrlimit(resource.RLIMIT_STACK),
                     platform=list(os.uname()),
@@ -149,6 +202,7 @@ def main():
     rows = []
     journal = root / "commands.jsonl"
     failure = None
+    monitors = []
     try:
         for jobs in args.jobs:
             for entrypoint in args.entrypoints:
@@ -157,6 +211,7 @@ def main():
                         "candidate", "baseline")
                     hashes = {}
                     for variant in order:
+                        extra_options = getattr(args, variant + "_option")
                         build = root / f"{entrypoint}-j{jobs}-r{sample}-{variant}"
                         build.mkdir()
                         tool = str(tools[variant])
@@ -213,13 +268,18 @@ def main():
                                         os.utime(build / "Makefile", None)
                                 phases = {}
                                 start = time.perf_counter()
+                                if scenario == "clean" and variant == "candidate" and args.monitor:
+                                    phases["monitor_startup"] = run(
+                                        [tool, "monitor", "start"], build,
+                                        build / "monitor-start.log", env, journal)
+                                    monitors.append((tool, build))
                                 if entrypoint == "build":
                                     phases["invocation"] = run(
-                                        [tool, "build", f"-j{jobs}", *common, "all"], build,
+                                        [tool, "build", f"-j{jobs}", *common, "all", *extra_options], build,
                                         build / f"{scenario}.log", env, journal)
                                 else:
                                     phases["generation" if scenario == "clean" else "regeneration"] = run(
-                                        [tool, "--ninja", "--regen", f"-j{jobs}", *common, "all"],
+                                        [tool, "--ninja", "--regen", f"-j{jobs}", *common, "all", *extra_options],
                                         build, build / f"{scenario}-regen.log", env, journal)
                                     phases["execution"] = run(
                                         ["sh", "./ninja.sh", f"-j{jobs}"], build,
@@ -268,18 +328,33 @@ def main():
                             run([str(build / "ffmpeg"), "-v", "error", "-f", "lavfi", "-i",
                                  "testsrc2=size=64x64:rate=10", "-t", "0.2", "-c:v", "mpeg4",
                                  "-f", "null", "-"], build, build / "smoke.log", env, journal)
+                        if (tool, build) in monitors:
+                            run([tool, "monitor", "stop"], build,
+                                build / "monitor-stop.log", env, journal)
+                            monitors.remove((tool, build))
     except Exception as error:
         failure = str(error)
         raise
     finally:
+        cleanup_errors = []
+        for tool, build in monitors:
+            try:
+                with (build / "monitor-cleanup.log").open("wb") as output:
+                    subprocess.run([tool, "monitor", "stop"], cwd=build, env=env,
+                                   stdout=output, stderr=subprocess.STDOUT, timeout=10, check=True)
+            except (OSError, subprocess.SubprocessError) as error:
+                cleanup_errors.append(f"{build}: {error}")
         after_source = source_manifest(source) if source else {}
         changed = sorted(p for p in before_source.keys() | after_source.keys()
                          if before_source.get(p) != after_source.get(p))
-        report = dict(metadata=metadata, failure=failure, source_changes=changed,
+        report = dict(metadata=metadata, failure=failure or ("monitor cleanup failed" if cleanup_errors else None),
+                      monitor_cleanup_errors=cleanup_errors, source_changes=changed,
                       summary=paired_summary(rows))
         (root / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         if changed:
             raise RuntimeError(f"Release source contents changed: {changed[:10]}")
+        if cleanup_errors and failure is None:
+            raise RuntimeError("Monitor cleanup failed; see retained report")
 
 
 if __name__ == "__main__":

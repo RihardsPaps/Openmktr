@@ -25,6 +25,7 @@
 
 #include <vector>
 
+#include "fileutil.h"
 #include "symtab.h"
 
 struct DepNode;
@@ -68,6 +69,8 @@ class CommandEvaluator {
   const DepNode* current_dep_node_;
   double target_age_;
   bool found_new_inputs_;
+  FileObservationCache observations_;
+  uint64_t filesystem_epoch_ = static_cast<uint64_t>(-1);
 };
 
 #endif  // COMMAND_H_

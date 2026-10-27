@@ -1,4 +1,5 @@
 > FORK MODIFICATION NOTICE (2026)
+> Added configurable graph optimizations, content-preserving output generation and monitoring.
 > Added an opt-in Gentoo overlay, Portage adapter, and load-average limits.
 > Added automatic Ninja build usage, locking, and generated-file safety guidance.
 > Added conservative recursive no-op caching and shared Ninja recipe limits.
@@ -322,6 +323,8 @@ the working directory for the build's recipes.
 | `--regen` | Check recorded inputs before reusing a generated graph. |
 | `--recursive_cache` | Cache validated no-op decisions for eligible recursive children. |
 | `--regen_debug` | Enable diagnostics for regeneration checks. |
+| `--graph_optimizations=PROFILE` | Select `off`, default `safe`, or opt-in `aggressive` graph optimizations. |
+| `--disable_graph_optimization=FEATURE` | Disable one optimization for controlled comparisons; repeatable. |
 | `--explain TARGET` | Explain resolved rules and Make freshness without running recipes. |
 | `--strict-compat` | Reject known constructs whose behavior cannot be preserved in the selected mode. |
 | `--ninja_dir DIR` | Write generated files into the specified directory. |
@@ -339,6 +342,11 @@ The `GNU Make 4.2.1` line in `--version` is a compatibility banner. The followin
 GNU Make compatibility.
 
 ## How it works
+
+See [Ninja graph optimizations](docs/graph-optimizations.md) for evaluation reuse,
+generated-include certificates, selective recursive import, compact rules,
+`write-if-changed`, and the optional Linux filesystem monitor. The guide records
+current coverage and the unverified real-project performance objective.
 
 Both modes share the same parser, evaluator, and dependency resolver. The
 execution path branches after Openmktr has interpreted the Makefile's rules.

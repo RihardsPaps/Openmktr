@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Validate without interning and record ordered symbol observations for replay.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -34,6 +35,7 @@
 #include <deque>
 #include <unordered_map>
 
+#include "incremental_eval.h"
 #include "log.h"
 #include "strutil.h"
 #include "var.h"
@@ -202,6 +204,11 @@ class Symtab {
     return result;
   }
 
+  Symbol Find(std::string_view name) const {
+    auto found = symtab_.find(name);
+    return found == symtab_.end() ? Symbol() : found->second;
+  }
+
  private:
   std::unordered_map<std::string_view, Symbol> symtab_;
   std::deque<std::string> storage_;
@@ -214,7 +221,12 @@ class Symtab {
 static Symtab g_symtab;
 
 Symbol Intern(std::string_view s) {
+  RecordEvaluationIntern(s);
   return g_symtab.Intern(s);
+}
+
+Symbol FindSymbol(std::string_view s) {
+  return g_symtab.Find(s);
 }
 
 std::string JoinSymbols(const std::vector<Symbol>& syms, const char* sep) {

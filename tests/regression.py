@@ -103,6 +103,9 @@ def run_makefile(source: Path, target: str, ninja: bool) -> dict:
         command = [str(KATI), "--use_find_emulator", "-j1"]
         if ninja:
             command.append("--ninja")
+            profile = os.environ.get("OMKTR_TEST_GRAPH_PROFILE")
+            if profile:
+                command.append(f"--graph_optimizations={profile}")
         command.extend(["SHELL=/bin/sh"])
         if target:
             command.append(target)
@@ -238,6 +241,11 @@ def main() -> int:
     parser.add_argument("--record", action="store_true", help="regenerate checked-in snapshots")
     parser.add_argument("--case", default="", help="run scenarios containing this key text")
     args = parser.parse_args()
+    profile = os.environ.get("OMKTR_TEST_GRAPH_PROFILE", "")
+    if profile not in ("", "off", "safe", "aggressive"):
+        parser.error("OMKTR_TEST_GRAPH_PROFILE must be off, safe or aggressive")
+    if args.record and profile not in ("", "safe"):
+        parser.error("record snapshots only with the canonical safe profile")
     if args.record and args.case:
         parser.error("--record cannot be combined with --case")
     if not KATI.is_file():

@@ -4,6 +4,7 @@
 # Added an isolated external differential incremental campaign gate.
 # Cover persistent workspace recipe state with the sanitizer build.
 # Include load admission and adapter checks with sanitized executors.
+# Exercise graph optimization behavior with sanitized executors.
 # Upstream material retains its Apache-2.0 terms. Fork modifications are
 # covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 # at the repository root. Original notices below remain applicable.
@@ -74,6 +75,8 @@ jobs:
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/portage.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/load_limits.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/correctness.py &&
+            OMKTR_BINARY=/workspace/omktr-sanitized python tests/graph_optimizations.py &&
+            OMKTR_TEST_GRAPH_PROFILE=aggressive OMKTR_BINARY=/workspace/omktr-sanitized python tests/correctness.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/workspace.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/make_compat_regressions.py' 2>&1 | tee sanitizer.log
       - uses: actions/upload-artifact@v4

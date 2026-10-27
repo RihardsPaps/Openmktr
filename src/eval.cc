@@ -1,7 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
-// Changed by the Openmktr fork, maintained by Rihards Paps and
-// Haralds Paps.
-// Changed build execution, evaluation, or portability for this fork.
+// Track and validate incremental evaluation, include proofs and imported Ninja
+// graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
+// Paps. Changed build execution, evaluation, or portability for this fork.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -23,6 +23,7 @@
 // +build ignore
 
 #include "eval.h"
+#include "incremental_eval.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -38,6 +39,7 @@
 #include "file.h"
 #include "file_cache.h"
 #include "fileutil.h"
+#include "graph_optimization.h"
 #include "parser.h"
 #include "rule.h"
 #include "stats.h"
@@ -47,6 +49,34 @@
 #include "var.h"
 
 namespace {
+
+std::string RuleStateRecord(const Rule& rule) {
+  std::string record;
+  auto symbols = [&](const std::vector<Symbol>& values) {
+    AppendGraphString(std::to_string(values.size()), &record);
+    for (Symbol value : values)
+      AppendGraphString(value.str(), &record);
+  };
+  symbols(rule.outputs);
+  symbols(rule.inputs);
+  symbols(rule.order_only_inputs);
+  symbols(rule.output_patterns);
+  symbols(rule.validations);
+  AppendGraphString(std::to_string(rule.wait_groups.size()), &record);
+  for (const auto& group : rule.wait_groups)
+    symbols(group);
+  record += rule.is_double_colon ? '1' : '0';
+  record += rule.is_suffix_rule ? '1' : '0';
+  record += rule.secondary_expansion ? '1' : '0';
+  record += rule.has_wait ? '1' : '0';
+  AppendGraphString(rule.secondary_prerequisites, &record);
+  AppendGraphString(rule.loc.filename ? rule.loc.filename : "", &record);
+  AppendGraphString(std::to_string(rule.loc.lineno), &record);
+  AppendGraphString(std::to_string(rule.cmd_lineno), &record);
+  for (const Value* command : rule.cmds)
+    AppendGraphString(command->IncrementalIdentity(), &record);
+  return record;
+}
 
 // Rule prerequisites are evaluated before they are tokenized.  Comments in
 // the rule's original text must therefore remain comments after expansion;
@@ -219,6 +249,7 @@ Evaluator::Evaluator()
 
   stack_.push_back(new Frame(FrameType::ROOT, nullptr, Loc(), "*root*"));
 
+  incremental_ = std::make_unique<IncrementalEvaluator>(this);
   trace_ = g_flags.dump_variable_assignment_trace || g_flags.dump_include_graph;
   assignment_tracefile_ = nullptr;
   assignment_sep_ = "\n";
@@ -258,6 +289,7 @@ bool Evaluator::Start() {
 }
 
 void Evaluator::Finish() {
+  incremental_->Save();
   if (assignment_tracefile_ == nullptr) {
     return;
   }
@@ -328,7 +360,7 @@ Var* Evaluator::EvalRHS(Symbol lhs,
   switch (op) {
     case AssignOp::COLON_EQ: {
       prev = PeekVarInCurrentScope(lhs);
-      result = new SimpleVar(origin, current_frame, loc_, this, rhs_v);
+      result = new SimpleVar(EvalOperand(rhs_v), origin, current_frame, loc_);
       break;
     }
     case AssignOp::EQ:
@@ -394,7 +426,7 @@ void Evaluator::EvalUndefine(const UndefineStmt* stmt) {
   last_rule_ = NULL;
 
   std::string name;
-  stmt->lhs->Eval(this, &name);
+  name = EvalOperand(stmt->lhs);
 
   Symbol sym = Intern(TrimSpace(name));
   if (sym.empty()) {
@@ -409,6 +441,7 @@ void Evaluator::EvalUndefine(const UndefineStmt* stmt) {
     Error(
         StringPrintf("*** cannot undefine readonly variable: %s", sym.c_str()));
   }
+  incremental_->StateWrite("undefine", "global", sym.str(), "");
 }
 
 void Evaluator::EvalAssign(const AssignStmt* stmt) {
@@ -420,7 +453,7 @@ void Evaluator::EvalAssign(const AssignStmt* stmt) {
 
   if (lhs == kKatiReadonlySym) {
     std::string rhs;
-    stmt->rhs->Eval(this, &rhs);
+    rhs = EvalOperand(stmt->rhs);
     for (auto const& name : WordScanner(rhs)) {
       Var* var = Intern(name).GetGlobalVar();
       if (!var->IsDefined()) {
@@ -428,6 +461,7 @@ void Evaluator::EvalAssign(const AssignStmt* stmt) {
                            std::string(name).c_str()));
       }
       var->SetReadOnly();
+      incremental_->StateWriteVar("global", name, var);
     }
     return;
   }
@@ -445,6 +479,9 @@ void Evaluator::EvalAssign(const AssignStmt* stmt) {
       Error(StringPrintf("*** cannot assign to readonly variable: %s",
                          lhs.c_str()));
     }
+    // Assignment precedence can retain an automatic/override binding and
+    // discard the proposed value. Observe and annotate the surviving object.
+    var = lhs.PeekGlobalVar();
   }
 
   // A recursive VPATH may refer to a variable assigned later in the file.
@@ -454,6 +491,7 @@ void Evaluator::EvalAssign(const AssignStmt* stmt) {
     var->SetReadOnly();
   }
   TraceVariableAssign(lhs, var);
+  incremental_->StateWriteVar("global", lhs.str(), var);
 }
 
 // With rule broken into
@@ -518,7 +556,7 @@ static std::string FormatRuleError(const std::string& before_term) {
 
 void Evaluator::MarkVarsReadonly(Value* vars_list) {
   std::string vars_list_string;
-  vars_list->Eval(this, &vars_list_string);
+  vars_list_string = EvalOperand(vars_list);
   for (auto const& name : WordScanner(vars_list_string)) {
     Var* var = current_scope_->Lookup(Intern(name));
     if (!var->IsDefined()) {
@@ -526,6 +564,7 @@ void Evaluator::MarkVarsReadonly(Value* vars_list) {
           StringPrintf("*** unknown variable: %s", std::string(name).c_str()));
     }
     var->SetReadOnly();
+    incremental_->StateWriteVar("current", name, var);
   }
 }
 
@@ -629,7 +668,7 @@ void Evaluator::EvalRuleSpecificAssign(const std::vector<Symbol>& targets,
     }
     if (assign_op == AssignOp::COLON_EQ) {
       std::string expanded_rhs;
-      rhs->Eval(this, &expanded_rhs);
+      expanded_rhs = EvalOperand(rhs);
       // Literal values retain a string_view, so intern the expanded text
       // before storing it in the target-specific variable.
       rhs = Value::NewLiteral(Intern(expanded_rhs).str());
@@ -658,6 +697,11 @@ void Evaluator::EvalRuleSpecificAssign(const std::vector<Symbol>& targets,
     }
     if (is_export || is_unexport)
       target_scope->SetExported(var_sym, is_export && !is_unexport);
+    incremental_->StateWriteVar(target.str(), var_sym.str(),
+                                target_scope->Peek(var_sym));
+    if (is_export || is_unexport)
+      incremental_->StateWrite("export", target.str(), var_sym.str(),
+                               is_export && !is_unexport ? "1" : "0");
     current_scope_ = enclosing_scope;
   }
 }
@@ -666,7 +710,7 @@ void Evaluator::EvalRule(const RuleStmt* stmt) {
   loc_ = stmt->loc();
   last_rule_ = NULL;
 
-  const std::string&& before_term = stmt->lhs->Eval(this);
+  const std::string&& before_term = EvalOperand(stmt->lhs);
 
   // See semicolon.mk.
   if (before_term.find_first_not_of(" \t\n;") == std::string::npos) {
@@ -747,6 +791,7 @@ void Evaluator::EvalRule(const RuleStmt* stmt) {
       rule->outputs[0] == Intern(".SECONDEXPANSION") && after_targets.empty() &&
       rule->cmds.empty()) {
     secondary_expansion_ = true;
+    incremental_->StateWrite("secondary-expansion", "global", "", "1");
     delete rule;
     return;
   }
@@ -785,6 +830,8 @@ void Evaluator::EvalRule(const RuleStmt* stmt) {
 
   rules_.push_back(rule);
   last_rule_ = rule;
+  if (incremental_->RecordingStatement())
+    incremental_->StateWrite("rule", "global", "", RuleStateRecord(*rule));
 }
 
 void Evaluator::EvalCommand(const CommandStmt* stmt) {
@@ -802,6 +849,19 @@ void Evaluator::EvalCommand(const CommandStmt* stmt) {
   if (last_rule_->cmd_lineno == 0)
     last_rule_->cmd_lineno = stmt->loc().lineno;
   LOG("Command: %s", Value::DebugString(stmt->expr).c_str());
+  if (incremental_->RecordingStatement())
+    incremental_->StateWrite(
+        "recipe",
+        last_rule_->outputs.empty()
+            ? (last_rule_->output_patterns.empty()
+                   ? std::string_view()
+                   : std::string_view(
+                         last_rule_->output_patterns.front().str()))
+            : std::string_view(last_rule_->outputs.front().str()),
+        std::string(last_rule_->loc.filename ? last_rule_->loc.filename : "") +
+            ":" + std::to_string(last_rule_->loc.lineno) + ":" +
+            std::to_string(last_rule_->cmd_lineno),
+        stmt->expr->IncrementalIdentity());
 }
 
 void Evaluator::EvalIf(const IfStmt* stmt) {
@@ -813,7 +873,7 @@ void Evaluator::EvalIf(const IfStmt* stmt) {
     case CondOp::IFDEF:
     case CondOp::IFNDEF: {
       std::string var_name;
-      stmt->lhs->Eval(this, &var_name);
+      var_name = EvalOperand(stmt->lhs);
       Symbol lhs = Intern(TrimRightSpace(var_name));
       if (const auto& s = lhs.str();
           std::find_if(s.begin(), s.end(), ::isspace) != s.end()) {
@@ -826,8 +886,8 @@ void Evaluator::EvalIf(const IfStmt* stmt) {
     }
     case CondOp::IFEQ:
     case CondOp::IFNEQ: {
-      const std::string&& lhs = stmt->lhs->Eval(this);
-      const std::string&& rhs = stmt->rhs->Eval(this);
+      const std::string&& lhs = EvalOperand(stmt->lhs);
+      const std::string&& rhs = EvalOperand(stmt->rhs);
 
       is_true = ((lhs == rhs) == (stmt->op == CondOp::IFEQ));
       break;
@@ -867,6 +927,10 @@ void Evaluator::DoInclude(const std::string& fname) {
   Var* var_list = LookupVar(Intern("MAKEFILE_LIST"));
   var_list->AppendVar(
       this, Value::NewLiteral(Intern(TrimLeadingCurdir(fname)).str()));
+  incremental_->StateWriteVar("global", "MAKEFILE_LIST", var_list);
+  if (incremental_->RecordingStatement())
+    incremental_->StateWrite("include", "global", fname,
+                             GetFileIdentity(fname));
   for (Stmt* stmt : mk.stmts()) {
     LOG("%s", stmt->DebugString().c_str());
     stmt->Eval(this);
@@ -882,7 +946,7 @@ void Evaluator::EvalInclude(const IncludeStmt* stmt) {
   loc_ = stmt->loc();
   last_rule_ = NULL;
 
-  const std::string&& pats = stmt->expr->Eval(this);
+  const std::string&& pats = EvalOperand(stmt->expr);
   for (std::string_view pat : WordScanner(pats)) {
     std::vector<std::string> files = Glob(pat);
     if (files.empty() && !pat.empty() && pat.front() != '/' &&
@@ -939,13 +1003,14 @@ void Evaluator::EvalInclude(const IncludeStmt* stmt) {
 }
 
 void Evaluator::EvalVpath(const Value* expr) {
-  std::string value = expr->Eval(this);
+  std::string value = EvalOperand(expr);
   std::vector<std::string_view> words;
   for (std::string_view word : WordScanner(value))
     words.push_back(word);
 
   if (words.empty()) {
     vpaths_.clear();
+    incremental_->StateWrite("vpath-clear", "global", "", "");
     return;
   }
 
@@ -962,6 +1027,10 @@ void Evaluator::SetVpath(std::string_view pattern,
                          std::string_view directories,
                          bool append,
                          bool from_vpath) {
+  std::string operation(directories);
+  operation += append ? '1' : '0';
+  operation += from_vpath ? '1' : '0';
+  incremental_->StateWrite("vpath", "global", pattern, operation);
   if (!append) {
     vpaths_.erase(std::remove_if(vpaths_.begin(), vpaths_.end(),
                                  [&](const Vpath& v) {
@@ -1053,7 +1122,7 @@ void Evaluator::EvalExport(const ExportStmt* stmt) {
   loc_ = stmt->loc();
   last_rule_ = NULL;
 
-  const std::string&& exports = stmt->expr->Eval(this);
+  const std::string&& exports = EvalOperand(stmt->expr);
   for (std::string_view tok : WordScanner(exports)) {
     size_t equal_index = tok.find('=');
     std::string_view lhs;
@@ -1071,6 +1140,8 @@ void Evaluator::EvalExport(const ExportStmt* stmt) {
     }
     Symbol sym = Intern(lhs);
     exports_[sym] = stmt->is_export;
+    incremental_->StateWrite("export", "global", lhs,
+                             stmt->is_export ? "1" : "0");
     if (export_message_) {
       const char* prefix = "";
       if (!stmt->is_export) {
@@ -1090,6 +1161,7 @@ void Evaluator::EvalExport(const ExportStmt* stmt) {
 
 Var* Evaluator::LookupVarGlobal(Symbol name) {
   Var* v = name.GetGlobalVar();
+  incremental_->StateRead(name.str(), v, 'g', true);
   if (v->IsDefined())
     return v;
   const bool first_use = !used_undefined_vars_.exists(name);
@@ -1191,6 +1263,7 @@ Var* Evaluator::LookupVar(Symbol name) {
     result = LookupVarGlobal(name);
   }
 
+  incremental_->Read(name.str(), result);
   TraceVariableLookup("lookup", name, result);
   return result;
 }
@@ -1206,6 +1279,7 @@ Var* Evaluator::PeekVar(Symbol name) {
     result = name.PeekGlobalVar();
   }
 
+  incremental_->StateRead(name.str(), result, 'v', false);
   return result;
 }
 
@@ -1217,6 +1291,7 @@ Var* Evaluator::LookupVarInCurrentScope(Symbol name) {
     result = LookupVarGlobal(name);
   }
 
+  incremental_->StateRead(name.str(), result, 's', true);
   TraceVariableLookup("scope lookup", name, result);
   return result;
 }
@@ -1229,7 +1304,12 @@ Var* Evaluator::PeekVarInCurrentScope(Symbol name) {
     result = name.PeekGlobalVar();
   }
 
+  incremental_->StateRead(name.str(), result, 's', false);
   return result;
+}
+
+std::string Evaluator::EvalOperand(const Value* value) {
+  return incremental_->Operand(value);
 }
 
 std::string Evaluator::EvalVar(Symbol name) {

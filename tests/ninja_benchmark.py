@@ -20,6 +20,15 @@ spec.loader.exec_module(benchmark)
 
 
 class Evidence(unittest.TestCase):
+    def test_effective_settings_record_defaults_and_ablations(self):
+        self.assertFalse(benchmark.effective_settings([])["enabled"]["monitor"])
+        aggressive = benchmark.effective_settings([
+            "--graph_optimizations=aggressive", "--disable_graph_optimization=evaluation"])
+        self.assertTrue(aggressive["enabled"]["recursive"])
+        self.assertFalse(aggressive["general_state_replay"])
+        self.assertFalse(any(benchmark.effective_settings(
+            ["--graph_optimizations=off"])["enabled"].values()))
+
     def test_pairs_match_samples_and_discard_warmups_and_incomplete_pairs(self):
         def row(sample, variant, seconds, warmup=False):
             return dict(project="synthetic", entrypoint="build", jobs=8,

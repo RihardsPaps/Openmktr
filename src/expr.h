@@ -1,7 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
-// Changed by the Openmktr fork, maintained by Rihards Paps and
-// Haralds Paps.
-// Changed build execution, evaluation, or portability for this fork.
+// Track and validate incremental evaluation, include proofs and imported Ninja
+// graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
+// Paps. Changed build execution, evaluation, or portability for this fork.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -58,6 +58,8 @@ class Evaluable {
 
 class Value : public Evaluable {
  public:
+  std::string_view IncrementalIdentity() const;
+  virtual bool IsIncrementalCandidate(bool) const { return false; }
   // All NewExpr calls take ownership of the Value instances.
   static Value* NewExpr(const Loc& loc, Value* v1, Value* v2);
   static Value* NewExpr(const Loc& loc, Value* v1, Value* v2, Value* v3);
@@ -74,6 +76,10 @@ class Value : public Evaluable {
  protected:
   Value(const Loc& loc);
   virtual std::string DebugString_() const = 0;
+  virtual bool AppendIncrementalIdentity(std::string*) const { return false; }
+
+ private:
+  mutable std::string incremental_identity_;
 };
 
 enum struct ParseExprOpt {

@@ -1,6 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
-// Carry generation/runtime load limits into Ninja and recursive recipes.
-// Use native load admission for every recipe, with configurable Ninja
+// Track and validate incremental evaluation, include proofs and imported Ninja
+// graphs. Carry generation/runtime load limits into Ninja and recursive
+// recipes. Use native load admission for every recipe, with configurable Ninja
 // selection. Quote generated launcher paths for build directories containing
 // shell syntax. Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
@@ -38,6 +39,8 @@
 // +build ignore
 
 #include "ninja.h"
+#include "graph_import.h"
+#include "graph_optimization.h"
 
 #ifndef OMKTR_NINJA_EXECUTABLE
 #define OMKTR_NINJA_EXECUTABLE "ninja"
@@ -278,6 +281,26 @@ class NinjaGenerator {
     if (g_flags.ninja_dir && !EnsureDirectory(g_flags.ninja_dir))
       ERROR("*** cannot create Ninja output directory: %s", g_flags.ninja_dir);
     PopulateNinjaNodes(nodes);
+    if (g_flags.import_root) {
+      if (!cycle_edges_.empty())
+        exit(3);
+      for (const NinjaNode& nn : nodes_) {
+        const DepNode& node = *nn.node;
+        struct stat st;
+        if (node.is_notparallel || node.vpath_provider.IsValid() ||
+            node.output_pattern.IsValid() || !node.implicit_inputs.empty() ||
+            !node.implicit_outputs.empty() || !node.validations.empty() ||
+            !node.double_colon_group_for_cmd.empty() ||
+            !node.low_resolution_inputs.empty() || !node.wait_groups.empty() ||
+            node.intermediate || node.precious || node.ignore_errors ||
+            std::any_of(
+                nn.commands.begin(), nn.commands.end(),
+                [](const Command& command) { return command.ignore_error; }) ||
+            (stat(node.output.c_str(), &st) == 0 && S_ISDIR(st.st_mode)))
+          exit(3);
+      }
+    }
+    PrepareImports();
     unlink(GetNinjaStampFilename().c_str());
     const char* workspace_build = getenv("OMKTR_WORKSPACE_BUILD");
     const bool managed_workspace = workspace_build && *workspace_build;
@@ -289,6 +312,29 @@ class NinjaGenerator {
     if (!managed_workspace)
       GenerateShell();
     GenerateStamp(orig_args);
+    if (g_flags.import_root) {
+      std::string manifest;
+      AppendGraphString("jobs", &manifest);
+      AppendGraphString(std::to_string(g_flags.num_jobs), &manifest);
+      auto record = [&](const char* kind, Symbol name) {
+        std::string absolute;
+        AbsPath(name.str(), &absolute);
+        AppendGraphString(kind, &manifest);
+        AppendGraphString(absolute, &manifest);
+      };
+      for (const NinjaNode& nn : nodes_)
+        if (!IsSpecialTarget(nn.node->output))
+          record("output", nn.node->output);
+      for (const auto& root : nodes)
+        record("goal", root.first);
+      std::unordered_set<std::string> files;
+      MakefileCacheManager::Get().GetAllFilenames(&files);
+      for (const auto& file : files)
+        record("source", Intern(file));
+      if (!WriteGraphCache(std::string(g_flags.import_root) + "/manifest",
+                           manifest))
+        ERROR("cannot publish imported graph manifest");
+    }
   }
 
   static std::string GetStampTempFilename() {
@@ -634,6 +680,13 @@ class NinjaGenerator {
 
   void EmitNode(const NinjaNode& nn, std::ostream& out) {
     const DepNode* node = nn.node;
+    if (node->is_default_target) {
+      std::unique_lock<std::mutex> lock(mu_);
+      default_target_ = node;
+    }
+    if (TryImport(nn, out))
+      return;
+    std::string edge_command, edge_depfile;
     // Ninja needs a concrete local output for a rule-bearing VPATH target.
     // Materialize a local link to the source only while its ordinary
     // prerequisites are older. This keeps the rule's edges reachable and
@@ -710,6 +763,11 @@ class NinjaGenerator {
                      node->oneshell);
       std::string depfile;
       const bool has_depfile = GetDepfile(node, &cmd_buf, &depfile);
+      if (has_depfile && g_flags.import_root) {
+        std::string absolute;
+        AbsPath(depfile, &absolute);
+        depfile = std::move(absolute);
+      }
       // Recipe translation may remove every command.  Keep the Ninja rule a
       // valid shell no-op, including when the leaf-output guard is added.
       if (cmd_buf.empty())
@@ -918,12 +976,41 @@ class NinjaGenerator {
               ? (cleanup_output.empty() ? "" : " " + ShellQuote(cleanup_output))
               : " " + ShellQuote(cleanup_output) + " " +
                     ShellQuote(recipe_state);
+      std::string helper_prefix;
       if (helper_recipe && !recipe_in_rsp) {
-        cmd_buf = "cd " + ShellQuote(working_dir_) + " && " +
-                  EscapeNinja(ShellQuote(GetExecutablePath())) + recipe_helper +
-                  ShellQuote(command_shell) + " " +
-                  ShellQuote(command_shellflag) + " " + ShellQuote(cmd_buf) +
-                  EscapeNinja(cleanup_arg);
+        helper_prefix = "cd " + ShellQuote(working_dir_) + " && " +
+                        EscapeNinja(ShellQuote(GetExecutablePath())) +
+                        recipe_helper + ShellQuote(command_shell) + " " +
+                        ShellQuote(command_shellflag) + " ";
+        cmd_buf =
+            helper_prefix + ShellQuote(cmd_buf) + EscapeNinja(cleanup_arg);
+      }
+      struct stat compact_output;
+      const bool special_output =
+          node->precious || node->output == Intern(".") ||
+          (stat(node->output.c_str(), &compact_output) == 0 &&
+           S_ISDIR(compact_output.st_mode));
+      const bool compact = !special_output &&
+                           g_flags.GraphOptimizationEnabled("compact") &&
+                           !recipe_in_rsp && cmd_buf.size() <= 100 * 1000;
+      if (compact) {
+        if (helper_recipe) {
+          edge_command = cmd_buf.substr(helper_prefix.size());
+        } else {
+          edge_command = command_shell == "/bin/sh" && command_shellflag == "-c"
+                             ? cmd_buf
+                             : command_shell + " " + command_shellflag + " " +
+                                   ShellQuote(cmd_buf);
+        }
+
+        edge_depfile = depfile;
+
+        // Keep the native launcher in the shared rule. The edge retains the
+        // opaque quoted script and cleanup arguments, so expansion produces
+        // exactly the same command as the ordinary emitter.
+        cmd_buf = helper_prefix + "$omktr_command";
+        if (has_depfile)
+          depfile = "$omktr_depfile";
       }
       std::string rule_key = description;
       rule_key += '\0';
@@ -954,7 +1041,8 @@ class NinjaGenerator {
         out << "rule " << rule_name << "\n";
         out << " description = " << description << "\n";
         if (has_depfile)
-          out << " depfile = " << EscapeNinja(depfile) << "\n deps = gcc\n";
+          out << " depfile = " << (compact ? depfile : EscapeNinja(depfile))
+              << "\n deps = gcc\n";
 
         // It seems Linux is OK with ~130kB and Mac's limit is ~250kB.
         // TODO: Find this number automatically.
@@ -962,6 +1050,11 @@ class NinjaGenerator {
           out << " rspfile = $out.rsp\n";
           out << " rspfile_content = " << cmd_buf << "\n";
           std::string rspfile = node->output.str() + ".rsp";
+          if (g_flags.import_root) {
+            std::string absolute;
+            AbsPath(rspfile, &absolute);
+            rspfile = std::move(absolute);
+          }
           if (rspfile.front() != '/')
             rspfile = "./" + rspfile;
           const std::string source_rspfile = ". " + ShellQuote(rspfile);
@@ -976,7 +1069,7 @@ class NinjaGenerator {
                 << ' ' << (helper_recipe ? "-c" : command_shellflag) << ' '
                 << ShellQuote(source_rspfile) << "\n";
           }
-        } else if (helper_recipe ||
+        } else if (compact || helper_recipe ||
                    (command_shell == "/bin/sh" && command_shellflag == "-c")) {
           // Ninja already runs commands through /bin/sh -c on POSIX hosts.
           // A second identical shell adds a process launch to every recipe.
@@ -999,7 +1092,8 @@ class NinjaGenerator {
       }
     }
 
-    EmitBuild(nn, rule_name, use_local_pool || node->is_notparallel, out);
+    EmitBuild(nn, rule_name, use_local_pool || node->is_notparallel, out,
+              edge_command, edge_depfile);
   }
 
   std::string EscapeNinja(const std::string& s) const {
@@ -1020,7 +1114,186 @@ class NinjaGenerator {
     return r;
   }
 
-  std::string EscapeBuildTarget(Symbol s) const { return EscapeNinja(s.str()); }
+  std::string EscapeBuildTarget(Symbol s) const {
+    if (g_flags.import_root) {
+      std::string absolute;
+      AbsPath(s.str(), &absolute);
+      return EscapeNinja(absolute);
+    }
+    return EscapeNinja(s.str());
+  }
+
+  bool TryImport(const NinjaNode& nn, std::ostream& out) {
+    const DepNode& node = *nn.node;
+    if (!preparing_imports_) {
+      auto found = prepared_imports_.find(node.output);
+      if (found == prepared_imports_.end())
+        return false;
+      out << found->second;
+      return true;
+    }
+    if (!g_flags.GraphOptimizationEnabled("recursive") || g_flags.import_root ||
+        g_flags.is_dry_run || nn.commands.size() != 1 || !node.is_phony ||
+        g_flags.is_touch || g_flags.is_question || g_flags.keep_going ||
+        g_flags.load_limit_set || g_flags.detect_depfiles || node.depfile_var ||
+        node.ninja_pool_var || node.is_notparallel || node.precious ||
+        node.delete_on_error || !node.validations.empty() ||
+        !node.implicit_outputs.empty() || !node.wait_groups.empty() ||
+        !node.double_colon_group_for_cmd.empty())
+      return false;
+    if (node.rule_vars &&
+        node.rule_vars->find(Intern("MAKEFLAGS")) != node.rule_vars->end())
+      return false;
+    std::vector<std::string> arguments;
+    if (!ParseImportCommand(nn.commands.front(), &arguments))
+      return false;
+    std::string directory =
+        GetFilename(".imports%s") + "/" + GraphDigest(node.output.str());
+    std::string absolute_directory;
+    AbsPath(directory, &absolute_directory);
+    directory = std::move(absolute_directory);
+    const std::string directory_base = directory;
+    size_t collision = 0;
+    while (!import_directories_.insert(directory).second)
+      directory = directory_base + "." + std::to_string(++collision);
+    if (!EnsureDirectory(directory))
+      return false;
+    const std::string gate = directory + "/entry";
+    if (GenerateImportedGraph(nn.commands.front(), arguments, directory,
+                              gate) != 0)
+      return false;
+    std::string bytes;
+    if (!ReadGraphCache(directory + "/manifest", &bytes))
+      return false;
+    std::string_view view(bytes);
+    std::vector<std::string> outputs, sources, goals;
+    bool matching_budget = false;
+    while (!view.empty()) {
+      std::string kind, path;
+      if (!ConsumeGraphString(&view, &kind) ||
+          !ConsumeGraphString(&view, &path))
+        return false;
+      if (kind == "output")
+        outputs.push_back(path);
+      else if (kind == "source")
+        sources.push_back(path);
+      else if (kind == "goal")
+        goals.push_back(path);
+      else if (kind == "jobs") {
+        if (matching_budget || path != std::to_string(g_flags.num_jobs))
+          return false;
+        matching_budget = true;
+      } else
+        return false;
+    }
+    if (goals.empty() || !matching_budget)
+      return false;
+    auto unambiguous_output = [](const std::string& path) {
+      const size_t slash = path.rfind('/');
+      const std::string parent = slash == 0 ? "/" : path.substr(0, slash);
+      char resolved[PATH_MAX];
+      if (slash == std::string::npos || !realpath(parent.c_str(), resolved) ||
+          parent != resolved)
+        return false;
+      struct stat st;
+      if (lstat(path.c_str(), &st) < 0)
+        return errno == ENOENT;
+      return !S_ISLNK(st.st_mode) && (!S_ISREG(st.st_mode) || st.st_nlink == 1);
+    };
+    std::unordered_set<std::string> claimed = imported_outputs_;
+    for (const NinjaNode& other : nodes_) {
+      std::string absolute;
+      AbsPath(other.node->output.str(), &absolute);
+      if (!unambiguous_output(absolute))
+        return false;
+      claimed.insert(absolute);
+    }
+    for (const auto& output : outputs)
+      if (!unambiguous_output(output) || !claimed.insert(output).second)
+        return false;
+    std::vector<const DepNode*> pending;
+    for (const auto& input : node.deps)
+      pending.push_back(input.second);
+    for (const auto& input : node.order_onlys)
+      pending.push_back(input.second);
+    std::unordered_set<const DepNode*> visited;
+    while (!pending.empty()) {
+      const DepNode* input = pending.back();
+      pending.pop_back();
+      if (!visited.insert(input).second)
+        continue;
+      std::string absolute;
+      AbsPath(input->output.str(), &absolute);
+      if (std::find(outputs.begin(), outputs.end(), absolute) != outputs.end())
+        return false;
+      for (const auto& dependency : input->deps)
+        pending.push_back(dependency.second);
+      for (const auto& dependency : input->order_onlys)
+        pending.push_back(dependency.second);
+    }
+    for (const auto& output : outputs)
+      imported_outputs_.insert(output);
+    out << "build " << EscapeNinja(gate) << ": phony";
+    for (const auto& input : node.deps)
+      out << ' ' << EscapeBuildTarget(input.first);
+    if (!node.order_onlys.empty()) {
+      out << " ||";
+      for (const auto& input : node.order_onlys)
+        out << ' ' << EscapeBuildTarget(input.first);
+    }
+    out << "\nsubninja " << EscapeNinja(directory + "/build.ninja") << "\n";
+    out << "build " << EscapeBuildTarget(node.output) << ": phony";
+    for (const auto& goal : goals)
+      out << ' ' << EscapeNinja(goal);
+    out << '\n';
+    for (const auto& source : sources)
+      import_inputs_.push_back(source);
+    import_artifacts_.push_back(directory + "/build.ninja");
+    import_artifacts_.push_back(directory + "/env.sh");
+    import_artifacts_.push_back(directory + "/manifest");
+    return true;
+  }
+
+  void PrepareImports() {
+    if (!g_flags.GraphOptimizationEnabled("recursive") || g_flags.import_root ||
+        !cycle_edges_.empty() ||
+        MakefileCacheManager::Get().has_observable_evaluation())
+      return;
+    for (const CommandResult* command : GetShellCommandResults())
+      if (command->op == CommandOp::SHELL || command->op == CommandOp::WRITE ||
+          command->op == CommandOp::APPEND)
+        return;
+    preparing_imports_ = true;
+    bool valid = true;
+    for (const NinjaNode& nn : nodes_) {
+      bool recursive = false;
+      for (const Command& command : nn.commands)
+        recursive |= IsRecursiveKatiCommand(command.cmd);
+      if (!recursive)
+        continue;
+      std::ostringstream fragment;
+      if (!TryImport(nn, fragment)) {
+        valid = false;
+        break;
+      }
+      prepared_imports_[nn.node->output] = fragment.str();
+    }
+    preparing_imports_ = false;
+    // Commit ownership changes together. An opaque sibling could otherwise
+    // race an imported graph that owns the same files behind that boundary.
+    if (!valid) {
+      prepared_imports_.clear();
+      imported_outputs_.clear();
+      LOG_STAT("recursive import: conservative graph-wide fallback");
+    } else {
+      for (const auto& child : prepared_imports_)
+        LOG_STAT("imported child graph: %s", child.first.c_str());
+      for (const auto& input : import_inputs_)
+        MakefileCacheManager::Get().AddExtraFileDep(input);
+      for (const auto& artifact : import_artifacts_)
+        MakefileCacheManager::Get().AddGeneratedGraphDep(artifact);
+    }
+  }
 
   bool IsExistingDirectoryAlias(Symbol dependency) const {
     std::string_view path = dependency.str();
@@ -1041,7 +1314,9 @@ class NinjaGenerator {
   void EmitBuild(const NinjaNode& nn,
                  const std::string& rule_name,
                  bool use_local_pool,
-                 std::ostream& out) {
+                 std::ostream& out,
+                 const std::string& edge_command,
+                 const std::string& edge_depfile) {
     const DepNode* node = nn.node;
     struct stat output_stat;
     const bool directory_output =
@@ -1079,7 +1354,7 @@ class NinjaGenerator {
     out << ": " << rule_name;
     std::vector<Symbol> order_onlys;
     if (node->is_phony && !g_flags.use_ninja_phony_output) {
-      out << " _kati_always_build_";
+      out << ' ' << EscapeBuildTarget(Intern("_kati_always_build_"));
     }
     for (auto const& d : node->deps) {
       if (IsCycleEdge(node->output, d.first) ||
@@ -1098,6 +1373,11 @@ class NinjaGenerator {
         out << " ||";
       has_order_only = true;
       out << " " << EscapeBuildTarget(d.first).c_str();
+    }
+    if (g_flags.import_gate && rule_name != "phony") {
+      if (!has_order_only)
+        out << " ||";
+      out << ' ' << EscapeNinja(g_flags.import_gate);
     }
     bool has_validation = false;
     for (auto const& d : node->validations) {
@@ -1146,9 +1426,11 @@ class NinjaGenerator {
         out << " tags = " << tags << "\n";
       }
     }
-    if (node->is_default_target) {
-      std::unique_lock<std::mutex> lock(mu_);
-      default_target_ = node;
+    if (!edge_command.empty()) {
+      out << " omktr_command = " << edge_command << "\n";
+
+      if (!edge_depfile.empty())
+        out << " omktr_depfile = " << EscapeNinja(edge_depfile) << "\n";
     }
   }
 
@@ -1240,7 +1522,8 @@ class NinjaGenerator {
     // internal dependency graphs are opaque to this Ninja graph, so Ninja
     // cannot otherwise know about shared outputs produced by sibling
     // recursive invocations.
-    out << "pool local_pool\n depth = 1\n\n";
+    if (!g_flags.import_root)
+      out << "pool local_pool\n depth = 1\n\n";
 
     if (!used_envs_.empty()) {
       out << "# Environment variables used:\n";
@@ -1256,7 +1539,8 @@ class NinjaGenerator {
       }
 
       if (!g_flags.use_ninja_phony_output) {
-        out << "build _kati_always_build_: phony\n\n";
+        out << "build " << EscapeBuildTarget(Intern("_kati_always_build_"))
+            << ": phony\n\n";
       }
     }
 
@@ -1318,8 +1602,8 @@ class NinjaGenerator {
             << default_targets << "\n";
         default_targets = cleanup_target;
       }
-      out << "\n"
-          << "default " << default_targets << '\n';
+      if (!g_flags.import_root)
+        out << "\n" << "default " << default_targets << '\n';
     }
 
     if (g_flags.ninja_stats)
@@ -1548,22 +1832,50 @@ class NinjaGenerator {
   }
 
   void GenerateStamp(const std::string& orig_args) {
+    std::unordered_set<std::string> makefiles;
+    MakefileCacheManager::Get().GetAllFilenames(&makefiles);
+    int evaluation = (MakefileCacheManager::Get().requires_evaluation() ||
+                      HasInconsistentGlobObservations())
+                         ? 1
+                         : 0;
+    // Required effects are correctness boundaries in every profile, including
+    // off. Checking them speculatively and then evaluating would run them
+    // twice.
+    for (const CommandResult* command : GetShellCommandResults())
+      if (command->op == CommandOp::SHELL || command->op == CommandOp::WRITE ||
+          command->op == CommandOp::APPEND)
+        evaluation = 1;
+    if (!evaluation && MakefileCacheManager::Get().includes_certified()) {
+      std::string proof;
+      AppendGraphString(g_flags.GraphOptimizationIdentity(), &proof);
+      AppendGraphString(orig_args, &proof);
+      auto record = [&](const std::string& path) {
+        AppendGraphString(path, &proof);
+        AppendGraphString(GetFileIdentity(path), &proof);
+      };
+      record(GetNinjaFilename());
+      record(GetEnvScriptFilename());
+      for (const auto& path : makefiles)
+        record(path);
+      evaluation =
+          WriteGraphCache(GetNinjaStampFilename() + ".includes", proof) ? 2 : 1;
+    }
     FILE* fp = fopen(GetStampTempFilename().c_str(), "wb");
     CHECK(fp);
 
     size_t r = fwrite(&start_time_, sizeof(start_time_), 1, fp);
     CHECK(r == 1);
     CHECK(fwrite("KAT3", 1, 4, fp) == 4);
-    DumpInt(fp, MakefileCacheManager::Get().requires_evaluation());
-
-    std::unordered_set<std::string> makefiles;
-    MakefileCacheManager::Get().GetAllFilenames(&makefiles);
+    DumpInt(fp, evaluation);
     DumpInt(fp, makefiles.size() + 1);
     DumpString(fp, kati_binary_);
     DumpString(fp, GetFileIdentity(kati_binary_));
     for (const std::string& makefile : makefiles) {
       DumpString(fp, makefile);
-      DumpString(fp, GetFileIdentity(makefile));
+      DumpString(fp, (MakefileCacheManager::Get().IsGeneratedGraphDep(makefile)
+                          ? "generated:"
+                          : "") +
+                         GetFileIdentity(makefile));
     }
 
     DumpInt(fp, Evaluator::used_undefined_vars().size());
@@ -1602,7 +1914,7 @@ class NinjaGenerator {
       DumpString(fp, cr->shellflag);
       DumpString(fp, cr->cmd);
       DumpString(fp, cr->result);
-      DumpString(fp, cr->loc.filename);
+      DumpString(fp, cr->loc.filename ? cr->loc.filename : "");
       DumpInt(fp, cr->loc.lineno);
 
       if (cr->op == CommandOp::FIND) {
@@ -1642,6 +1954,12 @@ class NinjaGenerator {
   Evaluator* ev_;
   SymbolSet done_;
   std::unordered_set<std::string> recipe_state_paths_;
+  std::unordered_set<std::string> imported_outputs_;
+  std::unordered_set<std::string> import_directories_;
+  bool preparing_imports_ = false;
+  std::unordered_map<Symbol, std::string> prepared_imports_;
+  std::vector<std::string> import_inputs_;
+  std::vector<std::string> import_artifacts_;
   std::string workspace_recipe_dir_;
   std::string workspace_environment_;
   std::unordered_set<std::string> active_nodes_;

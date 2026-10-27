@@ -1,0 +1,1002 @@
+{
+  "schema_version": 1,
+  "status": "in_progress",
+  "complete": false,
+  "updated_utc": "2026-10-27T02:07:31.408575+00:00",
+  "delivery": {
+    "branch": "codex/ninja-graph-optimizations",
+    "base_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d",
+    "push": false,
+    "pull_request": false,
+    "merge": false,
+    "preserved_untracked_binaries": [
+      "ckati",
+      "ckati-sanitized"
+    ],
+    "committed": false,
+    "requested_followup": "Complete state replay and remaining validation, then create PR, pass all checks and merge. User authorization supersedes prior local-only restriction.",
+    "push_authorized": true,
+    "pr_authorized": true,
+    "merge_authorized_after_all_gates": true
+  },
+  "build": {
+    "baseline_sha256": "192505c0257134de072b3d530c4a059ea12a33197b3cee20b8c219df26a58ce4",
+    "candidate_sha256": "ecbc4c2072f2a93fe681deb21a40fe3a502d6fc746c497f45e35c21f97a64d8d",
+    "toolchain": "Clang 22.1.8 / musl / libc++ / C++17 / O2 / ThinLTO / static",
+    "toolchain_image_id": "sha256:b741c0938effd057d7677c91febf150d69ac9832581c1dd814f84de6600f69b2",
+    "source_manifest": {
+      "path": "validation/logs/graph-optimizations/build-candidate-measured-identities.json",
+      "sha256": "5fde2aec5885094779f53b76746685ebbe5a78c18e07e8490c4950f1510d34f7"
+    },
+    "baseline_source_archive": {
+      "path": "validation/logs/graph-optimizations/baseline-source.tar",
+      "sha256": "d222a4dc79e296390571547b4e108d359d809182087a6ae01ae263a382aaa912"
+    },
+    "native_binaries": {
+      "path": "validation/logs/graph-optimizations/native-measured-binaries.json",
+      "sha256": "a5ed982f92e5abc1706f409789b0ba7bcc8f8275e1cb9ceedb9a20e36fadd057"
+    },
+    "revision_override": "Both static builds hold OMKTR_SOURCE_REVISION at the starting revision; binary and per-file source hashes identify the actual candidate.",
+    "current_cpp_and_build_inputs_match_measured_manifest": false,
+    "functional_image_id": "sha256:4c240dd24184310fee539ef664b3658aae37649e2e9561edfd1e76908d8998b7",
+    "preserved_untracked_binary_identities": {
+      "ckati": {
+        "sha256": "1308a3837ea0ebbc25999448e2793a0dd0cfd41bb64e1c721899970701a17bbf",
+        "bytes": 854648
+      },
+      "ckati-sanitized": {
+        "sha256": "0b335ddf4496f5dd35b01bfcee4a022132b6f3908f6f720b1677cdbb127d9898",
+        "bytes": 17060224
+      }
+    },
+    "followup_working_tree_changed": true,
+    "current_candidate_sha256": "057a084f0cd866c7aabde3a0de8045bc1c8a467173a3c3c6a194facfb1c2f1d9",
+    "current_build_manifest": {
+      "path": "validation/logs/graph-optimizations/build-state-epochs-v2-identities.json",
+      "sha256": "c764321de0004fa20517785d18a78f5da45ca7cda89e4541a1e21d595ae988ad"
+    },
+    "current_cpp_and_build_inputs_match_current_build_manifest": true
+  },
+  "features": [
+    {
+      "name": "measurement_and_validation",
+      "implemented": [
+        "Separate phase timers and effective settings",
+        "Versioned bounded checksummed atomic local records",
+        "Filesystem observation epochs and corruption misses",
+        "Serialized recipe metadata epochs, invalidated across threads by real commands and file effects; active effects force fresh probes"
+      ],
+      "boundaries": [
+        "FNV checksum detects local damage; it is not authentication"
+      ]
+    },
+    {
+      "name": "evaluation",
+      "implemented": [
+        "Owned normalized statement programs for assignment, rule, recipe, conditional, include, export, undefine and VPATH operations",
+        "Fresh-bootstrap replay through ordinary mutation APIs with origin, flavor, precedence, exports, automatic and target-specific scope validation",
+        "Nested dynamic variable names, call/foreach bindings, secondary expansion and dynamically parsed eval body programs",
+        "Ordered symbol interning and variable-use observations, including undefined lookups",
+        "Native file, wildcard and native find observations with positive and negative dependencies",
+        "Exactly-once ordered arbitrary effects with downstream pure value reuse and in-place operand replacement"
+      ],
+      "full_general_statement_replay": true,
+      "boundaries": [
+        "Persistent reuse applies to Ninja generation; direct mode remains the behavioral reference",
+        "Diagnostics, unsupported variable metadata and uncertain observations use ordinary evaluation at their current boundary",
+        "Effectful enclosing regions are not cached; current nested statement regions can still be reused",
+        "Native find validation accepts only complete quiet interpreter results; it never executes arbitrary shell text"
+      ]
+    },
+    {
+      "name": "includes",
+      "implemented": [
+        "Validated no-work include certificates",
+        "Producer/prerequisite and negative search observations",
+        "Graph and environment identities bound to the accepted certificate"
+      ],
+      "boundaries": [
+        "Phony work, VPATH, unresolved dependencies, observable effects and incomplete proofs use ordinary remaking",
+        "Certificate stores the validated dependency closure rather than a general replayable include graph"
+      ]
+    },
+    {
+      "name": "recursive",
+      "implemented": [
+        "Preflighted standalone static child graphs",
+        "Scoped subninja fragments with child cwd and exports",
+        "Parent prerequisite gates, budget validation, ownership and cycle checks"
+      ],
+      "boundaries": [
+        "Opaque siblings cause graph-wide fallback",
+        "Generated includes, implicit rules, dynamic discovery and unresolved environments retain recursion",
+        "Special execution modes, load constraints, target MAKEFLAGS, depfile detection, pools, WAIT, precious/ignored outputs and diagnostics retain recursion",
+        "General Kbuild and shell-loop import are unsupported"
+      ]
+    },
+    {
+      "name": "outputs_and_compact",
+      "implemented": [
+        "Explicit write-if-changed stdout contract",
+        "Preserved unchanged mtime, regular-file mode, producer stderr and failures",
+        "Failed comparisons preserve prior outputs",
+        "Shared native launcher templates with per-edge quoted scripts, cleanup arguments and depfiles"
+      ],
+      "boundaries": [
+        "No automatic recipe rewriting or transitive reduction",
+        "Symlink/directory outputs rejected; compact fallback for special outputs and large response files"
+      ]
+    },
+    {
+      "name": "monitor",
+      "implemented": [
+        "Explicit Linux start/status/stop",
+        "Private workspace socket and inotify watches",
+        "Sequence checkpoints spanning validation",
+        "Restart, overflow, lost coverage and unsupported filesystem fallback"
+      ],
+      "boundaries": [
+        "No implicit daemon startup",
+        "Regular single-link unambiguous local files only",
+        "Absent, symlink, uncovered and unsupported paths use ordinary validation",
+        "Ninja dependency checks remain enabled"
+      ]
+    }
+  ],
+  "correctness": {
+    "portable": {
+      "status": "passed",
+      "regressions": 858,
+      "correctness_per_profile": 174,
+      "focused": 31,
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/portable-final.log",
+        "sha256": "04d0327f59ffad094daf50c755782c0ab0ceb58d217b874d16ea851b149935b7"
+      }
+    },
+    "sanitizers": {
+      "status": "passed",
+      "asan_options": "detect_leaks=0",
+      "focused": 31,
+      "correctness_per_profile": 174,
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/sanitizer-final.log",
+        "sha256": "f69f9a14d4217233969f3de13b84dc4235f836313d6885828018e426d7b1c2ba"
+      }
+    },
+    "native_focused": {
+      "status": "passed",
+      "cases": 33,
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/native-focused-final-33.log",
+        "sha256": "298921729c817ef8e99c91e00f4c52b491d8d3bb1eb034a07bdb6b411f2d4b68"
+      }
+    },
+    "format": {
+      "status": "passed",
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/format-measured.log",
+        "sha256": "203ed5297d897de106b449365cb397e9b0294cae6e06132313d3fbcc627df48b"
+      }
+    },
+    "external": {
+      "current_selection": [
+        "safe j4",
+        "aggressive j4"
+      ],
+      "status": "passed",
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/external-measured.log",
+        "sha256": "db3366b88dafe5d30291e3fc52d66a87d53781382c9b6f812f7fe6793bf25e33"
+      },
+      "earlier_selection": [
+        "safe j1",
+        "aggressive j1"
+      ],
+      "earlier_evidence": {
+        "path": "validation/logs/graph-optimizations/external-reviewed-additional.log",
+        "sha256": "ef3ec783834242cf2683512e7242fe377b9a445ff13c728e09d104e98153820b"
+      },
+      "reports": [
+        {
+          "path": "validation/logs/graph-optimizations/external-measured-evidence/safe-j4/report.json",
+          "sha256": "00aa36731abcabe6e6efedae0afa26ec7b831fe5be58bc01ac33611308c7d624"
+        },
+        {
+          "path": "validation/logs/graph-optimizations/external-measured-evidence/aggressive-j4/report.json",
+          "sha256": "427e93638edb2597b6d8ff952e950c0745d9b7832c6ac31092f08fe30a1672b3"
+        }
+      ]
+    },
+    "snapshots": {
+      "changed": 4,
+      "description": "Three Ninja error line numbers after compact emission; one direct wildcard result aligned with GNU Make 4.4.1. No fixture or known-crash changes.",
+      "oracle": {
+        "path": "validation/logs/graph-optimizations/wildcard-oracle.json",
+        "sha256": "2c13d9a01a084ad614d04d0c1d94b184873ab2538be69114b2a37906c97e5725"
+      },
+      "record": {
+        "path": "validation/logs/graph-optimizations/golden-record-filesystem-epochs.log",
+        "sha256": "5bca80623d3bf1096eff17eb822276c14947a5bb8520df0acb84e4e5b5795ebe"
+      }
+    },
+    "focused_supplement": {
+      "cases": 33,
+      "ordinary_chimera": "passed",
+      "asan_ubsan": "passed",
+      "test_source": {
+        "path": "tests/graph_optimizations.py",
+        "sha256": "a3123d353eba6b8dbbf0c29b31752e58d6444d4dc72471de41c558cb7e9a8458"
+      },
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/focused-final-33-chimera-sanitized.log",
+        "sha256": "bc7367297d8f3cf7115ec4f940005957b36763e57e249007f32689de5e73127e"
+      }
+    },
+    "covered_profiles": [
+      "Direct execution reference",
+      "Ninja safe defaults",
+      "Ninja aggressive"
+    ],
+    "limits": [
+      "Functional gates do not establish general statement-state replay, which remains unimplemented.",
+      "The agreed real-project performance matrix is incomplete."
+    ]
+  },
+  "performance": {
+    "acceptance": "incomplete",
+    "method": {
+      "warmup_pairs": 2,
+      "measured_pairs": 7,
+      "order": "alternating baseline/candidate",
+      "estimator": "median paired percentage improvement",
+      "bootstrap_resamples": 10000,
+      "seed": 0,
+      "confidence": 0.95,
+      "compiler_caches": "disabled",
+      "concurrent_benchmark_or_test_workloads": false
+    },
+    "required": {
+      "projects": [
+        "FFmpeg 7.1.1",
+        "Linux 6.12"
+      ],
+      "jobs": [
+        8,
+        16
+      ],
+      "profiles": [
+        "safe defaults",
+        "aggressive"
+      ],
+      "entrypoint": "omktr build",
+      "positive_intervals": [
+        "clean",
+        "noop",
+        "single-source"
+      ],
+      "no_supported_regressions": [
+        "missing-object",
+        "graph-change",
+        "legacy entrypoint",
+        "candidate defaults"
+      ]
+    },
+    "experiments": [
+      {
+        "name": "ffmpeg-safe-measured",
+        "status": "passed_build_default_matrix",
+        "wsl_distro": "Ubuntu-24.04",
+        "root": "/root/omktr-graph-optimizations/ffmpeg-safe-measured",
+        "profile": "safe",
+        "entrypoints": [
+          "build"
+        ],
+        "jobs": [
+          8,
+          16
+        ],
+        "warmups": 2,
+        "samples": 7,
+        "ninja": "1.11.1",
+        "summary": [
+          {
+            "project": "ffmpeg",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "clean",
+            "pairs": 7,
+            "paired_improvement_percent": [
+              5.610460044873944,
+              4.105203958180558,
+              7.47219989197564,
+              6.491110023970148,
+              6.4505795311407095,
+              6.49797521947566,
+              5.4443521782590265
+            ],
+            "median_improvement_percent": 6.4505795311407095,
+            "bootstrap_95_percent": [
+              5.4443521782590265,
+              6.49797521947566
+            ],
+            "supported_improvement": true,
+            "supported_regression": false,
+            "baseline_median_seconds": 43.58713127299984,
+            "candidate_median_seconds": 40.81122990600011
+          },
+          {
+            "project": "ffmpeg",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "graph",
+            "pairs": 7,
+            "paired_improvement_percent": [
+              88.85683640270723,
+              89.52613005171587,
+              89.27302376700992,
+              89.04955201572862,
+              89.27622682242715,
+              88.90085579762427,
+              88.88910742413488
+            ],
+            "median_improvement_percent": 89.04955201572862,
+            "bootstrap_95_percent": [
+              88.88910742413488,
+              89.27622682242715
+            ],
+            "supported_improvement": true,
+            "supported_regression": false,
+            "baseline_median_seconds": 3.8109083409999585,
+            "candidate_median_seconds": 0.4190698560000783
+          },
+          {
+            "project": "ffmpeg",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "missing",
+            "pairs": 7,
+            "paired_improvement_percent": [
+              81.73381906957101,
+              81.25601165314468,
+              82.20912783195547,
+              82.3626142620908,
+              82.42633107751529,
+              81.85971174795141,
+              81.89492991515638
+            ],
+            "median_improvement_percent": 81.89492991515638,
+            "bootstrap_95_percent": [
+              81.73381906957101,
+              82.3626142620908
+            ],
+            "supported_improvement": true,
+            "supported_regression": false,
+            "baseline_median_seconds": 4.166137732000038,
+            "candidate_median_seconds": 0.7498442570001771
+          },
+          {
+            "project": "ffmpeg",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "noop",
+            "pairs": 7,
+            "paired_improvement_percent": [
+              79.96998855716757,
+              80.15909518170236,
+              79.74935149546704,
+              80.71822526727348,
+              80.82269842260101,
+              80.66284787347197,
+              80.36963442579773
+            ],
+            "median_improvement_percent": 80.36963442579773,
+            "bootstrap_95_percent": [
+              79.96998855716757,
+              80.71822526727348
+            ],
+            "supported_improvement": true,
+            "supported_regression": false,
+            "baseline_median_seconds": 4.263063246999991,
+            "candidate_median_seconds": 0.837610269000038
+          },
+          {
+            "project": "ffmpeg",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "source",
+            "pairs": 7,
+            "paired_improvement_percent": [
+              81.91614350886938,
+              81.82506573717332,
+              81.61589965699551,
+              82.63107492966006,
+              82.17346497431379,
+              81.76725310576755,
+              81.74195887132377
+            ],
+            "median_improvement_percent": 81.82506573717332,
+            "bootstrap_95_percent": [
+              81.74195887132377,
+              82.17346497431379
+            ],
+            "supported_improvement": true,
+            "supported_regression": false,
+            "baseline_median_seconds": 4.196394038000108,
+            "candidate_median_seconds": 0.7588193230001252
+          },
+          {
+            "project": "ffmpeg",
+            "entrypoint": "build",
+            "jobs": 16,
+            "scenario": "clean",
+            "pairs": 7,
+            "paired_improvement_percent": [
+              5.068645977677089,
+              5.616813080139849,
+              6.762167593582014,
+              6.203534855058967,
+              5.390225809988902,
+              4.794698668256903,
+              5.027123798209853
+            ],
+            "median_improvement_percent": 5.390225809988902,
+            "bootstrap_95_percent": [
+              5.027123798209853,
+              6.203534855058967
+            ],
+            "supported_improvement": true,
+            "supported_regression": false,
+            "baseline_median_seconds": 33.5036210090002,
+            "candidate_median_seconds": 31.702573461000156
+          },
+          {
+            "project": "ffmpeg",
+            "entrypoint": "build",
+            "jobs": 16,
+            "scenario": "graph",
+            "pairs": 7,
+            "paired_improvement_percent": [
+              89.2434341210886,
+              89.08153035306177,
+              89.02773596942326,
+              89.45472099494157,
+              88.93874927735064,
+              89.13119197290523,
+              88.87593148473535
+            ],
+            "median_improvement_percent": 89.08153035306177,
+            "bootstrap_95_percent": [
+              88.93874927735064,
+              89.2434341210886
+            ],
+            "supported_improvement": true,
+            "supported_regression": false,
+            "baseline_median_seconds": 3.7423860499998227,
+            "candidate_median_seconds": 0.41149604299971543
+          },
+          {
+            "project": "ffmpeg",
+            "entrypoint": "build",
+            "jobs": 16,
+            "scenario": "missing",
+            "pairs": 7,
+            "paired_improvement_percent": [
+              81.5579552871353,
+              81.43349492124041,
+              81.53519957624512,
+              82.14869201962844,
+              81.69843817226526,
+              81.50398643347067,
+              80.94815985045194
+            ],
+            "median_improvement_percent": 81.53519957624512,
+            "bootstrap_95_percent": [
+              81.43349492124041,
+              81.69843817226526
+            ],
+            "supported_improvement": true,
+            "supported_regression": false,
+            "baseline_median_seconds": 4.090673981999771,
+            "candidate_median_seconds": 0.7503298780002297
+          },
+          {
+            "project": "ffmpeg",
+            "entrypoint": "build",
+            "jobs": 16,
+            "scenario": "noop",
+            "pairs": 7,
+            "paired_improvement_percent": [
+              81.53657751323948,
+              81.9891332731894,
+              81.26268130604004,
+              81.55166056028904,
+              81.41545310431269,
+              81.37862552304831,
+              81.61528524121644
+            ],
+            "median_improvement_percent": 81.53657751323948,
+            "bootstrap_95_percent": [
+              81.37862552304831,
+              81.61528524121644
+            ],
+            "supported_improvement": true,
+            "supported_regression": false,
+            "baseline_median_seconds": 4.043517667999822,
+            "candidate_median_seconds": 0.7544887220001328
+          },
+          {
+            "project": "ffmpeg",
+            "entrypoint": "build",
+            "jobs": 16,
+            "scenario": "source",
+            "pairs": 7,
+            "paired_improvement_percent": [
+              81.28184690120621,
+              81.06897841580937,
+              81.52533216688995,
+              81.82719929111278,
+              81.74264717760681,
+              81.49802224184849,
+              78.80582338190763
+            ],
+            "median_improvement_percent": 81.49802224184849,
+            "bootstrap_95_percent": [
+              81.06897841580937,
+              81.74264717760681
+            ],
+            "supported_improvement": true,
+            "supported_regression": false,
+            "baseline_median_seconds": 4.093258541000068,
+            "candidate_median_seconds": 0.7577456940002776
+          }
+        ],
+        "source_changes": [],
+        "failure": null,
+        "evidence": [
+          {
+            "path": "validation/logs/graph-optimizations/ffmpeg-safe-measured/commands.jsonl",
+            "sha256": "75e2ce0c4a1e601043f56d9cfde258c769cc7f789c40e3dee6e7b51639388bd8"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/ffmpeg-safe-measured/metadata.json",
+            "sha256": "ff7988db2e9e2c8764d4107b4ccfbeaf7c6ff093899bd353abab9db0c1fe75b0"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/ffmpeg-safe-measured/report.json",
+            "sha256": "501755a7aa68199eb54913129b8bc0f866325fd0390757b8742570ddeff9a5b1"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/ffmpeg-safe-measured/samples.jsonl",
+            "sha256": "3246dfe4a3c7bef178013575f37bdd7f6bbbe4cf053937b56dab16f704c69daa"
+          }
+        ]
+      },
+      {
+        "name": "linux-safe-measured",
+        "status": "failed_compiler_crash_acceptance_incomplete",
+        "wsl_distro": "Ubuntu-24.04",
+        "root": "/root/omktr-graph-optimizations/linux-safe-measured",
+        "profile": "safe",
+        "entrypoints": [
+          "build"
+        ],
+        "jobs": [
+          8,
+          16
+        ],
+        "warmups": 2,
+        "samples": 7,
+        "ninja": "1.11.1",
+        "failure": "Command failed (1): /root/omktr-graph-optimizations/linux-safe-measured/build-j8-r3-candidate/clean.log",
+        "summary": [
+          {
+            "project": "linux",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "clean",
+            "pairs": 1,
+            "paired_improvement_percent": [
+              -0.5056552020714422
+            ],
+            "median_improvement_percent": -0.5056552020714422,
+            "bootstrap_95_percent": [
+              -0.5056552020714422,
+              -0.5056552020714422
+            ],
+            "supported_improvement": false,
+            "supported_regression": false,
+            "baseline_median_seconds": 153.75109774700013,
+            "candidate_median_seconds": 154.52854817099978
+          },
+          {
+            "project": "linux",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "graph",
+            "pairs": 1,
+            "paired_improvement_percent": [
+              -1.8271058667010287
+            ],
+            "median_improvement_percent": -1.8271058667010287,
+            "bootstrap_95_percent": [
+              -1.8271058667010287,
+              -1.8271058667010287
+            ],
+            "supported_improvement": false,
+            "supported_regression": false,
+            "baseline_median_seconds": 4.136259446000167,
+            "candidate_median_seconds": 4.2118332850000115
+          },
+          {
+            "project": "linux",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "missing",
+            "pairs": 1,
+            "paired_improvement_percent": [
+              7.128764746424698
+            ],
+            "median_improvement_percent": 7.128764746424698,
+            "bootstrap_95_percent": [
+              7.128764746424698,
+              7.128764746424698
+            ],
+            "supported_improvement": false,
+            "supported_regression": false,
+            "baseline_median_seconds": 13.520576316999723,
+            "candidate_median_seconds": 12.556726239
+          },
+          {
+            "project": "linux",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "noop",
+            "pairs": 1,
+            "paired_improvement_percent": [
+              11.445988643990091
+            ],
+            "median_improvement_percent": 11.445988643990091,
+            "bootstrap_95_percent": [
+              11.445988643990091,
+              11.445988643990091
+            ],
+            "supported_improvement": false,
+            "supported_regression": false,
+            "baseline_median_seconds": 4.039483825999923,
+            "candidate_median_seconds": 3.577124966000156
+          },
+          {
+            "project": "linux",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "source",
+            "pairs": 1,
+            "paired_improvement_percent": [
+              -1.916727449558886
+            ],
+            "median_improvement_percent": -1.916727449558886,
+            "bootstrap_95_percent": [
+              -1.916727449558886,
+              -1.916727449558886
+            ],
+            "supported_improvement": false,
+            "supported_regression": false,
+            "baseline_median_seconds": 12.76479637500006,
+            "candidate_median_seconds": 13.009462730999985
+          }
+        ],
+        "source_changes": [],
+        "evidence": [
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/commands.jsonl",
+            "sha256": "8df3242fd450817b1abacbc357bdb2e44206a572ee54f02ffd8db6e8baf89a83"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/compiler-investigation.json",
+            "sha256": "5eb22e7222126056f8f2d8fcbf70bc891f4707585b14286bfc98e6f87b022b53"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/failed-clean.log",
+            "sha256": "51e8a01e78d3f16a8b6a3b3fca53d36ef3545e995a091873c18b26ead9f333a9"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/metadata.json",
+            "sha256": "566c729e78658782607bfcc8c876c40cd3917fa04174a76189581101bf123c4b"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/report.json",
+            "sha256": "e89f009db974957bacdc3419fb4d9b42f9feb5d717905bc1435e9a2cfbb212a1"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/samples.jsonl",
+            "sha256": "5b01b0b55423bd18697533c0f75c7d16107095cabf36975ab11bb07101b72dda"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/slub-baseline.i",
+            "sha256": "230f505aba1a6ea096b47233247298e765a9313e70873f26b33447180bd69ce1"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/slub-candidate.i",
+            "sha256": "230f505aba1a6ea096b47233247298e765a9313e70873f26b33447180bd69ce1"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/slub-command.sh",
+            "sha256": "086f19aad56271d71ea3e889a37efc660ddf71d3eae3ec2d2351aebba44e967b"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/slub-controlled-0.log",
+            "sha256": "a43187277f919ba662f5152e4a950844badcd9a082ad886d8bcc48bc7b6f6968"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/slub-controlled-1.log",
+            "sha256": "a43187277f919ba662f5152e4a950844badcd9a082ad886d8bcc48bc7b6f6968"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/slub-controlled-2.log",
+            "sha256": "a43187277f919ba662f5152e4a950844badcd9a082ad886d8bcc48bc7b6f6968"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/slub-dry-run.log",
+            "sha256": "e6b6bfc3317a7a487a9b446b5ba25120b89238dc6ddeccb3b1d125716782e992"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/slub-standalone-0.log",
+            "sha256": "a43187277f919ba662f5152e4a950844badcd9a082ad886d8bcc48bc7b6f6968"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/slub-standalone-1.log",
+            "sha256": "a43187277f919ba662f5152e4a950844badcd9a082ad886d8bcc48bc7b6f6968"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-measured/slub-standalone-2.log",
+            "sha256": "a43187277f919ba662f5152e4a950844badcd9a082ad886d8bcc48bc7b6f6968"
+          }
+        ],
+        "investigation": "Clang 18.1.3 parser crashed with frontend exit 139 compiling mm/slub.c. Three exact standalone compile reruns pass; root cause remains unresolved. Failed run retained; no release-source patches."
+      },
+      {
+        "name": "linux-safe-llvm19",
+        "status": "interrupted_runtime_acceptance_incomplete",
+        "container": "openmktr-graph-linux19-measured",
+        "volume": "openmktr-graph-linux19-measured",
+        "root": "/benchmark/linux-safe-llvm19",
+        "image_id": "sha256:42bae58178c98432973444c1b5b7de9b5e847f1fce7372c73a1034749902c050",
+        "profile": "safe",
+        "entrypoints": [
+          "build"
+        ],
+        "jobs": [
+          8,
+          16
+        ],
+        "warmups": 2,
+        "samples": 7,
+        "ninja": "1.11.1",
+        "external_compiler": "Clang 19.1.1",
+        "failure": "Docker attach returned unexpected EOF; container exit 255, OOMKilled false; native WSL and Docker share a freshly reset boot clock. Cause unresolved.",
+        "summary": [
+          {
+            "project": "linux",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "clean",
+            "pairs": 2,
+            "paired_improvement_percent": [
+              0.4737199676865256,
+              -0.465038031135645
+            ],
+            "median_improvement_percent": 0.004340968275440282,
+            "bootstrap_95_percent": [
+              -0.465038031135645,
+              0.4737199676865256
+            ],
+            "supported_improvement": false,
+            "supported_regression": false,
+            "baseline_median_seconds": 155.51197762799984,
+            "candidate_median_seconds": 155.50059785250005
+          },
+          {
+            "project": "linux",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "graph",
+            "pairs": 2,
+            "paired_improvement_percent": [
+              -15.115731027923385,
+              10.121345730344355
+            ],
+            "median_improvement_percent": -2.4971926487895146,
+            "bootstrap_95_percent": [
+              -15.115731027923385,
+              10.121345730344355
+            ],
+            "supported_improvement": false,
+            "supported_regression": false,
+            "baseline_median_seconds": 3.5709233924999353,
+            "candidate_median_seconds": 3.638557541499722
+          },
+          {
+            "project": "linux",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "missing",
+            "pairs": 2,
+            "paired_improvement_percent": [
+              -1.3067635708363445,
+              0.7606279644521208
+            ],
+            "median_improvement_percent": -0.2730678031921119,
+            "bootstrap_95_percent": [
+              -1.3067635708363445,
+              0.7606279644521208
+            ],
+            "supported_improvement": false,
+            "supported_regression": false,
+            "baseline_median_seconds": 13.064123802500035,
+            "candidate_median_seconds": 13.097523765000005
+          },
+          {
+            "project": "linux",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "noop",
+            "pairs": 2,
+            "paired_improvement_percent": [
+              -0.7371214751881183,
+              -7.062573761027124
+            ],
+            "median_improvement_percent": -3.8998476181076214,
+            "bootstrap_95_percent": [
+              -7.062573761027124,
+              -0.7371214751881183
+            ],
+            "supported_improvement": false,
+            "supported_regression": false,
+            "baseline_median_seconds": 3.483203347500421,
+            "candidate_median_seconds": 3.6229776194995793
+          },
+          {
+            "project": "linux",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "source",
+            "pairs": 2,
+            "paired_improvement_percent": [
+              -1.8916640283865194,
+              -1.0130490277993731
+            ],
+            "median_improvement_percent": -1.4523565280929462,
+            "bootstrap_95_percent": [
+              -1.8916640283865194,
+              -1.0130490277993731
+            ],
+            "supported_improvement": false,
+            "supported_regression": false,
+            "baseline_median_seconds": 13.040490343999863,
+            "candidate_median_seconds": 13.230698035500154
+          }
+        ],
+        "source_changes": [],
+        "completed_measured_pairs": 2,
+        "evidence": [
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-llvm19/commands.jsonl",
+            "sha256": "36ecd89974bd27f314bc220ff716b12bc6f3ad5e9a909df7f79a0e41a3883f1e"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-llvm19/container-inspect.json",
+            "sha256": "0cc14d565744ac8a74f5aec9c48047ce1ec9f73c275b20ac173a36ca88c4b5b0"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-llvm19/container.log",
+            "sha256": "56c79ec510b6e0c8a48a4d004af3ba96aec4622100cf170ade79b8c00cf0cf69"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-llvm19/interrupted-clean.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-llvm19/interrupted-report.json",
+            "sha256": "66d5fa65e69b9831aca4afd81fa313464172da99f287ded2ef1f29faa78ff611"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-llvm19/metadata.json",
+            "sha256": "f10a00720b750b64c073ef2047dd50684adb766a03b0588e657f15cba8b8b467"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-llvm19/runtime-investigation.json",
+            "sha256": "9a5c88d8a186e17d2ce3b6e7f66d94c961ba2050411f00f742e827a2979ed953"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-llvm19/samples.jsonl",
+            "sha256": "a9dc5f30e4fcd167144b28289bfeebbd35f6386d444f2e2307d92d36cf477829"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-llvm19/source-integrity-raw-link-comparison.json",
+            "sha256": "935415e902bdb543cc64be8f3fb6b6e98a7e579fe22dbd783156a77a96216a97"
+          },
+          {
+            "path": "validation/logs/graph-optimizations/linux-safe-llvm19/source-integrity.json",
+            "sha256": "3afb9634fc8bed0fc1b638e43c8808803b800ed7954c99920a6678e726716219"
+          }
+        ]
+      }
+    ],
+    "retained_nonacceptance_evidence": [
+      {
+        "name": "early_ffmpeg_diagnostic",
+        "wsl_distro": "Ubuntu-24.04",
+        "root": "/root/omktr-graph-optimizations/ffmpeg-diagnostic-safe",
+        "reason": "Superseded early candidate, one pair and no warmups; reported regressions are retained."
+      },
+      {
+        "name": "superseded_linux_warmups",
+        "wsl_distro": "Ubuntu-24.04",
+        "root": "/root/omktr-graph-optimizations/linux-safe-reviewed",
+        "reason": "Interrupted during warmups for output-helper contract fixes; candidate source was superseded. No accepted measured pairs.",
+        "driver": {
+          "path": "validation/logs/graph-optimizations/linux-safe-reviewed-driver.log",
+          "sha256": "20226777f06238be086f1a211b0e35f827ea4f42c03e0fb80c9afbe3baf7f9fc"
+        }
+      },
+      {
+        "name": "synthetic_diagnostic",
+        "evidence": {
+          "path": "validation/logs/graph-optimizations/synthetic-bench-reviewed.json",
+          "sha256": "da067c015f2eeef5b85e5e57753c2e3c080e611f111cc3eaf3ce083c47f20aaf"
+        },
+        "reason": "tests/bench.py medians for an earlier candidate are diagnostic, not real-project acceptance."
+      }
+    ],
+    "synthetic_current": {
+      "path": "validation/logs/graph-optimizations/synthetic-bench-measured.json",
+      "sha256": "f05cd287d084fc3848ba38d606fda81d80afae0a5943c5a3760974f4055dbb58",
+      "qualification": "Required tests/bench.py comparison; synthetic medians are diagnostic, not real-project acceptance."
+    },
+    "prior_candidate_qualification_only": true
+  },
+  "retained_findings": [
+    {
+      "finding": "One extra app relink in an earlier safe-j4 external run; executable mtime preceded prerequisites although artifacts matched. Isolated baseline/off/safe/aggressive checks and full repeats passed; cause unresolved.",
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/external-reviewed.log",
+        "sha256": "b791402fc1e0ab5b5da205e9ca66c35f560f8170def0e7b2111ae18e31500c6b"
+      },
+      "investigation": {
+        "path": "validation/logs/graph-optimizations/external-timestamp-investigation.log",
+        "sha256": "1fdc14f71085e94fbf1d54f331a38c37e65abbe085666621fbae1df651faa03c"
+      }
+    },
+    {
+      "finding": "Windows-mounted external campaign produced inconsistent timestamp ordering, including extra work in the GNU Make oracle. All safe/aggressive j1/j4 native-volume comparisons passed for preceding state-replay candidates. Windows runs remain nonacceptance evidence.",
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/state-replay-filesystem-investigation.json",
+        "sha256": "8bf41bc815152b353f7219bc07a14a16affca613eb1268eef15742fa16caeafa"
+      }
+    }
+  ],
+  "outstanding": [
+    "Linux clean, no-op and source gains at j8/j16 remain unqualified; Clang 18 crashed, then the fresh Clang 19 campaign was interrupted by a WSL/Docker backend restart.",
+    "Aggressive real-project performance qualification remains unrun.",
+    "Legacy-entrypoint no-regression qualification, real-project feature ablations and separate Ninja-runtime performance comparisons remain unrun.",
+    "Monitored startup-inclusive cold and retained warm real-project measurements remain unrun."
+  ],
+  "validation_followup": {
+    "status": "passed",
+    "updated_utc": "2026-10-27T02:07:31.408575+00:00",
+    "binary_sha256": "057a084f0cd866c7aabde3a0de8045bc1c8a467173a3c3c6a194facfb1c2f1d9",
+    "source_manifest_sha256": "c764321de0004fa20517785d18a78f5da45ca7cda89e4541a1e21d595ae988ad",
+    "portable_gate": "passed",
+    "sanitizer_gate": "passed",
+    "regression_default": 858,
+    "regression_aggressive": 858,
+    "focused_graph_tests": 42,
+    "log_sha256": {
+      "state-replay-portable-5.log": "35804d5243f246816163a3379edc2a34708f8b8947d798fc62c6d749c222a82c",
+      "state-replay-sanitizer-4.log": "bf9e23c23ebbf2ceea1563b8987c19b07c80e099c77e191fbff4d7671ea96369",
+      "state-epochs-v2-format.json": "e0e155860671655bc0534f294e217fa9263962fa10c0b45c3f28e2e454900189"
+    },
+    "external_differential": "exact static candidate native-volume reruns in progress"
+  }
+}

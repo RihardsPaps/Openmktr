@@ -1,7 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
-// Changed by the Openmktr fork, maintained by Rihards Paps and
-// Haralds Paps.
-// Changed build execution, evaluation, or portability for this fork.
+// Track and validate incremental evaluation, include proofs and imported Ninja
+// graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
+// Paps. Changed build execution, evaluation, or portability for this fork.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Keep explanation checks from refreshing the regeneration stamp.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
@@ -37,8 +37,11 @@
 #include "fileutil.h"
 #include "find.h"
 #include "func.h"
+#include "graph_optimization.h"
 #include "io.h"
 #include "log.h"
+#include "monitor.h"
+#include "native_observation.h"
 #include "ninja.h"
 #include "stats.h"
 #include "strutil.h"
@@ -93,11 +96,18 @@ class StampChecker {
     if (IsMissingOutputs())
       RETURN_TRUE;
 
+    COLLECT_STATS("stamp validation");
     if (CheckStep1(orig_args))
       RETURN_TRUE;
 
     if (CheckStep2())
       RETURN_TRUE;
+
+    if (!monitor_checkpoint_.empty() &&
+        !MonitorCheckpointValid(monitor_checkpoint_)) {
+      LOG_STAT("monitor fallback: changes during stamp validation");
+      RETURN_TRUE;
+    }
 
     if (!needs_regen_ && !g_flags.explain) {
       FILE* fp = fopen(GetNinjaStampFilename().c_str(), "rb+");
@@ -177,7 +187,23 @@ class StampChecker {
       printf("Generated time: %f\n", gen_time);
 
     int requires_evaluation = LOAD_INT(fp);
-    if (requires_evaluation != 0) {
+    if (requires_evaluation == 2) {
+      std::string proof, configuration, arguments, path, identity;
+      if (!g_flags.GraphOptimizationEnabled("includes") ||
+          !ReadGraphCache(GetNinjaStampFilename() + ".includes", &proof))
+        RETURN_TRUE;
+      std::string_view view(proof);
+      if (!ConsumeGraphString(&view, &configuration) ||
+          !ConsumeGraphString(&view, &arguments) || arguments != orig_args ||
+          configuration != g_flags.GraphOptimizationIdentity())
+        RETURN_TRUE;
+      while (!view.empty()) {
+        if (!ConsumeGraphString(&view, &path) ||
+            !ConsumeGraphString(&view, &identity) || identity == "unreadable" ||
+            GetFileIdentity(path) != identity)
+          RETURN_TRUE;
+      }
+    } else if (requires_evaluation != 0) {
       if (g_flags.explain)
         printf(
             "Makefile evaluation has observable effects or generated inputs; "
@@ -187,14 +213,43 @@ class StampChecker {
 
     std::string s, s2;
     int num_files = LOAD_INT(fp);
+    std::vector<std::string> paths(num_files), recorded(num_files);
     for (int i = 0; i < num_files; i++) {
-      LOAD_STRING(fp, &s);
-      LOAD_STRING(fp, &s2);
-      double ts = GetTimestamp(s);
+      LOAD_STRING(fp, &paths[i]);
+      LOAD_STRING(fp, &recorded[i]);
+    }
+    std::vector<std::string> identities;
+    std::vector<double> timestamps;
+    bool monitored =
+        MonitorSnapshot(paths, &identities, &timestamps, &monitor_checkpoint_);
+    if (!monitored)
+      monitor_checkpoint_.clear();
+    if (g_flags.GraphOptimizationEnabled("monitor"))
+      LOG_STAT("monitor snapshots: %d accepted, %d ordinary fallbacks",
+               monitored ? 1 : 0, monitored ? 0 : 1);
+    if (g_flags.regen_debug && g_flags.GraphOptimizationEnabled("monitor"))
+      printf("monitor: %s\n",
+             monitored ? "validated snapshot" : "ordinary validation fallback");
+    for (int i = 0; i < num_files; i++) {
+      s = paths[i];
+      s2 = recorded[i];
+      const bool generated_artifact = s2.compare(0, 10, "generated:") == 0;
+      if (generated_artifact)
+        s2.erase(0, 10);
+      struct stat st;
+      const bool exists = !monitored && stat(s.c_str(), &st) == 0;
+      double ts = monitored ? timestamps[i]
+                  : exists  ? GetTimestampFromStat(st)
+                            : -1;
+      const std::string identity = monitored ? identities[i]
+                                   : exists  ? GetFileIdentityFromStat(st)
+                                             : "missing";
       // GetTimestamp returns < 0 when there's an error reading the file, like
       // when its been removed.
-      if (gen_time < ts || ts < 0 || GetFileIdentity(s) != s2 ||
-          s2 == "unreadable") {
+      const bool unchanged_missing = s2 == "missing" && identity == "missing";
+      if (!unchanged_missing &&
+          ((!generated_artifact && gen_time < ts) || ts < 0 || identity != s2 ||
+           s2 == "unreadable")) {
         if (g_flags.regen_ignoring_kati_binary) {
           if (s == GetExecutablePath()) {
             fprintf(stderr, "%s was modified, ignored.\n", s.c_str());
@@ -342,42 +397,6 @@ class StampChecker {
     return needs_regen;
   }
 
-  bool ShouldRunCommand(const ShellResult* sr) {
-    if (sr->op != CommandOp::FIND)
-      return true;
-
-    COLLECT_STATS("stat time (regen)");
-    for (const std::string& dir : sr->missing_dirs) {
-      if (Exists(dir))
-        return true;
-    }
-    for (const std::string& file : sr->files) {
-      if (!Exists(file))
-        return true;
-    }
-    for (const std::string& dir : sr->read_dirs) {
-      // We assume we rarely do a significant change for the top
-      // directory which affects the results of find command.
-      if (dir == "" || dir == "." || ShouldIgnoreDirty(dir))
-        continue;
-
-      struct stat st;
-      if (lstat(dir.c_str(), &st) != 0) {
-        return true;
-      }
-      double ts = GetTimestampFromStat(st);
-      if (ts < 0 || gen_time_ < ts) {
-        return true;
-      }
-      if (S_ISLNK(st.st_mode)) {
-        ts = GetTimestamp(dir);
-        if (ts < 0 || gen_time_ < ts)
-          return true;
-      }
-    }
-    return false;
-  }
-
   bool CheckShellResult(const ShellResult* sr, std::string* err) {
     if (sr->op == CommandOp::READ_MISSING) {
       if (Exists(sr->cmd)) {
@@ -429,12 +448,6 @@ class StampChecker {
       return false;
     }
 
-    if (!ShouldRunCommand(sr)) {
-      if (g_flags.regen_debug)
-        printf("shell %s: clean (no rerun)\n", sr->cmd.c_str());
-      return false;
-    }
-
     FindCommand fc;
     if (fc.Parse(sr->cmd) && !fc.chdir.empty() && ShouldIgnoreDirty(fc.chdir)) {
       if (g_flags.dump_kati_stamp)
@@ -444,9 +457,21 @@ class StampChecker {
 
     COLLECT_STATS_WITH_SLOW_REPORT("shell time (regen)", sr->cmd.c_str());
     std::string result;
-    RunCommand(sr->shell, sr->shellflag, sr->cmd, RedirectStderr::DEV_NULL,
-               &result);
-    FormatForCommandSubstitution(&result);
+    if (sr->op == CommandOp::FIND) {
+      // Reexecute only the native interpreter. Directory timestamps cannot
+      // certify negative matches, top-level membership or symlink searches.
+      std::string packet;
+      std::unique_ptr<FindCommand> descriptor;
+      if (!QueryNativeFind(sr->cmd, &packet) ||
+          !DecodeNativeFind(sr->cmd, packet, &result, &descriptor)) {
+        *err = "native find validation uncertain, regenerating...\n";
+        return true;
+      }
+    } else {
+      RunCommand(sr->shell, sr->shellflag, sr->cmd, RedirectStderr::DEV_NULL,
+                 &result);
+      FormatForCommandSubstitution(&result);
+    }
     if (sr->result != result) {
       if (g_flags.dump_kati_stamp) {
         printf("shell %s: dirty\n", sr->cmd.c_str());
@@ -506,6 +531,7 @@ class StampChecker {
   std::mutex mu_;
   bool needs_regen_;
   std::string msg_;
+  std::string monitor_checkpoint_;
 };
 
 }  // namespace

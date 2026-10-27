@@ -1,9 +1,10 @@
 // FORK MODIFICATION NOTICE (2026)
-// Preserve live Ninja load limits across deferred recursive environments.
-// Preserve literal saved compiler commands when resolving deferred assignments.
-// Accept recursive assignment operators when expanding deferred values.
-// Exclude recipe control prefixes when recognizing deferred assignments.
-// Changed by the Openmktr fork, maintained by Rihards Paps and
+// Track and validate incremental evaluation, include proofs and imported Ninja
+// graphs. Preserve live Ninja load limits across deferred recursive
+// environments. Preserve literal saved compiler commands when resolving
+// deferred assignments. Accept recursive assignment operators when expanding
+// deferred values. Exclude recipe control prefixes when recognizing deferred
+// assignments. Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Keep jobserver reservations live instead of copying them as make exports.
@@ -41,6 +42,7 @@
 #include "exec.h"
 #include "fileutil.h"
 #include "flags.h"
+#include "func.h"
 #include "log.h"
 #include "strutil.h"
 #include "var.h"
@@ -214,11 +216,10 @@ static void ExportRecursiveEnvironment(Command* command, Evaluator* ev) {
         !emitted.insert(name_string).second)
       return;
     const std::string value = ev->EvalVar(name);
+    command->environment.push_back(name_string + "=" + value);
     if (g_flags.generate_ninja)
       exports +=
           "export " + name_string + "=" + ShellQuoteCommand(value) + "; ";
-    else
-      command->environment.push_back(name_string + "=" + value);
   };
 
   // GNU make exports command-line assignments to every directly executed
@@ -283,7 +284,13 @@ static void ExportRecursiveEnvironment(Command* command, Evaluator* ev) {
   // assignments. Environment exports alone are insufficient: a recursive
   // makefile may assign CC=... itself, so command-line values such as
   // CC=clang must remain command-line overrides in the child.
+  for (const auto& item : ev->exports())
+    if (!item.second)
+      command->unset_environment.push_back(item.first.str());
+  command->unset_environment.push_back("MAKEOVERRIDES");
   Var* makeflags = ev->LookupVar(Intern("MAKEFLAGS"));
+  if (g_flags.generate_ninja && makeflags->IsDefined())
+    command->environment.push_back("MAKEFLAGS=" + makeflags->Eval(ev));
   if (!g_flags.generate_ninja) {
     if (makeflags != nullptr && makeflags->IsDefined())
       command->environment.push_back("MAKEFLAGS=" + makeflags->Eval(ev));
@@ -698,6 +705,14 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
                                             double target_age,
                                             size_t double_colon_group) {
   std::vector<Command> result;
+  const bool observe =
+      !g_flags.generate_ninja && g_flags.GraphOptimizationEnabled("evaluation");
+  if (!g_flags.generate_ninja &&
+      (!observe || filesystem_epoch_ != FilesystemObservationEpoch())) {
+    InvalidateEvaluationFilesystemQueries();
+    filesystem_epoch_ = FilesystemObservationEpoch();
+  }
+  ScopedFileObservations observations(observe, &observations_);
   target_age_ = target_age;
   ev_->set_loc(n.loc);
   ev_->set_current_scope(n.rule_vars);

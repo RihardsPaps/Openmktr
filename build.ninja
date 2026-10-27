@@ -1,5 +1,5 @@
 # Portable, GNU-free Linux build. Run with Ninja in a musl environment.
-# Openmktr fork (2026): include standalone load-limit admission tests.
+# Openmktr fork (2026): include load admission and native graph optimization modules.
 cxx = clang++
 cxxflags = -std=c++17 -O2 -DNOLOG -Wall -Wextra -stdlib=libc++ -pthread -flto=thin -ffunction-sections -fdata-sections
 ldflags = -stdlib=libc++ -fuse-ld=lld -pthread -flto=thin -Wl,--gc-sections -Wl,--icf=safe
@@ -36,10 +36,15 @@ build out/file_cache.o: cxx src/file_cache.cc || out
 build out/fileutil.o: cxx src/fileutil.cc || out
 build out/find.o: cxx src/find.cc || out
 build out/flags.o: cxx src/flags.cc || out
+build out/graph_optimization.o: cxx src/graph_optimization.cc || out
+build out/graph_import.o: cxx src/graph_import.cc || out
+build out/incremental_eval.o: cxx src/incremental_eval.cc || out
+build out/native_observation.o: cxx src/native_observation.cc || out
 build out/func.o: cxx src/func.cc || out
 build out/io.o: cxx src/io.cc || out
 build out/log.o: cxx src/log.cc || out
 build out/ninja.o: cxx src/ninja.cc || out
+build out/monitor.o: cxx src/monitor.cc || out
 build out/parser.o: cxx src/parser.cc || out
 build out/regen.o: cxx src/regen.cc || out
 build out/recursive_cache.o: cxx src/recursive_cache.cc || out
@@ -60,10 +65,10 @@ build out/ninja_test.o: cxx src/ninja_test.cc || out
 build out/strutil_test.o: cxx src/strutil_test.cc || out
 build out/load_limit_test.o: cxx src/load_limit_test.cc || out
 
-build omktr: link out/main.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/recursive_cache.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
-build out/find_test: link out/find_test.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/recursive_cache.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
-build out/ninja_test: link out/ninja_test.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/recursive_cache.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
-build out/strutil_test: link out/strutil_test.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/func.o out/io.o out/log.o out/ninja.o out/parser.o out/regen.o out/recursive_cache.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
+build omktr: link out/main.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/graph_optimization.o out/graph_import.o out/incremental_eval.o out/native_observation.o out/func.o out/io.o out/log.o out/ninja.o out/monitor.o out/parser.o out/regen.o out/recursive_cache.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
+build out/find_test: link out/find_test.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/graph_optimization.o out/graph_import.o out/incremental_eval.o out/native_observation.o out/func.o out/io.o out/log.o out/ninja.o out/monitor.o out/parser.o out/regen.o out/recursive_cache.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
+build out/ninja_test: link out/ninja_test.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/graph_optimization.o out/graph_import.o out/incremental_eval.o out/native_observation.o out/func.o out/io.o out/log.o out/ninja.o out/monitor.o out/parser.o out/regen.o out/recursive_cache.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
+build out/strutil_test: link out/strutil_test.o out/affinity.o out/command.o out/dep.o out/eval.o out/exec.o out/expr.o out/file.o out/file_cache.o out/fileutil.o out/find.o out/flags.o out/graph_optimization.o out/graph_import.o out/incremental_eval.o out/native_observation.o out/func.o out/io.o out/log.o out/ninja.o out/monitor.o out/parser.o out/regen.o out/recursive_cache.o out/regen_dump.o out/rule.o out/stats.o out/stmt.o out/stringprintf.o out/strutil.o out/symtab.o out/timeutil.o out/var.o out/version_generated.o
 build out/load_limit_test: link out/load_limit_test.o
 build tests: phony out/find_test out/ninja_test out/strutil_test out/load_limit_test
 default omktr

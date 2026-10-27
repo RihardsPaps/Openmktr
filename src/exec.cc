@@ -7,6 +7,7 @@
 // Remove changed non-precious recipe outputs on build interruption.
 // Report resolved recipes and freshness decisions in explanation mode.
 // Throttle recipe admission by load average without blocking forward progress.
+// Invalidate shared recipe-expansion observations around filesystem effects.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -650,6 +651,7 @@ class Executor {
         (group_needs_build.empty() ||
          std::any_of(group_needs_build.begin(), group_needs_build.end(),
                      [](bool dirty) { return dirty; }))) {
+      ScopedFilesystemEffect effect;
       if (n.vpath_provider.IsValid()) {
         n.vpath_discarded.store(true, std::memory_order_release);
         struct stat st;
@@ -720,6 +722,7 @@ class Executor {
                             : output_ts;
 
     if (n.vpath_provider.IsValid() && (n.is_phony || !n.cmds.empty())) {
+      ScopedFilesystemEffect effect;
       n.vpath_discarded.store(true, std::memory_order_release);
       struct stat st;
       if (!g_flags.is_dry_run && !g_flags.is_question &&
@@ -1099,8 +1102,10 @@ class Executor {
 
   void DeleteFailedOutput(const DepNode& node, double previous_ts) {
     if (node.delete_on_error && !node.precious &&
-        GetTimestamp(node.output.str()) != previous_ts)
+        GetTimestamp(node.output.str()) != previous_ts) {
+      ScopedFilesystemEffect effect;
       unlink(node.output.c_str());
+    }
   }
 
   CommandEvaluator ce_;
@@ -1161,6 +1166,7 @@ ExecResult Exec(const std::vector<NamedDepNode>& roots,
       continue;
     if (node->intermediate && !g_flags.is_dry_run && !g_flags.is_question &&
         executor.WasBuilt(node->output)) {
+      ScopedFilesystemEffect effect;
       unlink(node->output.str().c_str());
     }
     for (const auto& dep : node->deps)

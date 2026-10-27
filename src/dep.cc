@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Share resolver-local filesystem observations with generated-include proofs.
 // Avoid redundant VPATH filesystem probes for already resolved graph edges.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
@@ -990,14 +991,14 @@ class DepBuilder {
       // already has a rule for it; otherwise VPATH would replace it with the
       // source path and bypass the recursive child build.
       struct stat st;
-      if (stat(input.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
+      if (ObserveFile(input.c_str(), &st) && S_ISDIR(st.st_mode))
         continue;
       std::string resolved = ev_->ResolveVpath(input);
       if (!resolved.empty()) {
         // A VPATH match can itself be a directory in the source tree.  Keep
         // the logical target name in that case: it may be supplied by a
         // recursive rule in the output tree.
-        if (stat(resolved.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
+        if (ObserveFile(resolved.c_str(), &st) && S_ISDIR(st.st_mode))
           continue;
         input = Intern(resolved);
       }
@@ -1495,6 +1496,7 @@ class DepBuilder {
   }
 
   Vars* MergeImplicitRuleVars(Symbol output, Vars* vars) {
+    COLLECT_STATS("pattern variable merge");
     auto exact = rule_vars_.find(output);
     if (exact != rule_vars_.end() && exact->second != vars) {
       if (!vars) {
@@ -1510,23 +1512,50 @@ class DepBuilder {
     if (HasPrefix(target, "./"))
       target.remove_prefix(2);
     std::vector<std::pair<Symbol, Vars*>> patterns;
-    for (const auto& p : rule_vars_) {
+    const bool indexed = g_flags.GraphOptimizationEnabled("evaluation");
+    if (indexed && (indexed_rule_vars_ != rule_vars_.size() ||
+                    indexed_rule_order_ != ev_->rule_vars_order().size())) {
+      pattern_vars_.clear();
+      pattern_definition_order_.clear();
+      for (const auto& entry : rule_vars_)
+        if (entry.first.str().find('%') != std::string_view::npos)
+          pattern_vars_.push_back(entry);
+      const auto& order = ev_->rule_vars_order();
+      for (size_t i = 0; i < order.size(); ++i)
+        pattern_definition_order_[order[i]] = i;
+      indexed_rule_vars_ = rule_vars_.size();
+      indexed_rule_order_ = order.size();
+      LOG_STAT("indexed pattern scopes: %zu patterns among %zu target scopes",
+               pattern_vars_.size(), indexed_rule_vars_);
+    }
+    auto consider = [&](const auto& p) {
       std::string_view key = p.first.str();
       if (key.find('%') == std::string_view::npos)
-        continue;
+        return;
       Pattern pat(key);
       if (!pat.Match(target, 1))
-        continue;
+        return;
       patterns.push_back(p);
+    };
+    if (indexed) {
+      for (const auto& entry : pattern_vars_)
+        consider(entry);
+    } else {
+      for (const auto& entry : rule_vars_)
+        consider(entry);
     }
     if (patterns.empty())
       return vars;
     // Broad patterns form the base for narrower patterns and explicit
     // target assignments. Appends contribute only their local suffix.
-    std::unordered_map<Symbol, size_t> definition_order;
-    const auto& ordered_vars = ev_->rule_vars_order();
-    for (size_t i = 0; i < ordered_vars.size(); ++i)
-      definition_order[ordered_vars[i]] = i;
+    std::unordered_map<Symbol, size_t> uncached_definition_order;
+    if (!indexed) {
+      const auto& ordered_vars = ev_->rule_vars_order();
+      for (size_t i = 0; i < ordered_vars.size(); ++i)
+        uncached_definition_order[ordered_vars[i]] = i;
+    }
+    const auto& definition_order =
+        indexed ? pattern_definition_order_ : uncached_definition_order;
     std::sort(
         patterns.begin(), patterns.end(),
         [target, &definition_order](const auto& a, const auto& b) {
@@ -1882,7 +1911,7 @@ class DepBuilder {
         // even if a depfile gives that source an empty rule of its own.
         struct stat canonical_stat;
         const bool existing_file =
-            stat(canonical.c_str(), &canonical_stat) == 0 &&
+            ObserveFile(canonical.c_str(), &canonical_stat) &&
             S_ISREG(canonical_stat.st_mode);
         const bool plain_source = !canonical_node->has_rule &&
                                   !canonical_node->is_phony &&
@@ -2534,13 +2563,13 @@ class DepBuilder {
         const std::string parent_path = target_path.substr(0, slash + 1);
         struct stat parent_stat;
         const bool local_parent_exists =
-            stat(parent_path.c_str(), &parent_stat) == 0 &&
+            ObserveFile(parent_path.c_str(), &parent_stat) &&
             S_ISDIR(parent_stat.st_mode);
         Symbol parent_symbol = Intern(parent_path);
         const std::string vpath_parent = ev_->ResolveVpath(parent_symbol);
         const bool vpath_parent_exists =
             !vpath_parent.empty() &&
-            stat(vpath_parent.c_str(), &parent_stat) == 0 &&
+            ObserveFile(vpath_parent.c_str(), &parent_stat) &&
             S_ISDIR(parent_stat.st_mode);
         if (!local_parent_exists && !vpath_parent_exists) {
           const bool already_ordered =
@@ -2664,6 +2693,10 @@ class DepBuilder {
   bool silent_all_ = false;
   SymbolSet silent_;
   bool export_all_variables_ = false;
+  size_t indexed_rule_vars_ = static_cast<size_t>(-1);
+  size_t indexed_rule_order_ = static_cast<size_t>(-1);
+  std::vector<std::pair<Symbol, Vars*>> pattern_vars_;
+  std::unordered_map<Symbol, size_t> pattern_definition_order_;
   std::vector<Symbol> extra_prereqs_;
   SymbolSet low_resolution_;
 };

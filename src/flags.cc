@@ -1,5 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
-// Changed by the Openmktr fork, maintained by Rihards Paps and
+// Add configurable Ninja graph optimizations and content-preserving output
+// generation. Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
@@ -41,6 +42,29 @@
 #include "version.h"
 
 Flags g_flags;
+
+bool Flags::GraphOptimizationEnabled(std::string_view feature) const {
+  if (graph_optimizations == GraphOptimizations::kOff ||
+      std::find(disabled_graph_optimizations.begin(),
+                disabled_graph_optimizations.end(),
+                feature) != disabled_graph_optimizations.end())
+    return false;
+  return graph_optimizations == GraphOptimizations::kAggressive ||
+         (feature != "recursive" && feature != "monitor");
+}
+
+std::string Flags::GraphOptimizationIdentity() const {
+  std::string result = "graph-v1";
+  for (const char* feature :
+       {"evaluation", "includes", "recursive", "compact", "monitor"}) {
+    result += ' ';
+    result += feature;
+    result += GraphOptimizationEnabled(feature) ? "=1" : "=0";
+  }
+  result += graph_optimizations == GraphOptimizations::kAggressive ? " full=1"
+                                                                   : " full=0";
+  return result;
+}
 
 // Return the variable name from a command-line assignment.  The suffix is
 // kept here because assignment operators have different precedence rules:
@@ -149,6 +173,14 @@ std::string Flags::LoadLimitOption() const {
 }
 
 void Flags::Parse(int argc, char** argv) {
+  evaluation_context.clear();
+  for (int index = 0; index < argc; ++index) {
+    const std::string argument(argv[index]);
+    if (argument.empty() || argument.front() == '-' ||
+        argument.find('=') == std::string::npos) {
+      evaluation_context += std::to_string(argument.size()) + ":" + argument;
+    }
+  }
   executable_path = GetExecutablePath();
   subkati_args.push_back(executable_path.c_str());
   num_jobs = num_cpus = sysconf(_SC_NPROCESSORS_ONLN);
@@ -473,8 +505,31 @@ void Flags::Parse(int argc, char** argv) {
       enable_debug = true;
     } else if (!strcmp(arg, "--kati_stats")) {
       enable_stat_logs = true;
+    } else if (HasPrefix(arg, "--graph_optimizations=")) {
+      std::string_view value(arg + strlen("--graph_optimizations="));
+      if (value == "off")
+        graph_optimizations = GraphOptimizations::kOff;
+      else if (value == "safe")
+        graph_optimizations = GraphOptimizations::kSafe;
+      else if (value == "aggressive")
+        graph_optimizations = GraphOptimizations::kAggressive;
+      else
+        ERROR("Invalid graph optimization profile: %s", arg);
+      should_propagate = false;
+    } else if (HasPrefix(arg, "--disable_graph_optimization=")) {
+      std::string value(arg + strlen("--disable_graph_optimization="));
+      if (value != "evaluation" && value != "includes" &&
+          value != "recursive" && value != "compact" && value != "monitor")
+        ERROR("Invalid graph optimization feature: %s", value.c_str());
+      disabled_graph_optimizations.push_back(std::move(value));
+      should_propagate = false;
     } else if (!strcmp(arg, "--recursive_cache")) {
       setenv("OMKTR_RECURSIVE_CACHE", "1", 1);
+      should_propagate = false;
+    } else if (ParseCommandLineOptionWithArg("--internal-import-root", argv, &i,
+                                             &import_root) ||
+               ParseCommandLineOptionWithArg("--internal-import-gate", argv, &i,
+                                             &import_gate)) {
       should_propagate = false;
     } else if (!strcmp(arg, "--ninja_stats")) {
       ninja_stats = true;
