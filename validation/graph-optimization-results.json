@@ -2,7 +2,7 @@
   "schema_version": 1,
   "status": "in_progress",
   "complete": false,
-  "updated_utc": "2026-10-27T14:12:52.235146+00:00",
+  "updated_utc": "2026-10-27T15:41:40.615248+00:00",
   "delivery": {
     "branch": "codex/ninja-graph-optimizations",
     "base_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d",
@@ -1605,7 +1605,7 @@
     "future_remote_access": false
   },
   "pc_qualification": {
-    "status": "all_correctness_passed_benchmarks_running",
+    "status": "all_correctness_passed_native_vm_matrix_running",
     "docker_context": "desktop-linux",
     "image_build": {
       "command": [
@@ -1644,6 +1644,10 @@
     "benchmark_worker": {
       "path": "validation/logs/graph-optimizations/pc-controlled-worker-v4.py",
       "sha256": "421774a998e5fc2c410316413d67d0fe8f511652fc63221be74c90a71c6037c5"
+    },
+    "native_vm_preflight": {
+      "path": "validation/logs/graph-optimizations/pc-local-vm/native-preflight.json",
+      "sha256": "e98d3e480f3cc06a8f736b6b71176b14cfbeb60b2457a2c5cbc067cd582beaf2"
     }
   },
   "historical_remote_correctness": {
@@ -1786,5 +1790,73 @@
       },
       "current_cpp_and_build_inputs_match_current_build_manifest": true
     }
-  ]
+  ],
+  "pc_runtime_investigation": {
+    "status": "isolated_local_runtime_qualified_benchmarks_running",
+    "interrupted_docker_campaign": {
+      "status": "incomplete_excluded_from_acceptance",
+      "frontend_status": 125,
+      "container_status": 255,
+      "oom_killed": false,
+      "observation": "WSL VM panicked in unmap_page_range+0x455 during exit_mmap; Windows retained the matching panic at 2026-10-27T14:46:06Z.",
+      "limitation": "The kernel fault is established; the origin of the invalid memory state remains unresolved. Earlier compiler faults are not attributed to it without proof.",
+      "panic": {
+        "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/benchmarks/kernel-panic-20261027-144606.txt",
+        "sha256": "465f7550de4dbe4e04397e335057fbf8b825dccd8c267114d91913dbfbfafb39"
+      },
+      "samples": {
+        "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/benchmarks/linux-j8-interrupted-samples.jsonl",
+        "sha256": "21c343191f3e800730deeb12641dac1a949097598a370c77c3c93be8aae2fa22"
+      },
+      "commands": {
+        "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/benchmarks/linux-j8-interrupted-commands.jsonl",
+        "sha256": "e3585b8c2dd8e581621d8366a454e53d120207c89263272e57859041580eaa66"
+      },
+      "log": {
+        "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/benchmarks/linux-j8-interrupted-clean.log",
+        "sha256": "fc7f295d4f91adcc6ef15dcc611063b74de869196fb01e0911833ff37792955c"
+      }
+    },
+    "local_vm": {
+      "host": "local PC only",
+      "network": "No guest network devices; control bound to loopback virtio-serial only.",
+      "runtime": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/native-runtime.json",
+        "sha256": "16e7c2b51ca6f233e9d09161a54382a5e7d0fd2becc2ef00313cbfcf96067102"
+      },
+      "launch": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/vm-start.json",
+        "sha256": "e5759133cdadf1e034052f2beefe15e318db459e5bb2fefb125d285ddb29a3e3"
+      },
+      "rootfs": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/rootfs-prepared.json",
+        "sha256": "49125e2c329acf582423672fc3b05226650098115aea4a2d8f6dc55feef3f0ca"
+      },
+      "hypervisor_download": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/qemu-download.json",
+        "sha256": "1f3b2ad2d4563c0a4ed949669652398336eb811330fae38795310d19b0992bbb"
+      },
+      "preflight": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/native-preflight.json",
+        "sha256": "e98d3e480f3cc06a8f736b6b71176b14cfbeb60b2457a2c5cbc067cd582beaf2"
+      },
+      "focused_tests": 53,
+      "focused_skips": 0,
+      "focused_log": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/native-focused-complete.log",
+        "sha256": "71c93dfe2794f5422d7a1a769c29184e51ad5ed02680709c4775294b60a97c87"
+      },
+      "state_comparisons": 576,
+      "state_log": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/native-state-differential.json",
+        "sha256": "f04d748c41e4773f62ee0c9e9d702a579f2ab0a8cc65ad6181c353ccfdf079ac"
+      },
+      "cpu": "32 virtual CPUs, 20 GiB RAM, SSE4 model; XSAVE/AVX disabled and software interrupt emulation.",
+      "note": "Both variants share these exact runtime settings and the unchanged LLVM19 rootfs. No measurements are pooled across runtimes. This is a local runtime workaround, not a claim to have repaired WSL or hardware.",
+      "matrix_plan": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/benchmarks/plan.json",
+        "sha256": "d852b9ad82e52acfd0443f2f4b8e2633525489d2254fc08db29b8e624ccb33a3"
+      }
+    }
+  }
 }

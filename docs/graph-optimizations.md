@@ -253,8 +253,9 @@ correctness coverage; they do not satisfy the real-project performance gates.
 The preceding `09b0f15d` binary completed Linux builds and integrity checks at
 both job counts, but its clean-build intervals were inconclusive. Those
 measurements are historical. The current acceptance matrix runs entirely on the
-PC in separate Linux build directories inside a local Docker volume, with the
-same CPU availability for both variants. Every earlier failed or inconclusive
+PC. A captured WSL kernel panic interrupted its Docker campaign; fresh
+measurements use an independently qualified local Linux VM and native ext4
+directories, with the same CPU availability for both variants. Every earlier failed or inconclusive
 run remains separate. FFmpeg uses the same private NASM runtime for both variants
 and retains assembly support and the original release sources.
 Aggressive-mode real-project qualification, legacy-entrypoint comparisons,
