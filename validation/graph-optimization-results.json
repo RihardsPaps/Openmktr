@@ -2,7 +2,7 @@
   "schema_version": 1,
   "status": "in_progress",
   "complete": false,
-  "updated_utc": "2026-10-27T13:56:22.203648+00:00",
+  "updated_utc": "2026-10-27T14:12:52.235146+00:00",
   "delivery": {
     "branch": "codex/ninja-graph-optimizations",
     "base_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d",
@@ -21,25 +21,23 @@
     "implementation_commit": "d6413be13f6338e9c42b80167c2164300e879e4a"
   },
   "build": {
+    "host": "local PC Docker Desktop",
     "baseline_sha256": "192505c0257134de072b3d530c4a059ea12a33197b3cee20b8c219df26a58ce4",
-    "candidate_sha256": "ecbc4c2072f2a93fe681deb21a40fe3a502d6fc746c497f45e35c21f97a64d8d",
+    "candidate_sha256": "b7b75e459d4cf744ae73b970466c6c517473019cfce9573017770918c5eb147d",
+    "current_candidate_sha256": "b7b75e459d4cf744ae73b970466c6c517473019cfce9573017770918c5eb147d",
     "toolchain": "Clang 22.1.8 / musl / libc++ / C++17 / O2 / ThinLTO / static",
     "toolchain_image_id": "sha256:b741c0938effd057d7677c91febf150d69ac9832581c1dd814f84de6600f69b2",
+    "functional_image_id": "sha256:15ce1bbe9e3ace4b7fd4a534a40e721d9621a02b1548ee84effba3464d008d67",
     "source_manifest": {
-      "path": "validation/logs/graph-optimizations/build-candidate-measured-identities.json",
-      "sha256": "5fde2aec5885094779f53b76746685ebbe5a78c18e07e8490c4950f1510d34f7"
+      "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/build-identities.json",
+      "sha256": "6ffb86811b77b993c3711bac72c68cd724374d028ca00fcb39feb5ae63d6d77f"
     },
-    "baseline_source_archive": {
-      "path": "validation/logs/graph-optimizations/baseline-source.tar",
-      "sha256": "d222a4dc79e296390571547b4e108d359d809182087a6ae01ae263a382aaa912"
+    "current_build_manifest": {
+      "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/build-identities.json",
+      "sha256": "6ffb86811b77b993c3711bac72c68cd724374d028ca00fcb39feb5ae63d6d77f"
     },
-    "native_binaries": {
-      "path": "validation/logs/graph-optimizations/native-measured-binaries.json",
-      "sha256": "a5ed982f92e5abc1706f409789b0ba7bcc8f8275e1cb9ceedb9a20e36fadd057"
-    },
-    "revision_override": "Both static builds hold OMKTR_SOURCE_REVISION at the starting revision; binary and per-file source hashes identify the actual candidate.",
-    "current_cpp_and_build_inputs_match_measured_manifest": false,
-    "functional_image_id": "sha256:c32574b34880f9e4a0146ca66a4f1fd5524355782965767aa2f171bd76d59c74",
+    "current_cpp_and_build_inputs_match_current_build_manifest": true,
+    "revision_override": "Both static builds hold OMKTR_SOURCE_REVISION at the starting revision; source and binary hashes identify the actual builds.",
     "preserved_untracked_binary_identities": {
       "ckati": {
         "sha256": "1308a3837ea0ebbc25999448e2793a0dd0cfd41bb64e1c721899970701a17bbf",
@@ -49,14 +47,7 @@
         "sha256": "0b335ddf4496f5dd35b01bfcee4a022132b6f3908f6f720b1677cdbb127d9898",
         "bytes": 17060224
       }
-    },
-    "followup_working_tree_changed": true,
-    "current_candidate_sha256": "b7b75e459d4cf744ae73b970466c6c517473019cfce9573017770918c5eb147d",
-    "current_build_manifest": {
-      "path": "validation/logs/graph-optimizations/build-cooperative-v4-identities.json",
-      "sha256": "c33013a175467d7c9e67edee3dd088b752b6b4cc3ce3debee04d102da59a724f"
-    },
-    "current_cpp_and_build_inputs_match_current_build_manifest": true
+    }
   },
   "features": [
     {
@@ -145,7 +136,13 @@
     }
   ],
   "correctness": {
+    "host": "local PC Docker Desktop",
+    "status": "passed",
     "candidate_sha256": "b7b75e459d4cf744ae73b970466c6c517473019cfce9573017770918c5eb147d",
+    "preflight": {
+      "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/preflight.json",
+      "sha256": "de751d21be085a81f4519625e10b4e50756842d2e73318066bcc5f4482c8045a"
+    },
     "portable": {
       "status": "passed",
       "regression_default": 858,
@@ -153,28 +150,36 @@
       "correctness_per_profile": 174,
       "focused": 53,
       "evidence": {
-        "path": "validation/logs/graph-optimizations/cooperative-v4-portable.log",
-        "sha256": "6c5622c653841a7cf18c943b5f09d81b8b36eb12a2bdd85a31b87ac3471a03df"
+        "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/portable.log",
+        "sha256": "36066be919a12dcb1c593c7311c340ed0e9f140a85ff5c63b99952347a1ef372"
       }
     },
     "sanitizers": {
       "status": "passed",
       "asan_options": "detect_leaks=0",
+      "focused": 53,
       "evidence": {
-        "path": "validation/logs/graph-optimizations/cooperative-v4-sanitizer.log",
-        "sha256": "aca28460e36d804b15e224dffeccff34d9969891f9846cd09dd4d28c227ca39d"
+        "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/sanitizers.log",
+        "sha256": "695393cab46af3d0b193f4d9e408b68b8f7a600642a1750a402849e86e1340fb"
       },
       "commands": {
-        "path": "validation/logs/graph-optimizations/cooperative-v4-sanitizer-commands.jsonl",
-        "sha256": "e3421a68d9636613e68e1335442b6319984dea65a6b3c734b0e754981e50d2b9"
+        "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/sanitizer-commands.jsonl",
+        "sha256": "165118a8784d297bb39aa82b2c529af99e38552db4d6794c3577c570d09b6d0e"
       }
     },
-    "native_focused": {
+    "formatting": {
+      "status": "passed",
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/sanitizers.log",
+        "sha256": "695393cab46af3d0b193f4d9e408b68b8f7a600642a1750a402849e86e1340fb"
+      }
+    },
+    "static_focused": {
       "status": "passed",
       "cases": 53,
       "evidence": {
-        "path": "validation/logs/graph-optimizations/cooperative-v4-static-focused.log",
-        "sha256": "fc6c9bc04185e42118419a7ccd0cf2c9851f9764a514454b3fed8c1a56418138"
+        "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/static-focused.log",
+        "sha256": "6b5080f906d8f21f9819966c00713dbe79a9d1ad03c98a4ca09e54cbff9d970a"
       }
     },
     "state_differential": {
@@ -182,39 +187,39 @@
       "comparisons": 576,
       "failures": 0,
       "evidence": {
-        "path": "validation/logs/graph-optimizations/cooperative-v4-state-differential.json",
+        "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/state-differential.json",
         "sha256": "f04d748c41e4773f62ee0c9e9d702a579f2ab0a8cc65ad6181c353ccfdf079ac"
       }
     },
     "external": {
       "status": "passed",
+      "scenarios_per_combination": 27,
       "combinations": [
         "safe-j1",
         "safe-j4",
         "aggressive-j1",
         "aggressive-j4"
       ],
-      "scenarios_per_combination": 27,
       "evidence": {
-        "path": "validation/logs/graph-optimizations/cooperative-v4-external-results.json",
-        "sha256": "d2bd8dc23ec1ec7cba95ffc86456b96b34ac9b854468b01492df1470fada13c3"
+        "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/external-results.json",
+        "sha256": "83426612714d2282cedfa0533813280ab55bb86e967402706bf8c651a247f568"
       },
       "reports": [
         {
-          "path": "validation/logs/graph-optimizations/cooperative-v4-external-aggressive-j1-report.json",
-          "sha256": "f0d807488d8816a1e5fa1670607ccf7f16d61a5b899d821c30f2e177695e8021"
+          "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/external-aggressive-j1-report.json",
+          "sha256": "fd046f23cca5614d05bfd9bdc19e6e31bbd0b92e6b8aa6ce579f325e51d64c7f"
         },
         {
-          "path": "validation/logs/graph-optimizations/cooperative-v4-external-aggressive-j4-report.json",
-          "sha256": "9f0464c62819c42d0e4e00f849035cbcbd104517463aeb93b3f7f7612f4756c0"
+          "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/external-aggressive-j4-report.json",
+          "sha256": "e8f19bbd843434affd32d3e7b11e159e0c9ca467ce8e8856e2e03d00e173b9b0"
         },
         {
-          "path": "validation/logs/graph-optimizations/cooperative-v4-external-safe-j1-report.json",
-          "sha256": "194b202cae166856b952d13efb9f6f51e5d37c06ab0803dce700480e42b48eea"
+          "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/external-safe-j1-report.json",
+          "sha256": "d4391c181f12f8016aaf0685ae894d7fc916e2b2c09bd51b6e2a2323f468f229"
         },
         {
-          "path": "validation/logs/graph-optimizations/cooperative-v4-external-safe-j4-report.json",
-          "sha256": "b8d97ae6b5e91007b957f72c1dec0acf7afd3fddbe0046c148e0f9884e6c0b68"
+          "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/external-safe-j4-report.json",
+          "sha256": "87d5f1997f8924a7026e2f980e53593a190cfeec9629882dd16122e6a33b0077"
         }
       ]
     },
@@ -222,28 +227,20 @@
       "status": "passed",
       "repeats": 7,
       "evidence": {
-        "path": "validation/logs/graph-optimizations/cooperative-v4-synthetic-report.json",
-        "sha256": "149529c40e8d5e2256078fc3d3ac954267a5f78b57fdbc1ccd72c474b1c39e30"
+        "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/synthetic.log",
+        "sha256": "da4489fab8213add447640e97a256cf18ca21880ffd82f7ca369f5c55bf92bd5"
       }
-    },
-    "formatting": {
-      "status": "passed"
-    },
-    "limits": [
-      "The agreed real-project performance matrix remains incomplete."
-    ],
-    "preflight": {
-      "path": "validation/logs/graph-optimizations/cooperative-v4-preflight.json",
-      "sha256": "9a93b056711f053f1531c0293f0be27b506390436f944fd1477002ebfc5b219e"
     },
     "incremental_harness": {
       "status": "passed",
       "evidence": {
-        "path": "validation/logs/graph-optimizations/cooperative-v4-incremental-harness.log",
-        "sha256": "058745be0287c553993992665429a9680e234fc25e4bd5a34accbf9c070f2911"
+        "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/harness.log",
+        "sha256": "90c1c7e4d3ff2cb442dd51ab6d3e0025fbd0fb85ebcc7fcf36d38a089ec8416f"
       }
     },
-    "qualification": "Historical preceding remote-builder results; all required checks are being rerun on the PC."
+    "limits": [
+      "Correctness checks do not satisfy the real-project performance acceptance gates."
+    ]
   },
   "performance": {
     "acceptance": "incomplete",
@@ -572,7 +569,9 @@
             "path": "validation/logs/graph-optimizations/ffmpeg-safe-measured/samples.jsonl",
             "sha256": "3246dfe4a3c7bef178013575f37bdd7f6bbbe4cf053937b56dab16f704c69daa"
           }
-        ]
+        ],
+        "qualification": "Historical superseded experiment; excluded from current PC acceptance.",
+        "accepted_for_current_candidate": false
       },
       {
         "name": "linux-safe-measured",
@@ -755,7 +754,9 @@
             "sha256": "a43187277f919ba662f5152e4a950844badcd9a082ad886d8bcc48bc7b6f6968"
           }
         ],
-        "investigation": "Clang 18.1.3 parser crashed with frontend exit 139 compiling mm/slub.c. Three exact standalone compile reruns pass; root cause remains unresolved. Failed run retained; no release-source patches."
+        "investigation": "Clang 18.1.3 parser crashed with frontend exit 139 compiling mm/slub.c. Three exact standalone compile reruns pass; root cause remains unresolved. Failed run retained; no release-source patches.",
+        "qualification": "Historical superseded experiment; excluded from current PC acceptance.",
+        "accepted_for_current_candidate": false
       },
       {
         "name": "linux-safe-llvm19",
@@ -922,7 +923,9 @@
             "path": "validation/logs/graph-optimizations/linux-safe-llvm19/source-integrity.json",
             "sha256": "3afb9634fc8bed0fc1b638e43c8808803b800ed7954c99920a6678e726716219"
           }
-        ]
+        ],
+        "qualification": "Historical superseded experiment; excluded from current PC acceptance.",
+        "accepted_for_current_candidate": false
       }
     ],
     "retained_nonacceptance_evidence": [
@@ -1018,9 +1021,8 @@
     }
   ],
   "outstanding": [
-    "Complete PC-only portable, sanitizer, focused, external, state-differential and synthetic validation with fresh local binaries.",
-    "Qualify local clean, no-op and single-source improvements for both projects, job counts and profiles with the unchanged paired protocol.",
-    "Complete local legacy regression checks, feature ablations, separate Ninja runtimes and monitored cold/warm measurements.",
+    "Qualify PC clean, no-op and single-source improvements for both projects, job counts and profiles with the unchanged paired protocol.",
+    "Complete PC legacy regression checks, feature ablations, separate Ninja runtimes and monitored cold/warm measurements.",
     "Publish raw evidence, create the PR, pass all checks and merge."
   ],
   "validation_followup": {
@@ -1603,7 +1605,7 @@
     "future_remote_access": false
   },
   "pc_qualification": {
-    "status": "portable_running",
+    "status": "all_correctness_passed_benchmarks_running",
     "docker_context": "desktop-linux",
     "image_build": {
       "command": [
@@ -1625,7 +1627,164 @@
     "volume": "openmktr-graph-pc-v4",
     "acceptance": "incomplete",
     "source_snapshot": "candidate-cooperative-v4-source.tar",
-    "static_binaries": "fresh local baseline and candidate builds pending",
-    "note": "Previous remote-build artifacts and measurements are historical; the current acceptance campaign will be entirely local."
-  }
+    "static_binaries": "Both rebuilt locally with identical flags; baseline and candidate hashes reproduced byte for byte.",
+    "note": "Previous remote-build artifacts and measurements are historical; the current acceptance campaign will be entirely local.",
+    "preflight": {
+      "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/preflight.json",
+      "sha256": "de751d21be085a81f4519625e10b4e50756842d2e73318066bcc5f4482c8045a"
+    },
+    "matrix_plan": {
+      "path": "validation/logs/graph-optimizations/pc-cooperative-v4-gzip-context/benchmarks/plan.json",
+      "sha256": "292f714e36e60b1a947c9af312c4c3fcb7d019f47b4c86d51b986946214d5e2d"
+    },
+    "benchmark_controller": {
+      "path": "validation/logs/graph-optimizations/pc-run-controlled-v4.py",
+      "sha256": "eca71d8bda18250fef00a1d49d7b43788ea808163efcd6be0e436dc07aeb8ecd"
+    },
+    "benchmark_worker": {
+      "path": "validation/logs/graph-optimizations/pc-controlled-worker-v4.py",
+      "sha256": "421774a998e5fc2c410316413d67d0fe8f511652fc63221be74c90a71c6037c5"
+    }
+  },
+  "historical_remote_correctness": {
+    "candidate_sha256": "b7b75e459d4cf744ae73b970466c6c517473019cfce9573017770918c5eb147d",
+    "portable": {
+      "status": "passed",
+      "regression_default": 858,
+      "regression_aggressive": 858,
+      "correctness_per_profile": 174,
+      "focused": 53,
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/cooperative-v4-portable.log",
+        "sha256": "6c5622c653841a7cf18c943b5f09d81b8b36eb12a2bdd85a31b87ac3471a03df"
+      }
+    },
+    "sanitizers": {
+      "status": "passed",
+      "asan_options": "detect_leaks=0",
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/cooperative-v4-sanitizer.log",
+        "sha256": "aca28460e36d804b15e224dffeccff34d9969891f9846cd09dd4d28c227ca39d"
+      },
+      "commands": {
+        "path": "validation/logs/graph-optimizations/cooperative-v4-sanitizer-commands.jsonl",
+        "sha256": "e3421a68d9636613e68e1335442b6319984dea65a6b3c734b0e754981e50d2b9"
+      }
+    },
+    "native_focused": {
+      "status": "passed",
+      "cases": 53,
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/cooperative-v4-static-focused.log",
+        "sha256": "fc6c9bc04185e42118419a7ccd0cf2c9851f9764a514454b3fed8c1a56418138"
+      }
+    },
+    "state_differential": {
+      "status": "passed",
+      "comparisons": 576,
+      "failures": 0,
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/cooperative-v4-state-differential.json",
+        "sha256": "f04d748c41e4773f62ee0c9e9d702a579f2ab0a8cc65ad6181c353ccfdf079ac"
+      }
+    },
+    "external": {
+      "status": "passed",
+      "combinations": [
+        "safe-j1",
+        "safe-j4",
+        "aggressive-j1",
+        "aggressive-j4"
+      ],
+      "scenarios_per_combination": 27,
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/cooperative-v4-external-results.json",
+        "sha256": "d2bd8dc23ec1ec7cba95ffc86456b96b34ac9b854468b01492df1470fada13c3"
+      },
+      "reports": [
+        {
+          "path": "validation/logs/graph-optimizations/cooperative-v4-external-aggressive-j1-report.json",
+          "sha256": "f0d807488d8816a1e5fa1670607ccf7f16d61a5b899d821c30f2e177695e8021"
+        },
+        {
+          "path": "validation/logs/graph-optimizations/cooperative-v4-external-aggressive-j4-report.json",
+          "sha256": "9f0464c62819c42d0e4e00f849035cbcbd104517463aeb93b3f7f7612f4756c0"
+        },
+        {
+          "path": "validation/logs/graph-optimizations/cooperative-v4-external-safe-j1-report.json",
+          "sha256": "194b202cae166856b952d13efb9f6f51e5d37c06ab0803dce700480e42b48eea"
+        },
+        {
+          "path": "validation/logs/graph-optimizations/cooperative-v4-external-safe-j4-report.json",
+          "sha256": "b8d97ae6b5e91007b957f72c1dec0acf7afd3fddbe0046c148e0f9884e6c0b68"
+        }
+      ]
+    },
+    "synthetic": {
+      "status": "passed",
+      "repeats": 7,
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/cooperative-v4-synthetic-report.json",
+        "sha256": "149529c40e8d5e2256078fc3d3ac954267a5f78b57fdbc1ccd72c474b1c39e30"
+      }
+    },
+    "formatting": {
+      "status": "passed"
+    },
+    "limits": [
+      "The agreed real-project performance matrix remains incomplete."
+    ],
+    "preflight": {
+      "path": "validation/logs/graph-optimizations/cooperative-v4-preflight.json",
+      "sha256": "9a93b056711f053f1531c0293f0be27b506390436f944fd1477002ebfc5b219e"
+    },
+    "incremental_harness": {
+      "status": "passed",
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/cooperative-v4-incremental-harness.log",
+        "sha256": "058745be0287c553993992665429a9680e234fc25e4bd5a34accbf9c070f2911"
+      }
+    },
+    "qualification": "Historical preceding remote-builder results; all required checks are being rerun on the PC."
+  },
+  "historical_builds": [
+    {
+      "baseline_sha256": "192505c0257134de072b3d530c4a059ea12a33197b3cee20b8c219df26a58ce4",
+      "candidate_sha256": "ecbc4c2072f2a93fe681deb21a40fe3a502d6fc746c497f45e35c21f97a64d8d",
+      "toolchain": "Clang 22.1.8 / musl / libc++ / C++17 / O2 / ThinLTO / static",
+      "toolchain_image_id": "sha256:b741c0938effd057d7677c91febf150d69ac9832581c1dd814f84de6600f69b2",
+      "source_manifest": {
+        "path": "validation/logs/graph-optimizations/build-candidate-measured-identities.json",
+        "sha256": "5fde2aec5885094779f53b76746685ebbe5a78c18e07e8490c4950f1510d34f7"
+      },
+      "baseline_source_archive": {
+        "path": "validation/logs/graph-optimizations/baseline-source.tar",
+        "sha256": "d222a4dc79e296390571547b4e108d359d809182087a6ae01ae263a382aaa912"
+      },
+      "native_binaries": {
+        "path": "validation/logs/graph-optimizations/native-measured-binaries.json",
+        "sha256": "a5ed982f92e5abc1706f409789b0ba7bcc8f8275e1cb9ceedb9a20e36fadd057"
+      },
+      "revision_override": "Both static builds hold OMKTR_SOURCE_REVISION at the starting revision; binary and per-file source hashes identify the actual candidate.",
+      "current_cpp_and_build_inputs_match_measured_manifest": false,
+      "functional_image_id": "sha256:c32574b34880f9e4a0146ca66a4f1fd5524355782965767aa2f171bd76d59c74",
+      "preserved_untracked_binary_identities": {
+        "ckati": {
+          "sha256": "1308a3837ea0ebbc25999448e2793a0dd0cfd41bb64e1c721899970701a17bbf",
+          "bytes": 854648
+        },
+        "ckati-sanitized": {
+          "sha256": "0b335ddf4496f5dd35b01bfcee4a022132b6f3908f6f720b1677cdbb127d9898",
+          "bytes": 17060224
+        }
+      },
+      "followup_working_tree_changed": true,
+      "current_candidate_sha256": "b7b75e459d4cf744ae73b970466c6c517473019cfce9573017770918c5eb147d",
+      "current_build_manifest": {
+        "path": "validation/logs/graph-optimizations/build-cooperative-v4-identities.json",
+        "sha256": "c33013a175467d7c9e67edee3dd088b752b6b4cc3ce3debee04d102da59a724f"
+      },
+      "current_cpp_and_build_inputs_match_current_build_manifest": true
+    }
+  ]
 }

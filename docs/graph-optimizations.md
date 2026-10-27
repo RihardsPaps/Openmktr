@@ -246,13 +246,15 @@ their current qualification is recorded separately from the historical results.
 The current `b7b75e45` binary passes the full portable and required sanitizer
 gates, changed-file formatting, all 53 focused graph tests, 576 seeded state
 comparisons, and all 27 external incremental scenarios in both safe and
-aggressive modes at j1 and j4 on the independent AMD Linux builder. The portable
+aggressive modes at j1 and j4 on the local PC using the Chimera image. Both
+static binaries were rebuilt on the PC with identical compiler flags. The portable
 gate includes 858 regression scenarios in each profile. These checks establish
 correctness coverage; they do not satisfy the real-project performance gates.
 The preceding `09b0f15d` binary completed Linux builds and integrity checks at
-both job counts, but its clean-build intervals were inconclusive. A new matrix
-uses separate native ext4 workspaces, consistent CPU placement and a common
-performance governor for both variants. Every earlier failed or inconclusive
+both job counts, but its clean-build intervals were inconclusive. Those
+measurements are historical. The current acceptance matrix runs entirely on the
+PC in separate Linux build directories inside a local Docker volume, with the
+same CPU availability for both variants. Every earlier failed or inconclusive
 run remains separate. FFmpeg uses the same private NASM runtime for both variants
 and retains assembly support and the original release sources.
 Aggressive-mode real-project qualification, legacy-entrypoint comparisons,
