@@ -243,13 +243,18 @@ are kept separate from every previous host, binary and failed attempt.
 
 General statement replay and native-observation validation are implemented;
 their current qualification is recorded separately from the historical results.
-The preceding `09b0f15d` binary passes the portable and sanitizer gates, 576 seeded state
+The current `b7b75e45` binary passes the full portable and required sanitizer
+gates, changed-file formatting, all 53 focused graph tests, 576 seeded state
 comparisons, and all 27 external incremental scenarios in both safe and
-aggressive modes at j1 and j4 on the independent AMD Linux builder. These checks
-establish correctness coverage; they do not satisfy the real-project performance
-requirements. A storage-capacity interruption during discarded warmups requires
-a fresh performance matrix on a separate native ext4 disk.
-The interrupted run and its evidence are retained separately.
+aggressive modes at j1 and j4 on the independent AMD Linux builder. The portable
+gate includes 858 regression scenarios in each profile. These checks establish
+correctness coverage; they do not satisfy the real-project performance gates.
+The preceding `09b0f15d` binary completed Linux builds and integrity checks at
+both job counts, but its clean-build intervals were inconclusive. A new matrix
+uses separate native ext4 workspaces, consistent CPU placement and a common
+performance governor for both variants. Every earlier failed or inconclusive
+run remains separate. FFmpeg uses the same private NASM runtime for both variants
+and retains assembly support and the original release sources.
 Aggressive-mode real-project qualification, legacy-entrypoint comparisons,
 real-project feature ablations, separate Ninja-runtime comparisons and monitored
 cold/warm performance qualification also remain outstanding. Passing functional
