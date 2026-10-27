@@ -938,6 +938,54 @@ class GraphOptimizations(unittest.TestCase):
                 self.run_tool("monitor", "stop", check=False)
                 self.root = original_root
 
+    def test_opaque_recursion_inherits_profiles_and_feature_ablations(self):
+        (self.root / "child/grand").mkdir(parents=True)
+        self.makefile(".EXPORT_ALL_VARIABLES:\n"
+                      "export KATI_GRAPH_SETTINGS := invalid-make-export\n"
+                      "all:\n\t@$(MAKE) --kati_stats -C child all\n")
+        (self.root / "child/Makefile").write_text(
+            ".NOTPARALLEL:\nall:\n\t@$(MAKE) --kati_stats -C grand all\n")
+        (self.root / "child/grand/Makefile").write_text(
+            "all:\n\t@printf '%s\\n' \"$$KATI_GRAPH_SETTINGS\" "
+            "'$(origin KATI_GRAPH_SETTINGS)' '$(MAKE)' > result\n")
+        cases = [
+            (["--graph_optimizations=off"], "v1:off",
+             "evaluation=0 includes=0 recursive=0 compact=0 monitor=0 full=0"),
+            (["--graph_optimizations=safe"], "v1:safe",
+             "evaluation=1 includes=1 recursive=0 compact=1 monitor=0 full=0"),
+            (["--graph_optimizations=aggressive", "--disable_graph_optimization=evaluation",
+              "--disable_graph_optimization=compact"], "v1:aggressive:evaluation:compact",
+             "evaluation=0 includes=1 recursive=1 compact=0 monitor=1 full=1"),
+        ]
+        for jobs in (1, 8, 16):
+            for options, transport, settings in cases:
+                for ninja in (False, True):
+                    with self.subTest(jobs=jobs, options=options, ninja=ninja):
+                        arguments = ["--kati_stats", f"-j{jobs}", *options, "all"]
+                        if ninja:
+                            output = self.run_tool("--ninja", "--regen", *arguments).stdout
+                            output += subprocess.run(
+                                ["sh", "./ninja.sh", f"-j{jobs}"], cwd=self.root,
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                timeout=30, check=True).stdout
+                        else:
+                            output = self.run_tool(*arguments).stdout
+                        observations = [line for line in output.splitlines()
+                                        if "graph optimization settings:" in line]
+                        self.assertEqual(len(observations), 3, output)
+                        self.assertTrue(all(line.endswith(settings) for line in observations), output)
+                        self.assertEqual((self.root / "child/grand/result").read_text().splitlines(),
+                                         [transport, "undefined", str(BINARY)])
+
+    def test_invalid_inherited_graph_controls_fall_back_and_cli_profile_wins(self):
+        self.makefile("all:\n\t@:\n")
+        env = dict(os.environ, KATI_GRAPH_SETTINGS="v99:aggressive:unknown")
+        output = self.run_tool("--kati_stats", env=env).stdout
+        self.assertIn("ignored invalid inherited graph controls", output)
+        self.assertIn("evaluation=0 includes=0 recursive=0 compact=0 monitor=0 full=0", output)
+        output = self.run_tool("--kati_stats", "--graph_optimizations=aggressive", env=env).stdout
+        self.assertIn("evaluation=1 includes=1 recursive=1 compact=1 monitor=1 full=1", output)
+
     def test_profile_and_ablation_validation(self):
         self.makefile("all:\n\t@:\n")
         for option in ("--graph_optimizations=unknown", "--disable_graph_optimization=unknown"):

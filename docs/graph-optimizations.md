@@ -9,6 +9,13 @@ Use repeatable `--disable_graph_optimization=FEATURE` options for comparisons.
 Features are `evaluation`, `includes`, `recursive`, `compact`, and `monitor`.
 Disabling a feature takes precedence over the selected profile. Generation
 arguments and the executable identity invalidate graph reuse when settings change.
+Profiles and explicit feature exclusions also reach opaque recursive Openmktr
+children. Child command-line profiles override the inherited profile; inherited
+feature exclusions still apply. The private `KATI_GRAPH_SETTINGS` channel keeps
+`MAKE` as one executable pathname and avoids adding tool-specific options to
+`MAKEFLAGS`. It is excluded from Make's environment-variable bootstrap and
+reserved against Make export materialization. An unknown transport version
+disables optimizations unless a valid command-line profile selects them.
 Compact emission places the common native recipe launcher in a shared rule and
 keeps each quoted script, cleanup arguments and depfile in edge bindings. Large
 response files and outputs requiring special handling retain ordinary emission.
@@ -231,6 +238,12 @@ invocation and recorded separately in the phase data. Following no-op and
 incremental scenarios retain that monitor; shutdown and artifact verification
 are outside the timers. `--ninja-dir=DIR` selects one Ninja runtime for both
 variants and records the supplied runtime bundle's file hashes.
+For incremental feature ablations, `--retained` initializes separate build trees
+once and then measures no-op, single-source, missing-object and graph-change
+pairs. These reports are explicitly marked as retained state and contain no
+clean-build intervals. Initialization, including explicit monitor startup, is
+retained in the command journal outside those intervals. Warmups are still
+discarded, measured pairs still alternate, and each sample keeps distinct logs.
 `--toolchain-dir=DIR --llvm-version=19` selects a private external LLVM
 executable directory for both variants and records its wrapper and manifest
 hashes. It does not change Openmktr's GNU-free build toolchain.

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "status": "in_progress",
   "complete": false,
-  "updated_utc": "2026-10-27T03:36:05.819969+00:00",
+  "updated_utc": "2026-10-27T04:18:45.333701+00:00",
   "delivery": {
     "branch": "codex/ninja-graph-optimizations",
     "base_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d",
@@ -39,7 +39,7 @@
     },
     "revision_override": "Both static builds hold OMKTR_SOURCE_REVISION at the starting revision; binary and per-file source hashes identify the actual candidate.",
     "current_cpp_and_build_inputs_match_measured_manifest": false,
-    "functional_image_id": "sha256:ab1b8de9c2138485f83db0e9e4f1597846120cd8659530bc61e44e3f05ab95bf",
+    "functional_image_id": "sha256:2597cb6b872de0aad33ec6eb92d4701a5b18301f555c2809153daad8a0fe748e",
     "preserved_untracked_binary_identities": {
       "ckati": {
         "sha256": "1308a3837ea0ebbc25999448e2793a0dd0cfd41bb64e1c721899970701a17bbf",
@@ -51,10 +51,10 @@
       }
     },
     "followup_working_tree_changed": true,
-    "current_candidate_sha256": "a20c690102ac6a651a21c3cf134501bdc3d12a2d8c2a5dc2c07cf33930a487e3",
+    "current_candidate_sha256": "628620e5564513bae574dffd794044eeda0399d9c73687c420b9b660e274f622",
     "current_build_manifest": {
-      "path": "validation/logs/graph-optimizations/build-cache-v2-nas-identities.json",
-      "sha256": "0cb80facad6e38acf23f7dcb6262b0148a444f43ad01ca93d4018d3987fb0f77"
+      "path": "validation/logs/graph-optimizations/build-transport-v2-nas-identities.json",
+      "sha256": "3a018bf7234cdd57e2b436d9833c35a73add7f81a4102fb5d88f6db3782bbb67"
     },
     "current_cpp_and_build_inputs_match_current_build_manifest": true
   },
@@ -994,6 +994,16 @@
       "evidence_root": "validation/logs/graph-optimizations/cache-v2-external-native",
       "qualification": false,
       "release_blocked": false
+    },
+    {
+      "finding": "Opaque recursive invocations originally reverted to safe defaults, defeating full-build feature ablations. Reproduced with parent off and child statistics. Fixed using private versioned graph settings; reserved against ordinary and export-all Make materialization. Direct/Ninja nested recursion coverage passes at j1/j8/j16.",
+      "fixed": true
+    },
+    {
+      "finding": "Interrupted independent-builder cache-v2 campaign before its first measured clean result to fix recursive feature propagation. Two discarded warmup pairs (20 scenario rows), zero measured rows; source integrity passes. All raw evidence retained.",
+      "root": "/home/nasadmin/.cache/omktr-graph-20261027-057a084f/evidence/defaults-cache-v2/linux-safe",
+      "container": "openmktr-graph-nas-defaults-cache-v2",
+      "qualification": false
     }
   ],
   "outstanding": [
@@ -1003,38 +1013,63 @@
     "Monitored startup-inclusive cold and retained warm real-project measurements remain unrun."
   ],
   "validation_followup": {
-    "status": "external_comparison_pending",
+    "status": "exact-candidate external comparison pending",
     "updated_utc": "2026-10-27T03:32:10.792772+00:00",
-    "binary_sha256": "a20c690102ac6a651a21c3cf134501bdc3d12a2d8c2a5dc2c07cf33930a487e3",
+    "binary_sha256": "628620e5564513bae574dffd794044eeda0399d9c73687c420b9b660e274f622",
     "portable_gate": "passed",
     "sanitizer_gate": "passed",
     "regression_default": 858,
     "regression_aggressive": 858,
-    "focused_graph_tests": 45,
+    "focused_graph_tests": 47,
     "changed_cpp_formatting": "passed",
     "logs": [
       {
-        "path": "validation/logs/graph-optimizations/state-replay-portable-9.log",
-        "sha256": "e1147ab5cdc16bde7530602882e44c274666178b2960c606135bb9079f7414d0"
+        "path": "validation/logs/graph-optimizations/state-replay-portable-11.log",
+        "sha256": "8c53d1cd79eb1b52f530cb49bfe2865190dd28f740e2fbf5b2311c6c2a980bba"
       },
       {
-        "path": "validation/logs/graph-optimizations/state-replay-sanitizer-7.log",
-        "sha256": "24a8630a8ef838fa3c23f069637c42cc2069432cef4df53a1893f10e8122429c"
-      },
-      {
-        "path": "validation/logs/graph-optimizations/state-replay-19-focused.log",
-        "sha256": "bf70ef32e370502ab3a4ae94c49b1e7f1dcf31f19de39aec3d85d2de0a0d6da6"
+        "path": "validation/logs/graph-optimizations/state-replay-sanitizer-9.log",
+        "sha256": "7e87654f4d95ee349d72be8764c4ceab29f9e84f47e6701526d31aa9a180c4d4"
       }
-    ]
+    ],
+    "synthetic_comparison": {
+      "path": "validation/logs/graph-optimizations/synthetic-cache-v2.json",
+      "sha256": "f827f541944e17df74d824767b1682b12743103e1a2d22ec89829fb75f5c8aac"
+    },
+    "additional_state_differential": {
+      "path": "validation/logs/graph-optimizations/state-differential.json",
+      "sha256": "e446a252b73cea22cc5cfca6fc471badc6aa5208f64f9163a882f7e9fc55f778",
+      "comparisons": 576,
+      "seeds": 48,
+      "iterations": 6,
+      "status": "passed",
+      "driver": {
+        "path": "validation/logs/graph-optimizations/state-differential.py",
+        "sha256": "ab874907fa5ac3231a9db3b092a51e9b9dfe83fb59dd83a297cad10eb1e84e37"
+      }
+    },
+    "external_differential": {
+      "status": "independent-builder repeat pending",
+      "first_attempt": {
+        "path": "validation/logs/graph-optimizations/cache-v2-external-native/safe-j1/report.json",
+        "sha256": "5e59e0dccd42fb76e4518f2b73d12da50a3a0fe1501a132b4883722a2d9b80f7"
+      },
+      "repeat_results": {
+        "path": "validation/logs/graph-optimizations/cache-v2-external-native-repeat/results.json",
+        "sha256": "ea176f3758321d0e7a018b7b4aff3bc15660a77e2de0a7338c503608455c90f7"
+      },
+      "reason": "Clock-skew warnings and extra work in GNU Make reference baseline no-op at safe-j1; retain all attempts. Safe-j4 and aggressive-j1/j4 repeat comparisons pass."
+    },
+    "benchmark_harness_tests": 5
   },
   "performance_followup": {
-    "status": "running",
+    "status": "profiling queued after external comparison",
     "builder": "nas / native Linux / AMD Ryzen 7 5800X / 16 threads",
     "toolchain_image_id": "sha256:42bae58178c98432973444c1b5b7de9b5e847f1fce7372c73a1034749902c050",
-    "root": "/home/nasadmin/.cache/omktr-graph-20261027-057a084f/evidence/defaults-cache-v2",
-    "container": "openmktr-graph-nas-defaults-cache-v2",
-    "binary_sha256": "a20c690102ac6a651a21c3cf134501bdc3d12a2d8c2a5dc2c07cf33930a487e3",
-    "qualification": "Fresh independent-builder measurements; never pooled with previous hosts or candidates."
+    "root": "/home/nasadmin/.cache/omktr-graph-20261027-057a084f/evidence/profiles-transport-v2",
+    "container": "openmktr-graph-nas-profiles-transport-v2",
+    "binary_sha256": "628620e5564513bae574dffd794044eeda0399d9c73687c420b9b660e274f622",
+    "qualification": "Instrumented diagnostics only. Starting-revision, candidate-off and candidate-safe are separate fresh trees. No qualification pairs yet for this candidate."
   },
   "cache_correctness_followup": {
     "structural_stamp_checksum": "KAT4, bounded and sealed; mutable validated timestamp checkpoint excluded",
@@ -1045,6 +1080,13 @@
     ],
     "nonregular_cache_reads": "nonblocking regular-file validation",
     "publication_failure": "optional cache misses preserve existing files and unexpected directories",
-    "negative_observations": "ENOENT distinguished from ENOTDIR and permission/stat uncertainty"
+    "negative_observations": "ENOENT distinguished from ENOTDIR and permission/stat uncertainty",
+    "recursive_feature_transport": "Private KATI_GRAPH_SETTINGS v1; hidden from Make variable bootstrap and reserved against export materialization; child argv profile wins, explicit exclusions inherit; invalid versions conservatively disable optimizations."
+  },
+  "benchmark_retained_mode": {
+    "scope": "Incremental-only feature ablations, two separate initialized trees per job/entrypoint; no clean intervals",
+    "logs": "Each sample has a distinct log directory; setup and optional monitor start retained separately",
+    "correctness": "Same artifact, rebuild, unrelated-output and source-integrity checks as fresh mode",
+    "tests": "Portable integration verifies off/aggressive comparison, warmup filtering, unique retained logs and monitor shutdown"
   }
 }

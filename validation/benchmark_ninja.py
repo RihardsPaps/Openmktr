@@ -118,6 +118,8 @@ def main():
                         help="private external LLVM executable directory for both variants")
     parser.add_argument("--monitor", action="store_true",
                         help="explicitly start a candidate monitor; include startup in clean timing")
+    parser.add_argument("--retained", action="store_true",
+                        help="reuse separately initialized build trees for incremental-only ablations; never reports clean timings")
     parser.add_argument("--baseline-revision", required=True)
     parser.add_argument("--candidate-revision", required=True)
     parser.add_argument("--project", choices=("ffmpeg", "linux", "synthetic"), required=True)
@@ -151,6 +153,7 @@ def main():
                 for name, command in {"clang": [f"clang-{args.llvm_version}", "--version"],
                                       "ninja": ["ninja", "--version"]}.items()}
     metadata = dict(project=args.project, jobs=args.jobs, samples=args.samples,
+                    build_state="retained incremental only" if args.retained else "fresh clean per pair",
                     candidate_options=args.candidate_option,
                     baseline_options=args.baseline_option,
                     candidate_effective_settings=effective_settings(args.candidate_option),
@@ -158,7 +161,9 @@ def main():
                     if args.baseline_option or tools["baseline"] == tools["candidate"]
                     else "starting revision defaults",
                     monitor_explicitly_started=args.monitor,
-                    monitor_startup_timing="included in candidate clean invocation" if args.monitor else None,
+                    monitor_startup_timing=("unmeasured initialization; cost retained in command journal"
+                                           if args.retained else "included in candidate clean invocation")
+                        if args.monitor else None,
                     ninja_directory=str(args.ninja_dir.resolve()) if args.ninja_dir else None,
                     ninja_bundle_sha256={p.name: digest(p) for p in sorted(args.ninja_dir.resolve().iterdir())
                                          if p.is_file()} if args.ninja_dir else None,
@@ -212,8 +217,13 @@ def main():
                     hashes = {}
                     for variant in order:
                         extra_options = getattr(args, variant + "_option")
-                        build = root / f"{entrypoint}-j{jobs}-r{sample}-{variant}"
-                        build.mkdir()
+                        build = root / (f"{entrypoint}-j{jobs}-retained-{variant}" if args.retained
+                                        else f"{entrypoint}-j{jobs}-r{sample}-{variant}")
+                        initialize = not build.exists()
+                        if initialize:
+                            build.mkdir()
+                        logs = build / ".benchmark-logs" / str(sample) if args.retained else build
+                        logs.mkdir(parents=True, exist_ok=True)
                         tool = str(tools[variant])
                         common = []
                         if args.project == "ffmpeg":
@@ -233,27 +243,47 @@ def main():
                             unrelated = "kernel/fork.o"
                             configs = (".config",)
                         else:
-                            (build / "config.mk").write_text("MODE := original\n")
-                            (build / "Makefile").write_text(
-                                "include config.mk\n.PHONY: all\nall: " +
-                                " ".join(f"out{i}.o" for i in range(512)) + "\n" +
-                                "".join(f"out{i}.o: src{i} config.mk\n"
-                                        f"\t@printf '$(MODE):' > $@; cat $< >> $@\n"
-                                        for i in range(512)))
-                            for i in range(512):
-                                (build / f"src{i}").write_text(f"input {i}\n")
+                            if initialize:
+                                (build / "config.mk").write_text("MODE := original\n")
+                                (build / "Makefile").write_text(
+                                    "include config.mk\n.PHONY: all\nall: " +
+                                    " ".join(f"out{i}.o" for i in range(512)) + "\n" +
+                                    "".join(f"out{i}.o: src{i} config.mk\n"
+                                            f"\t@printf '$(MODE):' > $@; cat $< >> $@\n"
+                                            for i in range(512)))
+                                for i in range(512):
+                                    (build / f"src{i}").write_text(f"input {i}\n")
                             configure = None
                             artifacts = ("out0.o", "out511.o")
                             changed_source, missing = build / "src0", "out0.o"
                             unrelated = "out511.o"
                             configs = ("config.mk",)
-                        configuration = (run(configure, build, build / "configure.log", env, journal)
-                                         if configure else None)
+                        configuration = (run(configure, build, logs / "configure.log", env, journal)
+                                         if configure and initialize else None)
                         config_hash = {p: digest(build / p) for p in configs}
                         if hashes.get("configuration", config_hash) != config_hash:
                             raise RuntimeError("Baseline/candidate configurations differ")
                         hashes["configuration"] = config_hash
-                        for scenario in ("clean", "noop", "source", "missing", "graph"):
+                        if args.retained:
+                            if initialize:
+                                if variant == "candidate" and args.monitor:
+                                    run([tool, "monitor", "start"], build,
+                                        logs / "setup-monitor-start.log", env, journal)
+                                    monitors.append((tool, build))
+                                if entrypoint == "build":
+                                    run([tool, "build", f"-j{jobs}", *common, "all", *extra_options],
+                                        build, logs / "setup-clean.log", env, journal)
+                                else:
+                                    run([tool, "--ninja", "--regen", f"-j{jobs}", *common, "all", *extra_options],
+                                        build, logs / "setup-generation.log", env, journal)
+                                    run(["sh", "./ninja.sh", f"-j{jobs}"], build,
+                                        logs / "setup-clean.log", env, journal)
+                            setup_hashes = {p: digest(build / p) for p in artifacts}
+                            if hashes.get("clean", setup_hashes) != setup_hashes:
+                                raise RuntimeError("Retained baseline/candidate setup artifacts differ")
+                            hashes["clean"] = setup_hashes
+                        for scenario in (("noop", "source", "missing", "graph") if args.retained
+                                         else ("clean", "noop", "source", "missing", "graph")):
                             previous_objects = objects(build)
                             timestamp = changed_source.stat()
                             try:
@@ -262,8 +292,10 @@ def main():
                                 elif scenario == "missing":
                                     (build / missing).unlink()
                                 elif scenario == "graph":
-                                    if args.project == "synthetic":
+                                    if args.project == "synthetic" and not args.retained:
                                         (build / "config.mk").write_text("MODE := changed\n")
+                                    elif args.project == "synthetic":
+                                        os.utime(build / "config.mk", None)
                                     else:
                                         os.utime(build / "Makefile", None)
                                 phases = {}
@@ -271,19 +303,19 @@ def main():
                                 if scenario == "clean" and variant == "candidate" and args.monitor:
                                     phases["monitor_startup"] = run(
                                         [tool, "monitor", "start"], build,
-                                        build / "monitor-start.log", env, journal)
+                                        logs / "monitor-start.log", env, journal)
                                     monitors.append((tool, build))
                                 if entrypoint == "build":
                                     phases["invocation"] = run(
                                         [tool, "build", f"-j{jobs}", *common, "all", *extra_options], build,
-                                        build / f"{scenario}.log", env, journal)
+                                        logs / f"{scenario}.log", env, journal)
                                 else:
                                     phases["generation" if scenario == "clean" else "regeneration"] = run(
                                         [tool, "--ninja", "--regen", f"-j{jobs}", *common, "all", *extra_options],
-                                        build, build / f"{scenario}-regen.log", env, journal)
+                                        build, logs / f"{scenario}-regen.log", env, journal)
                                     phases["execution"] = run(
                                         ["sh", "./ninja.sh", f"-j{jobs}"], build,
-                                        build / f"{scenario}.log", env, journal)
+                                        logs / f"{scenario}.log", env, journal)
                                 elapsed = time.perf_counter() - start
                             finally:
                                 if scenario == "source":
@@ -306,7 +338,7 @@ def main():
                             if args.project != "synthetic" and scenario != "clean" and output_hashes != hashes["clean"]:
                                 raise RuntimeError(f"{scenario} changed deterministic release artifacts")
                             if args.project == "synthetic":
-                                mode = "changed" if scenario == "graph" else "original"
+                                mode = "changed" if scenario == "graph" and not args.retained else "original"
                                 for i in range(512):
                                     if (build / f"out{i}.o").read_text() != f"{mode}:input {i}\n":
                                         raise RuntimeError(f"Incorrect synthetic output out{i}.o")
@@ -327,8 +359,8 @@ def main():
                         if args.project == "ffmpeg":
                             run([str(build / "ffmpeg"), "-v", "error", "-f", "lavfi", "-i",
                                  "testsrc2=size=64x64:rate=10", "-t", "0.2", "-c:v", "mpeg4",
-                                 "-f", "null", "-"], build, build / "smoke.log", env, journal)
-                        if (tool, build) in monitors:
+                                 "-f", "null", "-"], build, logs / "smoke.log", env, journal)
+                        if not args.retained and (tool, build) in monitors:
                             run([tool, "monitor", "stop"], build,
                                 build / "monitor-stop.log", env, journal)
                             monitors.remove((tool, build))

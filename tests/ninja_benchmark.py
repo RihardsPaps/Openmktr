@@ -8,6 +8,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -68,6 +69,51 @@ class Evidence(unittest.TestCase):
             record = json.loads(journal.read_text())
             self.assertEqual(record["status"], 7)
             self.assertGreater(record["seconds"], 0)
+
+    def test_retained_campaign_separates_setup_and_preserves_each_log(self):
+        binary = Path(os.environ.get("OMKTR_BINARY", str(
+            Path(__file__).resolve().parents[1] / "omktr"))).resolve()
+        compilers = sorted(p for p in Path("/usr/bin").glob("clang-*")
+                           if p.name.removeprefix("clang-").isdigit())
+        if not binary.is_file() or not compilers:
+            self.skipTest("built Openmktr and versioned Clang are required")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "campaign"
+            result = subprocess.run([
+                sys.executable, str(Path(benchmark.__file__)),
+                "--root", str(root), "--project", "synthetic",
+                "--baseline", str(binary), "--candidate", str(binary),
+                "--baseline-revision", "test", "--candidate-revision", "test",
+                "--baseline-option=--graph_optimizations=off",
+                "--candidate-option=--graph_optimizations=aggressive",
+                "--entrypoints", "build", "--jobs", "2", "--samples", "1",
+                "--warmups", "1", "--llvm-version",
+                compilers[-1].name.removeprefix("clang-"), "--retained", "--monitor",
+            ], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            report = json.loads((root / "report.json").read_text())
+            self.assertIsNone(report["failure"])
+            self.assertEqual(report["metadata"]["build_state"], "retained incremental only")
+            self.assertEqual({r["scenario"] for r in report["summary"]},
+                             {"noop", "source", "missing", "graph"})
+            self.assertTrue(all(r["pairs"] == 1 and not r["supported_improvement"]
+                                for r in report["summary"]))
+            rows = [json.loads(line) for line in (root / "samples.jsonl").read_text().splitlines()]
+            self.assertEqual(len(rows), 16)
+            self.assertEqual(sum(row["warmup"] for row in rows), 8)
+            self.assertTrue(all(not row["changed_objects"] for row in rows
+                                if row["scenario"] == "noop"))
+            commands = [json.loads(line) for line in (root / "commands.jsonl").read_text().splitlines()]
+            logs = [r["log"] for r in commands]
+            self.assertEqual(len(logs), len(set(logs)))
+            self.assertTrue(all(Path(log).is_file() for log in logs))
+            self.assertEqual(sum(Path(log).name == "setup-clean.log" for log in logs), 2)
+            self.assertEqual(sum(Path(log).name == "setup-monitor-start.log" for log in logs), 1)
+            self.assertFalse(any("monitor_startup" in row["phases"] for row in rows))
+            status = subprocess.run([str(binary), "monitor", "status"],
+                                    cwd=root / "build-j2-retained-candidate",
+                                    capture_output=True, text=True)
+            self.assertNotEqual(status.returncode, 0)
 
 
 if __name__ == "__main__":

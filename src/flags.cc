@@ -2,6 +2,7 @@
 // Add configurable Ninja graph optimizations and content-preserving output
 // generation. Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
+// Carry effective graph controls through opaque recursive invocations.
 // Changed build execution, evaluation, or portability for this fork.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Parse explanation and strict compatibility options.
@@ -42,6 +43,53 @@
 #include "version.h"
 
 Flags g_flags;
+
+static bool IsGraphOptimizationFeature(std::string_view feature) {
+  return feature == "evaluation" || feature == "includes" ||
+         feature == "recursive" || feature == "compact" || feature == "monitor";
+}
+
+static bool ReadInheritedGraphOptimizations(const char* value, Flags* flags) {
+  std::string_view settings(value);
+  if (settings.size() > 256 || !HasPrefix(settings, "v1:"))
+    return false;
+  settings.remove_prefix(3);
+  size_t separator = settings.find(':');
+  std::string_view profile = settings.substr(0, separator);
+  if (profile == "off")
+    flags->graph_optimizations = Flags::GraphOptimizations::kOff;
+  else if (profile == "safe")
+    flags->graph_optimizations = Flags::GraphOptimizations::kSafe;
+  else if (profile == "aggressive")
+    flags->graph_optimizations = Flags::GraphOptimizations::kAggressive;
+  else
+    return false;
+  while (separator != std::string_view::npos) {
+    settings.remove_prefix(separator + 1);
+    separator = settings.find(':');
+    const std::string_view feature = settings.substr(0, separator);
+    if (!IsGraphOptimizationFeature(feature))
+      return false;
+    flags->disabled_graph_optimizations.emplace_back(feature);
+  }
+  return true;
+}
+
+std::string Flags::GraphOptimizationTransport() const {
+  std::string result =
+      graph_optimizations == GraphOptimizations::kOff    ? "v1:off"
+      : graph_optimizations == GraphOptimizations::kSafe ? "v1:safe"
+                                                         : "v1:aggressive";
+  for (const char* feature :
+       {"evaluation", "includes", "recursive", "compact", "monitor"})
+    if (std::find(disabled_graph_optimizations.begin(),
+                  disabled_graph_optimizations.end(),
+                  feature) != disabled_graph_optimizations.end()) {
+      result += ':';
+      result += feature;
+    }
+  return result;
+}
 
 bool Flags::GraphOptimizationEnabled(std::string_view feature) const {
   if (graph_optimizations == GraphOptimizations::kOff ||
@@ -173,6 +221,14 @@ std::string Flags::LoadLimitOption() const {
 }
 
 void Flags::Parse(int argc, char** argv) {
+  bool valid_graph_transport = true;
+  if (const char* inherited = getenv("KATI_GRAPH_SETTINGS")) {
+    valid_graph_transport = ReadInheritedGraphOptimizations(inherited, this);
+    if (!valid_graph_transport) {
+      graph_optimizations = GraphOptimizations::kOff;
+      disabled_graph_optimizations.clear();
+    }
+  }
   evaluation_context.clear();
   for (int index = 0; index < argc; ++index) {
     const std::string argument(argv[index]);
@@ -518,8 +574,7 @@ void Flags::Parse(int argc, char** argv) {
       should_propagate = false;
     } else if (HasPrefix(arg, "--disable_graph_optimization=")) {
       std::string value(arg + strlen("--disable_graph_optimization="));
-      if (value != "evaluation" && value != "includes" &&
-          value != "recursive" && value != "compact" && value != "monitor")
+      if (!IsGraphOptimizationFeature(value))
         ERROR("Invalid graph optimization feature: %s", value.c_str());
       disabled_graph_optimizations.push_back(std::move(value));
       should_propagate = false;
@@ -746,4 +801,11 @@ void Flags::Parse(int argc, char** argv) {
     is_question = true;
     regen_debug = true;
   }
+  if (!valid_graph_transport)
+    LOG_STAT("ignored invalid inherited graph controls");
+  // Keep MAKE executable-shaped and unknown options out of GNU-compatible
+  // MAKEFLAGS. Children parse this private, versioned channel before argv.
+  const std::string transport = GraphOptimizationTransport();
+  if (setenv("KATI_GRAPH_SETTINGS", transport.c_str(), 1) != 0)
+    PERROR("export graph optimization controls");
 }

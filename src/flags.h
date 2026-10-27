@@ -2,6 +2,7 @@
 // Add configurable Ninja graph optimizations and content-preserving output
 // generation. Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
+// Carry effective graph controls through opaque recursive invocations.
 // Changed build execution, evaluation, or portability for this fork.
 // Add build explanations and opt-in compatibility diagnostics.
 // Support inherited and command-line load-average limits.
@@ -41,6 +42,7 @@ struct Flags {
   const char* import_gate = nullptr;
   bool GraphOptimizationEnabled(std::string_view feature) const;
   std::string GraphOptimizationIdentity() const;
+  std::string GraphOptimizationTransport() const;
   enum class OutputSync { kTarget, kLine, kNone, kRecurse };
 
   bool detect_android_echo;

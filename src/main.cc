@@ -1,7 +1,8 @@
 // FORK MODIFICATION NOTICE (2026)
 // Add configurable Ninja graph optimizations and content-preserving output
 // generation. Forward load limits to Ninja and normalize recursive Make load
-// options. Supervise per-launcher load state and normalize options before
+// options. Keep private graph controls out of Make variables and recipe
+// exports. Supervise per-launcher load state and normalize options before
 // Ninja's --. Add a locked, regenerating single-command Ninja build supervisor.
 // Expose native output stamps for generated recipes' interruption cleanup.
 // Pass Ninja output cleanup to the existing native recipe supervisor.
@@ -905,6 +906,8 @@ static int Run(const std::vector<Symbol>& targets,
       const std::string_view entry(*p);
       const size_t equal_pos = entry.find('=');
       const std::string_view name = entry.substr(0, equal_pos);
+      if (name == "KATI_GRAPH_SETTINGS")
+        continue;
       const bool internal_make_variable =
           name == "MAKEFLAGS" || name == "MAKEOVERRIDES" ||
           name == "MAKELEVEL" || name == "MFLAGS" || name == "SHELL" ||
@@ -1377,6 +1380,8 @@ static int Run(const std::vector<Symbol>& targets,
 
     for (const auto& p : ev.exports()) {
       const Symbol name = p.first;
+      if (name.str() == "KATI_GRAPH_SETTINGS")
+        continue;
 
       if (p.second) {
         // LookupVar can still expose the environment-origin object that was

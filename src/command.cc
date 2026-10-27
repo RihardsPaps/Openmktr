@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Preserve private graph controls across recursive recipe environments.
 // Track and validate incremental evaluation, include proofs and imported Ninja
 // graphs. Preserve live Ninja load limits across deferred recursive
 // environments. Preserve literal saved compiler commands when resolving
@@ -187,7 +188,8 @@ static bool IsShellIdentifierCommand(std::string_view name) {
 static bool IsRecursiveTransportVariable(std::string_view name) {
   return name == "MAKEFLAGS" || name == "MAKEOVERRIDES" ||
          name == "MAKELEVEL" || name == "KATI_JOBSERVER_RESERVED" ||
-         name == "KATI_NINJA_LOAD_LIMIT" || name == "KATI_NINJA_LOAD_STATE";
+         name == "KATI_NINJA_LOAD_LIMIT" || name == "KATI_NINJA_LOAD_STATE" ||
+         name == "KATI_GRAPH_SETTINGS";
 }
 
 // Recursive commands executed directly by Kati do not pass through the
@@ -320,6 +322,7 @@ static void ExportAllVariables(Command* command, Evaluator* ev) {
     if (name_view == "MAKELEVEL" || name_view == "KATI_JOBSERVER_RESERVED" ||
         name_view == "KATI_NINJA_LOAD_LIMIT" ||
         name_view == "KATI_NINJA_LOAD_STATE" ||
+        name_view == "KATI_GRAPH_SETTINGS" ||
         !IsShellIdentifierCommand(name_view) ||
         !emitted.insert(std::string(name_view)).second)
       continue;

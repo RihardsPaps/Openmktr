@@ -2,7 +2,8 @@
 // Track and validate incremental evaluation, include proofs and imported Ninja
 // graphs. Seal structural stamp bytes and bind generated artifacts to
 // acceptance. Carry generation/runtime load limits into Ninja and recursive
-// recipes. Use native load admission for every recipe, with configurable Ninja
+// recipes. Preserve selected graph controls at deferred recursive boundaries.
+// Use native load admission for every recipe, with configurable Ninja
 // selection. Quote generated launcher paths for build directories containing
 // shell syntax. Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
@@ -1641,8 +1642,11 @@ class NinjaGenerator {
     std::map<std::string, std::string> workspace_exports;
     emitted_exports.insert("MAKELEVEL");
     fprintf(fp, "export MAKELEVEL=%d\n", g_flags.make_level + 1);
+    fprintf(fp, "export KATI_GRAPH_SETTINGS=%s\n",
+            ShellQuote(g_flags.GraphOptimizationTransport()).c_str());
     for (const auto& [symbol, is_exported] : ev_->exports()) {
       if (symbol.str() == "MAKELEVEL" ||
+          symbol.str() == "KATI_GRAPH_SETTINGS" ||
           symbol.str() == "KATI_JOBSERVER_RESERVED" ||
           symbol.str() == "KATI_NINJA_LOAD_LIMIT" ||
           symbol.str() == "KATI_RECIPE_CHANGED" ||
