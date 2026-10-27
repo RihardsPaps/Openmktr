@@ -21,6 +21,20 @@ spec.loader.exec_module(benchmark)
 
 
 class Evidence(unittest.TestCase):
+    def test_budgeted_campaign_rejects_extra_work_before_running_tools(self):
+        script = Path(benchmark.__file__).with_name("benchmark_graph_budget.py")
+        for limit, used in ((20, 3), (21, 0), (20, -1)):
+            with self.subTest(limit=limit, used=used), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp) / "must-not-be-created"
+                result = subprocess.run([
+                    sys.executable, str(script), "--root", str(root),
+                    "--archives", temp, "--baseline", str(Path(temp) / "missing-baseline"),
+                    "--candidate", str(Path(temp) / "missing-candidate"),
+                    "--toolchain-dir", temp, "--limit", str(limit), "--used-builds", str(used),
+                ], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertFalse(root.exists())
+
     def test_effective_settings_record_defaults_and_ablations(self):
         self.assertFalse(benchmark.effective_settings([])["enabled"]["monitor"])
         aggressive = benchmark.effective_settings([

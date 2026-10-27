@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "status": "in_progress",
+  "status": "implementation_and_correctness_complete_performance_unresolved",
   "complete": false,
-  "updated_utc": "2026-10-27T15:41:40.615248+00:00",
+  "updated_utc": "2026-10-27T17:26:58.023994+00:00",
   "delivery": {
     "branch": "codex/ninja-graph-optimizations",
     "base_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d",
@@ -18,7 +18,8 @@
     "push_authorized": true,
     "pr_authorized": true,
     "merge_authorized_after_all_gates": true,
-    "implementation_commit": "d6413be13f6338e9c42b80167c2164300e879e4a"
+    "implementation_commit": "d6413be13f6338e9c42b80167c2164300e879e4a",
+    "status_snapshot": "Pre-PR evidence snapshot; final PR/check state is recorded by GitHub."
   },
   "build": {
     "host": "local PC Docker Desktop",
@@ -240,10 +241,24 @@
     },
     "limits": [
       "Correctness checks do not satisfy the real-project performance acceptance gates."
-    ]
+    ],
+    "budget_harness_guard": {
+      "status": "passed",
+      "release_builds": 0,
+      "report": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/budgeted-benchmarks/harness-results.json",
+        "sha256": "5fc261e9e7916ecac3c94a48fef6fe819651e11d0b012d5673fc57de4169c2e7",
+        "bytes": 861
+      },
+      "log": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/budgeted-benchmarks/harness-tests.log",
+        "sha256": "4bc88273774c301cff4538c69b8df9455378aa588baa3868e8984ec63f148ea1",
+        "bytes": 100
+      }
+    }
   },
   "performance": {
-    "acceptance": "incomplete",
+    "acceptance": "Bounded measurements completed at the user cap. Linux j8 was slower in the measured pair and diagnostic repeat; original statistical gates remain unverified.",
     "method": {
       "warmup_pairs": 2,
       "measured_pairs": 7,
@@ -959,7 +974,242 @@
       "sha256": "f05cd287d084fc3848ba38d606fda81d80afae0a5943c5a3760974f4055dbb58",
       "qualification": "Required tests/bench.py comparison; synthetic medians are diagnostic, not real-project acceptance."
     },
-    "prior_candidate_qualification_only": true
+    "prior_candidate_qualification_only": true,
+    "bounded_pc_campaign": {
+      "status": "completed_with_unresolved_linux_j8_clean_slowdown",
+      "report": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/budgeted-benchmarks/report.json",
+        "sha256": "3cb64fb2c059e66935c6a7a2d484ec0fda85577591596b3fc02515a375b53738",
+        "bytes": 10262
+      },
+      "plan": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/budgeted-benchmarks/plan.json",
+        "sha256": "19e7c18783734c5d8f21e7b37f505f508f77f1d723bc9e8d3513813e0da74abd",
+        "bytes": 1014
+      },
+      "commands": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/budgeted-benchmarks/commands.jsonl",
+        "sha256": "65f2597af84f87e5aa4c63336e40076663064800a32415e3205bb065456c4298",
+        "bytes": 9411
+      },
+      "budget": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/budgeted-benchmarks/budget.jsonl",
+        "sha256": "d8a48a2bd11f175c39e70cde2263be15b0de1169050ed895db76237f18e7c5ec",
+        "bytes": 6959
+      },
+      "samples": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/budgeted-benchmarks/samples.jsonl",
+        "sha256": "f7011dbc048da2ff8f8648e5ebda4e9d0856f71516c0eb3cc34b8f770653e437",
+        "bytes": 604275
+      },
+      "completed": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/budgeted-benchmarks/completion.json",
+        "sha256": "c5f698b83bc4a242a06098ec4ce57a39c2f1ef1113ed328b5e7ae10760c6485d",
+        "bytes": 190
+      },
+      "common_runtime": {
+        "path": "validation/logs/graph-optimizations/pc-local-vm/budgeted-benchmarks/harness-results.json",
+        "sha256": "5fc261e9e7916ecac3c94a48fef6fe819651e11d0b012d5673fc57de4169c2e7",
+        "bytes": 861
+      },
+      "summary": [
+        {
+          "project": "ffmpeg",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "clean",
+          "pairs": 1,
+          "paired_improvement_percent": [
+            7.335225849136096
+          ],
+          "median_improvement_percent": 7.335225849136096,
+          "bootstrap_95_percent": null,
+          "supported_improvement": false,
+          "supported_regression": false,
+          "baseline_median_seconds": 68.22653730000002,
+          "candidate_median_seconds": 63.22196669999994,
+          "inference": "Descriptive only; one pair cannot establish a confidence interval or acceptance gate."
+        },
+        {
+          "project": "ffmpeg",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "noop",
+          "pairs": 1,
+          "paired_improvement_percent": [
+            70.53095100426347
+          ],
+          "median_improvement_percent": 70.53095100426347,
+          "bootstrap_95_percent": null,
+          "supported_improvement": false,
+          "supported_regression": false,
+          "baseline_median_seconds": 6.278684800000519,
+          "candidate_median_seconds": 1.850268700000015,
+          "inference": "Descriptive only; one pair cannot establish a confidence interval or acceptance gate."
+        },
+        {
+          "project": "ffmpeg",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "source",
+          "pairs": 1,
+          "paired_improvement_percent": [
+            79.78312851918488
+          ],
+          "median_improvement_percent": 79.78312851918488,
+          "bootstrap_95_percent": null,
+          "supported_improvement": false,
+          "supported_regression": false,
+          "baseline_median_seconds": 5.644808600000033,
+          "candidate_median_seconds": 1.1412037000000055,
+          "inference": "Descriptive only; one pair cannot establish a confidence interval or acceptance gate."
+        },
+        {
+          "project": "ffmpeg",
+          "entrypoint": "build",
+          "jobs": 16,
+          "scenario": "clean",
+          "pairs": 1,
+          "paired_improvement_percent": [
+            1.707603650171785
+          ],
+          "median_improvement_percent": 1.707603650171785,
+          "bootstrap_95_percent": null,
+          "supported_improvement": false,
+          "supported_regression": false,
+          "baseline_median_seconds": 41.60240580000027,
+          "candidate_median_seconds": 40.892001600000185,
+          "inference": "Descriptive only; one pair cannot establish a confidence interval or acceptance gate."
+        },
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "clean",
+          "pairs": 1,
+          "paired_improvement_percent": [
+            -26.362970704703347
+          ],
+          "median_improvement_percent": -26.362970704703347,
+          "bootstrap_95_percent": null,
+          "supported_improvement": false,
+          "supported_regression": false,
+          "baseline_median_seconds": 223.9563505999995,
+          "candidate_median_seconds": 282.99789770000007,
+          "inference": "Descriptive only; one pair cannot establish a confidence interval or acceptance gate."
+        },
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 16,
+          "scenario": "clean",
+          "pairs": 1,
+          "paired_improvement_percent": [
+            0.9754098053638138
+          ],
+          "median_improvement_percent": 0.9754098053638138,
+          "bootstrap_95_percent": null,
+          "supported_improvement": false,
+          "supported_regression": false,
+          "baseline_median_seconds": 153.56856079999943,
+          "candidate_median_seconds": 152.07063800000014,
+          "inference": "Descriptive only; one pair cannot establish a confidence interval or acceptance gate."
+        },
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 16,
+          "scenario": "noop",
+          "pairs": 1,
+          "paired_improvement_percent": [
+            -0.4882762467903978
+          ],
+          "median_improvement_percent": -0.4882762467903978,
+          "bootstrap_95_percent": null,
+          "supported_improvement": false,
+          "supported_regression": false,
+          "baseline_median_seconds": 7.208276100000148,
+          "candidate_median_seconds": 7.2434723999995185,
+          "inference": "Descriptive only; one pair cannot establish a confidence interval or acceptance gate."
+        },
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 16,
+          "scenario": "source",
+          "pairs": 1,
+          "paired_improvement_percent": [
+            5.033257398478841
+          ],
+          "median_improvement_percent": 5.033257398478841,
+          "bootstrap_95_percent": null,
+          "supported_improvement": false,
+          "supported_regression": false,
+          "baseline_median_seconds": 18.45204459999968,
+          "candidate_median_seconds": 17.523305699999582,
+          "inference": "Descriptive only; one pair cannot establish a confidence interval or acceptance gate."
+        }
+      ],
+      "source_changes": {
+        "ffmpeg": [],
+        "linux": []
+      },
+      "ffmpeg_smoke_checks": 4,
+      "configuration": "Two shared prepared configurations cloned before release compilation, with no prebuilt release objects; both variants use identical flags and compiler/runtime files.",
+      "original_gates_passed": false,
+      "final_diagnostic": {
+        "reservation": {
+          "slot": 20,
+          "purpose": "Targeted fresh Linux j8 candidate repeat after a 26% slower single pair; no affinity/toolchain/flags changes.",
+          "command": [
+            "/work/evidence/omktr-candidate-pc-v4",
+            "build",
+            "-j8",
+            "-f",
+            "/work/evidence/graph-budget20-v1/sources/linux-6.12/Makefile",
+            "LLVM=-19",
+            "LLVM_IAS=1",
+            "ARCH=x86",
+            "all"
+          ],
+          "cwd": "/work/evidence/graph-budget20-v1/linux-j8-candidate-repeat",
+          "log": "/work/evidence/graph-budget20-v1/linux-j8-candidate-repeat/clean.log",
+          "reserved_unix": 1793121655.1136355
+        },
+        "phase": {
+          "command": [
+            "/work/evidence/omktr-candidate-pc-v4",
+            "build",
+            "-j8",
+            "-f",
+            "/work/evidence/graph-budget20-v1/sources/linux-6.12/Makefile",
+            "LLVM=-19",
+            "LLVM_IAS=1",
+            "ARCH=x86",
+            "all"
+          ],
+          "cwd": "/work/evidence/graph-budget20-v1/linux-j8-candidate-repeat",
+          "log": "/work/evidence/graph-budget20-v1/linux-j8-candidate-repeat/clean.log",
+          "status": 0,
+          "seconds": 266.1836606000006,
+          "user_seconds": 1881.154113,
+          "system_seconds": 232.606804,
+          "peak_rss_kib": 890872
+        },
+        "failure": null,
+        "artifacts": {
+          "vmlinux": "ff27f1bb3137108e25ee29ca2116f17f0615e13260c21d57915ecdc6b79b0001",
+          "arch/x86/boot/bzImage": "043ad471492a71c455b3f24a45349af6dce3505e2f972efcb1bd426669be46d3"
+        },
+        "baseline_seconds": 223.9563505999995,
+        "diagnostic_improvement_percent": -18.855151857435757,
+        "source_changes": [],
+        "commands_consumed": 20,
+        "inference": "Unpaired diagnostic repeat; retain the original slower pair. No confidence interval or regression exclusion is established.",
+        "raw_evidence": "validation/logs/graph-optimizations/pc-local-vm/budgeted-benchmarks/final-slot.json"
+      },
+      "warning": "Original Linux j8 clean pair was 26.36% slower; retained unchanged. The final slot is a separate diagnostic repeat, not a replacement measured pair."
+    }
   },
   "retained_findings": [
     {
@@ -1021,9 +1271,8 @@
     }
   ],
   "outstanding": [
-    "Qualify PC clean, no-op and single-source improvements for both projects, job counts and profiles with the unchanged paired protocol.",
-    "Complete PC legacy regression checks, feature ablations, separate Ninja runtimes and monitored cold/warm measurements.",
-    "Publish raw evidence, create the PR, pass all checks and merge."
+    "Create the PR and pass every CI check.",
+    "Linux j8 clean slowdown remains unresolved. The original performance acceptance condition is not satisfied; no additional release builds are authorized beyond the exhausted 20-build cap."
   ],
   "validation_followup": {
     "status": "passed: portable, sanitizers, formatting, 576 seeded state comparisons and all four independent Linux external comparisons",
@@ -1102,7 +1351,7 @@
     "qualification": "Historical preceding 09b binary; current B7 validation is in correctness."
   },
   "performance_followup": {
-    "status": "Linux j8 complete: clean gate inconclusive, incremental gains supported; unchanged j16 and FFmpeg campaign continuing",
+    "status": "Historical results retained; superseded by current local PC correctness and the user-limited descriptive benchmark campaign.",
     "builder": "nas / native Linux / AMD Ryzen 7 5800X / 16 threads",
     "toolchain_image_id": "sha256:42bae58178c98432973444c1b5b7de9b5e847f1fce7372c73a1034749902c050",
     "root": "/srv/disks/media02/.omktr-graph-20261027-09b0/evidence/defaults-probe-media02",
@@ -1605,7 +1854,7 @@
     "future_remote_access": false
   },
   "pc_qualification": {
-    "status": "all_correctness_passed_native_vm_matrix_running",
+    "status": "correctness_passed_bounded_measurements_complete_linux_j8_performance_unresolved",
     "docker_context": "desktop-linux",
     "image_build": {
       "command": [
@@ -1625,7 +1874,7 @@
       "image_id": "sha256:15ce1bbe9e3ace4b7fd4a534a40e721d9621a02b1548ee84effba3464d008d67"
     },
     "volume": "openmktr-graph-pc-v4",
-    "acceptance": "incomplete",
+    "acceptance": "Correctness and integrity checks passed. The bounded campaign cannot establish statistical speedups or exclusion of regressions.",
     "source_snapshot": "candidate-cooperative-v4-source.tar",
     "static_binaries": "Both rebuilt locally with identical flags; baseline and candidate hashes reproduced byte for byte.",
     "note": "Previous remote-build artifacts and measurements are historical; the current acceptance campaign will be entirely local.",
@@ -1792,7 +2041,7 @@
     }
   ],
   "pc_runtime_investigation": {
-    "status": "isolated_local_runtime_qualified_benchmarks_running",
+    "status": "bounded_campaign_completed_without_runtime_or_compiler_failure_cause_unresolved",
     "interrupted_docker_campaign": {
       "status": "incomplete_excluded_from_acceptance",
       "frontend_status": 125,
@@ -1856,7 +2105,212 @@
       "matrix_plan": {
         "path": "validation/logs/graph-optimizations/pc-local-vm/benchmarks/plan.json",
         "sha256": "d852b9ad82e52acfd0443f2f4b8e2633525489d2254fc08db29b8e624ccb33a3"
+      },
+      "matrix_status": "Large matrix cancelled at user instruction; bounded campaign and final Linux j8 diagnostic completed with 20/20 slots consumed.",
+      "compiler_failure": {
+        "classification": "Unresolved intermittent external compiler failure; VM stayed running.",
+        "compiler": "Ubuntu Clang 19.1.1 (1ubuntu1~24.04.2)",
+        "source": "Linux 6.12 net/wireless/pmsr.c",
+        "diagnostic": "Frontend SIGSEGV; stack includes clang::SourceManager::getExpansionLocSlowCase.",
+        "source_changes": [],
+        "artifacts": [
+          {
+            "path": "validation/logs/graph-optimizations/pc-local-vm/benchmarks/failed-report.json",
+            "sha256": "4248587d2557d69ea65d0ed964787454eac300b691e4ebd6ea364db2cd60e2a7",
+            "bytes": 6541
+          },
+          {
+            "path": "validation/logs/graph-optimizations/pc-local-vm/benchmarks/failed-metadata.json",
+            "sha256": "80bbf1d9be350cd34e2b9a5376086d12743f2f4e74b33f269a89caf55348906d",
+            "bytes": 3120
+          },
+          {
+            "path": "validation/logs/graph-optimizations/pc-local-vm/benchmarks/failed-samples.jsonl",
+            "sha256": "b281946d3dce2b17aa297cf12b2219f3a26dcb4223b84ac08f5c81f1b89d9a49",
+            "bytes": 968319
+          },
+          {
+            "path": "validation/logs/graph-optimizations/pc-local-vm/benchmarks/failed-commands.jsonl",
+            "sha256": "5f4e08755e2434c0b2af529aaed85c8e0746e13cc4b9d506d02a77f8e602f2b8",
+            "bytes": 35669
+          },
+          {
+            "path": "validation/logs/graph-optimizations/pc-local-vm/benchmarks/failed-build-j8-r5-candidate-clean.log",
+            "sha256": "17343e3cb0fc2ca97fd05a2d83182835bbdedab22b0cabaf6e2ac7f79bafbfe8",
+            "bytes": 173030
+          },
+          {
+            "path": "validation/logs/graph-optimizations/pc-local-vm/compiler-investigation/collection.json",
+            "sha256": "e5bc297810cc9c88dde8c648a3ed9dce607fb394be4767130ade72dc6868822f",
+            "bytes": 30813
+          },
+          {
+            "path": "validation/logs/graph-optimizations/pc-local-vm/compiler-investigation/pmsr-c414cd.c",
+            "sha256": "8107d4f154ed4474cfac0f5c632b3d4ec8f72c5edf65c1ef0b1a75284aba0479",
+            "bytes": 9606785
+          },
+          {
+            "path": "validation/logs/graph-optimizations/pc-local-vm/compiler-investigation/pmsr-c414cd.sh",
+            "sha256": "1be6902f8569dbe73a59e33068a0aa2d1d4caa92a5ad017e400eafc3092a4b48",
+            "bytes": 11199
+          },
+          {
+            "path": "validation/logs/graph-optimizations/pc-local-vm/compiler-investigation/retries/results.json",
+            "sha256": "561bf068217e74cb0c9502f0d43abdfd599452a7c7ae90666872f0436c5d3534",
+            "bytes": 14810
+          },
+          {
+            "path": "validation/logs/graph-optimizations/pc-local-vm/compiler-investigation/retries.log",
+            "sha256": "ad0272b5f0bb4bb51d25c92af792a238bae3d1d5bed84f32cc9d1cf90d1573b0",
+            "bytes": 11528
+          }
+        ],
+        "controlled_retries": {
+          "cases": 72,
+          "failures": 0,
+          "coverage": "Four serial and 32 eight-way parallel repetitions for each of the preprocessed frontend and original source driver commands; unique outputs and depfiles.",
+          "unique_success_hashes": {
+            "unique_success_hashes_preprocessed": [
+              "6697400f7b626fb6ae5ea6025b52241ae453e0d0ba319b9d05e7af937a6d4824"
+            ],
+            "unique_success_hashes_driver": [
+              "bac6984c526948354b9433327f18eac493a2d3cb09863ac56a7f7dab84866cc3"
+            ]
+          },
+          "conclusion": "The saved input does not deterministically reproduce the failure. Passing retries do not identify or resolve its cause."
+        },
+        "partial_summary": [
+          {
+            "project": "linux",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "clean",
+            "pairs": 3,
+            "paired_improvement_percent": [
+              1.1386111217486783,
+              0.3737542787536019,
+              -5.890297024554991
+            ],
+            "median_improvement_percent": 0.3737542787536019,
+            "bootstrap_95_percent": [
+              -5.890297024554991,
+              1.1386111217486783
+            ],
+            "supported_improvement": false,
+            "supported_regression": false,
+            "baseline_median_seconds": 272.03025030000026,
+            "candidate_median_seconds": 271.01352559999987
+          },
+          {
+            "project": "linux",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "graph",
+            "pairs": 3,
+            "paired_improvement_percent": [
+              23.98021523479632,
+              30.184294513083344,
+              35.40088285457905
+            ],
+            "median_improvement_percent": 30.184294513083344,
+            "bootstrap_95_percent": [
+              23.98021523479632,
+              35.40088285457905
+            ],
+            "supported_improvement": false,
+            "supported_regression": false,
+            "baseline_median_seconds": 7.378260899999987,
+            "candidate_median_seconds": 5.154761100000087
+          },
+          {
+            "project": "linux",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "missing",
+            "pairs": 3,
+            "paired_improvement_percent": [
+              12.318458928788278,
+              13.717991459126132,
+              -2.9111951684419823
+            ],
+            "median_improvement_percent": 12.318458928788278,
+            "bootstrap_95_percent": [
+              -2.9111951684419823,
+              13.717991459126132
+            ],
+            "supported_improvement": false,
+            "supported_regression": false,
+            "baseline_median_seconds": 19.316926299999977,
+            "candidate_median_seconds": 17.274785600000087
+          },
+          {
+            "project": "linux",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "noop",
+            "pairs": 3,
+            "paired_improvement_percent": [
+              24.18653496341626,
+              23.56136075706894,
+              31.629792054031725
+            ],
+            "median_improvement_percent": 24.18653496341626,
+            "bootstrap_95_percent": [
+              23.56136075706894,
+              31.629792054031725
+            ],
+            "supported_improvement": false,
+            "supported_regression": false,
+            "baseline_median_seconds": 6.85192939999979,
+            "candidate_median_seconds": 5.233034800000041
+          },
+          {
+            "project": "linux",
+            "entrypoint": "build",
+            "jobs": 8,
+            "scenario": "source",
+            "pairs": 3,
+            "paired_improvement_percent": [
+              7.9128581875531285,
+              12.76664216764668,
+              1.07642256216961
+            ],
+            "median_improvement_percent": 7.9128581875531285,
+            "bootstrap_95_percent": [
+              1.07642256216961,
+              12.76664216764668
+            ],
+            "supported_improvement": false,
+            "supported_regression": false,
+            "baseline_median_seconds": 18.598741000000018,
+            "candidate_median_seconds": 17.127048999999715
+          }
+        ],
+        "acceptance": "Incomplete; no intervals from this run establish the agreed seven-pair gates.",
+        "next_step": "Two independent GNU Make controls passed with matching artifacts; extra controls stopped at user request. Bounded default-profile campaign passed. Intermittent compiler failure cause remains unresolved.",
+        "independent_controls": {
+          "path": "validation/logs/graph-optimizations/pc-local-vm/compiler-investigation/control-budget-stop.json",
+          "sha256": "340095d506a6d6d5de0e7a61dcb4c88ed27b697a1d6305f6938dc6da85251ea5",
+          "bytes": 1204
+        }
       }
     }
+  },
+  "benchmark_scope_change": {
+    "user_instruction": "Just run a maximum of 20 builds. Pick the most important ones.",
+    "maximum_remaining_invocations": 20,
+    "commands_consumed": 20,
+    "spare_not_used": 0,
+    "counting": "Includes both shared configuration commands, all clean/no-op/single-source invocations and the cancelled control already running at the instruction. Queries, hashes, smoke checks and unit tests do not compile releases.",
+    "original_statistical_protocol": "Not completed. The bounded single-pair campaign cannot establish the original seven-pair gates.",
+    "revised_scope": "Default-profile clean pairs for both projects at j8/j16, plus no-op/single-source pairs for FFmpeg j8 and Linux j16. Aggressive, ablations, legacy and separate Ninja versions are not measured in this reduced campaign."
+  },
+  "current_evidence_bundle": {
+    "path": "validation/evidence/ninja-graph-pc-v4.zip",
+    "sha256": "54027abd5398dd4564cb9bd2281627a3ecb696b0a1722ce3cf0517a4ef5f3efe",
+    "bytes": 1127204,
+    "entries": 80,
+    "format": "ZIP with per-entry SHA-256 manifest; raw bytes preserve original line endings.",
+    "note": "Large compiler preprocessed input remains at its recorded local path with checksum. No binaries, source archives, VM disks or control-channel credentials are included."
   }
 }

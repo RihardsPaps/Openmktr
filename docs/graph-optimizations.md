@@ -201,6 +201,27 @@ through `omktr build`. Other tested modes and scenarios must show no supported
 regression. The full performance objective remains **unverified** until the
 recorded matrix passes. Exploratory samples are not acceptance results.
 
+On 2026-10-27 the user replaced the large benchmark campaign with a maximum of
+20 further build invocations. The bounded runner
+[`benchmark_graph_budget.py`](../validation/benchmark_graph_budget.py) counts
+configuration commands and previously consumed slots, reserves a slot before
+launch, and stops on failure without automatic retries. Its fixed matrix uses
+18 commands: two shared configurations, clean baseline/candidate pairs for both
+projects at j8/j16, and no-op/single-source pairs for FFmpeg j8 and Linux j16.
+Both variants receive identical copies of the prepared configuration before
+release compilation. These single-pair results are descriptive; they cannot
+establish the original seven-pair confidence gates. The full statistical matrix,
+legacy measurements, runtime sweep and feature ablations are outside this
+reduced campaign.
+
+The bounded campaign completed with all 20 slots consumed and all correctness
+and integrity checks passing. Its original Linux j8 clean pair was 26.36%
+slower; the final diagnostic candidate repeat remained 18.86% slower than that
+baseline. This is an unresolved performance concern. It is retained alongside
+the FFmpeg and Linux j16 observations in the
+[published evidence summary](../validation/evidence/README.md). No full
+performance acceptance or exclusion of regressions is claimed.
+
 An earlier candidate's default-profile FFmpeg 7.1.1 comparison passed through `omktr build`
 with Ninja 1.11.1. Each job count has two discarded warmup pairs and seven
 alternating measured pairs. These are median paired percentage improvements;
@@ -235,11 +256,11 @@ archive link normalization performed by Python's initial `data` extraction filte
 A subsequent Clang 19 run failed in the unchanged baseline during its first
 discarded warmup, before any measured pairs. Its exact compiler invocation,
 400 independent frontend probes and a fresh GNU Make control build passed.
-This does not establish the intermittent failure's cause. Qualification has
-moved to an independent native Linux AMD builder using the same pinned compiler
-image and release archives. That builder also reproduced the baseline Openmktr
-binary byte for byte with the pinned Clang/musl build image. New measurements
-are kept separate from every previous host, binary and failed attempt.
+This does not establish the intermittent failure's cause. Historical attempts
+on another builder are excluded from current acceptance. All current project
+work and qualification take place on the local PC, with no NAS access. New
+measurements are kept separate from every previous host, binary and failed
+attempt.
 
 General statement replay and native-observation validation are implemented;
 their current qualification is recorded separately from the historical results.
@@ -255,13 +276,20 @@ both job counts, but its clean-build intervals were inconclusive. Those
 measurements are historical. The current acceptance matrix runs entirely on the
 PC. A captured WSL kernel panic interrupted its Docker campaign; fresh
 measurements use an independently qualified local Linux VM and native ext4
-directories, with the same CPU availability for both variants. Every earlier failed or inconclusive
-run remains separate. FFmpeg uses the same private NASM runtime for both variants
+directories, with the same CPU availability for both variants. The VM remained
+healthy when Clang 19.1.1 crashed compiling `net/wireless/pmsr.c` in the first
+task after three measured pairs. Its saved preprocessed input and original
+driver command pass 72 independent serial and parallel retries with stable
+output hashes. The cause remains unresolved; this run is incomplete and does
+not qualify any performance gate. A full Linux build through external GNU Make
+is the next independent control. Every earlier failed or inconclusive run
+remains separate. FFmpeg uses the same private NASM runtime for both variants
 and retains assembly support and the original release sources.
 Aggressive-mode real-project qualification, legacy-entrypoint comparisons,
 real-project feature ablations, separate Ninja-runtime comparisons and monitored
-cold/warm performance qualification also remain outstanding. Passing functional
-suites and FFmpeg default results do not satisfy those remaining gates.
+cold/warm performance qualification were not completed and are excluded by the
+reduced campaign scope. Passing functional suites and FFmpeg observations do
+not establish those original gates.
 
 Extend `validation/benchmark_ninja.py` invocations with, for example,
 `--candidate-option=--graph_optimizations=aggressive`. Options are recorded in
