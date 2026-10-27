@@ -3,6 +3,7 @@
 // graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
 // Paps. Changed build execution, evaluation, or portability for this fork.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
+// Bypass cache bookkeeping in observation regions overlapping active effects.
 // Expose validation of inherited FIFO jobservers for recursive scheduling.
 // Share signal handling and interrupted-output identity checks across modes.
 // Expose process-owned load-admission slots for generated Ninja recipes.
@@ -56,6 +57,7 @@ class FileObservationCache {
 
  private:
   std::shared_ptr<FileObservationState> state_;
+  size_t effect_bypasses_ = 0;
   friend class ScopedFileObservations;
 };
 

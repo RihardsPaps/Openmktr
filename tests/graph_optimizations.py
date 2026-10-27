@@ -507,6 +507,29 @@ class GraphOptimizations(unittest.TestCase):
             if profile != "off":
                 self.assertRegex(result.stdout, r"recipe metadata probes: [1-9]\d* hits")
 
+    def test_metadata_regions_overlapping_effects_use_ordinary_probes(self):
+        self.makefile(".PHONY: all busy finish\nall: busy finish\n"
+                      "busy:\n\t@printf new > input; touch ready; "
+                      "while [ ! -f finished ]; do sleep .01; done\n"
+                      "ready:\n\t@while [ ! -f ready ]; do sleep .01; done\n"
+                      "check: ready input\n\t@printf '%s' '$(filter input,$?)' > seen\n"
+                      "finish: check\n\t@touch finished\n")
+        for enabled in (False, True):
+            for name in ("ready", "finished", "seen"):
+                (self.root / name).unlink(missing_ok=True)
+            old = time.time_ns() - 30_000_000_000
+            (self.root / "input").write_text("initial")
+            os.utime(self.root / "input", ns=(old, old))
+            (self.root / "check").write_text("settled")
+            os.utime(self.root / "check", ns=(old + 10_000_000_000,
+                                             old + 10_000_000_000))
+            options = [] if enabled else ["--disable_graph_optimization=evaluation"]
+            result = self.run_tool("-j2", "--kati_stats", *options)
+            self.assertEqual((self.root / "input").read_text(), "new")
+            self.assertEqual((self.root / "seen").read_text(), "input")
+            if enabled:
+                self.assertRegex(result.stdout, r"recipe metadata expansion bypasses: [1-9]\d*")
+
     def test_shell_effects_execute_once_on_invalidation(self):
         (self.root / "value").write_text("one")
         self.makefile("VALUE := $(shell printf x >> effects; cat value)\n"

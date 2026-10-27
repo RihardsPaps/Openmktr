@@ -84,6 +84,9 @@ process epoch brackets real commands and filesystem writes across executor
 threads. Active effects force fresh probes; completion invalidates retained
 metadata before the next expansion. `--kati_stats` reports recipe metadata hits,
 misses and conservative fallbacks. This retains Ninja's own dependency checking.
+Regions that already overlap active effects use ordinary probes throughout,
+avoiding per-probe cache bookkeeping. Such bypasses invalidate any enclosing
+certificate and are counted separately in the statistics.
 Ordered shell and file effects invalidate live wildcard and native find
 queries as well. Earlier wildcard snapshots remain available for include loops
 and validation. Different results for the same pattern within one invocation

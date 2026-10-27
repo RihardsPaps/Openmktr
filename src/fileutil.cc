@@ -5,6 +5,7 @@
 // Supervise Ninja interruption cleanup without a separate timestamp process.
 // Atomically retain exact managed-workspace recipe identities.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
+// Bypass cache bookkeeping in observation regions overlapping active effects.
 // Preserve shell parsing of multi-option flags in recipe supervisors.
 // Prevent recipe exports from duplicating a live jobserver reservation.
 // Elide pure no-op commands for the default POSIX shell and flags.
@@ -105,6 +106,8 @@ FileObservationCache::~FileObservationCache() {
   if (state_)
     LOG_STAT("recipe metadata probes: %zu hits, %zu misses, %zu fallbacks",
              state_->hits, state_->misses, state_->fallbacks);
+  if (effect_bypasses_)
+    LOG_STAT("recipe metadata expansion bypasses: %zu", effect_bypasses_);
 }
 
 ScopedFileObservations::ScopedFileObservations(bool enabled,
@@ -112,6 +115,17 @@ ScopedFileObservations::ScopedFileObservations(bool enabled,
     : previous_(active_) {
   if (!enabled)
     return;
+  // An already-running effect makes every probe uncertain. Use ordinary
+  // probes for this entire region instead of checking the unusable cache on
+  // each lookup. An enclosing observation cannot certify omitted probes.
+  if (FilesystemEffectsActive()) {
+    if (cache)
+      ++cache->effect_bypasses_;
+    if (previous_)
+      previous_->valid = false;
+    active_ = nullptr;
+    return;
+  }
   if (cache) {
     if (!cache->state_)
       cache->state_ = std::make_shared<FileObservationState>();
