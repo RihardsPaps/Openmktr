@@ -2,7 +2,7 @@
   "schema_version": 1,
   "status": "in_progress",
   "complete": false,
-  "updated_utc": "2026-10-27T06:54:42.8219152Z",
+  "updated_utc": "2026-10-27T09:23:05.912935+00:00",
   "delivery": {
     "branch": "codex/ninja-graph-optimizations",
     "base_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d",
@@ -1017,7 +1017,7 @@
     }
   ],
   "outstanding": [
-    "Final-binary default/aggressive clean, no-op and source gains at j8/j16 remain unqualified on FFmpeg and Linux; fresh native ext4 qualification queued after verified evidence relocation.",
+    "Final-binary clean gains remain unqualified: Linux j8 clean is inconclusive; j16 and FFmpeg defaults are running. Aggressive and other required matrices remain pending.",
     "Aggressive real-project performance qualification remains unrun.",
     "Legacy-entrypoint no-regression qualification, real-project feature ablations and separate Ninja-runtime performance comparisons remain unrun.",
     "Monitored startup-inclusive cold and retained warm real-project measurements remain unrun."
@@ -1098,14 +1098,153 @@
     }
   },
   "performance_followup": {
-    "status": "Verified evidence relocation pending; fresh default matrix queued on separate native ext4 disk",
+    "status": "Linux j8 complete: clean gate inconclusive, incremental gains supported; unchanged j16 and FFmpeg campaign continuing",
     "builder": "nas / native Linux / AMD Ryzen 7 5800X / 16 threads",
     "toolchain_image_id": "sha256:42bae58178c98432973444c1b5b7de9b5e847f1fce7372c73a1034749902c050",
     "root": "/srv/disks/media02/.omktr-graph-20261027-09b0/evidence/defaults-probe-media02",
     "container": "openmktr-graph-nas-defaults-probe-media02",
     "pipeline": "/home/nasadmin/.cache/omktr-graph-20261027-057a084f/evidence/qualification-probe-pipeline.jsonl",
     "binary_sha256": "09b0f15dcccd30993f0230f2bc98ab4e894a767ebe5e78043dfef4f9aea731b4",
-    "qualification": "No accepted measurements yet. Fresh native Linux build trees, two discarded warmup pairs and seven alternating measured pairs at j8/j16. Never pooled with other binaries, hosts or instrumented runs."
+    "qualification": "No accepted measurements yet. Fresh native Linux build trees, two discarded warmup pairs and seven alternating measured pairs at j8/j16. Never pooled with other binaries, hosts or instrumented runs.",
+    "completed_linux_j8": {
+      "accepted": false,
+      "reason": "Clean 95% interval includes zero; no statistically supported regression",
+      "summary": [
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "clean",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            -2.739908906893218,
+            2.888655939874052,
+            4.324045701566348,
+            1.980239781508697,
+            -5.423602942156092,
+            -2.443818062726355,
+            0.4701746029863174
+          ],
+          "median_improvement_percent": 0.4701746029863174,
+          "bootstrap_95_percent": [
+            -2.739908906893218,
+            2.888655939874052
+          ],
+          "supported_improvement": false,
+          "supported_regression": false,
+          "baseline_median_seconds": 278.1817780039855,
+          "candidate_median_seconds": 284.71286963502644
+        },
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "graph",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            39.9024982664997,
+            44.22180359972818,
+            42.365264710880844,
+            38.14289838455798,
+            37.28708298015493,
+            42.23635086862815,
+            44.86791028210617
+          ],
+          "median_improvement_percent": 42.23635086862815,
+          "bootstrap_95_percent": [
+            38.14289838455798,
+            44.22180359972818
+          ],
+          "supported_improvement": true,
+          "supported_regression": false,
+          "baseline_median_seconds": 10.00564172299346,
+          "candidate_median_seconds": 5.797586055006832
+        },
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "missing",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            24.45129271329115,
+            21.402623531539366,
+            16.569939106416932,
+            19.27708925204631,
+            14.54431805828068,
+            19.001977765826204,
+            14.315454595930522
+          ],
+          "median_improvement_percent": 19.001977765826204,
+          "bootstrap_95_percent": [
+            14.54431805828068,
+            21.402623531539366
+          ],
+          "supported_improvement": true,
+          "supported_regression": false,
+          "baseline_median_seconds": 21.793454751954414,
+          "candidate_median_seconds": 17.635713767027482
+        },
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "noop",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            39.27770544509832,
+            43.67362338849049,
+            38.33872036845107,
+            31.34117059821204,
+            35.338088449307726,
+            39.53375073376692,
+            37.147081222770154
+          ],
+          "median_improvement_percent": 38.33872036845107,
+          "bootstrap_95_percent": [
+            35.338088449307726,
+            39.53375073376692
+          ],
+          "supported_improvement": true,
+          "supported_regression": false,
+          "baseline_median_seconds": 9.560464401962236,
+          "candidate_median_seconds": 5.996948358020745
+        },
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "source",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            21.13818510163806,
+            21.42701906476997,
+            16.86885401851179,
+            19.99448314878933,
+            16.29076671473496,
+            22.611330266390905,
+            19.048804211837613
+          ],
+          "median_improvement_percent": 19.99448314878933,
+          "bootstrap_95_percent": [
+            16.86885401851179,
+            21.42701906476997
+          ],
+          "supported_improvement": true,
+          "supported_regression": false,
+          "baseline_median_seconds": 22.266861137992237,
+          "candidate_median_seconds": 17.777812500018626
+        }
+      ],
+      "summary_reference": {
+        "path": "validation/logs/graph-optimizations/defaults-probe-media02-linux-j8-summary.json",
+        "sha256": "590b1f2923a7a4fb09a08140e1378a4bf59a6c3f03fd7dffd15c6287f4633c02"
+      },
+      "raw_samples": {
+        "path": "validation/logs/graph-optimizations/defaults-probe-media02-linux-progress.jsonl",
+        "sha256": "67685c5108c5d94dea93d876cf53428fb1470f9eabd175165467328e3af43d14"
+      }
+    }
   },
   "cache_correctness_followup": {
     "structural_stamp_checksum": "KAT4, bounded and sealed; mutable validated timestamp checkpoint excluded",
@@ -1196,7 +1335,7 @@
   },
   "metadata_bypass_coverage": "Known-active effect regions use ordinary filesystem probes throughout and invalidate enclosing certificates; statistics count region bypasses separately. Dedicated concurrent-side-effect regression passes in ordinary and optimized modes.",
   "evidence_relocation": {
-    "status": "copy complete; full metadata and SHA256 verification running before original removal",
+    "status": "passed: all 516066 entries matched by SHA256, type, mode, ownership and modification time; original revalidated before removal",
     "destination": "/srv/disks/media02/.omktr-graph-20261027-09b0/evidence",
     "filesystem": "native ext4 on separate physical /dev/sda1",
     "entries": 516066,
@@ -1216,6 +1355,111 @@
       "sha256": "12d417bd5af7fbb63699a068d41831f544a023e3260d77f0e5ff0d9445e37c73",
       "status": "passed: execution, explicit monitor lifecycle, aggressive build and required rebuild",
       "path": "validation/logs/graph-optimizations/media02-smoke.json"
+    },
+    "receipt": {
+      "path": "validation/logs/graph-optimizations/relocation-verified.json",
+      "sha256": "d7c4bde5938a18a2853bfc6f86b44ca0b7d983c3211b99a40a9a62315d9a1da3"
     }
+  },
+  "planned_controlled_comparison": {
+    "status": "queued after the unchanged default campaign; CPU settings not yet modified",
+    "candidate_sha256": "09b0f15dcccd30993f0230f2bc98ab4e894a767ebe5e78043dfef4f9aea731b4",
+    "purpose": "Test whether consistent CPU placement and a common performance governor reduce measurement variation; this is not an established explanation of the prior noise.",
+    "cpu_policy": "Temporary performance governor for both binaries; original governor and EPP saved and restored with readback verification; boost and frequency limits untouched.",
+    "affinity": {
+      "j8": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "j16": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ]
+    },
+    "topology": "Ryzen 5800X sibling pairs 0/8 through 7/15; j8 uses one logical CPU per physical core",
+    "protocol": "Unchanged two discarded warmup pairs, seven alternating measured pairs, seeded bootstrap and all acceptance conditions; fresh workspaces, no pooling.",
+    "retained_evidence": "All previous inconclusive and failed campaigns remain referenced; stop the new controller at its first incomplete required gate.",
+    "root": "/srv/disks/media02/.omktr-graph-20261027-09b0/evidence/controlled-01",
+    "coordinator": "/srv/disks/media02/.omktr-graph-20261027-09b0/controlled-coordinator.log",
+    "source": "https://docs.kernel.org/admin-guide/pm/amd-pstate.html",
+    "scripts": [
+      {
+        "path": "validation/logs/graph-optimizations/benchmark_cpu_control.py",
+        "sha256": "3722b75a45bcccd2a32a45274941e0a31f39f527103d00ae2e6de0f969c39e92"
+      },
+      {
+        "path": "validation/logs/graph-optimizations/controlled_worker.py",
+        "sha256": "4db6ecb0a32d210b150b33fb9aaec5bd996ab38df99a4c480d820b2612638575"
+      },
+      {
+        "path": "validation/logs/graph-optimizations/run_controlled.py",
+        "sha256": "1a4b6180e079e1a738a343aa844312a5c5ecd98c2536cd9fa3b47b87845e6ef5"
+      },
+      {
+        "path": "validation/logs/graph-optimizations/wait_then_controlled.py",
+        "sha256": "2b230c00695a979e803a89d9db9f01796515194ae141ce3f1e239a6b08c49824"
+      }
+    ]
+  },
+  "offline_profile_followup": {
+    "status": "Decoded existing profiles locally with the matching perf 7.0.14 runtime; analysis never ran on the timed builder",
+    "qualification": false,
+    "profiled_candidate_sha256": "628620e5564513bae574dffd794044eeda0399d9c73687c420b9b660e274f622",
+    "limitation": "Earlier candidate, cycles:u sampling only; small omktr user-cycle share does not rule out kernel time, waiting, or scheduling effects.",
+    "finding": "Over 99% of rounded sampled user-cycle weights belong to clang-19; omktr executable is approximately 0.04% in each profile. A prior 0.1% global display cutoff hid its individual functions.",
+    "references": [
+      {
+        "path": "validation/logs/graph-optimizations/clean-profile-copy.json",
+        "sha256": "525613b2367d05178f20dac96420679a4abff84b7b2f231e0a01b42015433161"
+      },
+      {
+        "path": "validation/logs/graph-optimizations/perf-7-runtime-manifest.json",
+        "sha256": "61f962a9c0efe314c2b24d0780939867baafd787c2f10f2fab8b0634460c5808"
+      },
+      {
+        "path": "validation/logs/graph-optimizations/clean-profile-v7-analysis.json",
+        "sha256": "7bcd3630dadffa323a3c88294450ada730921b3e067cc8d5c0c3914529a0f7de"
+      },
+      {
+        "path": "validation/logs/graph-optimizations/baseline-clean-dso-v7-local.txt",
+        "sha256": "411d1fff7c9e242706d413eb1bb0b8ac82583fe04782054a081fc68e9ec32bee"
+      },
+      {
+        "path": "validation/logs/graph-optimizations/candidate-safe-clean-dso-v7-local.txt",
+        "sha256": "1d3d80fd5cc94ce681e21fa49d17d72cc76c30cadc2f25797e7c32e02ebee124"
+      },
+      {
+        "path": "validation/logs/graph-optimizations/clean-hot-functions-analysis.json",
+        "sha256": "e1e70b1f238caa025b43e4b45b9da92ad9373bfdd29131b507483be7b579eac4"
+      },
+      {
+        "path": "validation/logs/graph-optimizations/baseline-clean-omktr-v7-local.txt",
+        "sha256": "879c345c0eb5b29a49449e292a5d0d71f0831c66334f2a9a2b6010a55f25415c"
+      },
+      {
+        "path": "validation/logs/graph-optimizations/candidate-safe-clean-omktr-v7-local.txt",
+        "sha256": "6b8de4cb7a4cd2aa6aee2654794677cd1ce072e9c3713db532b6d64014412819"
+      }
+    ]
   }
 }
