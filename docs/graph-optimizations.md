@@ -42,8 +42,9 @@ current child regions, and dynamically parsed `eval` bodies record independent
 programs. Definitions from obsolete branches never survive into a new invocation.
 An invalid operand is evaluated and recorded in place; recovery never restarts
 an invocation after effects have executed. Computed recipe automatic variables
-whose observations are not represented by scalar records, and other unsupported bindings or operations,
-continue through ordinary evaluation at the affected boundary.
+whose observations are not represented by scalar records, and other unsupported
+bindings or operations, continue through ordinary evaluation at the affected
+boundary.
 
 Pattern-variable scopes and their definition ordering are indexed during
 dependency resolution. Adding scopes through dynamic evaluation refreshes the
@@ -55,7 +56,9 @@ in every profile, rather than a separate speculative shell-check pass. This prev
 executing those effects twice when a regeneration check would otherwise discover
 a changed result. Explicit existing no-rerun extensions retain their semantics.
 Native file reads record identities, including missing files and changes that
-preserve mtimes. Wildcards retain both matches and empty queries. Recognized
+preserve mtimes. A missing-file observation accepts only `ENOENT`; later path
+errors or unreadable dependencies require ordinary evaluation. Wildcards retain
+both matches and empty queries. Recognized
 native find queries are revalidated by the native interpreter in an isolated
 worker; validation never executes a shell inferred to be pure from its text.
 The worker accepts only complete, quiet results, including current search
@@ -82,6 +85,10 @@ search candidates, generated graph and environment files. Phony work, VPATH,
 unresolved graphs and unsupported features retain ordinary evaluation.
 
 Cache payloads are bounded, versioned and checksummed, with atomic publication.
+The main regeneration stamp seals all structural fields; only its fixed-size
+validation checkpoint may be refreshed independently. It also binds the Ninja
+graph, launcher and environment file to the accepted generation. Nonregular
+cache files, including FIFOs, are rejected without blocking.
 Missing, obsolete, corrupt or mismatched records are misses. Internal evaluation
 and include records use `.kati_stamp*` names inside the graph output directory.
 Keep using `omktr build` for its existing build-directory lock.
@@ -196,6 +203,15 @@ runtime restarted. Its container exited 255 without an OOM-killed flag. Neither
 Linux run has seven measured pairs or qualifies at j8/j16. Their failed and
 partial evidence is retained. Source-integrity checks pass, accounting for the
 archive link normalization performed by Python's initial `data` extraction filter.
+
+A subsequent Clang 19 run failed in the unchanged baseline during its first
+discarded warmup, before any measured pairs. Its exact compiler invocation,
+400 independent frontend probes and a fresh GNU Make control build passed.
+This does not establish the intermittent failure's cause. Qualification has
+moved to an independent native Linux AMD builder using the same pinned compiler
+image and release archives. That builder also reproduced the baseline Openmktr
+binary byte for byte with the pinned Clang/musl build image. New measurements
+are kept separate from every previous host, binary and failed attempt.
 
 General statement replay and native-observation validation are implemented;
 their current qualification is recorded separately from the historical results.

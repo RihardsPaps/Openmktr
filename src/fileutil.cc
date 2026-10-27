@@ -135,11 +135,10 @@ ScopedFileObservations::Identities() const {
   if (!state_)
     return result;
   for (const auto& file : state_->files) {
-    result[file.first] =
-        file.second.error == 0 ? GetFileIdentityFromStat(file.second.metadata)
-        : file.second.error == ENOENT || file.second.error == ENOTDIR
-            ? "missing"
-            : "unreadable";
+    result[file.first] = file.second.error == 0
+                             ? GetFileIdentityFromStat(file.second.metadata)
+                         : file.second.error == ENOENT ? "missing"
+                                                       : "unreadable";
   }
   return result;
 }
@@ -313,7 +312,7 @@ void WriteNinjaRecipeState(const std::string& path, const std::string& state) {
 std::string GetFileIdentity(std::string_view path) {
   struct stat st;
   if (stat(std::string(path).c_str(), &st) != 0)
-    return errno == ENOENT || errno == ENOTDIR ? "missing" : "unreadable";
+    return errno == ENOENT ? "missing" : "unreadable";
   return GetFileIdentityFromStat(st);
 }
 

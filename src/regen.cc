@@ -1,7 +1,8 @@
 // FORK MODIFICATION NOTICE (2026)
 // Track and validate incremental evaluation, include proofs and imported Ninja
 // graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
-// Paps. Changed build execution, evaluation, or portability for this fork.
+// Paps. Check stamp integrity before accepting regeneration state.
+// Changed build execution, evaluation, or portability for this fork.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Keep explanation checks from refreshing the regeneration stamp.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
@@ -110,7 +111,7 @@ class StampChecker {
     }
 
     if (!needs_regen_ && !g_flags.explain) {
-      FILE* fp = fopen(GetNinjaStampFilename().c_str(), "rb+");
+      FILE* fp = OpenGraphStamp(GetNinjaStampFilename(), true);
       if (!fp)
         return true;
       ScopedFile sfp(fp);
@@ -162,7 +163,7 @@ class StampChecker {
   })
 
     const std::string& stamp_filename = GetNinjaStampFilename();
-    FILE* fp = fopen(stamp_filename.c_str(), "rb");
+    FILE* fp = OpenGraphStamp(stamp_filename);
     if (!fp) {
       if (g_flags.regen_debug)
         printf("%s: %s\n", stamp_filename.c_str(), strerror(errno));
@@ -179,7 +180,7 @@ class StampChecker {
     }
     char magic[4];
     if (fread(magic, 1, sizeof(magic), fp) != sizeof(magic) ||
-        memcmp(magic, "KAT3", sizeof(magic)) != 0) {
+        memcmp(magic, "KAT4", sizeof(magic)) != 0) {
       fprintf(stderr, "obsolete kati_stamp, regenerating...\n");
       RETURN_TRUE;
     }
@@ -212,6 +213,18 @@ class StampChecker {
     }
 
     std::string s, s2;
+    if (LOAD_INT(fp) != 3)
+      RETURN_TRUE;
+    for (int i = 0; i < 3; ++i) {
+      LOAD_STRING(fp, &s);
+      LOAD_STRING(fp, &s2);
+      if (s2 == "missing" || s2 == "unreadable" || GetFileIdentity(s) != s2) {
+        if (g_flags.regen_debug)
+          printf("generation artifact %s changed, regenerating...\n",
+                 s.c_str());
+        RETURN_TRUE;
+      }
+    }
     int num_files = LOAD_INT(fp);
     std::vector<std::string> paths(num_files), recorded(num_files);
     for (int i = 0; i < num_files; i++) {
@@ -238,12 +251,14 @@ class StampChecker {
         s2.erase(0, 10);
       struct stat st;
       const bool exists = !monitored && stat(s.c_str(), &st) == 0;
+      const int stat_error = exists ? 0 : errno;
       double ts = monitored ? timestamps[i]
                   : exists  ? GetTimestampFromStat(st)
                             : -1;
       const std::string identity = monitored ? identities[i]
                                    : exists  ? GetFileIdentityFromStat(st)
-                                             : "missing";
+                                   : stat_error == ENOENT ? "missing"
+                                                          : "unreadable";
       // GetTimestamp returns < 0 when there's an error reading the file, like
       // when its been removed.
       const bool unchanged_missing = s2 == "missing" && identity == "missing";
@@ -399,7 +414,8 @@ class StampChecker {
 
   bool CheckShellResult(const ShellResult* sr, std::string* err) {
     if (sr->op == CommandOp::READ_MISSING) {
-      if (Exists(sr->cmd)) {
+      struct stat metadata;
+      if (stat(sr->cmd.c_str(), &metadata) == 0 || errno != ENOENT) {
         if (g_flags.dump_kati_stamp)
           printf("file %s: dirty\n", sr->cmd.c_str());
         else

@@ -8,7 +8,9 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cerrno>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -19,6 +21,25 @@
 
 namespace {
 constexpr size_t kMaxCacheSize = 64 * 1024 * 1024;
+
+bool StampChecksum(FILE* stream, size_t length, uint64_t* checksum) {
+  if (fseek(stream, sizeof(double), SEEK_SET) != 0)
+    return false;
+  uint64_t hash = UINT64_C(14695981039346656037);
+  char buffer[65536];
+  while (length) {
+    const size_t size = std::min(length, sizeof(buffer));
+    if (fread(buffer, 1, size, stream) != size)
+      return false;
+    for (size_t i = 0; i < size; ++i) {
+      hash ^= static_cast<unsigned char>(buffer[i]);
+      hash *= UINT64_C(1099511628211);
+    }
+    length -= size;
+  }
+  *checksum = hash;
+  return true;
+}
 
 bool WriteAll(int fd, std::string_view data) {
   while (!data.empty()) {
@@ -92,7 +113,7 @@ bool ConsumeGraphString(std::string_view* data, std::string* value) {
 }
 
 bool ReadGraphCache(const std::string& path, std::string* payload) {
-  int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+  int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
   if (fd < 0)
     return false;
   struct stat st;
@@ -118,6 +139,61 @@ bool ReadGraphCache(const std::string& path, std::string* payload) {
          magic == "OMKTR_GRAPH1" && ConsumeGraphString(&view, &checksum) &&
          ConsumeGraphString(&view, payload) && view.empty() &&
          checksum == GraphDigest(*payload);
+}
+
+bool SealGraphStamp(FILE* stream) {
+  struct stat metadata;
+  if (fflush(stream) != 0 || fstat(fileno(stream), &metadata) != 0 ||
+      !S_ISREG(metadata.st_mode) ||
+      metadata.st_size < static_cast<off_t>(sizeof(double) + 4) ||
+      static_cast<uint64_t>(metadata.st_size) > kMaxCacheSize - 8)
+    return false;
+  uint64_t checksum;
+  if (!StampChecksum(stream, metadata.st_size - sizeof(double), &checksum) ||
+      fseek(stream, 0, SEEK_END) != 0)
+    return false;
+  unsigned char bytes[8];
+  for (size_t i = 0; i < sizeof(bytes); ++i)
+    bytes[i] = checksum >> (i * 8);
+  return fwrite(bytes, 1, sizeof(bytes), stream) == sizeof(bytes) &&
+         fflush(stream) == 0;
+}
+
+FILE* OpenGraphStamp(const std::string& path, bool writable) {
+  int fd = open(path.c_str(), (writable ? O_RDWR : O_RDONLY) | O_CLOEXEC |
+                                  O_NOFOLLOW | O_NONBLOCK);
+  if (fd < 0)
+    return nullptr;
+  struct stat metadata;
+  if (fstat(fd, &metadata) != 0 || !S_ISREG(metadata.st_mode) ||
+      metadata.st_size < static_cast<off_t>(sizeof(double) + 4 + 8) ||
+      static_cast<uint64_t>(metadata.st_size) > kMaxCacheSize) {
+    close(fd);
+    errno = EINVAL;
+    return nullptr;
+  }
+  FILE* stream = fdopen(fd, writable ? "rb+" : "rb");
+  if (!stream) {
+    close(fd);
+    return nullptr;
+  }
+  uint64_t checksum = 0, expected = 0;
+  unsigned char bytes[8];
+  double checkpoint;
+  bool valid =
+      fread(&checkpoint, sizeof(checkpoint), 1, stream) == 1 &&
+      std::isfinite(checkpoint) && checkpoint > 0 &&
+      StampChecksum(stream, metadata.st_size - sizeof(double) - 8, &checksum) &&
+      fread(bytes, 1, sizeof(bytes), stream) == sizeof(bytes);
+  if (valid)
+    for (size_t i = 0; i < sizeof(bytes); ++i)
+      expected |= static_cast<uint64_t>(bytes[i]) << (i * 8);
+  if (!valid || checksum != expected || fseek(stream, 0, SEEK_SET) != 0) {
+    fclose(stream);
+    errno = EBADMSG;
+    return nullptr;
+  }
+  return stream;
 }
 
 bool WriteGraphCache(const std::string& path, std::string_view payload) {

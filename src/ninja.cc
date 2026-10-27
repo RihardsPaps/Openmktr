@@ -1,6 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
 // Track and validate incremental evaluation, include proofs and imported Ninja
-// graphs. Carry generation/runtime load limits into Ninja and recursive
+// graphs. Seal structural stamp bytes and bind generated artifacts to
+// acceptance. Carry generation/runtime load limits into Ninja and recursive
 // recipes. Use native load admission for every recipe, with configurable Ninja
 // selection. Quote generated launcher paths for build directories containing
 // shell syntax. Changed by the Openmktr fork, maintained by Rihards Paps and
@@ -330,7 +331,8 @@ class NinjaGenerator {
       std::unordered_set<std::string> files;
       MakefileCacheManager::Get().GetAllFilenames(&files);
       for (const auto& file : files)
-        record("source", Intern(file));
+        if (!MakefileCacheManager::Get().IsGeneratedGraphDep(file))
+          record("source", Intern(file));
       if (!WriteGraphCache(std::string(g_flags.import_root) + "/manifest",
                            manifest))
         ERROR("cannot publish imported graph manifest");
@@ -1250,6 +1252,7 @@ class NinjaGenerator {
       import_inputs_.push_back(source);
     import_artifacts_.push_back(directory + "/build.ninja");
     import_artifacts_.push_back(directory + "/env.sh");
+    import_artifacts_.push_back(directory + "/ninja.sh");
     import_artifacts_.push_back(directory + "/manifest");
     return true;
   }
@@ -1860,13 +1863,33 @@ class NinjaGenerator {
       evaluation =
           WriteGraphCache(GetNinjaStampFilename() + ".includes", proof) ? 2 : 1;
     }
-    FILE* fp = fopen(GetStampTempFilename().c_str(), "wb");
-    CHECK(fp);
+    std::string temporary = GetStampTempFilename() + ".XXXXXX";
+    const int descriptor = mkstemp(temporary.data());
+    if (descriptor < 0) {
+      LOG_STAT("stamp cache publication failed: %s", strerror(errno));
+      return;
+    }
+    FILE* fp = fdopen(descriptor, "wb+");
+    if (!fp) {
+      close(descriptor);
+      unlink(temporary.c_str());
+      LOG_STAT("stamp cache publication failed: cannot open stream");
+      return;
+    }
 
     size_t r = fwrite(&start_time_, sizeof(start_time_), 1, fp);
     CHECK(r == 1);
-    CHECK(fwrite("KAT3", 1, 4, fp) == 4);
+    CHECK(fwrite("KAT4", 1, 4, fp) == 4);
     DumpInt(fp, evaluation);
+    // Generation artifacts certify acceptance, but are not Makefile inputs.
+    // Keep their records separate so stamp inspection retains that contract.
+    DumpInt(fp, 3);
+    for (const std::string& artifact :
+         {GetNinjaFilename(), GetNinjaShellScriptFilename(),
+          GetEnvScriptFilename()}) {
+      DumpString(fp, artifact);
+      DumpString(fp, GetFileIdentity(artifact));
+    }
     DumpInt(fp, makefiles.size() + 1);
     DumpString(fp, kati_binary_);
     DumpString(fp, GetFileIdentity(kati_binary_));
@@ -1943,11 +1966,19 @@ class NinjaGenerator {
 
     DumpString(fp, orig_args);
 
+    if (!SealGraphStamp(fp)) {
+      fclose(fp);
+      unlink(temporary.c_str());
+      unlink(GetNinjaStampFilename().c_str());
+      LOG_STAT("stamp cache not published: oversized or incomplete record");
+      return;
+    }
     if (fclose(fp) != 0)
       PERROR("fclose(kati_stamp) failed");
-    if (rename(GetStampTempFilename().c_str(),
-               GetNinjaStampFilename().c_str()) != 0)
-      PERROR("rename(kati_stamp) failed");
+    if (rename(temporary.c_str(), GetNinjaStampFilename().c_str()) != 0) {
+      LOG_STAT("stamp cache publication failed: %s", strerror(errno));
+      unlink(temporary.c_str());
+    }
   }
 
   CommandEvaluator ce_;

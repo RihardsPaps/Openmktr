@@ -778,6 +778,81 @@ class GraphOptimizations(unittest.TestCase):
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             self.assertEqual((self.root / "result").read_text(), "a b z")
 
+    def test_missing_native_read_does_not_hide_a_later_path_error(self):
+        for profile in ("off", "safe", "aggressive"):
+            for force_evaluation in (False, True):
+                slot = self.root / "slot"
+                if slot.exists():
+                    slot.unlink()
+                self.makefile("VALUE := $(file <slot/value)\n" +
+                              ("$(file >>effects,x)\n" if force_evaluation else "") +
+                              ".PHONY: all\nall:\n\t@printf '%s' '$(VALUE)' > result\n")
+                self.run_tool("build", f"--graph_optimizations={profile}")
+                slot.write_text("not a directory")
+                ordinary = self.run_tool("--graph_optimizations=off", check=False)
+                cached = self.run_tool("build", f"--graph_optimizations={profile}", check=False)
+                self.assertEqual(cached.returncode, ordinary.returncode)
+                self.assertNotEqual(cached.returncode, 0)
+                self.assertIn("*** open failed", cached.stdout)
+
+    def test_stamp_integrity_rejects_flag_corruption_and_tampered_graphs(self):
+        self.makefile("$(file >>effects,x)\n.PHONY: all\nall:\n\t@printf correct > result\n")
+        self.run_tool("build")
+        stamp = self.root / ".openmktr/.kati_stamp"
+        original = stamp.read_bytes()
+        damaged = bytearray(original)
+        damaged[12:16] = bytes(4)
+        stamp.write_bytes(damaged)
+        self.run_tool("build")
+        self.assertEqual((self.root / "effects").read_text(), "x\nx\n")
+        self.assertNotEqual(stamp.read_bytes(), damaged)
+        self.makefile(".PHONY: all\nall:\n\t@printf correct > result\n")
+        self.run_tool("build")
+        graph = self.root / ".openmktr/build.ninja"
+        graph.write_text(graph.read_text().replace("printf correct", "printf wrong"))
+        self.run_tool("build")
+        self.assertEqual((self.root / "result").read_text(), "correct")
+        dumped = self.run_tool("--dump_stamp_tool", "--files", str(stamp))
+        self.assertIn("Makefile", dumped.stdout)
+        self.assertNotIn(".openmktr/build.ninja", dumped.stdout)
+        # The mutable checkpoint is deliberately excluded from the structural
+        # seal; an ordinary no-op refresh must retain a valid stamp.
+        self.run_tool("build")
+        self.run_tool("--dump_stamp_tool", "--files", str(stamp))
+
+    def test_nonregular_cache_files_are_nonblocking_misses(self):
+        self.makefile("VALUE := $(sort c b a)\n.PHONY: all\nall:\n"
+                      "\t@printf '%s' '$(VALUE)' > result\n")
+        self.run_tool("--ninja", "--graph_optimizations=aggressive")
+        cache = self.root / ".kati_stamp.evaluation"
+        cache.unlink()
+        os.mkfifo(cache)
+        subprocess.run([str(BINARY), "--ninja", "--graph_optimizations=aggressive"],
+                       cwd=self.root, check=True, stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT, timeout=5)
+        self.assertTrue(cache.is_file())
+        self.run_tool("build")
+        stamp = self.root / ".openmktr/.kati_stamp"
+        stamp.unlink()
+        os.mkfifo(stamp)
+        subprocess.run([str(BINARY), "build"], cwd=self.root, check=True,
+                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=5)
+        self.assertTrue(stamp.is_file())
+        self.assertEqual((self.root / "result").read_text(), "a b c")
+        stamp.unlink()
+        stamp.mkdir()
+        (stamp / "sentinel").write_text("preserved")
+        self.run_tool("build")
+        self.assertEqual((stamp / "sentinel").read_text(), "preserved")
+        (stamp / "sentinel").unlink()
+        stamp.rmdir()
+        sentinel = self.root / "sentinel"
+        sentinel.write_text("preserved")
+        stamp.symlink_to(sentinel)
+        self.run_tool("build")
+        self.assertEqual(sentinel.read_text(), "preserved")
+        self.assertFalse(stamp.is_symlink())
+
     def test_monitor_tracks_include_rename_delete_recreate_and_symlinks(self):
         if not Path("/dev/shm").is_dir():
             self.skipTest("Linux tmpfs unavailable")

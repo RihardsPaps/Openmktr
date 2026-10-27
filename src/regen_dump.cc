@@ -3,6 +3,7 @@
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
+// Verify the bounded stamp checksum before reading structural records.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -34,6 +35,7 @@
 #include <vector>
 
 #include "func.h"
+#include "graph_optimization.h"
 #include "io.h"
 #include "log.h"
 #include "strutil.h"
@@ -91,9 +93,9 @@ int stamp_dump_main(int argc, char* argv[]) {
     dump_files = true;
   }
 
-  FILE* fp = fopen(argv[argc - 1], "rb");
+  FILE* fp = OpenGraphStamp(argv[argc - 1]);
   if (!fp)
-    PERROR(argv[argc - 1]);
+    ERROR("Invalid or incompatible stamp file: %s", argv[argc - 1]);
 
   ScopedFile sfp(fp);
   double gen_time;
@@ -102,10 +104,18 @@ int stamp_dump_main(int argc, char* argv[]) {
     ERROR("Incomplete stamp file");
   char magic[4];
   if (fread(magic, 1, sizeof(magic), fp) != sizeof(magic) ||
-      memcmp(magic, "KAT3", sizeof(magic)) != 0)
+      memcmp(magic, "KAT4", sizeof(magic)) != 0)
     ERROR("Unsupported stamp file");
   if (LoadInt(fp) < 0)
     ERROR("Incomplete stamp file");
+
+  if (LoadInt(fp) != 3)
+    ERROR("Invalid stamp file");
+  for (int i = 0; i < 3; ++i) {
+    std::string artifact, identity;
+    if (!LoadString(fp, &artifact) || !LoadString(fp, &identity))
+      ERROR("Incomplete stamp file");
+  }
 
   //
   // See regen.cc CheckStep1 for how this is read normally

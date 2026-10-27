@@ -2,7 +2,7 @@
   "schema_version": 1,
   "status": "in_progress",
   "complete": false,
-  "updated_utc": "2026-10-27T02:07:31.408575+00:00",
+  "updated_utc": "2026-10-27T03:36:05.819969+00:00",
   "delivery": {
     "branch": "codex/ninja-graph-optimizations",
     "base_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d",
@@ -13,11 +13,12 @@
       "ckati",
       "ckati-sanitized"
     ],
-    "committed": false,
+    "committed": true,
     "requested_followup": "Complete state replay and remaining validation, then create PR, pass all checks and merge. User authorization supersedes prior local-only restriction.",
     "push_authorized": true,
     "pr_authorized": true,
-    "merge_authorized_after_all_gates": true
+    "merge_authorized_after_all_gates": true,
+    "implementation_commit": "796f49f6e12799134c3482987e285f3e18d22b48"
   },
   "build": {
     "baseline_sha256": "192505c0257134de072b3d530c4a059ea12a33197b3cee20b8c219df26a58ce4",
@@ -38,7 +39,7 @@
     },
     "revision_override": "Both static builds hold OMKTR_SOURCE_REVISION at the starting revision; binary and per-file source hashes identify the actual candidate.",
     "current_cpp_and_build_inputs_match_measured_manifest": false,
-    "functional_image_id": "sha256:4c240dd24184310fee539ef664b3658aae37649e2e9561edfd1e76908d8998b7",
+    "functional_image_id": "sha256:ab1b8de9c2138485f83db0e9e4f1597846120cd8659530bc61e44e3f05ab95bf",
     "preserved_untracked_binary_identities": {
       "ckati": {
         "sha256": "1308a3837ea0ebbc25999448e2793a0dd0cfd41bb64e1c721899970701a17bbf",
@@ -50,10 +51,10 @@
       }
     },
     "followup_working_tree_changed": true,
-    "current_candidate_sha256": "057a084f0cd866c7aabde3a0de8045bc1c8a467173a3c3c6a194facfb1c2f1d9",
+    "current_candidate_sha256": "a20c690102ac6a651a21c3cf134501bdc3d12a2d8c2a5dc2c07cf33930a487e3",
     "current_build_manifest": {
-      "path": "validation/logs/graph-optimizations/build-state-epochs-v2-identities.json",
-      "sha256": "c764321de0004fa20517785d18a78f5da45ca7cda89e4541a1e21d595ae988ad"
+      "path": "validation/logs/graph-optimizations/build-cache-v2-nas-identities.json",
+      "sha256": "0cb80facad6e38acf23f7dcb6262b0148a444f43ad01ca93d4018d3987fb0f77"
     },
     "current_cpp_and_build_inputs_match_current_build_manifest": true
   },
@@ -974,29 +975,76 @@
         "path": "validation/logs/graph-optimizations/state-replay-filesystem-investigation.json",
         "sha256": "8bf41bc815152b353f7219bc07a14a16affca613eb1268eef15742fa16caeafa"
       }
+    },
+    {
+      "finding": "Fresh native WSL LLVM 19 campaign crashed in the unchanged baseline during the first clean warmup, mm/debug.c. No measured pairs. Exact standalone compile passed three times with identical output; 400 standalone frontend probes and one fresh GNU Make clean control passed with the same configuration. Root cause remains unconfirmed.",
+      "failure_root": "validation/logs/graph-optimizations/linux-state-epochs-v2-safe-failure",
+      "gnu_control": "validation/logs/graph-optimizations/linux19-gnu-diagnostic-report.json",
+      "hardware_context": "validation/logs/graph-optimizations/host-hardware-investigation.json",
+      "hardware_hypothesis_only": true
+    },
+    {
+      "finding": "Stopped independent-builder v2 campaign during its second discarded warmup for reproduced cache correctness fixes. No measured pairs. Both first-pair full Linux clean builds succeeded on AMD. Superseded binary and all raw evidence retained.",
+      "root": "/home/nasadmin/.cache/omktr-graph-20261027-057a084f/evidence/linux-safe",
+      "container": "openmktr-graph-nas-defaults-v2",
+      "qualification": false
+    },
+    {
+      "finding": "Final-candidate native-volume external safe-j1 comparison reports extra work only in the GNU Make oracle's baseline no-op. Its log explicitly warns generated.h is 0.44 seconds in the future; recorded generated.h mtime follows all three objects and the link despite being generated first. Candidate direct and Ninja comparisons pass. Environment clock ordering invalidates this attempt; a complete fresh repeat is retained separately.",
+      "evidence_root": "validation/logs/graph-optimizations/cache-v2-external-native",
+      "qualification": false,
+      "release_blocked": false
     }
   ],
   "outstanding": [
-    "Linux clean, no-op and source gains at j8/j16 remain unqualified; Clang 18 crashed, then the fresh Clang 19 campaign was interrupted by a WSL/Docker backend restart.",
+    "Fresh Linux and FFmpeg default clean, no-op and source gains at j8/j16 are being remeasured on the independent AMD native Linux builder; previous candidates and failed/interrupted campaigns do not qualify.",
     "Aggressive real-project performance qualification remains unrun.",
     "Legacy-entrypoint no-regression qualification, real-project feature ablations and separate Ninja-runtime performance comparisons remain unrun.",
     "Monitored startup-inclusive cold and retained warm real-project measurements remain unrun."
   ],
   "validation_followup": {
-    "status": "passed",
-    "updated_utc": "2026-10-27T02:07:31.408575+00:00",
-    "binary_sha256": "057a084f0cd866c7aabde3a0de8045bc1c8a467173a3c3c6a194facfb1c2f1d9",
-    "source_manifest_sha256": "c764321de0004fa20517785d18a78f5da45ca7cda89e4541a1e21d595ae988ad",
+    "status": "external_comparison_pending",
+    "updated_utc": "2026-10-27T03:32:10.792772+00:00",
+    "binary_sha256": "a20c690102ac6a651a21c3cf134501bdc3d12a2d8c2a5dc2c07cf33930a487e3",
     "portable_gate": "passed",
     "sanitizer_gate": "passed",
     "regression_default": 858,
     "regression_aggressive": 858,
-    "focused_graph_tests": 42,
-    "log_sha256": {
-      "state-replay-portable-5.log": "35804d5243f246816163a3379edc2a34708f8b8947d798fc62c6d749c222a82c",
-      "state-replay-sanitizer-4.log": "bf9e23c23ebbf2ceea1563b8987c19b07c80e099c77e191fbff4d7671ea96369",
-      "state-epochs-v2-format.json": "e0e155860671655bc0534f294e217fa9263962fa10c0b45c3f28e2e454900189"
-    },
-    "external_differential": "exact static candidate native-volume reruns in progress"
+    "focused_graph_tests": 45,
+    "changed_cpp_formatting": "passed",
+    "logs": [
+      {
+        "path": "validation/logs/graph-optimizations/state-replay-portable-9.log",
+        "sha256": "e1147ab5cdc16bde7530602882e44c274666178b2960c606135bb9079f7414d0"
+      },
+      {
+        "path": "validation/logs/graph-optimizations/state-replay-sanitizer-7.log",
+        "sha256": "24a8630a8ef838fa3c23f069637c42cc2069432cef4df53a1893f10e8122429c"
+      },
+      {
+        "path": "validation/logs/graph-optimizations/state-replay-19-focused.log",
+        "sha256": "bf70ef32e370502ab3a4ae94c49b1e7f1dcf31f19de39aec3d85d2de0a0d6da6"
+      }
+    ]
+  },
+  "performance_followup": {
+    "status": "running",
+    "builder": "nas / native Linux / AMD Ryzen 7 5800X / 16 threads",
+    "toolchain_image_id": "sha256:42bae58178c98432973444c1b5b7de9b5e847f1fce7372c73a1034749902c050",
+    "root": "/home/nasadmin/.cache/omktr-graph-20261027-057a084f/evidence/defaults-cache-v2",
+    "container": "openmktr-graph-nas-defaults-cache-v2",
+    "binary_sha256": "a20c690102ac6a651a21c3cf134501bdc3d12a2d8c2a5dc2c07cf33930a487e3",
+    "qualification": "Fresh independent-builder measurements; never pooled with previous hosts or candidates."
+  },
+  "cache_correctness_followup": {
+    "structural_stamp_checksum": "KAT4, bounded and sealed; mutable validated timestamp checkpoint excluded",
+    "artifact_binding": [
+      "build.ninja",
+      "ninja.sh",
+      "env.sh"
+    ],
+    "nonregular_cache_reads": "nonblocking regular-file validation",
+    "publication_failure": "optional cache misses preserve existing files and unexpected directories",
+    "negative_observations": "ENOENT distinguished from ENOTDIR and permission/stat uncertainty"
   }
 }
