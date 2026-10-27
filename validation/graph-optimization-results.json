@@ -2,7 +2,7 @@
   "schema_version": 1,
   "status": "in_progress",
   "complete": false,
-  "updated_utc": "2026-10-27T09:23:05.912935+00:00",
+  "updated_utc": "2026-10-27T12:27:40.272311+00:00",
   "delivery": {
     "branch": "codex/ninja-graph-optimizations",
     "base_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d",
@@ -39,7 +39,7 @@
     },
     "revision_override": "Both static builds hold OMKTR_SOURCE_REVISION at the starting revision; binary and per-file source hashes identify the actual candidate.",
     "current_cpp_and_build_inputs_match_measured_manifest": false,
-    "functional_image_id": "sha256:8f68c320bf4106ff43825dcb21e20bdd444711b784fd16ee307a0c4b52c9eb44",
+    "functional_image_id": "sha256:c32574b34880f9e4a0146ca66a4f1fd5524355782965767aa2f171bd76d59c74",
     "preserved_untracked_binary_identities": {
       "ckati": {
         "sha256": "1308a3837ea0ebbc25999448e2793a0dd0cfd41bb64e1c721899970701a17bbf",
@@ -51,10 +51,10 @@
       }
     },
     "followup_working_tree_changed": true,
-    "current_candidate_sha256": "09b0f15dcccd30993f0230f2bc98ab4e894a767ebe5e78043dfef4f9aea731b4",
+    "current_candidate_sha256": "b7b75e459d4cf744ae73b970466c6c517473019cfce9573017770918c5eb147d",
     "current_build_manifest": {
-      "path": "validation/logs/graph-optimizations/build-probe-nas-identities.json",
-      "sha256": "e24969a60295d99fdbddecb388b101a48611a591f4a8797e3c791f4d68c95571"
+      "path": "validation/logs/graph-optimizations/build-cooperative-v4-identities.json",
+      "sha256": "c33013a175467d7c9e67edee3dd088b752b6b4cc3ce3debee04d102da59a724f"
     },
     "current_cpp_and_build_inputs_match_current_build_manifest": true
   },
@@ -145,103 +145,51 @@
     }
   ],
   "correctness": {
+    "candidate_sha256": "b7b75e459d4cf744ae73b970466c6c517473019cfce9573017770918c5eb147d",
     "portable": {
       "status": "passed",
-      "regressions": 858,
+      "regression_default": 858,
+      "regression_aggressive": 858,
       "correctness_per_profile": 174,
-      "focused": 31,
-      "evidence": {
-        "path": "validation/logs/graph-optimizations/portable-final.log",
-        "sha256": "04d0327f59ffad094daf50c755782c0ab0ceb58d217b874d16ea851b149935b7"
-      }
+      "focused": 53,
+      "evidence": "/srv/disks/media02/.omktr-graph-20261027-09b0/evidence/cooperative-v4/portable.log"
     },
     "sanitizers": {
       "status": "passed",
       "asan_options": "detect_leaks=0",
-      "focused": 31,
-      "correctness_per_profile": 174,
-      "evidence": {
-        "path": "validation/logs/graph-optimizations/sanitizer-final.log",
-        "sha256": "f69f9a14d4217233969f3de13b84dc4235f836313d6885828018e426d7b1c2ba"
-      }
+      "evidence": "/srv/disks/media02/.omktr-graph-20261027-09b0/evidence/cooperative-v4/sanitizer.log"
     },
     "native_focused": {
       "status": "passed",
-      "cases": 33,
+      "cases": 53,
       "evidence": {
-        "path": "validation/logs/graph-optimizations/native-focused-final-33.log",
-        "sha256": "298921729c817ef8e99c91e00f4c52b491d8d3bb1eb034a07bdb6b411f2d4b68"
+        "path": "validation/logs/graph-optimizations/cooperative-v4-static-focused.log",
+        "sha256": "fc6c9bc04185e42118419a7ccd0cf2c9851f9764a514454b3fed8c1a56418138"
       }
     },
-    "format": {
+    "state_differential": {
       "status": "passed",
-      "evidence": {
-        "path": "validation/logs/graph-optimizations/format-measured.log",
-        "sha256": "203ed5297d897de106b449365cb397e9b0294cae6e06132313d3fbcc627df48b"
-      }
+      "comparisons": 576,
+      "failures": 0,
+      "evidence": "/srv/disks/media02/.omktr-graph-20261027-09b0/evidence/cooperative-v4/state/state-differential.json"
     },
     "external": {
-      "current_selection": [
-        "safe j4",
-        "aggressive j4"
-      ],
-      "status": "passed",
-      "evidence": {
-        "path": "validation/logs/graph-optimizations/external-measured.log",
-        "sha256": "db3366b88dafe5d30291e3fc52d66a87d53781382c9b6f812f7fe6793bf25e33"
-      },
-      "earlier_selection": [
-        "safe j1",
-        "aggressive j1"
-      ],
-      "earlier_evidence": {
-        "path": "validation/logs/graph-optimizations/external-reviewed-additional.log",
-        "sha256": "ef3ec783834242cf2683512e7242fe377b9a445ff13c728e09d104e98153820b"
-      },
-      "reports": [
-        {
-          "path": "validation/logs/graph-optimizations/external-measured-evidence/safe-j4/report.json",
-          "sha256": "00aa36731abcabe6e6efedae0afa26ec7b831fe5be58bc01ac33611308c7d624"
-        },
-        {
-          "path": "validation/logs/graph-optimizations/external-measured-evidence/aggressive-j4/report.json",
-          "sha256": "427e93638edb2597b6d8ff952e950c0745d9b7832c6ac31092f08fe30a1672b3"
-        }
+      "status": "running",
+      "combinations": [
+        "safe-j1",
+        "safe-j4",
+        "aggressive-j1",
+        "aggressive-j4"
       ]
     },
-    "snapshots": {
-      "changed": 4,
-      "description": "Three Ninja error line numbers after compact emission; one direct wildcard result aligned with GNU Make 4.4.1. No fixture or known-crash changes.",
-      "oracle": {
-        "path": "validation/logs/graph-optimizations/wildcard-oracle.json",
-        "sha256": "2c13d9a01a084ad614d04d0c1d94b184873ab2538be69114b2a37906c97e5725"
-      },
-      "record": {
-        "path": "validation/logs/graph-optimizations/golden-record-filesystem-epochs.log",
-        "sha256": "5bca80623d3bf1096eff17eb822276c14947a5bb8520df0acb84e4e5b5795ebe"
-      }
+    "synthetic": {
+      "status": "pending"
     },
-    "focused_supplement": {
-      "cases": 33,
-      "ordinary_chimera": "passed",
-      "asan_ubsan": "passed",
-      "test_source": {
-        "path": "tests/graph_optimizations.py",
-        "sha256": "a3123d353eba6b8dbbf0c29b31752e58d6444d4dc72471de41c558cb7e9a8458"
-      },
-      "evidence": {
-        "path": "validation/logs/graph-optimizations/focused-final-33-chimera-sanitized.log",
-        "sha256": "bc7367297d8f3cf7115ec4f940005957b36763e57e249007f32689de5e73127e"
-      }
+    "formatting": {
+      "status": "passed"
     },
-    "covered_profiles": [
-      "Direct execution reference",
-      "Ninja safe defaults",
-      "Ninja aggressive"
-    ],
     "limits": [
-      "Functional gates do not establish general statement-state replay, which remains unimplemented.",
-      "The agreed real-project performance matrix is incomplete."
+      "The agreed real-project performance matrix remains incomplete."
     ]
   },
   "performance": {
@@ -1017,10 +965,10 @@
     }
   ],
   "outstanding": [
-    "Final-binary clean gains remain unqualified: Linux j8 clean is inconclusive; j16 and FFmpeg defaults are running. Aggressive and other required matrices remain pending.",
-    "Aggressive real-project performance qualification remains unrun.",
-    "Legacy-entrypoint no-regression qualification, real-project feature ablations and separate Ninja-runtime performance comparisons remain unrun.",
-    "Monitored startup-inclusive cold and retained warm real-project measurements remain unrun."
+    "Finish current B7 external incremental comparisons and synthetic benchmark checks.",
+    "Qualify B7 clean, no-op and single-source improvements for both projects, jobs and profiles. Historical 09b Linux clean intervals remain inconclusive.",
+    "Complete legacy-entrypoint regression qualification, real-project feature ablations and separate Ninja-runtime comparisons.",
+    "Complete monitored startup-inclusive cold and retained warm measurements, publish raw evidence, then pass PR checks and merge."
   ],
   "validation_followup": {
     "status": "passed: portable, sanitizers, formatting, 576 seeded state comparisons and all four independent Linux external comparisons",
@@ -1095,7 +1043,8 @@
     "preflight": {
       "path": "validation/logs/graph-optimizations/preflight-probe-results.json",
       "sha256": "b492f68901cec58e043f731e4115704aa8c7ffa877c602e0db7ab8ebae5b419f"
-    }
+    },
+    "qualification": "Historical preceding 09b binary; current B7 validation is in correctness."
   },
   "performance_followup": {
     "status": "Linux j8 complete: clean gate inconclusive, incremental gains supported; unchanged j16 and FFmpeg campaign continuing",
@@ -1105,7 +1054,7 @@
     "container": "openmktr-graph-nas-defaults-probe-media02",
     "pipeline": "/home/nasadmin/.cache/omktr-graph-20261027-057a084f/evidence/qualification-probe-pipeline.jsonl",
     "binary_sha256": "09b0f15dcccd30993f0230f2bc98ab4e894a767ebe5e78043dfef4f9aea731b4",
-    "qualification": "No accepted measurements yet. Fresh native Linux build trees, two discarded warmup pairs and seven alternating measured pairs at j8/j16. Never pooled with other binaries, hosts or instrumented runs.",
+    "qualification": "Historical 09b Linux measurements; clean intervals were inconclusive and do not qualify B7.",
     "completed_linux_j8": {
       "accepted": false,
       "reason": "Clean 95% interval includes zero; no statistically supported regression",
@@ -1362,8 +1311,8 @@
     }
   },
   "planned_controlled_comparison": {
-    "status": "queued after the unchanged default campaign; CPU settings not yet modified",
-    "candidate_sha256": "09b0f15dcccd30993f0230f2bc98ab4e894a767ebe5e78043dfef4f9aea731b4",
+    "status": "prepared_pending_current_preflight",
+    "candidate_sha256": "b7b75e459d4cf744ae73b970466c6c517473019cfce9573017770918c5eb147d",
     "purpose": "Test whether consistent CPU placement and a common performance governor reduce measurement variation; this is not an established explanation of the prior noise.",
     "cpu_policy": "Temporary performance governor for both binaries; original governor and EPP saved and restored with readback verification; boost and frequency limits untouched.",
     "affinity": {
@@ -1399,25 +1348,21 @@
     "topology": "Ryzen 5800X sibling pairs 0/8 through 7/15; j8 uses one logical CPU per physical core",
     "protocol": "Unchanged two discarded warmup pairs, seven alternating measured pairs, seeded bootstrap and all acceptance conditions; fresh workspaces, no pooling.",
     "retained_evidence": "All previous inconclusive and failed campaigns remain referenced; stop the new controller at its first incomplete required gate.",
-    "root": "/srv/disks/media02/.omktr-graph-20261027-09b0/evidence/controlled-01",
-    "coordinator": "/srv/disks/media02/.omktr-graph-20261027-09b0/controlled-coordinator.log",
+    "root": "/srv/disks/media02/.omktr-graph-20261027-09b0/evidence/controlled-cooperative-v4",
+    "coordinator": "run_controlled_v4.py",
     "source": "https://docs.kernel.org/admin-guide/pm/amd-pstate.html",
     "scripts": [
       {
+        "path": "validation/logs/graph-optimizations/run_controlled_v4.py",
+        "sha256": "37f23ba15fd226daa2ddf80dfc390dc64c81c602c48910a1d11492d6a6e46aa7"
+      },
+      {
+        "path": "validation/logs/graph-optimizations/controlled_worker_v4.py",
+        "sha256": "7d8dd67c2e93170443cb9c834e2c2b7850b36a91e9755fd725c366c9d6fde1a2"
+      },
+      {
         "path": "validation/logs/graph-optimizations/benchmark_cpu_control.py",
         "sha256": "3722b75a45bcccd2a32a45274941e0a31f39f527103d00ae2e6de0f969c39e92"
-      },
-      {
-        "path": "validation/logs/graph-optimizations/controlled_worker.py",
-        "sha256": "4db6ecb0a32d210b150b33fb9aaec5bd996ab38df99a4c480d820b2612638575"
-      },
-      {
-        "path": "validation/logs/graph-optimizations/run_controlled.py",
-        "sha256": "1a4b6180e079e1a738a343aa844312a5c5ecd98c2536cd9fa3b47b87845e6ef5"
-      },
-      {
-        "path": "validation/logs/graph-optimizations/wait_then_controlled.py",
-        "sha256": "2b230c00695a979e803a89d9db9f01796515194ae141ce3f1e239a6b08c49824"
       }
     ]
   },
@@ -1461,5 +1406,132 @@
         "sha256": "6b8de4cb7a4cd2aa6aee2654794677cd1ce072e9c3713db532b6d64014412819"
       }
     ]
+  },
+  "historical_correctness": {
+    "portable": {
+      "status": "passed",
+      "regressions": 858,
+      "correctness_per_profile": 174,
+      "focused": 31,
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/portable-final.log",
+        "sha256": "04d0327f59ffad094daf50c755782c0ab0ceb58d217b874d16ea851b149935b7"
+      }
+    },
+    "sanitizers": {
+      "status": "passed",
+      "asan_options": "detect_leaks=0",
+      "focused": 31,
+      "correctness_per_profile": 174,
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/sanitizer-final.log",
+        "sha256": "f69f9a14d4217233969f3de13b84dc4235f836313d6885828018e426d7b1c2ba"
+      }
+    },
+    "native_focused": {
+      "status": "passed",
+      "cases": 33,
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/native-focused-final-33.log",
+        "sha256": "298921729c817ef8e99c91e00f4c52b491d8d3bb1eb034a07bdb6b411f2d4b68"
+      }
+    },
+    "format": {
+      "status": "passed",
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/format-measured.log",
+        "sha256": "203ed5297d897de106b449365cb397e9b0294cae6e06132313d3fbcc627df48b"
+      }
+    },
+    "external": {
+      "current_selection": [
+        "safe j4",
+        "aggressive j4"
+      ],
+      "status": "passed",
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/external-measured.log",
+        "sha256": "db3366b88dafe5d30291e3fc52d66a87d53781382c9b6f812f7fe6793bf25e33"
+      },
+      "earlier_selection": [
+        "safe j1",
+        "aggressive j1"
+      ],
+      "earlier_evidence": {
+        "path": "validation/logs/graph-optimizations/external-reviewed-additional.log",
+        "sha256": "ef3ec783834242cf2683512e7242fe377b9a445ff13c728e09d104e98153820b"
+      },
+      "reports": [
+        {
+          "path": "validation/logs/graph-optimizations/external-measured-evidence/safe-j4/report.json",
+          "sha256": "00aa36731abcabe6e6efedae0afa26ec7b831fe5be58bc01ac33611308c7d624"
+        },
+        {
+          "path": "validation/logs/graph-optimizations/external-measured-evidence/aggressive-j4/report.json",
+          "sha256": "427e93638edb2597b6d8ff952e950c0745d9b7832c6ac31092f08fe30a1672b3"
+        }
+      ]
+    },
+    "snapshots": {
+      "changed": 4,
+      "description": "Three Ninja error line numbers after compact emission; one direct wildcard result aligned with GNU Make 4.4.1. No fixture or known-crash changes.",
+      "oracle": {
+        "path": "validation/logs/graph-optimizations/wildcard-oracle.json",
+        "sha256": "2c13d9a01a084ad614d04d0c1d94b184873ab2538be69114b2a37906c97e5725"
+      },
+      "record": {
+        "path": "validation/logs/graph-optimizations/golden-record-filesystem-epochs.log",
+        "sha256": "5bca80623d3bf1096eff17eb822276c14947a5bb8520df0acb84e4e5b5795ebe"
+      }
+    },
+    "focused_supplement": {
+      "cases": 33,
+      "ordinary_chimera": "passed",
+      "asan_ubsan": "passed",
+      "test_source": {
+        "path": "tests/graph_optimizations.py",
+        "sha256": "a3123d353eba6b8dbbf0c29b31752e58d6444d4dc72471de41c558cb7e9a8458"
+      },
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/focused-final-33-chimera-sanitized.log",
+        "sha256": "bc7367297d8f3cf7115ec4f940005957b36763e57e249007f32689de5e73127e"
+      }
+    },
+    "covered_profiles": [
+      "Direct execution reference",
+      "Ninja safe defaults",
+      "Ninja aggressive"
+    ],
+    "limits": [
+      "Functional gates do not establish general statement-state replay, which remains unimplemented.",
+      "The agreed real-project performance matrix is incomplete."
+    ]
+  },
+  "execution_budget_followup": {
+    "candidate_sha256": "b7b75e459d4cf744ae73b970466c6c517473019cfce9573017770918c5eb147d",
+    "shared_dependency_waiting": {
+      "reproduction": "Sixteen runnable leaves behind shared aliases reached only one active recipe at j8 and four at j16.",
+      "implementation": "Canonical output dependency ranks permit waiting workers to run strictly lower-rank queued work. Submission/completion notifications avoid lost wakeups.",
+      "boundaries": [
+        "Cyclic or unknown ownership ranks and depth limits retain ordinary waiting.",
+        "Recipe admission, recursive FIFO reservations and NOTPARALLEL limits remain enforced."
+      ],
+      "validation": "Direct j1/j8/j16, Ninja j8/j16, opaque recursive j8/j16 and NOTPARALLEL budget regression passed."
+    },
+    "content_producer_admission": {
+      "reproduction": "An opaque nested write-if-changed producer permitted five active producers at j4.",
+      "implementation": "Acquire the shared job reservation before forking, forward the owned reservation, return acquired tokens on every completion path.",
+      "validation": "Mixed recursive j1/j4/j8/j16 budgets, interrupted admission, failed producer token return and inherited reservation tests passed."
+    }
+  },
+  "assembler_environment_followup": {
+    "status": "preflight_passed",
+    "evidence": {
+      "path": "validation/logs/graph-optimizations/assembler-preflight-result.json",
+      "sha256": "15d25c5efb377adc9a665055867179b8d0310169850c1bb21bff3adbccfbb15d"
+    },
+    "method": "APT-verified NASM 2.16.01 private runtime shared by both variants; original compiler, Ninja, configure flags and release sources unchanged.",
+    "binary_sha256": "9b9ed9dd9a5ed930a57e32ebd1556415376e73028f17fa5b4bf43afdb61972e9",
+    "have_x86asm": true
   }
 }

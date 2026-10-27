@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Behavioral coverage for graph reuse, imports, monitors and output publication."""
+import json
 import os
 from pathlib import Path
 import signal
@@ -33,6 +34,70 @@ class GraphOptimizations(unittest.TestCase):
     def makefile(self, source):
         (self.root / "Makefile").write_text(source)
 
+    def test_shared_dependency_waiters_keep_the_recipe_budget_busy(self):
+        worker = '''import fcntl,json,sys,time
+from pathlib import Path
+expected=int(sys.argv[2])
+def update(change):
+ with open('counter','a+') as stream:
+  fcntl.flock(stream,fcntl.LOCK_EX);stream.seek(0);data=stream.read()
+  value=json.loads(data) if data else dict(active=0,peak=0,started=0,release=False,deadline=time.monotonic()+2)
+  result=change(value);stream.seek(0);stream.truncate();json.dump(value,stream)
+  return result
+def enter(value):
+ value['active']+=1;value['started']+=1;value['peak']=max(value['peak'],value['active'])
+ value['release']=value['release'] or value['peak']>=expected
+update(enter)
+def ready(value):
+ value['release']=value['release'] or time.monotonic()>=value['deadline']
+ return value['release']
+while not update(ready):time.sleep(.01)
+time.sleep(.02)
+update(lambda value:value.update(active=value['active']-1))
+Path(sys.argv[1]).write_text('built')
+'''
+        for mode, jobs, serialized in (("direct", 1, False), ("direct", 8, False),
+                                       ("direct", 16, False), ("build", 8, False),
+                                       ("build", 16, False), ("recursive", 8, False),
+                                       ("recursive", 16, False), ("direct", 8, True)):
+            with self.subTest(mode=mode, jobs=jobs, serialized=serialized):
+                build = self.root / f"{mode}-{jobs}-{serialized}"
+                build.mkdir()
+                outputs = build
+                if mode == "recursive":
+                    outputs = build / "child"
+                    outputs.mkdir()
+                    (build / "Makefile").write_text(
+                        "all:\n\t@for directory in child; do $(MAKE) -C $$directory all || exit $$?; done\n")
+                (outputs / "worker.py").write_text(worker)
+                expected = 1 if serialized else jobs
+                aliases = [f"alias{i}" for i in range(32)]
+                leaves = [f"leaf{i}" for i in range(16)]
+                source = ".NOTPARALLEL:\n" if serialized else ""
+                source += "all: " + " ".join(aliases) + " consumer\n"
+                source += "consumer: alias0\n\t@printf done > $@\n"
+                for i, alias in enumerate(aliases):
+                    source += f"{alias}: shared extra{i}\n\t@printf done > $@\n"
+                    source += f"extra{i}:\n\t@:\n"
+                source += "shared: " + " ".join(leaves) + "\n\t@printf done > $@\n"
+                source += " ".join(leaves) + f":\n\t@python worker.py $@ {expected}\n"
+                (outputs / "Makefile").write_text(source)
+                command = [str(BINARY), *(["build"] if mode != "direct" else []),
+                           f"-j{jobs}", "all", "--kati_stats"]
+                if mode == "recursive":
+                    command.append("--graph_optimizations=aggressive")
+                result = subprocess.run(command, cwd=build, text=True,
+                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                        timeout=30, check=True)
+                self.assertNotIn("Circular", result.stdout)
+                counter = json.loads((outputs / "counter").read_text())
+                self.assertEqual(counter["started"], 16)
+                self.assertEqual(counter["active"], 0)
+                self.assertEqual(counter["peak"], expected)
+                for leaf in leaves:
+                    self.assertEqual((outputs / leaf).read_text(), "built")
+                self.assertEqual((outputs / "consumer").read_text(), "done")
+
     def test_write_if_changed_content_mode_and_failures(self):
         self.run_tool("write-if-changed", "output", "--", "printf", "one")
         output = self.root / "output"
@@ -53,6 +118,110 @@ class GraphOptimizations(unittest.TestCase):
         output.chmod(0o4640)
         self.run_tool("write-if-changed", "output", "--", "printf", "special mode")
         self.assertEqual(output.stat().st_mode & 0o7777, 0o4640)
+
+    def test_write_if_changed_shares_the_recursive_recipe_budget(self):
+        worker = '''import fcntl,json,sys,time
+from pathlib import Path
+path=Path('../counter')
+def update(change):
+ with path.open('a+') as stream:
+  fcntl.flock(stream,fcntl.LOCK_EX);stream.seek(0);data=stream.read()
+  value=json.loads(data) if data else dict(active=0,peak=0,started=0,release=False,deadline=time.monotonic()+2)
+  result=change(value);stream.seek(0);stream.truncate();json.dump(value,stream)
+  return result
+def enter(value):
+ value['active']+=1;value['started']+=1;value['peak']=max(value['peak'],value['active'])
+ value['release']=value['release'] or value['peak']>int(sys.argv[2])
+update(enter)
+if sys.argv[1]=='helper':Path('../helper-ready').touch()
+def ready(value):
+ value['release']=value['release'] or time.monotonic()>=value['deadline']
+ return value['release']
+while not update(ready):time.sleep(.01)
+time.sleep(.03)
+update(lambda value:value.update(active=value['active']-1))
+print(sys.argv[1])
+'''
+        for jobs in (1, 4, 8, 16):
+            with self.subTest(jobs=jobs):
+                build = self.root / str(jobs)
+                build.mkdir()
+                (build / "mid").mkdir()
+                (build / "leaf").mkdir()
+                (build / "worker.py").write_text(worker)
+                (build / "Makefile").write_text(
+                    "all:\n\t@for directory in mid; do $(MAKE) -C $$directory all; done\n")
+                (build / "mid/Makefile").write_text(
+                    "all: helper child\nhelper:\n"
+                    f"\t@$(MAKE) write-if-changed output -- python ../worker.py helper {jobs}\n"
+                    "child:\n\t@while [ ! -f ../helper-ready ]; do sleep .01; done; "
+                    "$(MAKE) -C ../leaf all\n")
+                leaves = " ".join(f"leaf{i}" for i in range(16))
+                (build / "leaf/Makefile").write_text(
+                    f"all: {leaves}\n{leaves}:\n\t@python ../worker.py $@ {jobs}\n")
+                subprocess.run([str(BINARY), "build", f"-j{jobs}", "all"], cwd=build,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               text=True, timeout=30, check=True)
+                counter = json.loads((build / "counter").read_text())
+                self.assertEqual(counter["started"], 17)
+                self.assertEqual(counter["active"], 0)
+                self.assertLessEqual(counter["peak"], jobs)
+                self.assertEqual((build / "mid/output").read_text(), "helper\n")
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "uses Linux process descriptors")
+    def test_write_if_changed_interrupts_while_waiting_for_a_job_slot(self):
+        output = self.root / "output"
+        output.write_text("previous")
+        fifo = self.root / "budget"
+        os.mkfifo(fifo)
+        fd = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+        self.addCleanup(os.close, fd)
+        env = dict(os.environ, KATI_JOBSERVER_FIFO=str(fifo), KATI_JOBSERVER_RESERVED="0")
+        process = subprocess.Popen([str(BINARY), "write-if-changed", "output", "--", "sh", "-c",
+                                    "touch producer-started; printf changed"], cwd=self.root,
+                                   env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        self.addCleanup(lambda: process.kill() if process.poll() is None else None)
+        opened = False
+        for _ in range(500):
+            if process.poll() is not None:
+                break
+            for descriptor in Path(f"/proc/{process.pid}/fd").glob("*"):
+                try:
+                    opened |= os.readlink(descriptor) == str(fifo)
+                except FileNotFoundError:
+                    pass
+            if opened:
+                break
+            time.sleep(.01)
+        self.assertTrue(opened, "helper did not enter jobserver admission")
+        process.send_signal(signal.SIGINT)
+        process.communicate(timeout=5)
+        self.assertEqual(process.returncode, 130)
+        self.assertEqual(output.read_text(), "previous")
+        self.assertFalse((self.root / "producer-started").exists())
+        self.assertEqual(list(self.root.glob("output.tmp.*")), [])
+
+    def test_write_if_changed_returns_failed_and_inherited_job_slots(self):
+        output = self.root / "output"
+        output.write_text("previous")
+        before = output.stat().st_mtime_ns
+        fifo = self.root / "budget"
+        os.mkfifo(fifo)
+        fd = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+        self.addCleanup(os.close, fd)
+        os.write(fd, b"x")
+        env = dict(os.environ, KATI_JOBSERVER_FIFO=str(fifo), KATI_JOBSERVER_RESERVED="0")
+        failed = self.run_tool("write-if-changed", "output", "--", "sh", "-c",
+                               "printf broken; exit 7", env=env, check=False)
+        self.assertEqual(failed.returncode, 7)
+        self.assertEqual(output.read_text(), "previous")
+        self.assertEqual(output.stat().st_mtime_ns, before)
+        self.assertEqual(os.read(fd, 1), b"x")
+        env["KATI_JOBSERVER_RESERVED"] = "1"
+        self.run_tool("write-if-changed", "output", "--", "printf", "stable", env=env)
+        self.assertEqual(output.read_text(), "stable")
+        with self.assertRaises(BlockingIOError):
+            os.read(fd, 1)
 
     def test_write_if_changed_rejects_nonregular_outputs(self):
         (self.root / "target").write_text("untouched")

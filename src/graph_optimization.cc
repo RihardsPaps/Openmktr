@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -245,9 +246,25 @@ int WriteIfChanged(int argc, char** argv) {
   // which may otherwise clear set-user-ID and set-group-ID bits.
   const mode_t mode = existed ? original.st_mode & 07777 : 0666 & ~mask;
   ScopedBuildSignals signals;
+  // A helper can be reached through an opaque recursive recipe, whose caller
+  // lets its children acquire the shared slots. Treat the producer as one job;
+  // an ordinary caller's inherited reservation avoids taking a second slot.
+  const int job_token = AcquireKatiJobToken();
+  if (const int interrupted = GetBuildSignal()) {
+    close(fd);
+    unlink(temporary.c_str());
+    ReleaseKatiJobToken(job_token);
+    return 128 + interrupted;
+  }
+  const char* fifo = getenv("KATI_JOBSERVER_FIFO");
+  const bool forward_slot = (fifo != nullptr && *fifo != '\0') ||
+                            getenv("KATI_JOBSERVER_RESERVED") != nullptr;
   pid_t child = fork();
   if (child == 0) {
     if (setpgid(0, 0) < 0)
+      _exit(126);
+    if (forward_slot &&
+        setenv("KATI_JOBSERVER_RESERVED", job_token == -1 ? "0" : "1", 1) < 0)
       _exit(126);
     if (dup2(fd, STDOUT_FILENO) < 0)
       _exit(126);
@@ -318,5 +335,6 @@ int WriteIfChanged(int argc, char** argv) {
   }
   close(fd);
   unlink(temporary.c_str());
+  ReleaseKatiJobToken(job_token);
   return status;
 }

@@ -130,7 +130,22 @@ ordinary recursion. Children producing discovery diagnostics use ordinary
 recursion so speculative parsing cannot duplicate their messages. No generic transitive dependency reduction
 is performed.
 
+The direct executor also lets dependency waiters run queued work when shared
+prerequisites occupy other workers. Borrowed tasks have a lower dependency rank
+than every active task and owned node on that thread. This prevents an acyclic
+graph from acquiring a false same-thread dependency cycle through helping.
+Ranks merge representations of the same output ownership; cyclic ownership
+graphs and deep helper stacks retain ordinary waiting. Recipe admission,
+`.NOTPARALLEL`, recursive serialization and the shared FIFO budget remain in
+force. This executor fix applies in every profile, including `off`, so feature
+ablations use the same scheduler on both sides.
+
 ## Content-preserving output generation
+
+The stdout producer participates in the inherited shared job budget, including
+when the helper is invoked inside an opaque recursive build. An inherited
+reservation is reused. Interruption while waiting for admission leaves the
+previous output intact and does not start the producer.
 
 Use an explicit stdout-producing command:
 
@@ -228,7 +243,7 @@ are kept separate from every previous host, binary and failed attempt.
 
 General statement replay and native-observation validation are implemented;
 their current qualification is recorded separately from the historical results.
-The current binary passes the portable and sanitizer gates, 576 seeded state
+The preceding `09b0f15d` binary passes the portable and sanitizer gates, 576 seeded state
 comparisons, and all 27 external incremental scenarios in both safe and
 aggressive modes at j1 and j4 on the independent AMD Linux builder. These checks
 establish correctness coverage; they do not satisfy the real-project performance
