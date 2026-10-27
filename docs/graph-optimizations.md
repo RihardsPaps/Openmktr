@@ -22,6 +22,9 @@ response files and outputs requiring special handling retain ordinary emission.
 `--kati_stats` reports effective settings, region hits/misses, effect barriers,
 include certification and recursive-import decisions. Existing phase timers
 separate parsing, evaluation, include remaking, dependency resolution and emission.
+Ninja launcher jobserver setup preserves existing paths and retries name
+collisions with a bounded suffix search. Other FIFO creation failures report the
+underlying diagnostic and terminate before Ninja starts.
 
 ## Evaluation and generated includes
 

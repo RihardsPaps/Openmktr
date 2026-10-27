@@ -11,6 +11,7 @@ import socket
 import struct
 import re
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -937,6 +938,53 @@ class GraphOptimizations(unittest.TestCase):
             finally:
                 self.run_tool("monitor", "stop", check=False)
                 self.root = original_root
+
+    def test_ninja_fifo_creation_reports_errors_and_preserves_collisions(self):
+        self.makefile(".PHONY: all\nall:\n\t@:\n")
+        self.run_tool("--ninja", "-j1")
+        tools = self.root / "tools"
+        tools.mkdir()
+        temporary = self.root / "temporary"
+        temporary.mkdir()
+        shim = tools / "mkfifo"
+        shim.write_text("#!/bin/sh\nprintf 'deliberate FIFO setup failure\\n' >&2\nexit 1\n")
+        shim.chmod(0o755)
+        env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ["PATH"],
+                   TMPDIR=str(temporary), KATI_JOBS="1")
+        env.pop("KATI_JOBSERVER_FIFO", None)
+
+        def launch():
+            child = subprocess.Popen(["sh", "./ninja.sh", "-j1"], cwd=self.root,
+                                     env=env, stdout=subprocess.PIPE,
+                                     stderr=subprocess.STDOUT, text=True, start_new_session=True)
+            try:
+                output, _ = child.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                os.killpg(child.pid, signal.SIGKILL)
+                output, _ = child.communicate()
+                self.fail("FIFO creation did not terminate: " + output)
+            return child.returncode, output
+
+        status, output = launch()
+        self.assertNotEqual(status, 0)
+        self.assertIn("cannot create jobserver FIFO", output)
+        self.assertIn("deliberate FIFO setup failure", output)
+        self.assertEqual(list(temporary.iterdir()), [])
+        shim.write_text(f"#!{sys.executable}\n"
+                        "from pathlib import Path\nimport os,sys\n"
+                        "marker=Path('fifo-collision')\n"
+                        "path=Path(sys.argv[-1])\n"
+                        "if not marker.exists():\n"
+                        " path.symlink_to('missing-collision-target')\n"
+                        " marker.write_text(str(path))\n"
+                        " sys.exit(1)\n"
+                        "os.mkfifo(path,0o600)\n")
+        status, output = launch()
+        self.assertEqual(status, 0, output)
+        collision = Path((self.root / "fifo-collision").read_text())
+        self.assertTrue(collision.is_symlink())
+        self.assertEqual(os.readlink(collision), "missing-collision-target")
+        self.assertEqual(list(temporary.iterdir()), [collision])
 
     def test_opaque_recursion_inherits_profiles_and_feature_ablations(self):
         (self.root / "child/grand").mkdir(parents=True)

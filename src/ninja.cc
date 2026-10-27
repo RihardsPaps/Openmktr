@@ -3,6 +3,7 @@
 // graphs. Seal structural stamp bytes and bind generated artifacts to
 // acceptance. Carry generation/runtime load limits into Ninja and recursive
 // recipes. Preserve selected graph controls at deferred recursive boundaries.
+// Bound FIFO setup retries and report failures without removing existing paths.
 // Use native load admission for every recipe, with configurable Ninja
 // selection. Quote generated launcher paths for build directories containing
 // shell syntax. Changed by the Openmktr fork, maintained by Rihards Paps and
@@ -1772,7 +1773,15 @@ class NinjaGenerator {
     fprintf(fp, "  kati_fifo=\"$kati_fifo_base\"\n");
     fprintf(fp, "  kati_fifo_i=0\n");
     fprintf(fp,
-            "  while ! (umask 077 && mkfifo \"$kati_fifo\") 2>/dev/null; do\n");
+            "  while ! kati_fifo_error=$(umask 077 && mkfifo \"$kati_fifo\" "
+            "2>&1); do\n");
+    fprintf(fp,
+            "    if { [ ! -e \"$kati_fifo\" ] && [ ! -L \"$kati_fifo\" ]; } || "
+            "[ \"$kati_fifo_i\" -ge 1023 ]; then\n"
+            "      printf 'omktr: cannot create jobserver FIFO %%s: %%s\\n' "
+            "\"$kati_fifo\" \"$kati_fifo_error\" >&2\n"
+            "      exit 1\n"
+            "    fi\n");
     fprintf(fp, "    kati_fifo_i=$((kati_fifo_i + 1))\n");
     fprintf(fp, "    kati_fifo=\"$kati_fifo_base-$kati_fifo_i\"\n");
     fprintf(fp, "  done\n");
