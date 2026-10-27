@@ -2,7 +2,7 @@
   "schema_version": 1,
   "status": "in_progress",
   "complete": false,
-  "updated_utc": "2026-10-27T12:27:40.272311+00:00",
+  "updated_utc": "2026-10-27T12:38:00.047192+00:00",
   "delivery": {
     "branch": "codex/ninja-graph-optimizations",
     "base_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d",
@@ -18,7 +18,7 @@
     "push_authorized": true,
     "pr_authorized": true,
     "merge_authorized_after_all_gates": true,
-    "implementation_commit": "e56cabee6c61f99d4e24ceabc44a1571e887da76"
+    "implementation_commit": "d6413be13f6338e9c42b80167c2164300e879e4a"
   },
   "build": {
     "baseline_sha256": "192505c0257134de072b3d530c4a059ea12a33197b3cee20b8c219df26a58ce4",
@@ -152,12 +152,22 @@
       "regression_aggressive": 858,
       "correctness_per_profile": 174,
       "focused": 53,
-      "evidence": "/srv/disks/media02/.omktr-graph-20261027-09b0/evidence/cooperative-v4/portable.log"
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/cooperative-v4-portable.log",
+        "sha256": "6c5622c653841a7cf18c943b5f09d81b8b36eb12a2bdd85a31b87ac3471a03df"
+      }
     },
     "sanitizers": {
       "status": "passed",
       "asan_options": "detect_leaks=0",
-      "evidence": "/srv/disks/media02/.omktr-graph-20261027-09b0/evidence/cooperative-v4/sanitizer.log"
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/cooperative-v4-sanitizer.log",
+        "sha256": "aca28460e36d804b15e224dffeccff34d9969891f9846cd09dd4d28c227ca39d"
+      },
+      "commands": {
+        "path": "validation/logs/graph-optimizations/cooperative-v4-sanitizer-commands.jsonl",
+        "sha256": "e3421a68d9636613e68e1335442b6319984dea65a6b3c734b0e754981e50d2b9"
+      }
     },
     "native_focused": {
       "status": "passed",
@@ -171,26 +181,68 @@
       "status": "passed",
       "comparisons": 576,
       "failures": 0,
-      "evidence": "/srv/disks/media02/.omktr-graph-20261027-09b0/evidence/cooperative-v4/state/state-differential.json"
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/cooperative-v4-state-differential.json",
+        "sha256": "f04d748c41e4773f62ee0c9e9d702a579f2ab0a8cc65ad6181c353ccfdf079ac"
+      }
     },
     "external": {
-      "status": "running",
+      "status": "passed",
       "combinations": [
         "safe-j1",
         "safe-j4",
         "aggressive-j1",
         "aggressive-j4"
+      ],
+      "scenarios_per_combination": 27,
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/cooperative-v4-external-results.json",
+        "sha256": "d2bd8dc23ec1ec7cba95ffc86456b96b34ac9b854468b01492df1470fada13c3"
+      },
+      "reports": [
+        {
+          "path": "validation/logs/graph-optimizations/cooperative-v4-external-aggressive-j1-report.json",
+          "sha256": "f0d807488d8816a1e5fa1670607ccf7f16d61a5b899d821c30f2e177695e8021"
+        },
+        {
+          "path": "validation/logs/graph-optimizations/cooperative-v4-external-aggressive-j4-report.json",
+          "sha256": "9f0464c62819c42d0e4e00f849035cbcbd104517463aeb93b3f7f7612f4756c0"
+        },
+        {
+          "path": "validation/logs/graph-optimizations/cooperative-v4-external-safe-j1-report.json",
+          "sha256": "194b202cae166856b952d13efb9f6f51e5d37c06ab0803dce700480e42b48eea"
+        },
+        {
+          "path": "validation/logs/graph-optimizations/cooperative-v4-external-safe-j4-report.json",
+          "sha256": "b8d97ae6b5e91007b957f72c1dec0acf7afd3fddbe0046c148e0f9884e6c0b68"
+        }
       ]
     },
     "synthetic": {
-      "status": "pending"
+      "status": "passed",
+      "repeats": 7,
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/cooperative-v4-synthetic-report.json",
+        "sha256": "149529c40e8d5e2256078fc3d3ac954267a5f78b57fdbc1ccd72c474b1c39e30"
+      }
     },
     "formatting": {
       "status": "passed"
     },
     "limits": [
       "The agreed real-project performance matrix remains incomplete."
-    ]
+    ],
+    "preflight": {
+      "path": "validation/logs/graph-optimizations/cooperative-v4-preflight.json",
+      "sha256": "9a93b056711f053f1531c0293f0be27b506390436f944fd1477002ebfc5b219e"
+    },
+    "incremental_harness": {
+      "status": "passed",
+      "evidence": {
+        "path": "validation/logs/graph-optimizations/cooperative-v4-incremental-harness.log",
+        "sha256": "058745be0287c553993992665429a9680e234fc25e4bd5a34accbf9c070f2911"
+      }
+    }
   },
   "performance": {
     "acceptance": "incomplete",
@@ -965,7 +1017,6 @@
     }
   ],
   "outstanding": [
-    "Finish current B7 external incremental comparisons and synthetic benchmark checks.",
     "Qualify B7 clean, no-op and single-source improvements for both projects, jobs and profiles. Historical 09b Linux clean intervals remain inconclusive.",
     "Complete legacy-entrypoint regression qualification, real-project feature ablations and separate Ninja-runtime comparisons.",
     "Complete monitored startup-inclusive cold and retained warm measurements, publish raw evidence, then pass PR checks and merge."
@@ -1311,7 +1362,7 @@
     }
   },
   "planned_controlled_comparison": {
-    "status": "prepared_pending_current_preflight",
+    "status": "running_linux_safe_j8_pilot",
     "candidate_sha256": "b7b75e459d4cf744ae73b970466c6c517473019cfce9573017770918c5eb147d",
     "purpose": "Test whether consistent CPU placement and a common performance governor reduce measurement variation; this is not an established explanation of the prior noise.",
     "cpu_policy": "Temporary performance governor for both binaries; original governor and EPP saved and restored with readback verification; boost and frequency limits untouched.",
