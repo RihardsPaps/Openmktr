@@ -228,6 +228,13 @@ are kept separate from every previous host, binary and failed attempt.
 
 General statement replay and native-observation validation are implemented;
 their current qualification is recorded separately from the historical results.
+The current binary passes the portable and sanitizer gates, 576 seeded state
+comparisons, and all 27 external incremental scenarios in both safe and
+aggressive modes at j1 and j4 on the independent AMD Linux builder. These checks
+establish correctness coverage; they do not satisfy the real-project performance
+requirements. A storage-capacity interruption during discarded warmups requires
+a fresh performance matrix on a separate native ext4 disk.
+The interrupted run and its evidence are retained separately.
 Aggressive-mode real-project qualification, legacy-entrypoint comparisons,
 real-project feature ablations, separate Ninja-runtime comparisons and monitored
 cold/warm performance qualification also remain outstanding. Passing functional

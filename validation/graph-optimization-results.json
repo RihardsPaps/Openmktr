@@ -2,7 +2,7 @@
   "schema_version": 1,
   "status": "in_progress",
   "complete": false,
-  "updated_utc": "2026-10-27T04:58:23.374204+00:00",
+  "updated_utc": "2026-10-27T06:54:42.8219152Z",
   "delivery": {
     "branch": "codex/ninja-graph-optimizations",
     "base_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d",
@@ -18,7 +18,7 @@
     "push_authorized": true,
     "pr_authorized": true,
     "merge_authorized_after_all_gates": true,
-    "implementation_commit": "ee7852c"
+    "implementation_commit": "e56cabee6c61f99d4e24ceabc44a1571e887da76"
   },
   "build": {
     "baseline_sha256": "192505c0257134de072b3d530c4a059ea12a33197b3cee20b8c219df26a58ce4",
@@ -39,7 +39,7 @@
     },
     "revision_override": "Both static builds hold OMKTR_SOURCE_REVISION at the starting revision; binary and per-file source hashes identify the actual candidate.",
     "current_cpp_and_build_inputs_match_measured_manifest": false,
-    "functional_image_id": "sha256:1dde170d33e5cdfa8dc5b1752eb9f0d8232b0899454d297ac7376c7df9580c3b",
+    "functional_image_id": "sha256:8f68c320bf4106ff43825dcb21e20bdd444711b784fd16ee307a0c4b52c9eb44",
     "preserved_untracked_binary_identities": {
       "ckati": {
         "sha256": "1308a3837ea0ebbc25999448e2793a0dd0cfd41bb64e1c721899970701a17bbf",
@@ -51,10 +51,10 @@
       }
     },
     "followup_working_tree_changed": true,
-    "current_candidate_sha256": "f7845bd8168d1fdd5fd233bdb1cd492df782e2587889398a5874e5961f2f6c95",
+    "current_candidate_sha256": "09b0f15dcccd30993f0230f2bc98ab4e894a767ebe5e78043dfef4f9aea731b4",
     "current_build_manifest": {
-      "path": "validation/logs/graph-optimizations/build-fifo-nas-identities.json",
-      "sha256": "77ae43567d43407a854384528872db15c9db71ed7d1a0aa9cf53edc46b5540c5"
+      "path": "validation/logs/graph-optimizations/build-probe-nas-identities.json",
+      "sha256": "e24969a60295d99fdbddecb388b101a48611a591f4a8797e3c791f4d68c95571"
     },
     "current_cpp_and_build_inputs_match_current_build_manifest": true
   },
@@ -1017,70 +1017,95 @@
     }
   ],
   "outstanding": [
-    "Final-binary default/aggressive clean, no-op and source gains at j8/j16 remain unqualified on FFmpeg and Linux; independent AMD execution profiling is running before fresh uninstrumented qualification.",
+    "Final-binary default/aggressive clean, no-op and source gains at j8/j16 remain unqualified on FFmpeg and Linux; fresh native ext4 qualification queued after verified evidence relocation.",
     "Aggressive real-project performance qualification remains unrun.",
     "Legacy-entrypoint no-regression qualification, real-project feature ablations and separate Ninja-runtime performance comparisons remain unrun.",
     "Monitored startup-inclusive cold and retained warm real-project measurements remain unrun."
   ],
   "validation_followup": {
-    "status": "exact-candidate external comparison pending",
-    "updated_utc": "2026-10-27T03:32:10.792772+00:00",
-    "binary_sha256": "f7845bd8168d1fdd5fd233bdb1cd492df782e2587889398a5874e5961f2f6c95",
+    "status": "passed: portable, sanitizers, formatting, 576 seeded state comparisons and all four independent Linux external comparisons",
+    "updated_utc": "2026-10-27T06:48:03.7765233Z",
+    "binary_sha256": "09b0f15dcccd30993f0230f2bc98ab4e894a767ebe5e78043dfef4f9aea731b4",
     "portable_gate": "passed",
     "sanitizer_gate": "passed",
     "regression_default": 858,
     "regression_aggressive": 858,
-    "focused_graph_tests": 48,
+    "focused_graph_tests": 49,
     "changed_cpp_formatting": {
-      "path": "validation/logs/graph-optimizations/fifo-format.log",
+      "path": "validation/logs/graph-optimizations/probe-format.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     "logs": [
       {
-        "path": "validation/logs/graph-optimizations/state-replay-portable-12.log",
-        "sha256": "deb5e117d0ba290667ba2c42f0350eabc0c9487aec4ac92ced8b1a28f9c70afc"
+        "path": "validation/logs/graph-optimizations/state-replay-portable-13.log",
+        "sha256": "e4b4ac8caa88b49c57aab72596747e24652951f0001daf6eb1642bedaeb2baca"
       },
       {
-        "path": "validation/logs/graph-optimizations/state-replay-sanitizer-10.log",
-        "sha256": "ab18208c87f727bebc460f22ba916bca2a6ad6806a336c057b0a95965ab40968"
+        "path": "validation/logs/graph-optimizations/state-replay-sanitizer-11.log",
+        "sha256": "65a7011be4cc664922179e84308e5f5e09629267e2ff9ac7ff2dab08f983ba86"
       },
       {
-        "path": "validation/logs/graph-optimizations/state-replay-22-focused.log",
-        "sha256": "2a1d3a58778fd855ce4d6e67270f8c81ad45d1bbcdabe79aad30162a9b3f21bd"
+        "path": "validation/logs/graph-optimizations/state-replay-23-focused.log",
+        "sha256": "44d32573a210129cdd98bd7c08322e196f8e4b24efa7a3e7456490472d541f1d"
+      },
+      {
+        "path": "validation/logs/graph-optimizations/probe-static-focused.log",
+        "sha256": "beac91f8f55a55ab2588287b1b2bde2d82f3b31a89bdf2b13c4151457122a2af"
       }
     ],
     "synthetic_comparison": {
-      "path": "validation/logs/graph-optimizations/synthetic-transport-v2.json",
-      "sha256": "599c8d6f304a82b327f14527ced79e62afe69df995b0e10cea8d8338a2796a9e"
+      "status": "passed",
+      "path": "validation/logs/graph-optimizations/synthetic-probe-native-amd.json",
+      "sha256": "4cd55b2ef4a57277f47ef7faad1dcb0e60efe67ec89bb30c0326d195178f117e",
+      "binary_sha256": "09b0f15dcccd30993f0230f2bc98ab4e894a767ebe5e78043dfef4f9aea731b4",
+      "repeats": 7,
+      "qualification": "Required tests/bench.py comparison; diagnostic synthetic results do not satisfy real-project acceptance."
     },
     "additional_state_differential": {
       "path": "validation/logs/graph-optimizations/state-differential.json",
-      "sha256": "47e067e119a93ffe82dc7279edd64b84ae3b19e9851cbb26dbb2564769fdbd7d",
+      "sha256": "24af0edf0b1eb8476cc5e2d674067013f5c6f166f243777095a891cdcd9cbd1d",
       "comparisons": 576,
       "seeds": 48,
       "iterations": 6,
       "status": "passed",
-      "binary_sha256": "628620e5564513bae574dffd794044eeda0399d9c73687c420b9b660e274f622",
+      "binary_sha256": "09b0f15dcccd30993f0230f2bc98ab4e894a767ebe5e78043dfef4f9aea731b4",
       "driver": {
         "path": "validation/logs/graph-optimizations/state-differential.py",
         "sha256": "f8fce89b8e1bf6e73342b50b3d2040b530c32acf5bc9fe1f22fc4bdbd184a3ca"
       }
     },
     "external_differential": {
-      "status": "current final FIFO-guard binary pending; preceding transport-v2 binary passes all four combinations on independent AMD builder",
-      "preceding_binary_sha256": "628620e5564513bae574dffd794044eeda0399d9c73687c420b9b660e274f622",
-      "root": "/home/nasadmin/.cache/omktr-graph-20261027-057a084f/evidence/external-transport-v2-native-amd"
+      "status": "passed",
+      "binary_sha256": "09b0f15dcccd30993f0230f2bc98ab4e894a767ebe5e78043dfef4f9aea731b4",
+      "root": "/home/nasadmin/.cache/omktr-graph-20261027-057a084f/evidence/external-probe-native-amd",
+      "scenarios_per_combination": 27,
+      "combinations": [
+        "safe-j1",
+        "safe-j4",
+        "aggressive-j1",
+        "aggressive-j4"
+      ],
+      "results": {
+        "sha256": "0fcd944e040e103a40b32af7d4201ba12c5aa32325e92fecee3b2a4c6c374a78",
+        "path": "validation/logs/graph-optimizations/external-probe-native-amd-results.json"
+      }
     },
-    "benchmark_harness_tests": 5
+    "benchmark_harness_tests": 5,
+    "static_focused_tests": 49,
+    "preflight": {
+      "path": "validation/logs/graph-optimizations/preflight-probe-results.json",
+      "sha256": "b492f68901cec58e043f731e4115704aa8c7ffa877c602e0db7ab8ebae5b419f"
+    }
   },
   "performance_followup": {
-    "status": "running isolated diagnostic; no qualification samples for final binary",
+    "status": "Verified evidence relocation pending; fresh default matrix queued on separate native ext4 disk",
     "builder": "nas / native Linux / AMD Ryzen 7 5800X / 16 threads",
     "toolchain_image_id": "sha256:42bae58178c98432973444c1b5b7de9b5e847f1fce7372c73a1034749902c050",
-    "root": "/home/nasadmin/.cache/omktr-graph-20261027-057a084f/evidence/profiles-transport-v2-isolated",
-    "container": "openmktr-graph-nas-profiles-transport-v2-isolated",
-    "binary_sha256": "628620e5564513bae574dffd794044eeda0399d9c73687c420b9b660e274f622",
-    "qualification": "Pre-FIFO-guard binary, instrumented diagnostics only; never used for final performance intervals. All generation/off/safe profiles use the same pinned external compiler image and fresh build trees."
+    "root": "/srv/disks/media02/.omktr-graph-20261027-09b0/evidence/defaults-probe-media02",
+    "container": "openmktr-graph-nas-defaults-probe-media02",
+    "pipeline": "/home/nasadmin/.cache/omktr-graph-20261027-057a084f/evidence/qualification-probe-pipeline.jsonl",
+    "binary_sha256": "09b0f15dcccd30993f0230f2bc98ab4e894a767ebe5e78043dfef4f9aea731b4",
+    "qualification": "No accepted measurements yet. Fresh native Linux build trees, two discarded warmup pairs and seven alternating measured pairs at j8/j16. Never pooled with other binaries, hosts or instrumented runs."
   },
   "cache_correctness_followup": {
     "structural_stamp_checksum": "KAT4, bounded and sealed; mutable validated timestamp checkpoint excluded",
@@ -1099,5 +1124,98 @@
     "logs": "Each sample has a distinct log directory; setup and optional monitor start retained separately",
     "correctness": "Same artifact, rebuild, unrelated-output and source-integrity checks as fresh mode",
     "tests": "Portable integration verifies off/aggressive comparison, warmup filtering, unique retained logs and monitor shutdown"
+  },
+  "metadata_bypass_diagnostic": {
+    "status": "inconclusive",
+    "qualification": false,
+    "scope": "Synthetic direct execution only; seven paired measurements after two discarded warmup pairs, blocking wait4; not real-project acceptance",
+    "report": {
+      "path": "validation/logs/graph-optimizations/metadata-bypass-comparison/report.json",
+      "sha256": "4abd798e5de9f2cc9b3f42da9b61b7b8fc461135d8248a3a5b44ebc5fb81c7cc"
+    },
+    "samples": {
+      "path": "validation/logs/graph-optimizations/metadata-bypass-comparison/samples.jsonl",
+      "sha256": "ac971ba50aa134799200affea4b9838cd7de7c8f32b050992360e0f5a7306c90"
+    },
+    "commands": {
+      "path": "validation/logs/graph-optimizations/metadata-bypass-comparison/commands.jsonl",
+      "sha256": "81bb69407cf535ce801ca0d203c3fb9305cd98a258773d57494ecd8621adefbd"
+    },
+    "summary": [
+      {
+        "project": "synthetic",
+        "entrypoint": "direct",
+        "jobs": 2,
+        "scenario": "active",
+        "pairs": 7,
+        "paired_improvement_percent": [
+          -1.1486794985649196,
+          0.00732581607885141,
+          1.4878127516795847,
+          0.5886743810863515,
+          -3.3613577979786813,
+          1.074197970004731,
+          0.6552984780351823
+        ],
+        "median_improvement_percent": 0.5886743810863515,
+        "bootstrap_95_percent": [
+          -1.1486794985649196,
+          1.074197970004731
+        ],
+        "supported_improvement": false,
+        "supported_regression": false,
+        "baseline_median_seconds": 2.775536273024045,
+        "candidate_median_seconds": 2.7635850890073925
+      },
+      {
+        "project": "synthetic",
+        "entrypoint": "direct",
+        "jobs": 2,
+        "scenario": "idle",
+        "pairs": 7,
+        "paired_improvement_percent": [
+          -8.004359799927219,
+          -2.1918964248207606,
+          -3.6315647920098115,
+          0.5449736427394991,
+          -4.86985392434478,
+          3.8089662661890067,
+          8.302622099191337
+        ],
+        "median_improvement_percent": -2.1918964248207606,
+        "bootstrap_95_percent": [
+          -4.86985392434478,
+          3.8089662661890067
+        ],
+        "supported_improvement": false,
+        "supported_regression": false,
+        "baseline_median_seconds": 0.22706721402937546,
+        "candidate_median_seconds": 0.22858017595717683
+      }
+    ]
+  },
+  "metadata_bypass_coverage": "Known-active effect regions use ordinary filesystem probes throughout and invalidate enclosing certificates; statistics count region bypasses separately. Dedicated concurrent-side-effect regression passes in ordinary and optimized modes.",
+  "evidence_relocation": {
+    "status": "copy complete; full metadata and SHA256 verification running before original removal",
+    "destination": "/srv/disks/media02/.omktr-graph-20261027-09b0/evidence",
+    "filesystem": "native ext4 on separate physical /dev/sda1",
+    "entries": 516066,
+    "originals_preserved_until_verified": true,
+    "interrupted_campaign": {
+      "report": {
+        "path": "validation/logs/graph-optimizations/defaults-probe-storage-interrupted-report.json",
+        "sha256": "bdb066cec9f69ef23f95fa9ea894e65b47e1324c64f406e62741c8edeeb54834"
+      },
+      "completed_warmup_rows": 20,
+      "completed_measured_rows": 0,
+      "reason": "Stopped deliberately for storage relocation before the first measured clean completed; exit 130",
+      "source_changes": [],
+      "qualification": false
+    },
+    "smoke": {
+      "sha256": "12d417bd5af7fbb63699a068d41831f544a023e3260d77f0e5ff0d9445e37c73",
+      "status": "passed: execution, explicit monitor lifecycle, aggressive build and required rebuild",
+      "path": "validation/logs/graph-optimizations/media02-smoke.json"
+    }
   }
 }
