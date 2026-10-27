@@ -2,7 +2,7 @@
   "schema_version": 1,
   "status": "in_progress",
   "complete": false,
-  "updated_utc": "2026-10-27T12:38:00.047192+00:00",
+  "updated_utc": "2026-10-27T13:56:22.203648+00:00",
   "delivery": {
     "branch": "codex/ninja-graph-optimizations",
     "base_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d",
@@ -242,7 +242,8 @@
         "path": "validation/logs/graph-optimizations/cooperative-v4-incremental-harness.log",
         "sha256": "058745be0287c553993992665429a9680e234fc25e4bd5a34accbf9c070f2911"
       }
-    }
+    },
+    "qualification": "Historical preceding remote-builder results; all required checks are being rerun on the PC."
   },
   "performance": {
     "acceptance": "incomplete",
@@ -1017,9 +1018,10 @@
     }
   ],
   "outstanding": [
-    "Qualify B7 clean, no-op and single-source improvements for both projects, jobs and profiles. Historical 09b Linux clean intervals remain inconclusive.",
-    "Complete legacy-entrypoint regression qualification, real-project feature ablations and separate Ninja-runtime comparisons.",
-    "Complete monitored startup-inclusive cold and retained warm measurements, publish raw evidence, then pass PR checks and merge."
+    "Complete PC-only portable, sanitizer, focused, external, state-differential and synthetic validation with fresh local binaries.",
+    "Qualify local clean, no-op and single-source improvements for both projects, job counts and profiles with the unchanged paired protocol.",
+    "Complete local legacy regression checks, feature ablations, separate Ninja runtimes and monitored cold/warm measurements.",
+    "Publish raw evidence, create the PR, pass all checks and merge."
   ],
   "validation_followup": {
     "status": "passed: portable, sanitizers, formatting, 576 seeded state comparisons and all four independent Linux external comparisons",
@@ -1362,7 +1364,7 @@
     }
   },
   "planned_controlled_comparison": {
-    "status": "running_linux_safe_j8_pilot",
+    "status": "interrupted_environment_contention_excluded_from_acceptance",
     "candidate_sha256": "b7b75e459d4cf744ae73b970466c6c517473019cfce9573017770918c5eb147d",
     "purpose": "Test whether consistent CPU placement and a common performance governor reduce measurement variation; this is not an established explanation of the prior noise.",
     "cpu_policy": "Temporary performance governor for both binaries; original governor and EPP saved and restored with readback verification; boost and frequency limits untouched.",
@@ -1415,7 +1417,13 @@
         "path": "validation/logs/graph-optimizations/benchmark_cpu_control.py",
         "sha256": "3722b75a45bcccd2a32a45274941e0a31f39f527103d00ae2e6de0f969c39e92"
       }
-    ]
+    ],
+    "qualification": "Unrelated bulk FFmpeg transcoding consumed about five CPU cores; partial rows retained. No acceptance claim.",
+    "partial_samples": {
+      "path": "validation/logs/graph-optimizations/controlled-v4-linux-j8-progress.jsonl",
+      "sha256": "c6675f95b37f2a820bb78f7143e3b5575f338c7c75b449e01e1b3508f6fccb38",
+      "rows": 50
+    }
   },
   "offline_profile_followup": {
     "status": "Decoded existing profiles locally with the matching perf 7.0.14 runtime; analysis never ran on the timed builder",
@@ -1584,5 +1592,40 @@
     "method": "APT-verified NASM 2.16.01 private runtime shared by both variants; original compiler, Ninja, configure flags and release sources unchanged.",
     "binary_sha256": "9b9ed9dd9a5ed930a57e32ebd1556415376e73028f17fa5b4bf43afdb61972e9",
     "have_x86asm": true
+  },
+  "execution_boundary": {
+    "local_host": "user PC only",
+    "nas_access": "prohibited",
+    "instruction": "All local development, validation and benchmarking must run on the PC. Never access or modify the NAS.",
+    "previous_remote_controller": "stopped before the user established this boundary",
+    "previous_remote_cpu_policy": "restored and readback verified before the boundary was established",
+    "source_services_modified": false,
+    "future_remote_access": false
+  },
+  "pc_qualification": {
+    "status": "portable_running",
+    "docker_context": "desktop-linux",
+    "image_build": {
+      "command": [
+        "docker",
+        "build",
+        "--build-arg",
+        "OMKTR_SOURCE_REVISION=58bb206a2e5a78f4ce0e7e01fce662f845ca459d",
+        "-t",
+        "openmktr-pc-cooperative-v4",
+        "-"
+      ],
+      "host": "local PC Docker Desktop",
+      "source_archive_sha256": "9cb3b5f25e6c0d938bff03e3a153aa530b87f0ec0910e80281430b4729277175",
+      "started": "2026-10-27T13:52:02.399843+00:00",
+      "status": 0,
+      "finished": "2026-10-27T13:52:16.633474+00:00",
+      "image_id": "sha256:15ce1bbe9e3ace4b7fd4a534a40e721d9621a02b1548ee84effba3464d008d67"
+    },
+    "volume": "openmktr-graph-pc-v4",
+    "acceptance": "incomplete",
+    "source_snapshot": "candidate-cooperative-v4-source.tar",
+    "static_binaries": "fresh local baseline and candidate builds pending",
+    "note": "Previous remote-build artifacts and measurements are historical; the current acceptance campaign will be entirely local."
   }
 }
