@@ -207,3 +207,23 @@ Saves reject stale previews and leave an exact before/after transaction journal
 if interrupted. `omktr-manager recover`, run as administrator, rolls back a partial
 save only when the files still match the journal; manual edits stop recovery.
 An interrupted cache setup may leave a prepared directory, which is safe to reuse.
+
+Configuration dialogs start with the selected package's existing settings,
+including recognized manual Ninja selections during adoption. Mixed batch
+settings show `<mixed; unchanged>`; leaving a field unchanged preserves each
+package's value. The TUI uses Enter to keep a value and `inherit` to clear an
+explicit jobs/load override. Unrelated inherited environments, such as a global
+CFLAGS selection, remain in place and do not prevent disabling integration.
+
+### GUI screenshots
+
+These are captures of the actual Tk application under Xvfb, with Gentoo's real
+package catalog and disposable configuration. No system package was activated.
+The example edits only jobs from 8 to 4 while retaining Ninja mode, strict
+compatibility, and persistent workspaces.
+
+![Package selection](../../docs/screenshots/portage-manager-packages.png)
+
+![Existing job setting](../../docs/screenshots/portage-manager-settings.png)
+
+![Review before saving](../../docs/screenshots/portage-manager-review.png)

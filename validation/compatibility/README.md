@@ -168,3 +168,10 @@ policy enforcement; it does not automate a desktop password prompt.
 The installed manager fixture also parses optional GUI/TUI interpreter
 dependencies using Portage, so invalid USE-dependency syntax fails the lane
 even when the ebuild is installed with only the CLI enabled.
+
+To regenerate the GUI screenshots, run
+`DISPLAY=:99 python3 validation/compatibility/capture_manager_gui.py --output DIR`
+in the Gentoo Xvfb environment with a true-color display. The helper captures
+actual X11 window pixels using the system X11 library, uses the live package
+catalog, and writes configuration only to a temporary directory. It never saves
+changes to `/etc/portage`.
