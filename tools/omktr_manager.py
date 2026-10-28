@@ -18,7 +18,7 @@ BEGIN = '# BEGIN openmktr-manager\n'
 END = '# END openmktr-manager\n'
 PREFIX = 'openmktr-manager-'
 OPTIONS = {
-    'disabled_graph_optimizations': ('', 'comma-separated features', 'Exclude evaluation, includes, recursive, compact, monitor; exclusions override the profile.'),
+    'disabled_graph_optimizations': ('', 'comma-separated features', 'Exclude evaluation, includes, recursive, compact, monitor; exclusions override the profile. Enter none in the TUI to clear all exclusions.'),
     'build_stats': (False, 'boolean', 'Print build timing and optimization statistics; may increase log output.'),
     'regen_debug': (False, 'boolean', 'Explain Ninja regeneration decisions; useful for diagnosing repeated builds.'),
     'mode': ('direct', 'direct|ninja', 'Build mode; Ninja applies to compilation only.'),
@@ -66,7 +66,7 @@ def option_value(name, value):
         if value.lower() not in ('true', 'false'):
             raise ValueError(name + ' must be true or false')
         return value.lower() == 'true'
-    return '' if name in ('jobs', 'load') and value == 'inherit' else value
+    return '' if (name in ('jobs', 'load') and value == 'inherit') or (name == 'disabled_graph_optimizations' and value == 'none') else value
 
 
 def environment(values, legacy=False):
@@ -667,6 +667,8 @@ def gui(backend):
         write_preview(''); error.set(''); controls()
 
     def initial_from_information(packages):
+        for p in packages:
+            if information[p].get('effective_error'): raise RuntimeError(p + ': ' + information[p]['effective_error'])
         if any(information[p]['state'] in ('conflicting', 'indeterminate') for p in packages):
             raise RuntimeError('Resolve conflicting or custom package environments manually before editing.')
         values = [information[p].get('effective') or settings({}) for p in packages]
@@ -770,7 +772,10 @@ def gui(backend):
         information = {}
         for row in catalog:
             p = row['package']; info = snapshot.show(p)
-            if info['state'] not in ('conflicting', 'indeterminate'): info['effective'] = snapshot.effective_settings(p)
+            if info['state'] not in ('conflicting', 'indeterminate'):
+                try: info['effective'] = snapshot.effective_settings(p)
+                except (ValueError, RuntimeError, OSError) as exc:
+                    info['effective_error'] = str(exc).strip() or type(exc).__name__ + ': settings unavailable'
             information[p] = info
         return catalog, information
 
@@ -780,7 +785,10 @@ def gui(backend):
         selected = [p for p in selected if p in information]
         refresh()
         if selected:
-            draft.initial = initial_from_information(selected)
+            try: draft.initial = initial_from_information(selected)
+            except (ValueError, RuntimeError, OSError) as exc:
+                draft.initial = {k: v[0] for k, v in OPTIONS.items()}
+                hint.set(str(exc))
             for key in variables: reset(key)
 
     def commit():
@@ -852,10 +860,13 @@ def gui(backend):
     cpu_button.grid(row=40, column=0, sticky='w')
     app.bind('<Control-f>', lambda event: search.focus_set())
     app.protocol('WM_DELETE_WINDOW', lambda: app.destroy() if not busy and permit_discard() else None)
-    app.manager = dict(table=table, variables=variables, inherits=inherits, tabs=tabs, pages=pages, review=review, stage=stage, back=back, clear=clear, commit=commit, controller=controller, query=query, navigation=navigation, workspace_vars=workspace_vars, operation=operation, error=error)
+    app.manager = dict(table=table, variables=variables, inherits=inherits, tabs=tabs, pages=pages, review=review, stage=stage, back=back, clear=clear, commit=commit, controller=controller, query=query, navigation=navigation, workspace_vars=workspace_vars, operation=operation, error=error, hint=hint)
     controls()
     poll_timer[:] = [app.after(60, poll)]
-    app.bind('<Destroy>', lambda event: app.after_cancel(poll_timer[0]) if event.widget is app and poll_timer else None)
+    def destroyed(event):
+        if event.widget is app:
+            for timer in app.tk.splitlist(app.tk.call('after', 'info')): app.after_cancel(timer)
+    app.bind('<Destroy>', destroyed)
     app.after(0, lambda: background(discover, loaded, 'Loading package catalog...'))
     app.mainloop()
 

@@ -30,6 +30,21 @@ class ManagerTests(unittest.TestCase):
         plan = self.backend.plan(action, packages or ['cat/pkg'], values or {})
         self.backend.apply(plan)
         return plan
+    def test_tui_can_clear_graph_exclusions(self):
+        from unittest import mock
+        import types
+        self.apply(values={'disabled_graph_optimizations':'monitor'})
+        keys = iter([ord(' '), ord('c'), ord('r'), 10, ord('s'), ord('q')])
+        replies = iter([b'none', *([b''] * (len(m.OPTIONS)-1))])
+        screen = mock.Mock()
+        screen.getmaxyx.return_value = (30, 120)
+        screen.getch.side_effect = lambda: next(keys)
+        screen.getstr.side_effect = lambda *args: next(replies)
+        fake = types.SimpleNamespace(KEY_DOWN=258, KEY_UP=259, echo=lambda:None, noecho=lambda:None, wrapper=lambda run:run(screen))
+        with mock.patch.dict('sys.modules', curses=fake), mock.patch.object(m, 'save', side_effect=lambda b, p:b.apply(p)):
+            m.tui(self.backend)
+        self.assertEqual(self.backend.show('cat/pkg')['settings']['disabled_graph_optimizations'], '')
+
     def test_snapshot_large_catalog_and_external_edit(self):
         from unittest import mock
         (self.root / 'package.env').write_text('cat/pkg custom\n')

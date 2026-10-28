@@ -255,6 +255,7 @@ Advanced settings include `disabled_graph_optimizations` (comma-separated
 `evaluation,includes,recursive,compact,monitor` exclusions), `build_stats`, and
 `regen_debug`. Exclusions override the selected graph profile; statistics add
 build log output, and regeneration explanations apply to Ninja regeneration.
+At the TUI exclusions prompt, `none` clears all exclusions; Enter keeps them.
 Boolean values use `true` or `false` with CLI `--set`. Defaults are no exclusions
 and both diagnostics disabled. Existing generated files remain readable and are
 upgraded only through a reviewed save.

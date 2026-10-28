@@ -16,6 +16,36 @@ spec.loader.exec_module(checks)
 m = checks.m
 
 class NativeTk(unittest.TestCase):
+    def test_unadoptable_package_does_not_block_catalog(self):
+        root = tk.Tk()
+        failures = []
+        root.report_callback_exception = lambda *args: failures.append(args[1])
+        with tempfile.TemporaryDirectory() as directory:
+            backend = m.Backend(Path(directory), checks.FakePortage())
+            backend.portage.packages = lambda: [dict(package=p, installed=True, available=True) for p in ('cat/pkg','other/pkg')]
+            (backend.root/'env').mkdir()
+            (backend.root/'env/openmktr-ninja').write_text('export MAKE="/usr/bin/omktr-portage"\nexport OMKTR_PORTAGE_MODE="ninja"\n')
+            # Manual activation mode conflicts are selection-specific errors.
+            (backend.root/'env/openmktr-direct').write_text('export MAKE="/usr/bin/omktr-portage"\nexport OMKTR_PORTAGE_MODE="direct"\n')
+            (backend.root/'package.env').write_text('cat/pkg openmktr-ninja openmktr-direct\n')
+            def interact():
+                try:
+                    deadline = time.monotonic()+5
+                    view = root.manager
+                    while len(view['table'].get_children()) != 2:
+                        if time.monotonic()>deadline: self.fail('catalog failed to load')
+                        root.update(); time.sleep(.01)
+                    view['table'].selection_set('cat/pkg'); root.update()
+                    self.assertIn('conflicting activation modes', view['hint'].get())
+                    view['table'].selection_set('other/pkg'); root.update()
+                    view['variables']['jobs'].set('4'); view['stage']('configure')
+                    self.assertEqual(view['controller'].pending['packages'], ['other/pkg'])
+                except Exception as exc: failures.append(exc)
+                finally: root.destroy()
+            with mock.patch.object(tk,'Tk',return_value=root), mock.patch.object(root,'mainloop',side_effect=interact):
+                m.gui(backend)
+        if failures: raise failures[0]
+
     def test_search_resize_and_cpu_shortcut(self):
         root = tk.Tk()
         failures = []
