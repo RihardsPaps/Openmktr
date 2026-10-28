@@ -1,4 +1,6 @@
 > FORK MODIFICATION NOTICE (2026)
+> Locked current distribution dependencies and added selectable Zstandard workspace packing.
+> Fixed reuse of inherited recursive recipe reservations.
 > Added configurable graph optimizations, content-preserving output generation and monitoring.
 > Added an opt-in Gentoo overlay, Portage adapter, and load-average limits.
 > Added automatic Ninja build usage, locking, and generated-file safety guidance.
@@ -34,7 +36,7 @@ equivalent POSIX tools, including BusyBox, Toybox, or BSD-derived
 implementations, can provide the basic system commands. The full snapshot suite
 remains tied to the reference environment. Optional manually dispatched
 [compatibility lanes](validation/compatibility/README.md) exercise Alpine/musl
-and Gentoo/glibc, including Ninja >= 1.13 jobserver behavior; their coverage
+and Gentoo/glibc, including Ninja >= 1.13.2 jobserver behavior; their coverage
 does not replace the reference gate.
 
 | Capability | What you can do |
@@ -94,7 +96,7 @@ and manual workflow runs validate and retain artifacts without publishing.
 
 ### Build requirements
 
-Openmktr's own build needs Clang/LLVM with LLD, libc++, Ninja, Python 3, a
+Openmktr's own build needs Clang/LLVM with LLD, libc++, Ninja 1.13.2+, Python 3, a
 POSIX shell, and basic system utilities. Package names vary by distribution;
 no Chimera-specific utility package or GNU userland is required.
 
@@ -134,6 +136,10 @@ suites when the container starts. Unit, version, correctness, compatibility,
 and include-dump checks have also passed in Alpine with its BusyBox utilities.
 The executable stays inside the image; this workflow does not install it on
 the host.
+
+See [dependency versions and upgrades](docs/dependencies.md) for the exact
+reference package lock, CI action commits, current campaign inputs and upgrade
+qualification policy.
 
 Docker and the CI host are external infrastructure. The CI image runs in
 Chimera; the independent Alpine run also built the source and passed the core
@@ -235,6 +241,9 @@ still run in the build working directory. Existing unrelated graphs at the
 selected output path are refused. `-jN` controls Ninja and recursive job limits;
 `-n` requests a dry run and `-k` continues independent work after failures.
 Question, touch, syntax-only, empty-graph, and stamp-dump modes are rejected.
+Without an explicit `-j`, a valid inherited GNU-protocol FIFO lets Ninja control
+its edges through that jobserver. Explicit job options override it. Recursive
+Openmktr work retains its private reservation and load-limit controls.
 
 Concurrent `omktr build` commands in the same build working directory wait on
 `.openmktr.lock`, held from input validation through Ninja completion. The lock
@@ -271,7 +280,8 @@ version-independent build location. Repeat without `--source` for a hot
 incremental build, or supply a new prepared release to synchronize changed
 inputs. `omktr workspace pack --name PROJECT` compresses inactive source and
 build state; the next run restores it automatically. These optional commands
-require Python 3.11+ with `lzma`; see [persistent workspaces](docs/workspaces.md)
+require Python 3.14+ with `lzma` (and `compression.zstd` or distribution `zstd`
+for Zstandard packing); see [persistent workspaces](docs/workspaces.md)
 for configuration, dependency tracking and the opt-in Portage profile.
 
 Gentoo users can install the live ebuild and opt selected packages into their
@@ -392,6 +402,8 @@ existing direct scheduler. It does not flatten child graphs. See the
 Ordinary generated Ninja recipes now acquire the shared FIFO budget, including
 recipes in nested Ninja builds. A child Ninja borrowing one inherited reservation
 runs serially to prevent separate helper processes from claiming that slot twice.
+Queued direct recipes can reuse a released inherited slot even while other
+processes own all remaining FIFO tokens.
 
 ## Compatibility and scope
 

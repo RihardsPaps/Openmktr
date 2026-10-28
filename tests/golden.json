@@ -3112,7 +3112,7 @@
   },
   "ninja_implicit_dependent.sh:script": {
     "files": [],
-    "output": "./build.ninja is missing, regenerating...\nninja: warning: deprecated warning 'dupbuild'\nninja: error: ./build.ninja:16: secondary is defined as an output multiple times\n\n",
+    "output": "./build.ninja is missing, regenerating...\nninja: warning: deprecated warning 'dupbuild'\nninja: error: ./build.ninja:18: secondary is defined as an output multiple times\n\n",
     "status": 1
   },
   "ninja_implicit_output_var.sh:script": {
@@ -3124,7 +3124,7 @@
   },
   "ninja_implicit_outputs.sh:script": {
     "files": [],
-    "output": "./build.ninja is missing, regenerating...\nninja: warning: deprecated warning 'dupbuild'\nninja: error: ./build.ninja:18: d is defined as an output multiple times\n\n",
+    "output": "./build.ninja is missing, regenerating...\nninja: warning: deprecated warning 'dupbuild'\nninja: error: ./build.ninja:20: d is defined as an output multiple times\n\n",
     "status": 1
   },
   "ninja_mkdir.sh:script": {
@@ -3774,7 +3774,7 @@
   },
   "recipe_var.mk:default:ninja": {
     "files": [],
-    "output": "ninja: error: ./build.ninja:12: bad $-escape (literal $ must be written as $$)\n\n",
+    "output": "ninja: error: ./build.ninja:14: bad $-escape (literal $ must be written as $$)\n\n",
     "status": 1
   },
   "recursive_command_expansion.mk:test:direct": {

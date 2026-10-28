@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Preserve inherited FIFO authentication without treating it as an explicit -j.
 // Add configurable Ninja graph optimizations and content-preserving output
 // generation. Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
@@ -240,6 +241,8 @@ void Flags::Parse(int argc, char** argv) {
   executable_path = GetExecutablePath();
   subkati_args.push_back(executable_path.c_str());
   num_jobs = num_cpus = sysconf(_SC_NPROCESSORS_ONLN);
+  num_jobs_specified = false;
+  ninja_jobserver_fifo.clear();
   if (const char* inherited_level = getenv("MAKELEVEL")) {
     char* end = nullptr;
     long level = strtol(inherited_level, &end, 10);
@@ -305,6 +308,16 @@ void Flags::Parse(int argc, char** argv) {
 
     for (size_t i = 0; i < makeflags_tokens.size(); ++i) {
       const std::string& tok = makeflags_tokens[i];
+      if (HasPrefix(tok, "--jobserver-auth=")) {
+        ninja_jobserver_fifo.clear();
+        if (HasPrefix(tok, "--jobserver-auth=fifo:"))
+          ninja_jobserver_fifo = tok.substr(strlen("--jobserver-auth=fifo:"));
+        // Ninja splits MAKEFLAGS on spaces/tabs without unescaping paths.
+        // Leave ambiguous encodings on the existing explicit-budget path.
+        if (ninja_jobserver_fifo.find_first_of(" \t\r\n\v\f\\") !=
+            std::string::npos)
+          ninja_jobserver_fifo.clear();
+      }
       bool consume_next;
       const char* next = i + 1 < makeflags_tokens.size()
                              ? makeflags_tokens[i + 1].c_str()
@@ -470,6 +483,8 @@ void Flags::Parse(int argc, char** argv) {
 
         if (option == 'C' || option == 'f' || option == 'j') {
           handled = true;
+          if (option == 'j')
+            num_jobs_specified = true;
 
           const char* value = arg + pos + 1;
           if (*value == '\0') {
@@ -695,6 +710,7 @@ void Flags::Parse(int argc, char** argv) {
         traced_variables_pattern.push_back(Pattern(pat));
       }
     } else if (!strcmp(arg, "-j")) {
+      num_jobs_specified = true;
       if (i + 1 < argc && isdigit(static_cast<unsigned char>(argv[i + 1][0]))) {
         num_jobs_str = argv[++i];
         char* end = nullptr;
@@ -706,6 +722,7 @@ void Flags::Parse(int argc, char** argv) {
         num_jobs = std::max(1, num_cpus);
       }
     } else if (ParseCommandLineOptionWithArg("-j", argv, &i, &num_jobs_str)) {
+      num_jobs_specified = true;
       char* end = nullptr;
       long parsed = strtol(num_jobs_str, &end, 10);
       if (*num_jobs_str == '\0' || *end != '\0' || parsed <= 0 ||

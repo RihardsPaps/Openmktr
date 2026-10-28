@@ -11,6 +11,8 @@ out/strutil_test
 out/load_limit_test
 python3 tests/version_generator.py
 python3 tests/correctness.py
+python3 tests/workspace.py
+python3 tests/graph_optimizations.py
 python3 tests/make_compat_regressions.py
 python3 tests/portage.py
 python3 tests/load_limits.py

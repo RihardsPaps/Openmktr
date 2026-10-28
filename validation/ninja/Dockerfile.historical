@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: MPL-2.0
+# Historical releases may predate diagnostics in the current default compiler.
+# Keep this supported parallel toolchain separate from current-release tests.
+# The distribution's GNU runtime dependencies stay in this external image.
+ARG BASE_IMAGE=openmktr-alpine-campaign
+FROM ${BASE_IMAGE}
+ARG LLVM_MAJOR=20
+ARG CLANG_VERSION=20.1.8-r3
+ARG LLVM_VERSION=20.1.8-r1
+ARG LLD_VERSION=20.1.8-r1
+ARG GCC_RUNTIME_VERSION=15.2.0-r5
+# This packaged Clang needs GCC's startup/runtime files for host-tool linking.
+# Kernel and host compilation still select Clang and LLD through this PATH.
+RUN apk del lld && apk add --no-cache "clang${LLVM_MAJOR}=${CLANG_VERSION}" \
+      "llvm${LLVM_MAJOR}=${LLVM_VERSION}" "lld${LLVM_MAJOR}=${LLD_VERSION}" \
+      "gcc=${GCC_RUNTIME_VERSION}"
+ENV PATH=/opt/openmktr-campaign-tools:/usr/lib/llvm${LLVM_MAJOR}/bin:${PATH}
+RUN clang_target=$(clang -dumpmachine) && \
+      mkdir -p "/etc/clang${LLVM_MAJOR}" && \
+      printf '%s\n' '-fuse-ld=lld' >> "/etc/clang${LLVM_MAJOR}/${clang_target}.cfg"
+RUN clang --version && ld.lld --version && llvm-ar --version && ninja --version && \
+      apk info -v > /historical-package-versions.txt

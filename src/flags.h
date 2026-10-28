@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Distinguish explicit job counts from an inherited Ninja FIFO jobserver.
 // Add configurable Ninja graph optimizations and content-preserving output
 // generation. Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
@@ -107,6 +108,8 @@ struct Flags {
   const char* working_dir;  // -C <dir>
   int num_cpus;
   int num_jobs;
+  bool num_jobs_specified = false;
+  std::string ninja_jobserver_fifo;
   double load_limit = -1;
   bool load_limit_set = false;
   int make_level = 0;

@@ -1,0 +1,136 @@
+{
+  "protocol": "one warmup; five alternating measured samples; verified file hashes",
+  "content": "repository C++ sources, tests, LLVM objects and executable",
+  "python": "3.14.6 (main, Jul 21 2026, 19:29:25) [Clang 22.1.7]",
+  "file_count": 138,
+  "input_manifest_sha256": "283641205250a94aa07a671c3e865a1ee019075318c9879a7e80ee23e454d332",
+  "harness_sha256": "a2ea0e9d8584a212101ddac3e6f5622cd12a567a19910c08ca494ec80dca4e01",
+  "executable_sha256": "4c020ea93477b2415ff20823dae37d7ba8ae865b124caa686180d7424ca6ce1b",
+  "settings": {
+    "xz_preset": 6,
+    "zstd_level": 3
+  },
+  "samples": [
+    {
+      "sample": 0,
+      "warmup": true,
+      "compression": "xz",
+      "pack_seconds": 1.5322518450002462,
+      "restore_seconds": 0.13316469799974584,
+      "original_bytes": 8322999,
+      "compressed_bytes": 2353264
+    },
+    {
+      "sample": 0,
+      "warmup": true,
+      "compression": "zstd",
+      "pack_seconds": 0.06566155400014395,
+      "restore_seconds": 0.03848306899999443,
+      "original_bytes": 8322999,
+      "compressed_bytes": 3244985
+    },
+    {
+      "sample": 1,
+      "warmup": false,
+      "compression": "zstd",
+      "pack_seconds": 0.06737255300049583,
+      "restore_seconds": 0.0387458590003007,
+      "original_bytes": 8322999,
+      "compressed_bytes": 3244999
+    },
+    {
+      "sample": 1,
+      "warmup": false,
+      "compression": "xz",
+      "pack_seconds": 1.535703913999896,
+      "restore_seconds": 0.13335218700012774,
+      "original_bytes": 8322999,
+      "compressed_bytes": 2353276
+    },
+    {
+      "sample": 2,
+      "warmup": false,
+      "compression": "xz",
+      "pack_seconds": 1.5251519370003734,
+      "restore_seconds": 0.13725308799985214,
+      "original_bytes": 8322999,
+      "compressed_bytes": 2353276
+    },
+    {
+      "sample": 2,
+      "warmup": false,
+      "compression": "zstd",
+      "pack_seconds": 0.06751069500023732,
+      "restore_seconds": 0.037650786000085645,
+      "original_bytes": 8322999,
+      "compressed_bytes": 3244985
+    },
+    {
+      "sample": 3,
+      "warmup": false,
+      "compression": "zstd",
+      "pack_seconds": 0.06550329499987129,
+      "restore_seconds": 0.037463818000105675,
+      "original_bytes": 8322999,
+      "compressed_bytes": 3245014
+    },
+    {
+      "sample": 3,
+      "warmup": false,
+      "compression": "xz",
+      "pack_seconds": 1.5048613349999869,
+      "restore_seconds": 0.13634738800010382,
+      "original_bytes": 8322999,
+      "compressed_bytes": 2353300
+    },
+    {
+      "sample": 4,
+      "warmup": false,
+      "compression": "xz",
+      "pack_seconds": 1.4940124939994348,
+      "restore_seconds": 0.13266962499983492,
+      "original_bytes": 8322999,
+      "compressed_bytes": 2353272
+    },
+    {
+      "sample": 4,
+      "warmup": false,
+      "compression": "zstd",
+      "pack_seconds": 0.0668188449999434,
+      "restore_seconds": 0.03968957200049772,
+      "original_bytes": 8322999,
+      "compressed_bytes": 3245013
+    },
+    {
+      "sample": 5,
+      "warmup": false,
+      "compression": "zstd",
+      "pack_seconds": 0.06761981599993305,
+      "restore_seconds": 0.040258257999994385,
+      "original_bytes": 8322999,
+      "compressed_bytes": 3244988
+    },
+    {
+      "sample": 5,
+      "warmup": false,
+      "compression": "xz",
+      "pack_seconds": 1.6470710209996469,
+      "restore_seconds": 0.13737981200029026,
+      "original_bytes": 8322999,
+      "compressed_bytes": 2353268
+    }
+  ],
+  "medians": {
+    "xz": {
+      "pack_seconds": 1.5251519370003734,
+      "restore_seconds": 0.13634738800010382,
+      "compressed_bytes": 2353276
+    },
+    "zstd": {
+      "pack_seconds": 0.06737255300049583,
+      "restore_seconds": 0.0387458590003007,
+      "compressed_bytes": 3244999
+    }
+  },
+  "selected_default": "xz"
+}

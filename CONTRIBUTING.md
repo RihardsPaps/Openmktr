@@ -59,6 +59,7 @@ python tests/portage_validation.py
 python tests/cross_version_cache.py
 python tests/ninja_benchmark.py
 python tests/workspace.py
+python tests/ninja_jobserver.py
 python tests/release_packaging.py
 python tests/regression.py
 sh testcase/dump/run.sh
@@ -141,6 +142,7 @@ ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/c
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/graph_optimizations.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_TEST_GRAPH_PROFILE=aggressive OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/correctness.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/workspace.py
+ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/ninja_jobserver.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/make_compat_regressions.py
 ```
 
@@ -171,7 +173,7 @@ adding phase medians. These small synthetic workloads measure build overhead,
 not compiler throughput or full third-party project performance.
 
 The manually dispatched [optional compatibility workflow](.github/workflows/compatibility.yml)
-publishes these reports and tests Alpine/musl, Gentoo/glibc, Ninja >= 1.13 FIFO
+publishes these reports and tests Alpine/musl, Gentoo/glibc, Ninja >= 1.13.2 FIFO
 jobserver interaction, and serial/parallel external GNU Make comparisons.
 See the [lane guide](validation/compatibility/README.md) for scope and local commands.
 

@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Verify owned, C-string and bounded-view filesystem probes across mutations.
 // Cover conservative depfile inference and reject ambiguous shell commands.
 // Fork modifications are covered by MPL-2.0; see docs/LICENSING.md and NOTICE.
 
@@ -21,11 +22,57 @@
 #include "ninja.h"
 
 #include <assert.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <unistd.h>
 
+#include "fileutil.h"
 #include "log.h"
 #include "testutil.h"
 
 namespace {
+
+void TestOwnedFilesystemPaths() {
+  char temporary[] = "/tmp/omktr-owned-path-XXXXXX";
+  int fd = mkstemp(temporary);
+  assert(fd >= 0);
+  close(fd);
+  const std::string name(temporary);
+  const std::string buffer = name + "-not-part-of-the-view";
+  const std::string_view view(buffer.data(), name.size());
+  std::string embedded = name;
+  embedded.append("\0suffix", 7);
+  for (bool cached : {false, true}) {
+    ScopedFileObservations observations(cached);
+    const double stamp = GetTimestamp(name);
+    assert(stamp >= 0);
+    for (int repeat = 0; repeat < 2; ++repeat) {
+      assert(Exists(name) && Exists(name.c_str()) && Exists(view));
+      assert(Exists(embedded) && !Exists(buffer));
+      ASSERT_EQ(GetTimestamp(name.c_str()), stamp);
+      ASSERT_EQ(GetTimestamp(view), stamp);
+      ASSERT_EQ(GetTimestamp(embedded), stamp);
+      ASSERT_EQ(GetTimestamp(buffer), -2.0);
+    }
+    {
+      ScopedFilesystemEffect effect;
+      const int removed = unlink(name.c_str());
+      assert(removed == 0);
+    }
+    assert(!Exists(name) && !Exists(view) && !Exists(embedded));
+    ASSERT_EQ(GetTimestamp(name), -2.0);
+    {
+      ScopedFilesystemEffect effect;
+      fd = open(name.c_str(), O_CREAT | O_EXCL | O_WRONLY, 0600);
+      assert(fd >= 0);
+      close(fd);
+    }
+    assert(Exists(name) && Exists(view) && Exists(embedded));
+    assert(GetTimestamp(name) >= 0);
+  }
+  const int removed = unlink(name.c_str());
+  assert(removed == 0);
+}
 
 std::string GetDepfile(std::string cmd, std::string* new_cmd) {
   new_cmd->clear();
@@ -99,5 +146,6 @@ void TestGetDepfile() {
 int main() {
   g_log_no_exit = true;
   TestGetDepfile();
+  TestOwnedFilesystemPaths();
   assert(!g_failed);
 }

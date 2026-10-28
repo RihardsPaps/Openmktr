@@ -1,4 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
+// Compare generated freshness guards with native nanosecond timestamps.
+// Let managed Ninja builds inherit a valid FIFO unless -j was explicit.
 // Add configurable Ninja graph optimizations and content-preserving output
 // generation. Forward load limits to Ninja and normalize recursive Make load
 // options. Keep private graph controls out of Make variables and recipe
@@ -197,8 +199,15 @@ static int HandleBuild(int argc, char** argv) {
   if (status == 0) {
     std::string launcher = GetNinjaShellScriptFilename();
     std::string jobs = "-j" + std::to_string(g_flags.num_jobs);
-    std::vector<char*> ninja = {const_cast<char*>("sh"), launcher.data(),
-                                jobs.data()};
+    struct stat jobserver;
+    const bool inherit_fifo =
+        !g_flags.num_jobs_specified && !g_flags.is_dry_run &&
+        g_flags.remote_num_jobs <= 0 && !g_flags.ninja_jobserver_fifo.empty() &&
+        stat(g_flags.ninja_jobserver_fifo.c_str(), &jobserver) == 0 &&
+        S_ISFIFO(jobserver.st_mode);
+    std::vector<char*> ninja = {const_cast<char*>("sh"), launcher.data()};
+    if (!inherit_fifo)
+      ninja.push_back(jobs.data());
     std::string load_option = g_flags.LoadLimitOption();
     if (g_flags.load_limit >= 0)
       ninja.push_back(load_option.data());
@@ -275,7 +284,7 @@ int HandleNewerInputs(int argc, char** argv) {
 }
 
 int HandleLowResolutionUpToDate(int argc, char** argv) {
-  if (argc < 6)
+  if (argc < 5)
     return 1;
 
   char* end = nullptr;
@@ -286,7 +295,7 @@ int HandleLowResolutionUpToDate(int argc, char** argv) {
   errno = 0;
   const unsigned long low_resolution_count = strtoul(argv[4], &end, 10);
   if (errno != 0 || end == argv[4] || *end != '\0' ||
-      low_resolution_count == 0 || normal_count > (unsigned long)(argc - 5) ||
+      normal_count > (unsigned long)(argc - 5) ||
       low_resolution_count != (unsigned long)(argc - 5) - normal_count)
     return 1;
 

@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: MPL-2.0
+# Current distribution tools for external release qualification only.
+# GNU comparison/prerequisite packages never enter the portable reference image.
+ARG BASE_IMAGE=openmktr-test
+FROM ${BASE_IMAGE}
+RUN apk add --no-cache gmake bison flex perl pkgconf linux-headers \
+      elfutils-devel openssl3-devel bc-gh nasm gsed
+# Current Kbuild recipes require GNU sed's -i and binary substitution syntax.
+RUN mkdir -p /opt/openmktr-campaign-tools && \
+      ln -s /usr/bin/gsed /opt/openmktr-campaign-tools/sed
+COPY validation/ninja/reproducible-date /opt/openmktr-campaign-tools/date
+RUN chmod 755 /opt/openmktr-campaign-tools/date
+ENV PATH=/opt/openmktr-campaign-tools:${PATH}
+# Chimera names GNU m4 gm4; flex's compiled fallback expects /usr/bin/m4.
+ENV M4=/usr/bin/gm4
+WORKDIR /campaign
+ENTRYPOINT []
+CMD ["/bin/sh"]

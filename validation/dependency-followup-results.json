@@ -1,0 +1,1997 @@
+{
+  "schema": 1,
+  "date": "2026-10-27",
+  "status": "Linux matrix completed with correctness checks passing; strict Linux performance gate did not pass; Alpine fixes qualified",
+  "host": "User PC, local Docker Desktop Linux containers; no NAS",
+  "prior_report": "validation/dependency-upgrade-results.json",
+  "preserved_evidence": {
+    "validation/evidence/dependency-upgrade-2026-10-27.zip": "8860e90a058458d875e50d8b612bc7197ed1b39850a5f2b2ac12d248354d4846",
+    "validation/evidence/ninja-graph-pc-v4.zip": "54027abd5398dd4564cb9bd2281627a3ecb696b0a1722ce3cf0517a4ef5f3efe"
+  },
+  "defaults": {
+    "graph_profile": "safe",
+    "workspace_compression": "xz",
+    "implicit_monitor": false,
+    "promotion_gate_passed": false
+  },
+  "changes": [
+    "Use native nanosecond timestamp comparisons for generated freshness guards instead of shell test -nt",
+    "Prefer Python compression.zstd and use the distribution zstd executable when the extension is absent",
+    "Wake Linux recipe supervisors through a lazily opened process descriptor after stdout closes; retain portable fallback",
+    "Make workspace and graph suites mandatory in both distribution comparison lanes",
+    "Continue one durable command ledger with an explicitly user-authorized cap of 400",
+    "Avoid temporary path-string allocation during cached filesystem probes, while preserving owned, C-string and bounded-view semantics",
+    "Check recipe-less dependency leaves inline while preserving node ownership and parallel recipe scheduling",
+    "Create Linux recipe pipes with atomic close-on-exec flags to prevent sibling descriptor inheritance and EOF deadlock",
+    "Serialize local private-FIFO readers and wake waiters when an inherited reservation is released; notifications never add token capacity"
+  ],
+  "binaries": {
+    "baseline_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d",
+    "baseline_sha256": "7259555cbd7d10a3de7b320d6d165640ab42a1f6690693d359be485829ce5096",
+    "candidate_sha256": "e22071d29bae5eb96c1f34e13ab8d76ae2f908aa6eeac49170581d076da0fe86",
+    "earlier_eager_pidfd_candidate_sha256": "906ceb7714787e55e8c8dd3ae6bfa9405096130ccaa6d4d309aa867a453c5c51",
+    "build_toolchain": "Both comparison binaries built using identical Chimera Clang 22.1.8, C++17, O2, ThinLTO flags; historical baseline source unmodified",
+    "comparison_environment": "Stable Alpine Clang 22.1.3, Ninja 1.13.2, musl; identical compiler, runtime, configuration and environment for both binaries",
+    "image": "sha256:006aa0c08e355be63cd49964a98027b8c6711b9bf0b1e13186796fcde4a9097a",
+    "owned_path_candidate_sha256": "3f52622ffaeced439c2c826e999d16938753e20b9e4592215e00003c45cfdd9d",
+    "candidate_sha256_scope": "Earlier PIDFD-only candidate; its failed Linux matrix is preserved separately",
+    "current_candidate_sha256": "8027d04f6693a10801536d4e17da008b98595eb42875a652ee3e93eefbd240cf",
+    "current_candidate_identity": {
+      "binary_sha256": "8027d04f6693a10801536d4e17da008b98595eb42875a652ee3e93eefbd240cf",
+      "source_sha256": {
+        "src/exec.cc": "86332eb25d490cf5300719f75373df01b272515654ddcc8a4600daeae726f231",
+        "src/fileutil.cc": "eb95af546e57c993db81097f1b35d25ec579eb24d5f4e09f9eabdab8575246f7",
+        "src/fileutil.h": "cef13662bb7eecfd0b843a879988c732feec19c069fda5ffcaeebc5f42a585cc",
+        "src/ninja_test.cc": "0122476d07ede2107953e583891c5938e86d51282d202c543d232982793bc1ab",
+        "tests/correctness.py": "4a8b9e52753372a949cec8ca291a0fdb649643a618feb7a52dcd0b3340e44fc1",
+        "tests/ninja_jobserver.py": "d8831b9f77d060962e005d551d3a573f43306b03d5ec2eb6cd3f30601736bded",
+        "build.ninja": "6a274314735829297c413c5bbbdc4552dc90d588e50c3f1107b6744d6d0e85df"
+      },
+      "harness_sha256": {
+        "benchmark_jobserver_contention.py": "da89d67c5715fb65e42f16f1ce197c052d0d1271ce25edf407bbb2a7fb957015",
+        "qualify_dependencies.py": "17ca3782f55947c299eab9168c61cd6f72b19f665830f5ee369ddc1c70d37ea3",
+        "requalify_dependencies.py": "cdf04f627b616559fbe8dc9b17730f7b936a6a21f6dd1a45f3713e6cd8655150",
+        "reserved_command.py": "17f82964ea84f05b4aaef7e3166fbf7356bb88d346becbec5d65a99e2e3835e6",
+        "benchmark_ninja.py": "791a933b71ed07f3c0db96d76db4f5ec10e5835a055abcaa6a9df3d66f68601f"
+      },
+      "build_image": "openmktr-followup-reservation-wakeup",
+      "build_flags": "C++17 O2 ThinLTO; unchanged build.ninja",
+      "baseline": "/qualification/followup/historical-baseline-omktr",
+      "baseline_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d"
+    },
+    "leaf_dispatch_before_atomic_pipes_sha256": "8af0716dcefc3626a6c7b1ded83d6a7eab971b23534f0f486a2223e8408e6f1f",
+    "atomic_candidate_identity": {
+      "binary_sha256": "3573c7b68543453e1555b9014d5dadea7cfaa0f07936b894206925ee72005bb7",
+      "source_sha256": {
+        "src/exec.cc": "86332eb25d490cf5300719f75373df01b272515654ddcc8a4600daeae726f231",
+        "src/fileutil.cc": "eaf2b1c0842a119514402926404a85cdc9b9fc0fb7fee41ae5332f56df233076",
+        "src/fileutil.h": "cef13662bb7eecfd0b843a879988c732feec19c069fda5ffcaeebc5f42a585cc",
+        "src/ninja_test.cc": "0122476d07ede2107953e583891c5938e86d51282d202c543d232982793bc1ab",
+        "tests/correctness.py": "4a8b9e52753372a949cec8ca291a0fdb649643a618feb7a52dcd0b3340e44fc1",
+        "tests/ninja_jobserver.py": "7b12aec3ccc09e951ae3b2959210b0c4afc708395e167641ac949bd61520fdc0",
+        "build.ninja": "6a274314735829297c413c5bbbdc4552dc90d588e50c3f1107b6744d6d0e85df"
+      },
+      "harness_sha256": {
+        "qualify_dependencies.py": "17ca3782f55947c299eab9168c61cd6f72b19f665830f5ee369ddc1c70d37ea3",
+        "requalify_dependencies.py": "cdf04f627b616559fbe8dc9b17730f7b936a6a21f6dd1a45f3713e6cd8655150",
+        "reserved_command.py": "17f82964ea84f05b4aaef7e3166fbf7356bb88d346becbec5d65a99e2e3835e6",
+        "benchmark_ninja.py": "791a933b71ed07f3c0db96d76db4f5ec10e5835a055abcaa6a9df3d66f68601f"
+      },
+      "build_image": "openmktr-followup-atomic-pipes",
+      "build_flags": "C++17 O2 ThinLTO; unchanged build.ninja",
+      "baseline": "/qualification/followup/historical-baseline-omktr",
+      "baseline_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d"
+    },
+    "fifo_wakeup_candidate_identity": {
+      "binary_sha256": "8027d04f6693a10801536d4e17da008b98595eb42875a652ee3e93eefbd240cf",
+      "source_sha256": {
+        "src/exec.cc": "86332eb25d490cf5300719f75373df01b272515654ddcc8a4600daeae726f231",
+        "src/fileutil.cc": "eb95af546e57c993db81097f1b35d25ec579eb24d5f4e09f9eabdab8575246f7",
+        "src/fileutil.h": "cef13662bb7eecfd0b843a879988c732feec19c069fda5ffcaeebc5f42a585cc",
+        "src/ninja_test.cc": "0122476d07ede2107953e583891c5938e86d51282d202c543d232982793bc1ab",
+        "tests/correctness.py": "4a8b9e52753372a949cec8ca291a0fdb649643a618feb7a52dcd0b3340e44fc1",
+        "tests/ninja_jobserver.py": "d8831b9f77d060962e005d551d3a573f43306b03d5ec2eb6cd3f30601736bded",
+        "build.ninja": "6a274314735829297c413c5bbbdc4552dc90d588e50c3f1107b6744d6d0e85df"
+      },
+      "harness_sha256": {
+        "benchmark_jobserver_contention.py": "da89d67c5715fb65e42f16f1ce197c052d0d1271ce25edf407bbb2a7fb957015",
+        "qualify_dependencies.py": "17ca3782f55947c299eab9168c61cd6f72b19f665830f5ee369ddc1c70d37ea3",
+        "requalify_dependencies.py": "cdf04f627b616559fbe8dc9b17730f7b936a6a21f6dd1a45f3713e6cd8655150",
+        "reserved_command.py": "17f82964ea84f05b4aaef7e3166fbf7356bb88d346becbec5d65a99e2e3835e6",
+        "benchmark_ninja.py": "791a933b71ed07f3c0db96d76db4f5ec10e5835a055abcaa6a9df3d66f68601f"
+      },
+      "build_image": "openmktr-followup-reservation-wakeup",
+      "build_flags": "C++17 O2 ThinLTO; unchanged build.ninja",
+      "baseline": "/qualification/followup/historical-baseline-omktr",
+      "baseline_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d"
+    },
+    "small_fifo_candidate_benchmark": {
+      "baseline": {
+        "binary_bytes": 1379696,
+        "convert": {
+          "median_seconds": 0.05520011699991301,
+          "peak_rss_kib": 25312
+        },
+        "direct_recipe_launch_j1": {
+          "median_seconds": 0.013054447001195513,
+          "peak_rss_kib": 25192
+        },
+        "direct_recipe_launch_j4": {
+          "median_seconds": 0.008259524001914542,
+          "peak_rss_kib": 25192
+        },
+        "end_to_end": {
+          "clean": {
+            "median_seconds": {
+              "configuration": 0.013943048998044105,
+              "end_to_end": 0.030182819999026833,
+              "graph_generation": 0.0015096939969225787,
+              "recipe_execution": 0.014620541001931997
+            },
+            "samples_seconds": [
+              {
+                "configuration": 0.013943048998044105,
+                "end_to_end": 0.030077392999373842,
+                "graph_generation": 0.0014975610029068775,
+                "recipe_execution": 0.014620541001931997
+              },
+              {
+                "configuration": 0.014046091000636807,
+                "end_to_end": 0.03023272599966731,
+                "graph_generation": 0.0014703689994348679,
+                "recipe_execution": 0.014698978997330414
+              },
+              {
+                "configuration": 0.014061099998798454,
+                "end_to_end": 0.03060541099694092,
+                "graph_generation": 0.0015096939969225787,
+                "recipe_execution": 0.015017601002909942
+              },
+              {
+                "configuration": 0.013915642000938533,
+                "end_to_end": 0.029988316000526538,
+                "graph_generation": 0.0014667959985672496,
+                "recipe_execution": 0.01458802100023604
+              },
+              {
+                "configuration": 0.013342704998649424,
+                "end_to_end": 0.029285035998327658,
+                "graph_generation": 0.0015259120009432081,
+                "recipe_execution": 0.014400386997294845
+              },
+              {
+                "configuration": 0.014090095999563346,
+                "end_to_end": 0.030182819999026833,
+                "graph_generation": 0.0015948760010360274,
+                "recipe_execution": 0.014481859001534758
+              },
+              {
+                "configuration": 0.013886198001273442,
+                "end_to_end": 0.030521447999490192,
+                "graph_generation": 0.0015837530008866452,
+                "recipe_execution": 0.015034664000268094
+              }
+            ]
+          },
+          "graph_change": {
+            "median_seconds": {
+              "end_to_end": 0.02448961900154245,
+              "recipe_execution": 0.02242227800161345,
+              "regeneration": 0.001906379999127239
+            },
+            "samples_seconds": [
+              {
+                "end_to_end": 0.024293896000017412,
+                "recipe_execution": 0.02242227800161345,
+                "regeneration": 0.001856737999332836
+              },
+              {
+                "end_to_end": 0.02448961900154245,
+                "recipe_execution": 0.022372557999915443,
+                "regeneration": 0.002101067002513446
+              },
+              {
+                "end_to_end": 0.025764591999177355,
+                "recipe_execution": 0.022923815002286574,
+                "regeneration": 0.0028236869984539226
+              },
+              {
+                "end_to_end": 0.02419976199962548,
+                "recipe_execution": 0.022293422000075225,
+                "regeneration": 0.001891658001113683
+              },
+              {
+                "end_to_end": 0.023663285999646178,
+                "recipe_execution": 0.021729426000092644,
+                "regeneration": 0.0019187799989595078
+              },
+              {
+                "end_to_end": 0.02464421799959382,
+                "recipe_execution": 0.02280618200165918,
+                "regeneration": 0.001823102000344079
+              },
+              {
+                "end_to_end": 0.02460876199984341,
+                "recipe_execution": 0.022687111999402987,
+                "regeneration": 0.001906379999127239
+              }
+            ]
+          },
+          "noop": {
+            "median_seconds": {
+              "end_to_end": 0.0034394199974485673,
+              "recipe_execution": 0.0025422110011277255,
+              "regeneration": 0.0009025879990076646
+            },
+            "samples_seconds": [
+              {
+                "end_to_end": 0.0033973410027101636,
+                "recipe_execution": 0.0024853899994923268,
+                "regeneration": 0.0009025879990076646
+              },
+              {
+                "end_to_end": 0.003411322002648376,
+                "recipe_execution": 0.002534187002311228,
+                "regeneration": 0.0008684259992151055
+              },
+              {
+                "end_to_end": 0.003612487002101261,
+                "recipe_execution": 0.0026368500002718065,
+                "regeneration": 0.0009664329991210252
+              },
+              {
+                "end_to_end": 0.0034394199974485673,
+                "recipe_execution": 0.0025461019977228716,
+                "regeneration": 0.000882551001268439
+              },
+              {
+                "end_to_end": 0.0035201249993406236,
+                "recipe_execution": 0.0025933460019587073,
+                "regeneration": 0.000918163001188077
+              },
+              {
+                "end_to_end": 0.003376935001142556,
+                "recipe_execution": 0.002474395998433465,
+                "regeneration": 0.0008925679976528045
+              },
+              {
+                "end_to_end": 0.003491391998977633,
+                "recipe_execution": 0.0025422110011277255,
+                "regeneration": 0.0009402470022905618
+              }
+            ]
+          },
+          "single_file_change": {
+            "median_seconds": {
+              "end_to_end": 0.005752978999225888,
+              "recipe_execution": 0.004489180999371456,
+              "regeneration": 0.0012390760020934977
+            },
+            "samples_seconds": [
+              {
+                "end_to_end": 0.006029514999681851,
+                "recipe_execution": 0.004734648002340691,
+                "regeneration": 0.0012851900028181262
+              },
+              {
+                "end_to_end": 0.005752978999225888,
+                "recipe_execution": 0.004569404998619575,
+                "regeneration": 0.0011740830013877712
+              },
+              {
+                "end_to_end": 0.005654680000588996,
+                "recipe_execution": 0.004406197000207612,
+                "regeneration": 0.0012390760020934977
+              },
+              {
+                "end_to_end": 0.005556230000365758,
+                "recipe_execution": 0.004370681999716908,
+                "regeneration": 0.001175925997813465
+              },
+              {
+                "end_to_end": 0.005763188997661928,
+                "recipe_execution": 0.004489180999371456,
+                "regeneration": 0.001263087000552332
+              },
+              {
+                "end_to_end": 0.005858413001988083,
+                "recipe_execution": 0.004588017000060063,
+                "regeneration": 0.0012558189991977997
+              },
+              {
+                "end_to_end": 0.005529056998057058,
+                "recipe_execution": 0.004334608001954621,
+                "regeneration": 0.0011857680001412518
+              }
+            ]
+          }
+        },
+        "incremental_noop": {
+          "median_seconds": 0.0013439499998639803,
+          "peak_rss_kib": 25192
+        },
+        "nested_parallel_exec": {
+          "median_seconds": 0.20533165400047437,
+          "peak_rss_kib": 24936
+        },
+        "ninja_recipe_launch_j1": {
+          "median_seconds": 0.6155304839994642,
+          "peak_rss_kib": 25192
+        },
+        "ninja_recipe_launch_j4": {
+          "median_seconds": 0.17346793599790544,
+          "peak_rss_kib": 25192
+        },
+        "noop_regen": {
+          "median_seconds": 0.0008662090003781486,
+          "peak_rss_kib": 24936
+        },
+        "parallel_exec": {
+          "median_seconds": 0.20536302900291048,
+          "peak_rss_kib": 24936
+        }
+      },
+      "current": {
+        "binary_bytes": 1380352,
+        "convert": {
+          "median_seconds": 0.0556293360023119,
+          "peak_rss_kib": 25328
+        },
+        "direct_recipe_launch_j1": {
+          "median_seconds": 0.012776740000845166,
+          "peak_rss_kib": 24628
+        },
+        "direct_recipe_launch_j4": {
+          "median_seconds": 0.008101571998849977,
+          "peak_rss_kib": 24628
+        },
+        "end_to_end": {
+          "clean": {
+            "median_seconds": {
+              "configuration": 0.013694831999600865,
+              "end_to_end": 0.029876578999392223,
+              "graph_generation": 0.0014960420012357645,
+              "recipe_execution": 0.014635620998888044
+            },
+            "samples_seconds": [
+              {
+                "configuration": 0.013959536001493689,
+                "end_to_end": 0.03007265899941558,
+                "graph_generation": 0.0014518889984174166,
+                "recipe_execution": 0.014644111000961857
+              },
+              {
+                "configuration": 0.013766176001809072,
+                "end_to_end": 0.029760152003291296,
+                "graph_generation": 0.0014659549997304566,
+                "recipe_execution": 0.014512273002765141
+              },
+              {
+                "configuration": 0.013680080999620259,
+                "end_to_end": 0.029876578999392223,
+                "graph_generation": 0.0015462209994439036,
+                "recipe_execution": 0.014635620998888044
+              },
+              {
+                "configuration": 0.01344303400037461,
+                "end_to_end": 0.029707726997003192,
+                "graph_generation": 0.0015389819964184426,
+                "recipe_execution": 0.014709901999594877
+              },
+              {
+                "configuration": 0.013406578000285663,
+                "end_to_end": 0.02930153200213681,
+                "graph_generation": 0.0015252029988914728,
+                "recipe_execution": 0.014352745998621685
+              },
+              {
+                "configuration": 0.013694831999600865,
+                "end_to_end": 0.03014126500056591,
+                "graph_generation": 0.0014960420012357645,
+                "recipe_execution": 0.014933312002540333
+              },
+              {
+                "configuration": 0.013994117001857376,
+                "end_to_end": 0.03010168699984206,
+                "graph_generation": 0.0014896020002197474,
+                "recipe_execution": 0.014599923000787385
+              }
+            ]
+          },
+          "graph_change": {
+            "median_seconds": {
+              "end_to_end": 0.024544161002268083,
+              "recipe_execution": 0.022631361996900523,
+              "regeneration": 0.0019106549989373889
+            },
+            "samples_seconds": [
+              {
+                "end_to_end": 0.025119517998973606,
+                "recipe_execution": 0.023114850002457388,
+                "regeneration": 0.0019911890012735967
+              },
+              {
+                "end_to_end": 0.02435741999943275,
+                "recipe_execution": 0.02243287000237615,
+                "regeneration": 0.0019106549989373889
+              },
+              {
+                "end_to_end": 0.024492860000464134,
+                "recipe_execution": 0.022550833000423154,
+                "regeneration": 0.001928534999024123
+              },
+              {
+                "end_to_end": 0.023875733000750188,
+                "recipe_execution": 0.0221115659987845,
+                "regeneration": 0.001750998999341391
+              },
+              {
+                "end_to_end": 0.024571992002165643,
+                "recipe_execution": 0.02264434899916523,
+                "regeneration": 0.0019133800014969893
+              },
+              {
+                "end_to_end": 0.024544161002268083,
+                "recipe_execution": 0.022631361996900523,
+                "regeneration": 0.0018989140007761307
+              },
+              {
+                "end_to_end": 0.025203209999745013,
+                "recipe_execution": 0.023353620003035758,
+                "regeneration": 0.0018229449997306801
+              }
+            ]
+          },
+          "noop": {
+            "median_seconds": {
+              "end_to_end": 0.0034286150003026705,
+              "recipe_execution": 0.0025292360005551018,
+              "regeneration": 0.0008963370019046124
+            },
+            "samples_seconds": [
+              {
+                "end_to_end": 0.003446479997364804,
+                "recipe_execution": 0.0025241699986509047,
+                "regeneration": 0.000912109997443622
+              },
+              {
+                "end_to_end": 0.003424402999371523,
+                "recipe_execution": 0.00251268799911486,
+                "regeneration": 0.0009006069994939025
+              },
+              {
+                "end_to_end": 0.0035314100023242645,
+                "recipe_execution": 0.0025909500000125263,
+                "regeneration": 0.0009309529996244237
+              },
+              {
+                "end_to_end": 0.0034286150003026705,
+                "recipe_execution": 0.0025292360005551018,
+                "regeneration": 0.0008891930010577198
+              },
+              {
+                "end_to_end": 0.0034079969991580583,
+                "recipe_execution": 0.002541569003369659,
+                "regeneration": 0.0008576230029575527
+              },
+              {
+                "end_to_end": 0.003419901000597747,
+                "recipe_execution": 0.0025141129990515765,
+                "regeneration": 0.0008963370019046124
+              },
+              {
+                "end_to_end": 0.0034816610022971872,
+                "recipe_execution": 0.002595498001028318,
+                "regeneration": 0.0008770800013735425
+              }
+            ]
+          },
+          "single_file_change": {
+            "median_seconds": {
+              "end_to_end": 0.005570705998252379,
+              "recipe_execution": 0.0044034450002072845,
+              "regeneration": 0.0011811960030172486
+            },
+            "samples_seconds": [
+              {
+                "end_to_end": 0.006053370001609437,
+                "recipe_execution": 0.004738275998533936,
+                "regeneration": 0.001304542998695979
+              },
+              {
+                "end_to_end": 0.00555510000049253,
+                "recipe_execution": 0.0043017999996664,
+                "regeneration": 0.0012438529993232805
+              },
+              {
+                "end_to_end": 0.005440368000563467,
+                "recipe_execution": 0.004226461998769082,
+                "regeneration": 0.0012052570018568076
+              },
+              {
+                "end_to_end": 0.005570705998252379,
+                "recipe_execution": 0.0044034450002072845,
+                "regeneration": 0.0011574620002647862
+              },
+              {
+                "end_to_end": 0.005425153001851868,
+                "recipe_execution": 0.004298469997593202,
+                "regeneration": 0.0011179100001754705
+              },
+              {
+                "end_to_end": 0.005722492998756934,
+                "recipe_execution": 0.004532423001364805,
+                "regeneration": 0.0011811960030172486
+              },
+              {
+                "end_to_end": 0.005618421000690432,
+                "recipe_execution": 0.004432529000041541,
+                "regeneration": 0.0011766040006477851
+              }
+            ]
+          }
+        },
+        "incremental_noop": {
+          "median_seconds": 0.00129005299822893,
+          "peak_rss_kib": 24628
+        },
+        "nested_parallel_exec": {
+          "median_seconds": 0.2052493150004011,
+          "peak_rss_kib": 24628
+        },
+        "ninja_recipe_launch_j1": {
+          "median_seconds": 0.6157929549990513,
+          "peak_rss_kib": 24628
+        },
+        "ninja_recipe_launch_j4": {
+          "median_seconds": 0.1730810270018992,
+          "peak_rss_kib": 24628
+        },
+        "noop_regen": {
+          "median_seconds": 0.0008546640019631013,
+          "peak_rss_kib": 24628
+        },
+        "parallel_exec": {
+          "median_seconds": 0.20504869499927736,
+          "peak_rss_kib": 24628
+        }
+      }
+    }
+  },
+  "checks": [
+    {
+      "name": "Complete portable Chimera gate",
+      "status": "passed",
+      "binary": "final lazy pidfd candidate, identical SHA-256 to measured binary",
+      "coverage": "175 correctness and 858 snapshots per profile; 53 graph, 29 workspace, 5 jobserver, 6 packaging cases; units and required supporting suites",
+      "evidence": "checks/openmktr-followup-verified-chimera-gate.log"
+    },
+    {
+      "name": "ASan/UBSan required suites",
+      "status": "passed",
+      "binary": "final lazy pidfd candidate",
+      "evidence": "checks/openmktr-followup-sanitizers-final.log"
+    },
+    {
+      "name": "Final process wait correctness",
+      "status": "passed",
+      "binary": "final lazy pidfd candidate",
+      "coverage": "175 correctness cases and 5 jobserver/process cases"
+    },
+    {
+      "name": "Alpine and Gentoo mandatory comparison gates",
+      "status": "passed",
+      "binary": "final lazy pidfd source, built with each distribution toolchain",
+      "coverage": "Includes all 29 workspace, 53 graph and 5 jobserver cases",
+      "evidence": [
+        "checks/openmktr-followup-verified-alpine-gate.log",
+        "checks/openmktr-followup-verified-gentoo-gate.log"
+      ]
+    },
+    {
+      "name": "Zstandard backend interoperability",
+      "status": "passed",
+      "coverage": "Chimera, Alpine and Gentoo; command/module interoperability where module is provided"
+    },
+    {
+      "name": "External incremental differential checks",
+      "status": "passed",
+      "coverage": "27 cases each at j1/j4 in safe/aggressive"
+    },
+    {
+      "name": "Gentoo installed overlay and real package lifecycle",
+      "status": "passed",
+      "coverage": "USE=test installation; retained workspace lifecycle; Hello, libpipeline and gzip in direct/Ninja modes"
+    },
+    {
+      "name": "Owned-path candidate full validation",
+      "status": "passed",
+      "coverage": "Chimera full gate, Alpine/Gentoo gates, ASan/UBSan, plus native and sanitized probe edge tests",
+      "binary": "3f52622ffaeced439c2c826e999d16938753e20b9e4592215e00003c45cfdd9d"
+    },
+    {
+      "name": "Atomic-pipe and leaf-dispatch candidate validation",
+      "status": "passed",
+      "binary": "3573c7b68543453e1555b9014d5dadea7cfaa0f07936b894206925ee72005bb7",
+      "coverage": "Full Chimera gate, ASan/UBSan, Alpine and Gentoo gates, changed C++ formatting, four j1/j4 safe/aggressive external incremental comparisons",
+      "counts": {
+        "correctness_per_profile": 176,
+        "snapshots_per_profile": 858,
+        "graph": 53,
+        "workspace": 29,
+        "jobserver_and_process": 6,
+        "packaging": 6,
+        "incremental_scenarios_per_lane": 27
+      },
+      "containers": [
+        "openmktr-followup-atomic-core-gate",
+        "openmktr-followup-atomic-sanitizers",
+        "openmktr-followup-atomic-alpine-gate",
+        "openmktr-followup-atomic-gentoo-gate",
+        "openmktr-followup-atomic-format"
+      ]
+    },
+    {
+      "name": "Sibling pipe inheritance regression",
+      "status": "passed",
+      "before": "Fails with leaked pipe descriptors on preceding Alpine binary",
+      "after": "Passes with atomic close-on-exec pipe creation",
+      "containers": [
+        "openmktr-followup-pipe-before-corrected",
+        "openmktr-followup-atomic-focused"
+      ]
+    },
+    {
+      "name": "FIFO reservation and contention candidate validation",
+      "status": "passed",
+      "binary": "8027d04f6693a10801536d4e17da008b98595eb42875a652ee3e93eefbd240cf",
+      "coverage": "Complete Chimera gate, ASan/UBSan, Alpine/Gentoo gates, formatting, four external incremental lanes",
+      "counts": {
+        "correctness_per_profile": 176,
+        "snapshots_per_profile": 858,
+        "graph": 53,
+        "workspace": 29,
+        "jobserver_and_process": 7,
+        "packaging": 6,
+        "incremental_scenarios_per_lane": 27
+      }
+    },
+    {
+      "name": "Idle inherited reservation regression",
+      "status": "passed",
+      "before": "Previous candidate stalls with four queued recipes, zero free FIFO tokens and one inherited slot",
+      "after": "All four finish at peak concurrency one; FIFO remains empty",
+      "forced_fallback": "All seven jobserver/process cases pass with eventfd returning ENOSYS; injection verified"
+    },
+    {
+      "name": "Final FIFO candidate Gentoo installed overlay and real-package lifecycle",
+      "status": "passed",
+      "raw_root": "/qualification/followup/portage-fifo",
+      "candidate_commit": "81fb5ab62630ca6b1b3bdebd9be72e96840ab3f0",
+      "candidate_tree": "8c3ec1c3525624b8ff60e5b49066a6fb213bd6af",
+      "snapshot_scope": "Container source snapshot; no host commit or publication",
+      "openmktr_use_test": true,
+      "real_packages": [
+        {
+          "atom": "=app-misc/hello-2.12.2",
+          "mode": "direct",
+          "status": "passed",
+          "upstream_tests": 7
+        },
+        {
+          "atom": "=dev-libs/libpipeline-1.5.8",
+          "mode": "direct",
+          "status": "passed",
+          "upstream_tests": 7
+        },
+        {
+          "atom": "=app-arch/gzip-1.14-r1",
+          "mode": "direct",
+          "status": "passed",
+          "upstream_tests": 30
+        },
+        {
+          "atom": "=app-misc/hello-2.12.2",
+          "mode": "ninja",
+          "status": "passed",
+          "upstream_tests": 7
+        },
+        {
+          "atom": "=dev-libs/libpipeline-1.5.8",
+          "mode": "ninja",
+          "status": "passed",
+          "upstream_tests": 7
+        },
+        {
+          "atom": "=app-arch/gzip-1.14-r1",
+          "mode": "ninja",
+          "status": "passed",
+          "upstream_tests": 30
+        }
+      ]
+    },
+    {
+      "name": "Post-Docker-update final candidate gates",
+      "status": "passed",
+      "lanes": [
+        "core",
+        "alpine",
+        "gentoo",
+        "sanitizers",
+        "format",
+        "fallback"
+      ],
+      "consumed_large_commands": 0
+    }
+  ],
+  "qualification": {
+    "status": "completed",
+    "protocol": "one discarded warmup pair and seven alternating measured pairs",
+    "comparison_kind": "historical baseline versus candidate; not same-binary feature isolation",
+    "budget_ledger": "Docker volume openmktr-dependency-qualification:/qualification/budget.jsonl",
+    "initial_consumed": 115,
+    "authorized_total_limit": 400,
+    "large_sources_modified": false,
+    "raw_root": "/qualification/followup",
+    "j8_root": "/qualification/followup/alpine-linux-j8-ready",
+    "full_twelve_scenario_promotion_gate_passed": false,
+    "j8_summary": [
+      {
+        "project": "linux",
+        "entrypoint": "build",
+        "jobs": 8,
+        "scenario": "clean",
+        "pairs": 7,
+        "paired_improvement_percent": [
+          -0.9063490271543184,
+          0.9911782669550395,
+          0.024456526095617548,
+          -0.07877282926094242,
+          -1.4897286549036215,
+          0.30509287442636035,
+          -1.2456871896885824
+        ],
+        "median_improvement_percent": -0.07877282926094242,
+        "bootstrap_95_percent": [
+          -1.2456871896885824,
+          0.30509287442636035
+        ],
+        "supported_improvement": false,
+        "supported_regression": false,
+        "baseline_median_seconds": 266.18877850100034,
+        "candidate_median_seconds": 268.0913356000001
+      },
+      {
+        "project": "linux",
+        "entrypoint": "build",
+        "jobs": 8,
+        "scenario": "noop",
+        "pairs": 7,
+        "paired_improvement_percent": [
+          25.535353930588823,
+          18.729925696906413,
+          11.889707348416378,
+          24.614247433153036,
+          23.04396584705104,
+          25.206902798896035,
+          22.235890395480084
+        ],
+        "median_improvement_percent": 23.04396584705104,
+        "bootstrap_95_percent": [
+          18.729925696906413,
+          25.206902798896035
+        ],
+        "supported_improvement": true,
+        "supported_regression": false,
+        "baseline_median_seconds": 5.58375158400122,
+        "candidate_median_seconds": 4.28864820400122
+      },
+      {
+        "project": "linux",
+        "entrypoint": "build",
+        "jobs": 8,
+        "scenario": "source",
+        "pairs": 7,
+        "paired_improvement_percent": [
+          3.522262946007493,
+          3.669558875785661,
+          5.8364040386362,
+          3.5020230224102056,
+          1.5678831004011795,
+          4.561283869247889,
+          6.366485473639882
+        ],
+        "median_improvement_percent": 3.669558875785661,
+        "bootstrap_95_percent": [
+          3.5020230224102056,
+          5.8364040386362
+        ],
+        "supported_improvement": true,
+        "supported_regression": false,
+        "baseline_median_seconds": 19.51993057599975,
+        "candidate_median_seconds": 18.81728209999892
+      }
+    ],
+    "j8_status": "completed",
+    "j8_source_changes": {
+      "linux": false
+    },
+    "j16_root": "/qualification/followup/alpine-linux-j16",
+    "historical_regression_root": "/qualification/followup/linux-6.12-current-toolchain",
+    "j16_summary": [
+      {
+        "project": "linux",
+        "entrypoint": "build",
+        "jobs": 16,
+        "scenario": "clean",
+        "pairs": 7,
+        "paired_improvement_percent": [
+          -0.4940849348796128,
+          -0.25718796080282935,
+          -0.704267274727921,
+          -0.9546962114829194,
+          -0.5529585821687277,
+          -0.7314378915185937,
+          -0.0618966515790742
+        ],
+        "median_improvement_percent": -0.5529585821687277,
+        "bootstrap_95_percent": [
+          -0.7314378915185937,
+          -0.25718796080282935
+        ],
+        "supported_improvement": false,
+        "supported_regression": true,
+        "baseline_median_seconds": 197.4707363790003,
+        "candidate_median_seconds": 198.5820419970005
+      },
+      {
+        "project": "linux",
+        "entrypoint": "build",
+        "jobs": 16,
+        "scenario": "noop",
+        "pairs": 7,
+        "paired_improvement_percent": [
+          4.783039696496683,
+          5.6462860606863,
+          1.6087567429796001,
+          2.4251640996222568,
+          18.44397310314617,
+          9.873533113670286,
+          4.547474769223991
+        ],
+        "median_improvement_percent": 4.783039696496683,
+        "bootstrap_95_percent": [
+          2.4251640996222568,
+          9.873533113670286
+        ],
+        "supported_improvement": true,
+        "supported_regression": false,
+        "baseline_median_seconds": 4.6065732250008296,
+        "candidate_median_seconds": 4.386414669999795
+      },
+      {
+        "project": "linux",
+        "entrypoint": "build",
+        "jobs": 16,
+        "scenario": "source",
+        "pairs": 7,
+        "paired_improvement_percent": [
+          1.2670085567994538,
+          1.0386831177996103,
+          7.6574237938167204,
+          5.371777906239849,
+          2.0185675027365346,
+          1.7844319935555797,
+          -1.6377758566872958
+        ],
+        "median_improvement_percent": 1.7844319935555797,
+        "bootstrap_95_percent": [
+          1.0386831177996103,
+          5.371777906239849
+        ],
+        "supported_improvement": true,
+        "supported_regression": false,
+        "baseline_median_seconds": 18.952034042000378,
+        "candidate_median_seconds": 18.611132154001098
+      }
+    ],
+    "post_allocation_root": "/qualification/followup/owned-paths-linux",
+    "consumed_commands": 394,
+    "current_root": "/qualification/followup/fifo-linux-current-restart1",
+    "post_allocation_status": "Interrupted at slot 234; only one measured j8 pair complete; not qualified",
+    "atomic_root": "/qualification/followup/atomic-pipes-linux",
+    "atomic_status": "Early rejection; interrupted at 262; not qualified",
+    "atomic_summary": [
+      {
+        "project": "linux",
+        "entrypoint": "build",
+        "jobs": 8,
+        "scenario": "clean",
+        "pairs": 3,
+        "paired_improvement_percent": [
+          -0.28275187432926785,
+          -0.07218939684645598,
+          0.34929252725887094
+        ],
+        "median_improvement_percent": -0.07218939684645598,
+        "bootstrap_95_percent": [
+          -0.28275187432926785,
+          0.34929252725887094
+        ],
+        "supported_improvement": false,
+        "supported_regression": false,
+        "baseline_median_seconds": 271.001333365999,
+        "candidate_median_seconds": 271.19696759400176
+      },
+      {
+        "project": "linux",
+        "entrypoint": "build",
+        "jobs": 8,
+        "scenario": "noop",
+        "pairs": 3,
+        "paired_improvement_percent": [
+          33.32922025769049,
+          32.925307494399135,
+          24.04373376198429
+        ],
+        "median_improvement_percent": 32.925307494399135,
+        "bootstrap_95_percent": [
+          24.04373376198429,
+          33.32922025769049
+        ],
+        "supported_improvement": false,
+        "supported_regression": false,
+        "baseline_median_seconds": 5.312050831998931,
+        "candidate_median_seconds": 3.571353294999426
+      },
+      {
+        "project": "linux",
+        "entrypoint": "build",
+        "jobs": 8,
+        "scenario": "source",
+        "pairs": 3,
+        "paired_improvement_percent": [
+          8.95780829720253,
+          7.987896645404846,
+          7.534324151607885
+        ],
+        "median_improvement_percent": 7.987896645404846,
+        "bootstrap_95_percent": [
+          7.534324151607885,
+          8.95780829720253
+        ],
+        "supported_improvement": false,
+        "supported_regression": false,
+        "baseline_median_seconds": 19.694362375998026,
+        "candidate_median_seconds": 18.0832326239979
+      }
+    ],
+    "atomic_source_changes": {
+      "linux": false
+    },
+    "early_rejection": {
+      "observed_pairs": 3,
+      "observed_gains": [
+        -0.28275187432926785,
+        -0.07218939684645598,
+        0.34929252725887094
+      ],
+      "hypothetical_remaining_gain_percent": 99.0,
+      "best_case_lower_bound_percent": -0.07218939684645598,
+      "strict_positive_interval_still_possible": false,
+      "scope": "Early rejection analysis only; not a completed seven-pair qualification"
+    },
+    "original_regression_report_root": "/qualification/followup/fifo-linux-6.12-llvm20",
+    "current_linux_matrix_status": "completed",
+    "current_linux_matrix_planned_commands": 98,
+    "original_case_planned_commands": 16,
+    "pending_scope_minimum_total": null,
+    "original_regression_clang22_failure_root": "/qualification/followup/fifo-linux-6.12",
+    "original_regression_result": {
+      "status": "completed",
+      "summary": [
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "clean",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            0.08593903260726288,
+            0.292344902464281,
+            0.1686945213172475,
+            0.5239713722625328,
+            0.27890055862785923,
+            0.1610869380484603,
+            -0.6272345614923402
+          ],
+          "median_improvement_percent": 0.1686945213172475,
+          "bootstrap_95_percent": [
+            0.08593903260726288,
+            0.292344902464281
+          ],
+          "supported_improvement": true,
+          "supported_regression": false,
+          "baseline_median_seconds": 240.72176658200624,
+          "candidate_median_seconds": 240.6030230910037
+        }
+      ],
+      "source_changes": {
+        "linux": false
+      },
+      "selected_performance_gate_passed": true,
+      "consumed_commands": 283
+    },
+    "interrupted_current_cohort": "/qualification/followup/fifo-linux-current",
+    "current_interruption": {
+      "extraction_policy": "Python 3.14 tarfile.data_filter, matching original extraction; normalizes lexical symlink target components",
+      "supersedes_comparison": "interruption.json compared raw tar link spelling; retained unchanged",
+      "scope": "Independent verification after unexpected container exit; not a completed cohort",
+      "interrupted_slot": 296,
+      "consumed_commands": 296,
+      "container_exit_code": 255,
+      "oom_killed": false,
+      "cause": "Docker reported unexpected EOF; underlying cause undetermined",
+      "official_archive_sha256": "87363c24f10e06321eb362765521094e94471f6bff8bce2d6b3e40f39f004953",
+      "verified_entries": 96080,
+      "source_matches_official_archive": true,
+      "source_differences": [],
+      "frozen_binaries_unchanged": true,
+      "shared_configuration_unchanged": true,
+      "interrupted_cohort_qualified": false,
+      "completed_pairs_not_reused": true,
+      "fresh_cohort": "/qualification/followup/fifo-linux-current-restart1",
+      "platform": [
+        "Linux",
+        "ee359ceb1ad3",
+        "6.18.54.1-microsoft-standard-WSL2",
+        "#1 SMP PREEMPT_DYNAMIC Tue Oct  6 19:13:07 UTC 2026",
+        "x86_64"
+      ],
+      "affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ]
+    },
+    "remaining_commands": 6,
+    "current_candidate_result": {
+      "status": "completed",
+      "metadata": {
+        "protocol": "one discarded warmup pair; seven alternating measured pairs",
+        "cases": [
+          [
+            "linux",
+            8,
+            [
+              "clean",
+              "noop",
+              "source"
+            ]
+          ],
+          [
+            "linux",
+            16,
+            [
+              "clean",
+              "noop",
+              "source"
+            ]
+          ]
+        ],
+        "baseline_profile": "legacy",
+        "candidate_profile": "aggressive",
+        "baseline_revision": "58bb206a2e5a78f4ce0e7e01fce662f845ca459d",
+        "binaries": {
+          "baseline": "7259555cbd7d10a3de7b320d6d165640ab42a1f6690693d359be485829ce5096",
+          "candidate": "8027d04f6693a10801536d4e17da008b98595eb42875a652ee3e93eefbd240cf"
+        },
+        "environment": {
+          "HOME": "/root",
+          "USER": "benchmark",
+          "LOGNAME": "benchmark",
+          "SHELL": "/bin/sh",
+          "PATH": "/opt/openmktr-campaign-tools:/usr/lib/llvm22/bin:/usr/lib/ninja-build/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "CCACHE_DISABLE": "1",
+          "LC_ALL": "C",
+          "TZ": "UTC",
+          "SOURCE_DATE_EPOCH": "1731888000",
+          "KBUILD_BUILD_USER": "benchmark",
+          "KBUILD_BUILD_HOST": "benchmark",
+          "KBUILD_BUILD_VERSION": "1",
+          "KBUILD_BUILD_TIMESTAMP": "2024-11-18 00:00:00",
+          "M4": "/usr/bin/m4"
+        },
+        "harness_sha256": "cdf04f627b616559fbe8dc9b17730f7b936a6a21f6dd1a45f3713e6cd8655150",
+        "prior_campaign": "/qualification/followup/alpine-ready",
+        "image": "sha256:006aa0c08e355be63cd49964a98027b8c6711b9bf0b1e13186796fcde4a9097a",
+        "affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31
+        ],
+        "packages": [
+          "alpine-baselayout-3.7.2-r1",
+          "alpine-baselayout-data-3.7.2-r1",
+          "alpine-keys-2.6-r0",
+          "alpine-release-3.24.3-r0",
+          "apk-tools-3.0.8-r0",
+          "bc-1.08.2-r1",
+          "bison-3.8.2-r3",
+          "brotli-libs-1.2.1-r0",
+          "busybox-1.37.0-r31",
+          "busybox-binsh-1.37.0-r31",
+          "c-ares-1.34.9-r0",
+          "ca-certificates-bundle-20261020-r0",
+          "clang22-22.1.3-r2",
+          "clang22-headers-22.1.3-r2",
+          "clang22-libs-22.1.3-r2",
+          "compiler-rt-22.1.3-r0",
+          "dash-0.5.13.1-r2",
+          "elfutils-dev-0.195-r0",
+          "flex-2.6.4-r8",
+          "fortify-headers-3.0.1-r2",
+          "gdbm-1.26-r0",
+          "json-c-0.18-r1",
+          "libapk-3.0.8-r0",
+          "libasm-0.195-r0",
+          "libbz2-1.0.8-r6",
+          "libc++-22.1.3-r0",
+          "libc++-dev-22.1.3-r0",
+          "libcrypto3-3.5.9-r0",
+          "libcurl-8.23.0-r0",
+          "libdebuginfod-0.195-r0",
+          "libdw-0.195-r0",
+          "libelf-0.195-r0",
+          "libexpat-2.9.0-r0",
+          "libffi-3.5.2-r1",
+          "libgcc-15.2.0-r5",
+          "libgcc-static-15.2.0-r5",
+          "libidn2-2.3.8-r0",
+          "libncursesw-6.6_p20260516-r0",
+          "libpanelw-6.6_p20260516-r0",
+          "libpsl-0.21.5-r3",
+          "libssl3-3.5.9-r0",
+          "libstdc++-15.2.0-r5",
+          "libstdc++-dev-15.2.0-r5",
+          "libunistring-1.4.2-r0",
+          "libxml2-2.13.9-r2",
+          "linux-headers-7.0.0-r1",
+          "lld22-22.1.3-r0",
+          "lld22-libs-22.1.3-r0",
+          "llvm-libunwind-22.1.3-r0",
+          "llvm-libunwind-dev-22.1.3-r0",
+          "llvm22-22.1.3-r1",
+          "llvm22-libs-22.1.3-r1",
+          "llvm22-linker-tools-22.1.3-r1",
+          "m4-1.4.20-r1",
+          "make-4.4.1-r4",
+          "mpdecimal-4.0.1-r0",
+          "musl-1.2.6-r3",
+          "musl-dev-1.2.6-r3",
+          "musl-fts-1.2.7-r7",
+          "musl-utils-1.2.6-r3",
+          "nasm-3.01-r0",
+          "ncurses-terminfo-base-6.6_p20260516-r0",
+          "nghttp2-libs-1.70.0-r0",
+          "ninja-build-1.13.2-r1",
+          "openssl-dev-3.5.9-r0",
+          "perl-5.42.2-r1",
+          "pkgconf-2.5.1-r0",
+          "pyc-3.14.10-r1",
+          "python3-3.14.10-r1",
+          "python3-pyc-3.14.10-r1",
+          "python3-pycache-pyc0-3.14.10-r1",
+          "readline-8.3.3-r1",
+          "scanelf-1.3.9-r1",
+          "scudo-malloc-22.1.3-r0",
+          "sed-4.9-r2",
+          "sqlite-libs-3.53.4-r0",
+          "ssl_client-1.37.0-r31",
+          "xz-5.8.4-r0",
+          "xz-dev-5.8.4-r0",
+          "xz-libs-5.8.4-r0",
+          "zlib-1.3.2-r1",
+          "zlib-dev-1.3.2-r1",
+          "zstd-1.5.7-r2",
+          "zstd-dev-1.5.7-r2",
+          "zstd-libs-1.5.7-r2"
+        ],
+        "releases": {
+          "ffmpeg": {
+            "id": "ffmpeg",
+            "version": "9.0.2",
+            "source": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+            "archive": "ffmpeg-9.0.2.tar.xz",
+            "directory": "ffmpeg-9.0.2",
+            "sha256": "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e",
+            "status": "pending qualification",
+            "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed"
+          },
+          "linux": {
+            "id": "linux",
+            "version": "7.3",
+            "source": "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.3.tar.xz",
+            "archive": "linux-7.3.tar.xz",
+            "directory": "linux-7.3",
+            "sha256": "87363c24f10e06321eb362765521094e94471f6bff8bce2d6b3e40f39f004953",
+            "status": "pending qualification",
+            "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed"
+          }
+        },
+        "previously_used": 296,
+        "planned_commands": 98,
+        "command_limit": 400,
+        "comparison_kind": "candidate regression comparison"
+      },
+      "summary": [
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "clean",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            0.3085919945528204,
+            -0.5797097601585532,
+            0.6377872615958347,
+            -0.5885695174506989,
+            -0.42687818524751453,
+            1.6626708604445262,
+            1.0517796889784825
+          ],
+          "median_improvement_percent": 0.3085919945528204,
+          "bootstrap_95_percent": [
+            -0.5797097601585532,
+            1.0517796889784825
+          ],
+          "supported_improvement": false,
+          "supported_regression": false,
+          "baseline_median_seconds": 262.99816653500056,
+          "candidate_median_seconds": 262.0261492220002
+        },
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "noop",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            27.465118166188084,
+            29.15682585265924,
+            38.99888550215942,
+            30.582463924000834,
+            28.92216663711914,
+            39.127874396385224,
+            27.2256695165377
+          ],
+          "median_improvement_percent": 29.15682585265924,
+          "bootstrap_95_percent": [
+            27.465118166188084,
+            38.99888550215942
+          ],
+          "supported_improvement": true,
+          "supported_regression": false,
+          "baseline_median_seconds": 4.942415145999803,
+          "candidate_median_seconds": 3.3874266239999997
+        },
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "source",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            7.9805245708945876,
+            5.929927873051433,
+            8.476271778351908,
+            5.141813327684996,
+            8.193670556077537,
+            8.09143715609606,
+            5.535780740581697
+          ],
+          "median_improvement_percent": 7.9805245708945876,
+          "bootstrap_95_percent": [
+            5.535780740581697,
+            8.193670556077537
+          ],
+          "supported_improvement": true,
+          "supported_regression": false,
+          "baseline_median_seconds": 19.217706620000172,
+          "candidate_median_seconds": 17.93809912200004
+        },
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 16,
+          "scenario": "clean",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            0.6343787988571381,
+            0.75634287402645,
+            0.7715089653471785,
+            -0.18226557136427068,
+            0.5154505602009585,
+            -0.07020885085065043,
+            0.2643314889503534
+          ],
+          "median_improvement_percent": 0.5154505602009585,
+          "bootstrap_95_percent": [
+            -0.07020885085065043,
+            0.75634287402645
+          ],
+          "supported_improvement": false,
+          "supported_regression": false,
+          "baseline_median_seconds": 195.20780782700058,
+          "candidate_median_seconds": 194.0806575380002
+        },
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 16,
+          "scenario": "noop",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            37.36834447749586,
+            25.198036078046748,
+            32.87458270381832,
+            36.856358398079436,
+            27.100776356163603,
+            33.668091673631636,
+            22.679977083215785
+          ],
+          "median_improvement_percent": 32.87458270381832,
+          "bootstrap_95_percent": [
+            25.198036078046748,
+            36.856358398079436
+          ],
+          "supported_improvement": true,
+          "supported_regression": false,
+          "baseline_median_seconds": 5.235023661000014,
+          "candidate_median_seconds": 3.505966451999484
+        },
+        {
+          "project": "linux",
+          "entrypoint": "build",
+          "jobs": 16,
+          "scenario": "source",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            3.1520974783499134,
+            7.48275579817016,
+            8.145858241887371,
+            8.763867983425522,
+            6.364731970264936,
+            7.685396346754403,
+            8.07134481562679
+          ],
+          "median_improvement_percent": 7.685396346754403,
+          "bootstrap_95_percent": [
+            6.364731970264936,
+            8.145858241887371
+          ],
+          "supported_improvement": true,
+          "supported_regression": false,
+          "baseline_median_seconds": 19.45848310800011,
+          "candidate_median_seconds": 18.034119132000342
+        }
+      ],
+      "direct": [
+        {
+          "project": "linux",
+          "scenario": "clean",
+          "artifacts": {
+            "vmlinux": "c0139431df22dcc9fc1b3ac80a33843ee7db49f02329904aff849b6c9901fce8",
+            "arch/x86/boot/bzImage": "665def51209026bfe115d12614feb63c6e02128d35d3287b6a822ad8b8f13559"
+          },
+          "config_sha256": {
+            ".config": "70e60bdb75a2e3c617808c9740a8a180186ec95cf62d29e464fddd6f4d4babac"
+          },
+          "phase": {
+            "command": [
+              "/qualification/followup/fifo-wakeup-omktr",
+              "-j8",
+              "-f",
+              "/qualification/followup/alpine-ready/sources/linux-7.3/Makefile",
+              "LLVM=1",
+              "LLVM_IAS=1",
+              "ARCH=x86",
+              "HOSTCC=clang",
+              "HOSTCXX=clang++",
+              "all"
+            ],
+            "cwd": "/qualification/followup/fifo-linux-current-restart1/linux-direct",
+            "log": "/qualification/followup/fifo-linux-current-restart1/command-393.log",
+            "status": 0,
+            "seconds": 320.9567372099991,
+            "user_seconds": 1829.790656,
+            "system_seconds": 161.882473,
+            "peak_rss_kib": 1117516
+          }
+        },
+        {
+          "project": "linux",
+          "scenario": "noop",
+          "artifacts": {
+            "vmlinux": "c0139431df22dcc9fc1b3ac80a33843ee7db49f02329904aff849b6c9901fce8",
+            "arch/x86/boot/bzImage": "665def51209026bfe115d12614feb63c6e02128d35d3287b6a822ad8b8f13559"
+          },
+          "config_sha256": {
+            ".config": "70e60bdb75a2e3c617808c9740a8a180186ec95cf62d29e464fddd6f4d4babac"
+          },
+          "phase": {
+            "command": [
+              "/qualification/followup/fifo-wakeup-omktr",
+              "-j8",
+              "-f",
+              "/qualification/followup/alpine-ready/sources/linux-7.3/Makefile",
+              "LLVM=1",
+              "LLVM_IAS=1",
+              "ARCH=x86",
+              "HOSTCC=clang",
+              "HOSTCXX=clang++",
+              "all"
+            ],
+            "cwd": "/qualification/followup/fifo-linux-current-restart1/linux-direct",
+            "log": "/qualification/followup/fifo-linux-current-restart1/command-394.log",
+            "status": 0,
+            "seconds": 16.38517836599931,
+            "user_seconds": 14.359277,
+            "system_seconds": 7.091792,
+            "peak_rss_kib": 327072
+          }
+        }
+      ],
+      "failures": [],
+      "source_changes": {
+        "linux": false
+      },
+      "consumed_commands": 394,
+      "selected_performance_gate_passed": false
+    },
+    "current_linux_performance_gate_passed": false,
+    "final_scope": "Six current Linux 7.3 scenarios plus direct clean/repeat; historical Linux 6.12 j8 clean separately qualified",
+    "historical_toolchain": {
+      "protocol": "one discarded warmup pair; seven alternating measured pairs",
+      "limit": 200,
+      "previously_used": 2,
+      "tool_sha256": "c41bbadb8c1597b395f9ff383ef558553591a247e53550ba0f3573668a6c31ca",
+      "harness_sha256": "f4053e56cb0d912a42f6b213f06895d740b8430c74da9491db10c10a19daf084",
+      "manifest_sha256": "00459b8ecd4761fb4afa274f8ea1da3b3b31b75e39f4b3553743118a97f499fb",
+      "baseline_profile": "safe",
+      "candidate_profile": "aggressive",
+      "image": "sha256:fb944dfcc70c48c7404b159d631ce80ab453fd92a8750881269dc514a7aa51c9",
+      "environment": {
+        "HOME": "/root",
+        "USER": "benchmark",
+        "LOGNAME": "benchmark",
+        "SHELL": "/bin/sh",
+        "PATH": "/opt/openmktr-campaign-tools:/usr/lib/llvm20/bin:/opt/openmktr-campaign-tools:/usr/lib/llvm22/bin:/usr/lib/ninja-build/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "CCACHE_DISABLE": "1",
+        "LC_ALL": "C",
+        "TZ": "UTC",
+        "SOURCE_DATE_EPOCH": "1731888000",
+        "KBUILD_BUILD_USER": "benchmark",
+        "KBUILD_BUILD_HOST": "benchmark",
+        "KBUILD_BUILD_VERSION": "1",
+        "KBUILD_BUILD_TIMESTAMP": "2024-11-18 00:00:00",
+        "M4": "/usr/bin/m4"
+      },
+      "affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31
+      ],
+      "platform": [
+        "Linux",
+        "cfa163cfc527",
+        "6.18.33.2-microsoft-standard-WSL2",
+        "#1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026",
+        "x86_64"
+      ],
+      "versions": {
+        "clang": "Alpine clang version 22.1.3\nTarget: x86_64-alpine-linux-musl\nThread model: posix\nInstalledDir: /usr/lib/llvm22/bin\nConfiguration file: /etc/clang22/x86_64-alpine-linux-musl.cfg\n",
+        "ninja": "1.13.2\n",
+        "python3": "Python 3.14.10\n"
+      },
+      "releases": {
+        "ffmpeg": {
+          "id": "ffmpeg",
+          "version": "9.0.2",
+          "source": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+          "archive": "ffmpeg-9.0.2.tar.xz",
+          "directory": "ffmpeg-9.0.2",
+          "sha256": "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e",
+          "status": "pending qualification",
+          "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed"
+        },
+        "linux": {
+          "id": "linux",
+          "version": "6.12",
+          "directory": "linux-6.12",
+          "archive": "linux-6.12.tar.xz",
+          "source": "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.tar.xz",
+          "sha256": "b1a2562be56e42afb3f8489d4c2a7ac472ac23098f1ef1c1e40da601f54625eb",
+          "status": "historical regression input; separately requalified with updated toolchain"
+        }
+      },
+      "note": "Original historical archive verified against retained historical metadata; fresh source extraction; no old evidence replaced.",
+      "scope": "Unmodified historical Linux 6.12; supported distribution Clang 20 without warning suppression",
+      "tool_versions": {
+        "clang": "Alpine clang version 20.1.8",
+        "ld.lld": "LLD 20.1.8 (compatible with GNU linkers)",
+        "llvm-ar": "LLVM (http://llvm.org/):",
+        "ninja": "1.13.2"
+      },
+      "toolchain_packages": [
+        "alpine-baselayout-3.7.2-r1",
+        "alpine-baselayout-data-3.7.2-r1",
+        "alpine-keys-2.6-r0",
+        "alpine-release-3.24.3-r0",
+        "apk-tools-3.0.8-r0",
+        "bc-1.08.2-r1",
+        "binutils-2.45.1-r1",
+        "bison-3.8.2-r3",
+        "brotli-libs-1.2.1-r0",
+        "busybox-1.37.0-r31",
+        "busybox-binsh-1.37.0-r31",
+        "c-ares-1.34.9-r0",
+        "ca-certificates-bundle-20261020-r0",
+        "clang20-20.1.8-r3",
+        "clang20-headers-20.1.8-r3",
+        "clang20-libs-20.1.8-r3",
+        "clang22-22.1.3-r2",
+        "clang22-headers-22.1.3-r2",
+        "clang22-libs-22.1.3-r2",
+        "compiler-rt-22.1.3-r0",
+        "dash-0.5.13.1-r2",
+        "elfutils-dev-0.195-r0",
+        "flex-2.6.4-r8",
+        "fortify-headers-3.0.1-r2",
+        "gcc-15.2.0-r5",
+        "gdbm-1.26-r0",
+        "gmp-6.3.0-r4",
+        "isl26-0.26-r2",
+        "jansson-2.15.0-r0",
+        "json-c-0.18-r1",
+        "libapk-3.0.8-r0",
+        "libasm-0.195-r0",
+        "libatomic-15.2.0-r5",
+        "libbz2-1.0.8-r6",
+        "libc++-22.1.3-r0",
+        "libc++-dev-22.1.3-r0",
+        "libcrypto3-3.5.9-r0",
+        "libcurl-8.23.0-r0",
+        "libdebuginfod-0.195-r0",
+        "libdw-0.195-r0",
+        "libelf-0.195-r0",
+        "libexpat-2.9.0-r0",
+        "libffi-3.5.2-r1",
+        "libgcc-15.2.0-r5",
+        "libgcc-static-15.2.0-r5",
+        "libgomp-15.2.0-r5",
+        "libidn2-2.3.8-r0",
+        "libncursesw-6.6_p20260516-r0",
+        "libpanelw-6.6_p20260516-r0",
+        "libpsl-0.21.5-r3",
+        "libssl3-3.5.9-r0",
+        "libstdc++-15.2.0-r5",
+        "libstdc++-dev-15.2.0-r5",
+        "libunistring-1.4.2-r0",
+        "libxml2-2.13.9-r2",
+        "linux-headers-7.0.0-r1",
+        "lld20-20.1.8-r1",
+        "lld20-libs-20.1.8-r1",
+        "llvm-libunwind-22.1.3-r0",
+        "llvm-libunwind-dev-22.1.3-r0",
+        "llvm20-20.1.8-r1",
+        "llvm20-libs-20.1.8-r1",
+        "llvm20-linker-tools-20.1.8-r1",
+        "llvm22-22.1.3-r1",
+        "llvm22-libs-22.1.3-r1",
+        "llvm22-linker-tools-22.1.3-r1",
+        "m4-1.4.20-r1",
+        "make-4.4.1-r4",
+        "mpc1-1.3.1-r1",
+        "mpdecimal-4.0.1-r0",
+        "mpfr4-4.2.2-r0",
+        "musl-1.2.6-r3",
+        "musl-dev-1.2.6-r3",
+        "musl-fts-1.2.7-r7",
+        "musl-utils-1.2.6-r3",
+        "nasm-3.01-r0",
+        "ncurses-terminfo-base-6.6_p20260516-r0",
+        "nghttp2-libs-1.70.0-r0",
+        "ninja-build-1.13.2-r1",
+        "openssl-dev-3.5.9-r0",
+        "perl-5.42.2-r1",
+        "pkgconf-2.5.1-r0",
+        "pyc-3.14.10-r1",
+        "python3-3.14.10-r1",
+        "python3-pyc-3.14.10-r1",
+        "python3-pycache-pyc0-3.14.10-r1",
+        "readline-8.3.3-r1",
+        "scanelf-1.3.9-r1",
+        "scudo-malloc-22.1.3-r0",
+        "sed-4.9-r2",
+        "sqlite-libs-3.53.4-r0",
+        "ssl_client-1.37.0-r31",
+        "xz-5.8.4-r0",
+        "xz-dev-5.8.4-r0",
+        "xz-libs-5.8.4-r0",
+        "zlib-1.3.2-r1",
+        "zlib-dev-1.3.2-r1",
+        "zstd-1.5.7-r2",
+        "zstd-dev-1.5.7-r2",
+        "zstd-libs-1.5.7-r2"
+      ],
+      "tool_versions_full": {
+        "clang": "Alpine clang version 20.1.8\nTarget: x86_64-alpine-linux-musl\nThread model: posix\nInstalledDir: /usr/lib/llvm20/bin\nConfiguration file: /etc/clang20/x86_64-alpine-linux-musl.cfg",
+        "ld.lld": "LLD 20.1.8 (compatible with GNU linkers)",
+        "llvm-ar": "LLVM (http://llvm.org/):\n  LLVM version 20.1.8\n  Optimized build.",
+        "ninja": "1.13.2"
+      }
+    },
+    "final_linux_artifacts": {
+      "vmlinux": "c0139431df22dcc9fc1b3ac80a33843ee7db49f02329904aff849b6c9901fce8",
+      "arch/x86/boot/bzImage": "665def51209026bfe115d12614feb63c6e02128d35d3287b6a822ad8b8f13559"
+    },
+    "historical_and_current_runs_independent": true,
+    "interrupted_samples_reused": false,
+    "current_linux_gate_explanation": {
+      "supported_improvement_scenarios": 4,
+      "inconclusive_clean_scenarios": 2,
+      "supported_regressions": 0,
+      "requirement": "All six intervals must be strictly positive; both clean intervals cross zero",
+      "disposition": "Strict Linux gate unresolved; safe remains default; six contingency commands unused"
+    }
+  },
+  "retained_failures": [
+    {
+      "slot": 119,
+      "failure": "Intermittent Chimera Clang 22.1.8 SIGILL in unchanged Linux blktrace.c; saved preprocessed input and compiler script",
+      "standalone_reproducer_slot": 120,
+      "standalone_reproducer_status": "passed",
+      "root_cause": "unresolved; no compiler fix claimed"
+    },
+    {
+      "slot": 122,
+      "failure": "First Alpine warmup lacked llvm-ar; installed supported llvm22 utilities and recorded explicit LLVM tool directory before starting a fresh comparison"
+    },
+    {
+      "scope": "Intermediate leaf-dispatch Alpine graph gate",
+      "failure": "Overlapping-effects case timed out; a recipe inherited its sibling pipe writer",
+      "evidence": "checks/leaf-pipe-deadlock-state.log",
+      "resolution": "Atomic close-on-exec recipe pipes plus regression test"
+    },
+    {
+      "scope": "Intermediate leaf-dispatch Chimera ThinLTO link",
+      "failure": "LLVM 22.1.8 MachineCopyPropagation SIGSEGV on unchanged evaluator source",
+      "retry": "Successful identical-flags diagnostic and clean repeat; matching binary hashes",
+      "reproducer_archive_sha256": "29366c838d13f587588b53151261986c615ce02a412417ad56520a2b202c5974",
+      "root_cause": "Unresolved; retained link-input archive came from successful diagnostic, not a deterministic crash reproduction"
+    },
+    {
+      "slot": 266,
+      "failure": "Unmodified Linux 6.12 rejects Clang 22 const-field diagnostic under its existing -Werror policy",
+      "source_changes": false,
+      "resolution": "Separate supported Clang/LLVM/LLD 20.1.8 historical variant, no source patch or warning suppression",
+      "configuration_slot": 267,
+      "current_linux_toolchain": "Clang 22.1.3 unchanged"
+    },
+    {
+      "slot": 296,
+      "failure": "Docker client unexpected EOF; container exit 255, not OOM-killed; cause undetermined",
+      "raw_root": "/qualification/followup/fifo-linux-current",
+      "source_verification": "interruption-data-filter-verification.json",
+      "disposition": "Incomplete cohort preserved; no samples transferred to restart1"
+    }
+  ],
+  "excluded_performance_evidence": [
+    "Early microbenchmark used a baseline on the Windows bind mount; excluded because loader/storage placement was confounded",
+    "Fair native-volume small benchmarks show no broad demonstrated speedup",
+    "Earlier single-pair Linux measurements and earlier compiler failures remain separate from this protocol",
+    "Atomic candidate tests/bench.py ran alongside small gates; retained as functional smoke, no performance acceptance claim"
+  ],
+  "updated_on": "2026-10-28",
+  "synthetic_fifo_contention": {
+    "scope": "Synthetic contention only; not release qualification",
+    "protocol": "one discarded warmup pair; seven alternating measured pairs",
+    "binaries": {
+      "baseline": "3573c7b68543453e1555b9014d5dadea7cfaa0f07936b894206925ee72005bb7",
+      "candidate": "8027d04f6693a10801536d4e17da008b98595eb42875a652ee3e93eefbd240cf"
+    },
+    "summary": [
+      {
+        "project": "synthetic",
+        "entrypoint": "direct",
+        "jobs": 8,
+        "scenario": "fifo_contention",
+        "pairs": 7,
+        "paired_improvement_percent": [
+          35.26177161278875,
+          37.522030932638614,
+          36.11087908070173,
+          34.69690721759565,
+          36.3841766417587,
+          34.23313343804711,
+          38.89611379570298
+        ],
+        "median_improvement_percent": 36.11087908070173,
+        "bootstrap_95_percent": [
+          34.69690721759565,
+          37.522030932638614
+        ],
+        "supported_improvement": true,
+        "supported_regression": false,
+        "baseline_median_seconds": 0.1688250529987272,
+        "candidate_median_seconds": 0.10756929399940418
+      }
+    ],
+    "raw_root": "/qualification/followup/fifo-contention"
+  },
+  "cpu_profiles": {
+    "scope": "Diagnostics only; instrumented timings excluded from qualification",
+    "first_attempt": "/qualification/followup/clean-profiles-v1",
+    "first_attempt_status": "Baseline recording/build passed; report helper SIGPIPE recovered with no-inline; 99Hz was too coarse for short-lived Openmktr processes",
+    "comparison": "/qualification/followup/clean-profiles-v2",
+    "comparison_status": "Both 9999Hz software CPU-clock profiles passed; artifacts identical and sources unchanged",
+    "hardware_counter_status": "Unavailable in this WSL kernel",
+    "tool_versions": {
+      "perf": "7.1.5-r0",
+      "strace": "6.19-r1"
+    },
+    "image": "sha256:c927710a658838f707fdd50937a6d59a3fe8f902ded30f9dbf6346aaafa7697f"
+  },
+  "docker_resume": {
+    "client": "29.9.2",
+    "server": "Docker Desktop 4.97.0 (244584)",
+    "local_context": "desktop-linux",
+    "ledger_preserved": true
+  },
+  "final_integrity": {
+    "consumed_commands": 394,
+    "authorized_cap": 400,
+    "remaining_commands": 6,
+    "platform": [
+      "Linux",
+      "c188351207ba",
+      "6.18.54.1-microsoft-standard-WSL2",
+      "#1 SMP PREEMPT_DYNAMIC Tue Oct  6 19:13:07 UTC 2026",
+      "x86_64"
+    ],
+    "preserved_archives": {
+      "validation/evidence/dependency-upgrade-2026-10-27.zip": "8860e90a058458d875e50d8b612bc7197ed1b39850a5f2b2ac12d248354d4846",
+      "validation/evidence/ninja-graph-pc-v4.zip": "54027abd5398dd4564cb9bd2281627a3ecb696b0a1722ce3cf0517a4ef5f3efe"
+    },
+    "final_binaries": {
+      "historical-baseline-omktr": "7259555cbd7d10a3de7b320d6d165640ab42a1f6690693d359be485829ce5096",
+      "fifo-wakeup-omktr": "8027d04f6693a10801536d4e17da008b98595eb42875a652ee3e93eefbd240cf"
+    },
+    "retained_profile_recordings": {
+      "/qualification/followup/clean-profiles-v1/baseline.perf.data": {
+        "bytes": 1654738988,
+        "sha256": "d3851e34715a297f627a08553fc9446810bd201f265865057db3827be16305ba"
+      },
+      "/qualification/followup/clean-profiles-v2/baseline.perf.data": {
+        "bytes": 814540700,
+        "sha256": "81e4528b9b23dc1d765b158bd83bcf39be3c7bca814ce8baff0d6094310614bf"
+      },
+      "/qualification/followup/clean-profiles-v2/candidate.perf.data": {
+        "bytes": 798040724,
+        "sha256": "e8c99bd6fbe2fd726d87a95e72d93ed1011f267b4861e826894551e2f722c037"
+      }
+    },
+    "timing_scope": "Checksums computed after qualification; no instrumented timing used for acceptance"
+  },
+  "postresume_local_gates": {
+    "checks": {
+      "core": {
+        "status": "passed",
+        "container": "openmktr-followup-postresume-core",
+        "image": "sha256:0682e0d7dcad79f0893b52fb1a893392fb744a74b5f5cb5e51d6446777f3f5ee",
+        "started": "2026-10-28T13:44:53.623861658Z",
+        "finished": "2026-10-28T13:47:28.997168498Z",
+        "raw_log": "checks/2026-10-28-postresume/openmktr-followup-postresume-core.log"
+      },
+      "alpine": {
+        "status": "passed",
+        "container": "openmktr-followup-postresume-alpine",
+        "image": "sha256:9882a5b40ed639ee04490677738d535ba8e53d70e0cb4eb6edc2e03583d9f70b",
+        "started": "2026-10-28T13:44:53.642676138Z",
+        "finished": "2026-10-28T13:46:21.999633935Z",
+        "raw_log": "checks/2026-10-28-postresume/openmktr-followup-postresume-alpine.log"
+      },
+      "gentoo": {
+        "status": "passed",
+        "container": "openmktr-followup-postresume-gentoo",
+        "image": "sha256:9f56433c1d26135b7f77e811f6df93012ffa9ebc8822d19a695c6b7a20eb5dea",
+        "started": "2026-10-28T13:44:53.6503441Z",
+        "finished": "2026-10-28T13:46:23.08933059Z",
+        "raw_log": "checks/2026-10-28-postresume/openmktr-followup-postresume-gentoo.log"
+      },
+      "sanitizers": {
+        "status": "passed",
+        "container": "openmktr-followup-postresume-sanitizers",
+        "image": "sha256:0682e0d7dcad79f0893b52fb1a893392fb744a74b5f5cb5e51d6446777f3f5ee",
+        "started": "2026-10-28T13:45:24.72853498Z",
+        "finished": "2026-10-28T13:47:35.702655646Z",
+        "raw_log": "checks/2026-10-28-postresume/openmktr-followup-postresume-sanitizers.log"
+      },
+      "format": {
+        "status": "passed",
+        "container": "openmktr-followup-postresume-format",
+        "image": "sha256:0682e0d7dcad79f0893b52fb1a893392fb744a74b5f5cb5e51d6446777f3f5ee",
+        "started": "2026-10-28T13:45:24.745202785Z",
+        "finished": "2026-10-28T13:45:25.018442815Z",
+        "raw_log": "checks/2026-10-28-postresume/openmktr-followup-postresume-format.log"
+      },
+      "fallback": {
+        "status": "passed",
+        "container": "openmktr-followup-postresume-fallback",
+        "image": "sha256:0682e0d7dcad79f0893b52fb1a893392fb744a74b5f5cb5e51d6446777f3f5ee",
+        "started": "2026-10-28T13:45:24.742826399Z",
+        "finished": "2026-10-28T13:45:33.508667172Z",
+        "raw_log": "checks/2026-10-28-postresume/openmktr-followup-postresume-fallback.log"
+      }
+    },
+    "image_identities": [
+      {
+        "binary_sha256": "8027d04f6693a10801536d4e17da008b98595eb42875a652ee3e93eefbd240cf",
+        "source_sha256": {
+          "src/exec.cc": "86332eb25d490cf5300719f75373df01b272515654ddcc8a4600daeae726f231",
+          "src/fileutil.cc": "eb95af546e57c993db81097f1b35d25ec579eb24d5f4e09f9eabdab8575246f7",
+          "src/fileutil.h": "cef13662bb7eecfd0b843a879988c732feec19c069fda5ffcaeebc5f42a585cc",
+          "src/ninja_test.cc": "0122476d07ede2107953e583891c5938e86d51282d202c543d232982793bc1ab",
+          "tests/correctness.py": "4a8b9e52753372a949cec8ca291a0fdb649643a618feb7a52dcd0b3340e44fc1",
+          "tests/ninja_jobserver.py": "d8831b9f77d060962e005d551d3a573f43306b03d5ec2eb6cd3f30601736bded",
+          "build.ninja": "6a274314735829297c413c5bbbdc4552dc90d588e50c3f1107b6744d6d0e85df"
+        },
+        "clang": "clang version 22.1.8",
+        "python": "3.14.6 (main, Jul 21 2026, 19:29:25) [Clang 22.1.7]",
+        "image": "openmktr-followup-reservation-wakeup",
+        "image_id": "sha256:0682e0d7dcad79f0893b52fb1a893392fb744a74b5f5cb5e51d6446777f3f5ee"
+      },
+      {
+        "binary_sha256": "daa366aa7cfe0e9185b39d51867ab04032b4e9e1ee868f29ff3a7f27b6d3cb53",
+        "source_sha256": {
+          "src/exec.cc": "86332eb25d490cf5300719f75373df01b272515654ddcc8a4600daeae726f231",
+          "src/fileutil.cc": "eb95af546e57c993db81097f1b35d25ec579eb24d5f4e09f9eabdab8575246f7",
+          "src/fileutil.h": "cef13662bb7eecfd0b843a879988c732feec19c069fda5ffcaeebc5f42a585cc",
+          "src/ninja_test.cc": "0122476d07ede2107953e583891c5938e86d51282d202c543d232982793bc1ab",
+          "tests/correctness.py": "4a8b9e52753372a949cec8ca291a0fdb649643a618feb7a52dcd0b3340e44fc1",
+          "tests/ninja_jobserver.py": "d8831b9f77d060962e005d551d3a573f43306b03d5ec2eb6cd3f30601736bded",
+          "build.ninja": "6a274314735829297c413c5bbbdc4552dc90d588e50c3f1107b6744d6d0e85df"
+        },
+        "clang": "Alpine clang version 22.1.3",
+        "python": "3.14.10 (main, Oct 27 2026, 09:35:01) [GCC 15.2.0]",
+        "image": "openmktr-followup-fifo-alpine",
+        "image_id": "sha256:9882a5b40ed639ee04490677738d535ba8e53d70e0cb4eb6edc2e03583d9f70b"
+      },
+      {
+        "binary_sha256": "7c0714a2dc228067308681970e4b35b7954ee7771c039f0c3efd31e68fb79a9f",
+        "source_sha256": {
+          "src/exec.cc": "86332eb25d490cf5300719f75373df01b272515654ddcc8a4600daeae726f231",
+          "src/fileutil.cc": "eb95af546e57c993db81097f1b35d25ec579eb24d5f4e09f9eabdab8575246f7",
+          "src/fileutil.h": "cef13662bb7eecfd0b843a879988c732feec19c069fda5ffcaeebc5f42a585cc",
+          "src/ninja_test.cc": "0122476d07ede2107953e583891c5938e86d51282d202c543d232982793bc1ab",
+          "tests/correctness.py": "4a8b9e52753372a949cec8ca291a0fdb649643a618feb7a52dcd0b3340e44fc1",
+          "tests/ninja_jobserver.py": "d8831b9f77d060962e005d551d3a573f43306b03d5ec2eb6cd3f30601736bded",
+          "build.ninja": "6a274314735829297c413c5bbbdc4552dc90d588e50c3f1107b6744d6d0e85df"
+        },
+        "clang": "clang version 22.1.8",
+        "python": "3.14.10 (main, Oct 27 2026, 09:12:37) [GCC 14.3.1 20260604]",
+        "image": "openmktr-followup-fifo-gentoo",
+        "image_id": "sha256:9f56433c1d26135b7f77e811f6df93012ffa9ebc8822d19a695c6b7a20eb5dea"
+      }
+    ],
+    "scope": "Full reference gate, both distribution gates, complete CI sanitizer suites, changed C++ formatting, forced eventfd fallback",
+    "reason": "Pre-update gate containers no longer present; latest pre-update raw gate logs were not captured. Fresh reruns preserve auditable evidence without replacing older captures.",
+    "preserved_earlier_container_captures": 91,
+    "portable_portage_skip": "One absolute-configured-Ninja-path case skips in generic builds; installed-overlay USE=test qualification is recorded separately",
+    "large_build_commands": 0,
+    "core_synthetic_budget": "Separate from the user-capped large FFmpeg/Linux build allowance"
+  },
+  "evidence_limits": [
+    "Older 91-container log captures remain intact; missing late pre-update gate logs are replaced by separately dated fresh reruns, not reconstructed.",
+    "Interrupted Linux report remains an unfinished checkpoint; independent source verification is separate from its unrun finalizer.",
+    "Core sanitizer and distribution reruns occurred after all timed Linux measurements.",
+    "No hosted Actions run or release publication was performed."
+  ],
+  "evidence_archive": {
+    "path": "validation/evidence/dependency-followup-2026-10-28.zip",
+    "sha256": "b26a55d7e113baf0e4a65272618d1240030d9795335a964e40eadbadc571323b",
+    "bytes": 9963515,
+    "files": 7681,
+    "crc_and_all_entry_hashes_verified": true,
+    "historical_115_reservations_preserved_byte_for_byte": true,
+    "embedded_report_scope": "Snapshot immediately before addition of this outer ZIP identity"
+  }
+}

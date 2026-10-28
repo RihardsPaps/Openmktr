@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MPL-2.0
+"""Supply Kbuild's fixed ISO -d/+%s conversion on a BSD-userland campaign host.
+
+This external campaign adapter does not replace date in the reference image.
+All other invocations use the distribution's date unchanged.
+"""
+from datetime import datetime, timezone
+import os
+import sys
+
+
+args = sys.argv[1:]
+value = None
+if len(args) == 3 and args[0] == "-d" and args[2] == "+%s":
+    value = args[1]
+elif len(args) == 2 and args[0].startswith("-d") and args[1] == "+%s":
+    value = args[0][2:]
+if value is not None:
+    try:
+        parsed = datetime.fromisoformat(value)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        print(int(parsed.timestamp()))
+    except ValueError:
+        print("campaign date: -d requires an ISO datetime for reproducible Kbuild input", file=sys.stderr)
+        raise SystemExit(2)
+else:
+    native_date = "/usr/bin/date" if os.path.exists("/usr/bin/date") else "/bin/date"
+    os.execv(native_date, ["date", *args])
