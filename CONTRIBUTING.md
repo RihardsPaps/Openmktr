@@ -219,3 +219,7 @@ Portage manager backend checks run with `python tests/manager.py` without Portag
 curses, or Tkinter. The reference Docker gate includes them. Optional frontend
 smoke checks require curses or Tkinter and a display; real package discovery
 requires the Gentoo system Python and Portage.
+
+Run `python tests/manager_frontend.py` with Tkinter and a display (or through
+Xvfb) for actual widget interaction checks. The portable suite separately tests
+frontend controllers without requiring graphical dependencies.
