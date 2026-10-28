@@ -9,6 +9,19 @@ case ${OMKTR_PORTAGE_MODE:-direct} in
      exit 2 ;;
 esac
 
+# Manager defaults precede explicit ebuild arguments.
+case ${OMKTR_PORTAGE_GRAPH_OPTIMIZATIONS:-} in
+  '') ;;
+  off|safe|aggressive) set -- "--graph_optimizations=${OMKTR_PORTAGE_GRAPH_OPTIMIZATIONS}" "$@" ;;
+  *) exit 2 ;;
+esac
+case ${OMKTR_PORTAGE_RECURSIVE_CACHE:-0} in
+  0) ;; 1) set -- --recursive_cache "$@" ;; *) exit 2 ;;
+esac
+case ${OMKTR_PORTAGE_STRICT_COMPAT:-0} in
+  0) ;; 1) set -- --strict-compat "$@" ;; *) exit 2 ;;
+esac
+
 # Portage configuration uses an absolute pathname. Also permit PATH invocation
 # for diagnostics, without changing the caller's recipe working directory.
 wrapper=$0

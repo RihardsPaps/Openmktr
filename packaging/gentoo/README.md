@@ -166,3 +166,44 @@ configuration, compilation, default test probes, testing, installation,
 merge, and unmerge. See `validation/compatibility/README.md` at the source root
 for commands and the evidence boundary. Passing those fixtures does not qualify
 arbitrary third-party packages, cross-compilation, or Prefix.
+
+## Interactive and scripted manager
+
+Install with the optional `tui`, `gui`, and `policykit` USE flags for curses,
+Tkinter, and authentication on Save. Installation activates no packages.
+`omktr-manager gui` and `omktr-manager tui` browse packages as the current user.
+System changes authenticate through `pkexec`; the graphical process stays
+unprivileged. Without polkit, preview changes and run the equivalent CLI as an
+administrator. Private workspace inspection also authenticates.
+
+```sh
+omktr-manager packages --filter installed --search sys-libs --json
+omktr-manager show category/package --json
+omktr-manager configure category/package other/package --set mode=ninja --dry-run
+omktr-manager configure category/package --set mode=ninja --set jobs=4
+omktr-manager disable category/package
+omktr-manager adopt category/package --dry-run
+omktr-manager setup-workspaces --dry-run
+omktr-manager setup-workspaces
+omktr-manager configure category/package --set mode=ninja --set workspace=true
+omktr-manager workspaces --workspace-action list
+omktr-manager workspaces --workspace-action pack --name CATEGORY/PN:SLOT:CHOST --profile PROFILE --compression xz
+```
+
+Settings are `mode`, `jobs`, `load`, `graph`, `recursive_cache`, `strict`,
+`workspace`, and `root`. Booleans use `true` or `false`; empty jobs/load inherit
+Portage settings. Workspace roots must be below `/var/cache/openmktr/`.
+Workspace mode enables Automake dependency tracking and requires Ninja compilation.
+`gc` compresses idle workspaces (default 3600 seconds); it does not delete them.
+
+The manager uses a marked `package.env` block or directory snippet and environment
+files named `openmktr-manager-*`. It preserves other entries. Adoption recognizes
+unmodified direct/Ninja environment examples; complex or conflicting settings
+require manual resolution. Existing custom bashrc content requires manual hook
+composition. Use previews before adoption or workspace setup. Configured activation
+does not establish compatibility with an arbitrary package or ebuild.
+
+Saves reject stale previews and leave an exact before/after transaction journal
+if interrupted. `omktr-manager recover`, run as administrator, rolls back a partial
+save only when the files still match the journal; manual edits stop recovery.
+An interrupted cache setup may leave a prepared directory, which is safe to reuse.

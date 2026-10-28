@@ -4,6 +4,7 @@
 EAPI=8
 LLVM_COMPAT=( {22..23} )
 PYTHON_COMPAT=( python3_{14..15} )
+PYTHON_REQ_USE="gui? ( tk ) tui? ( ncurses )"
 NINJA=ninja-reference
 
 inherit git-r3 llvm-r2 ninja-utils python-single-r1
@@ -16,13 +17,14 @@ EGIT_BRANCH=main
 LICENSE="MPL-2.0 Apache-2.0"
 SLOT="0"
 KEYWORDS=""
-IUSE="test"
+IUSE="test tui gui policykit"
 REQUIRED_USE="${PYTHON_REQUIRED_USE}"
 RESTRICT="!test? ( test )"
 
 RDEPEND="llvm-runtimes/libcxx:=
 	${PYTHON_DEPS}
-	>=dev-build/ninja-1.13.2"
+	>=dev-build/ninja-1.13.2
+	policykit? ( sys-auth/polkit )"
 DEPEND="llvm-runtimes/libcxx:="
 BDEPEND="${PYTHON_DEPS}
 	>=dev-build/ninja-1.13.2
@@ -58,6 +60,7 @@ src_test() {
 	"${PYTHON}" tests/version_generator.py || die
 	OMKTR_EXPECT_NINJA_EXECUTABLE=/usr/bin/ninja-reference \
 		"${PYTHON}" tests/portage.py || die
+	"${PYTHON}" tests/manager.py || die
 	"${PYTHON}" tests/portage_validation.py || die
 	"${PYTHON}" tests/load_limits.py || die
 	"${PYTHON}" tests/correctness.py || die
@@ -70,6 +73,12 @@ src_install() {
 	dobin omktr packaging/gentoo/omktr-portage
 	python_fix_shebang tools/omktr_workspace.py
 	newbin tools/omktr_workspace.py omktr-workspace
+	python_fix_shebang tools/omktr_manager.py
+	newbin tools/omktr_manager.py omktr-manager
+	if use gui; then
+		insinto /usr/share/applications
+		doins packaging/gentoo/openmktr-manager.desktop
+	fi
 	insinto /usr/share/openmktr
 	doins packaging/gentoo/workspace-hooks.sh
 	dodoc README.md NOTICE LICENSE LICENSES/Apache-2.0.txt

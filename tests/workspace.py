@@ -64,6 +64,22 @@ class Workspace(unittest.TestCase):
     def profile(self):
         return self.directory().parent.parent
 
+    def test_profile_enumeration_and_explicit_maintenance(self):
+        self.assertEqual(json.loads(self.command("list").stdout), [])
+        self.assertFalse(self.cache.exists())
+        self.build(self.source)
+        first = self.profile().name
+        self.build(self.source, "--context", "second")
+        second = self.profile().name
+        profiles = json.loads(self.command("list").stdout)
+        self.assertEqual({p["profile"] for p in profiles}, {first, second})
+        before = next(self.cache.glob("*/index.json")).read_bytes()
+        self.command("pack", "--profile", first)
+        self.assertTrue(json.loads(self.command("status", "--profile", first).stdout)["packed"])
+        self.command("unpack", "--profile", first)
+        self.assertEqual(next(self.cache.glob("*/index.json")).read_bytes(), before)
+        self.assertNotEqual(self.command("status", "--profile", "../outside", success=False).returncode, 0)
+
     def test_workspace_target_keeps_legacy_direct_execution(self):
         (self.source / "Makefile").write_text("workspace:\n\t@printf target > result\n")
         subprocess.run([str(TOOL), "workspace"], cwd=self.source, env=self.env,

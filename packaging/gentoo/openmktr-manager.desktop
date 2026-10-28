@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Openmktr Portage Manager
+Comment=Configure optional Openmktr package integration
+Exec=omktr-manager gui
+Terminal=false
+Categories=System;Settings;
