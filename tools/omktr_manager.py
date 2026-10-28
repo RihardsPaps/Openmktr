@@ -54,6 +54,14 @@ def settings(values):
     return result
 
 
+def option_value(name, value):
+    if type(OPTIONS[name][0]) is bool:
+        if value.lower() not in ('true', 'false'):
+            raise ValueError(name + ' must be true or false')
+        return value.lower() == 'true'
+    return '' if name in ('jobs', 'load') and value == 'inherit' else value
+
+
 def environment(values):
     v = settings(values)
     lines = [f'export MAKE="/usr/bin/omktr-portage"', f'export OMKTR_PORTAGE_MODE="{v["mode"]}"',
@@ -126,11 +134,12 @@ class Backend:
         self.portage.atom(package)
         entries = [e for e in self.entries() if e[2] == package or self.portage.matches(e[2], package)]
         managed = [e for e in entries if any(x.startswith(PREFIX) for x in e[3])]
-        activation = any('/omktr-portage' in self.read(Path('env') / name) or name.startswith('openmktr-') for e in entries for name in e[3])
-        state = 'manual' if activation else 'disabled'
+        activations = [(e, name) for e in entries for name in e[3]
+                       if self.activates(name)]
+        state = 'manual' if activations else 'disabled'
         values = None
         if managed:
-            state = 'managed' if len(managed) == 1 and all(e[2] == package for e in entries) else 'conflicting'
+            state = 'managed' if len(activations) == 1 and activations[0][0][2] == package else 'conflicting'
             names = [x for x in managed[0][3] if x.startswith(PREFIX)]
             if len(names) == 1:
                 text = self.read(Path('env') / names[0])
@@ -148,6 +157,39 @@ class Backend:
                     state = 'indeterminate'
         return dict(package=package, state=state, settings=values, entries=[dict(file=str(e[0]), line=e[1]+1, atom=e[2], environments=e[3]) for e in entries])
 
+    def activates(self, name):
+        return name.startswith('openmktr-') or '/omktr-portage' in self.read(Path('env') / name)
+
+    def adoption_settings(self, package, entries):
+        modes = set()
+        for entry in entries:
+            for name in entry['environments']:
+                if not self.activates(name):
+                    continue
+                if entry['atom'] != package:
+                    raise RuntimeError('overlapping activation atoms require manual resolution')
+                if name not in ('openmktr-direct', 'openmktr-ninja'):
+                    raise RuntimeError('custom environment cannot be adopted: ' + name)
+                mode = name.split('-')[-1]
+                expected = f'export MAKE="/usr/bin/omktr-portage"\nexport OMKTR_PORTAGE_MODE="{mode}"\n'
+                text = self.read(Path('env') / name)
+                clean = '\n'.join(x for x in text.splitlines() if x.strip() and not x.lstrip().startswith('#')) + '\n'
+                if clean != expected:
+                    raise RuntimeError('custom environment cannot be adopted: ' + name)
+                modes.add(mode)
+        if len(modes) > 1:
+            raise RuntimeError('conflicting activation modes require manual resolution')
+        return {'mode': modes.pop()} if modes else {}
+
+    def effective_settings(self, package):
+        info = self.show(package)
+        if info['state'] in ('conflicting', 'indeterminate'):
+            raise RuntimeError(package + ': resolve conflicting/custom entries manually')
+        if info['settings'] is not None:
+            return info['settings']
+        return settings(self.adoption_settings(package, info['entries'])
+                        if info['state'] == 'manual' else {})
+
     def plan(self, action, packages, values):
         updates = {}
         def content(path):
@@ -161,19 +203,7 @@ class Backend:
                 raise RuntimeError(package + ': resolve conflicting/custom entries manually')
             if info['state'] == 'manual' and action != 'adopt':
                 raise RuntimeError(package + ': explicit adopt is required')
-            adopted_values = {}
-            if action == 'adopt':
-                for entry in info['entries']:
-                    if entry['atom'] != package:
-                        raise RuntimeError('overlapping atoms require manual resolution')
-                    for name in entry['environments']:
-                        text = self.read(Path('env') / name)
-                        if name in ('openmktr-direct', 'openmktr-ninja'):
-                            expected = f'export MAKE="/usr/bin/omktr-portage"\nexport OMKTR_PORTAGE_MODE="{name.split("-")[-1]}"\n'
-                            clean = '\n'.join(x for x in text.splitlines() if x.strip() and not x.lstrip().startswith('#')) + '\n'
-                            adopted_values['mode'] = name.split('-')[-1]
-                            if clean != expected:
-                                raise RuntimeError('custom environment cannot be adopted: ' + name)
+            adopted_values = self.adoption_settings(package, info['entries']) if action == 'adopt' else {}
             for path in self.files():
                 lines = content(path).splitlines(keepends=True)
                 for i, line in enumerate(lines):
@@ -309,6 +339,13 @@ class Controller:
         self.pending = None
         self.reviewed = False
 
+    def initial_settings(self, packages):
+        if not packages:
+            raise RuntimeError('select at least one package')
+        values = [self.backend.effective_settings(p) for p in sorted(set(packages))]
+        return {key: values[0][key] if all(v[key] == values[0][key] for v in values) else None
+                for key in OPTIONS}
+
     def stage(self, action, packages, values):
         if self.pending:
             raise RuntimeError('Save or discard the pending batch before staging another batch')
@@ -394,11 +431,14 @@ def gui(backend):
             packages = [displayed[i] for i in listing.curselection()]
             values = {}
             if action in ('configure', 'adopt'):
+                initial = controller.initial_settings(packages)
                 for key, (default, kind, help_text) in OPTIONS.items():
-                    value = simpledialog.askstring(key, help_text + '\n' + kind, initialvalue=str(default), parent=app)
+                    current = str(initial[key]) if initial[key] is not None else '<mixed; unchanged>'
+                    value = simpledialog.askstring(key, help_text + '\n' + kind + '\nKeep the shown value to leave this setting unchanged.', initialvalue=current, parent=app)
                     if value is None:
                         return
-                    values[key] = value.lower() == 'true' if type(default) is bool else value
+                    if value != current:
+                        values[key] = option_value(key, value)
             text = controller.stage(action, packages, values)
             preview.delete('1.0', 'end')
             preview.insert('end', text)
@@ -507,10 +547,12 @@ def tui(backend):
                     action = {ord('c'):'configure', ord('a'):'adopt', ord('d'):'disable', ord('w'):'setup-workspaces'}[key]
                     values = {}
                     if action in ('configure', 'adopt'):
+                        initial = controller.initial_settings(sorted(selected))
                         for name, (default, kind, help_text) in OPTIONS.items():
-                            value = ask(f'{name}: {help_text} ({kind}; default {default})')
+                            current = initial[name] if initial[name] is not None else '<mixed>'
+                            value = ask(f'{name}: {help_text} ({kind}; current {current}; Enter keeps; inherit clears jobs/load)')
                             if value:
-                                values[name] = value.lower() == 'true' if type(default) is bool else value
+                                values[name] = option_value(name, value)
                     controller.stage(action, sorted(selected), values)
                     message = 'Staged. Press r to review, then s to save.'
                 elif key == ord('x'):

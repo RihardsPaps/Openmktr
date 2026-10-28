@@ -61,10 +61,12 @@ class ManagerTests(unittest.TestCase):
         (self.root / 'env').mkdir()
         (self.root / 'env/openmktr-direct').write_text('export MAKE="/usr/bin/omktr-portage"\nexport OMKTR_PORTAGE_MODE="direct"\n')
         (self.root / 'env/custom').write_text('CFLAGS="-O2"\n')
-        (self.root / 'package.env').write_text('cat/pkg custom openmktr-direct\n')
+        (self.root / 'package.env').write_text('*/* custom\ncat/pkg custom openmktr-direct\n')
         self.apply('adopt')
         self.assertIn('cat/pkg custom\n', (self.root / 'package.env').read_text())
         self.assertTrue((self.root / 'env/openmktr-direct').exists())
+        self.assertIn('*/* custom\n', (self.root / 'package.env').read_text())
+        self.assertEqual(self.backend.show('cat/pkg')['state'], 'managed')
     def test_interrupted_recovery_preserves_manual_changes(self):
         import json
         plan = self.backend.plan('configure', ['cat/pkg'], {})
@@ -143,6 +145,48 @@ class ManagerTests(unittest.TestCase):
         root.mainloop.side_effect = interact
         with mock.patch.dict('sys.modules', tkinter=tk), mock.patch.object(m, 'save', side_effect=RuntimeError('cancelled')):
             m.gui(self.backend)
+    def test_harmless_inherited_environment_remains_manageable(self):
+        (self.root / 'env').mkdir()
+        (self.root / 'env/custom').write_text('CFLAGS="-O2"\n')
+        (self.root / 'package.env').write_text('*/* custom\n')
+        self.apply()
+        self.assertEqual(self.backend.show('cat/pkg')['state'], 'managed')
+        self.apply(values={'jobs': '4'})
+        self.apply('disable')
+        self.assertEqual(self.backend.show('cat/pkg')['state'], 'disabled')
+        self.assertIn('*/* custom\n', (self.root / 'package.env').read_text())
+
+    def test_overlapping_activation_is_still_rejected(self):
+        (self.root / 'env').mkdir()
+        (self.root / 'env/openmktr-direct').write_text('export MAKE="/usr/bin/omktr-portage"\nexport OMKTR_PORTAGE_MODE="direct"\n')
+        (self.root / 'package.env').write_text('*/* openmktr-direct\n')
+        with self.assertRaises(RuntimeError): self.apply('adopt')
+        self.assertNotIn(m.BEGIN, (self.root / 'package.env').read_text())
+
+    def test_edit_initial_values_and_sparse_batch_overrides(self):
+        self.apply(packages=['cat/a'], values={'mode':'ninja', 'strict':True, 'jobs':'8'})
+        self.apply(packages=['cat/b'], values={'mode':'direct', 'jobs':'2'})
+        controller = m.Controller(self.backend)
+        initial = controller.initial_settings(['cat/a', 'cat/b'])
+        self.assertIsNone(initial['mode'])
+        self.assertIsNone(initial['strict'])
+        self.assertEqual(controller.initial_settings(['cat/a'])['mode'], 'ninja')
+        controller.stage('configure', ['cat/a','cat/b'], {'jobs':'4'})
+        self.backend.apply(controller.pending)
+        self.assertEqual(self.backend.show('cat/a')['settings']['mode'], 'ninja')
+        self.assertTrue(self.backend.show('cat/a')['settings']['strict'])
+        self.assertEqual(self.backend.show('cat/b')['settings']['mode'], 'direct')
+
+    def test_adoption_initial_settings_preserve_manual_ninja(self):
+        (self.root / 'env').mkdir()
+        (self.root / 'env/openmktr-ninja').write_text('export MAKE="/usr/bin/omktr-portage"\nexport OMKTR_PORTAGE_MODE="ninja"\n')
+        (self.root / 'package.env').write_text('cat/pkg openmktr-ninja\n')
+        controller = m.Controller(self.backend)
+        self.assertEqual(controller.initial_settings(['cat/pkg'])['mode'], 'ninja')
+        controller.stage('adopt', ['cat/pkg'], {})
+        self.backend.apply(controller.pending)
+        self.assertEqual(self.backend.show('cat/pkg')['settings']['mode'], 'ninja')
+
     def test_failed_save_retains_pending(self):
         c = m.Controller(self.backend)
         c.stage('configure', ['cat/pkg'], {})
