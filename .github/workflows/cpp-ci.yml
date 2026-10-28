@@ -5,6 +5,7 @@
 # Cover persistent workspace recipe state with the sanitizer build.
 # Include load admission and adapter checks with sanitized executors.
 # Exercise graph optimization behavior with sanitized executors.
+# Run real manager widget checks under a private Chimera display.
 # Pin current stable Actions and gate FIFO jobserver recovery in both builds.
 # Upstream material retains its Apache-2.0 terms. Fork modifications are
 # covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
@@ -44,6 +45,10 @@ jobs:
         run: |
           set -o pipefail
           docker run --rm openmktr-test 2>&1 | tee tests.log
+      - name: Build and test graphical manager in Chimera
+        run: |
+          docker build -f Dockerfile.frontend -t openmktr-frontend .
+          docker run --rm openmktr-frontend
       - name: Check incremental campaign harness without GNU dependencies
         run: docker run --rm openmktr-test python tests/incremental_campaign.py
       - name: Compare incremental builds with external GNU Make

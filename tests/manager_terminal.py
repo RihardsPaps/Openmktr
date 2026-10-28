@@ -41,9 +41,21 @@ def main():
         def send(text): os.write(terminal, text.encode())
         try:
             expect('Openmktr:')
+            send('?')
+            expect('disabled_graph_optimizations')
+            send('\n/')
+            expect('Search category/package:')
+            send('cat\n')
+            send('f')
+            expect('Filter: all, installed, available, configured')
+            send('installed\n')
+            time.sleep(.15)
+            fcntl.ioctl(terminal, termios.TIOCSWINSZ, struct.pack('HHHH', 18, 80, 0, 0))
+            os.kill(pid, signal.SIGWINCH)
+            time.sleep(.15)
             send(' c')
-            for name in ('mode', 'jobs', 'load', 'graph', 'recursive_cache', 'strict', 'workspace', 'root'):
-                expect(name)
+            for name in ('disabled_graph_optimizations', 'build_stats', 'regen_debug', 'mode', 'jobs', 'load', 'graph', 'recursive_cache', 'strict', 'workspace', 'root'):
+                expect(name + ':')
                 send('\n')
             expect('Staged.')
             send('r')

@@ -18,8 +18,11 @@ BEGIN = '# BEGIN openmktr-manager\n'
 END = '# END openmktr-manager\n'
 PREFIX = 'openmktr-manager-'
 OPTIONS = {
+    'disabled_graph_optimizations': ('', 'comma-separated features', 'Exclude evaluation, includes, recursive, compact, monitor; exclusions override the profile. Enter none in the TUI to clear all exclusions.'),
+    'build_stats': (False, 'boolean', 'Print build timing and optimization statistics; may increase log output.'),
+    'regen_debug': (False, 'boolean', 'Explain Ninja regeneration decisions; useful for diagnosing repeated builds.'),
     'mode': ('direct', 'direct|ninja', 'Build mode; Ninja applies to compilation only.'),
-    'jobs': ('', 'positive integer', 'Empty inherits Portage MAKEOPTS.'),
+    'jobs': ('', 'positive integer', 'Empty inherits Portage MAKEOPTS at build time (unresolved here). Jobs control build recipes, not browsing; use cpus in the TUI for available CPUs.'),
     'load': ('', 'nonnegative number', 'Empty inherits the load limit; zero serializes.'),
     'graph': ('safe', 'off|safe|aggressive', 'Graph optimization profile.'),
     'recursive_cache': (False, 'boolean', 'Conservative recursive no-op certificates.'),
@@ -34,9 +37,13 @@ def settings(values):
         raise ValueError('unknown setting')
     result = {k: v[0] for k, v in OPTIONS.items()}
     result.update(values)
+    excluded = result['disabled_graph_optimizations']
+    if not isinstance(excluded, str) or (excluded and any(not x for x in excluded.split(','))) or any(x not in ('evaluation', 'includes', 'recursive', 'compact', 'monitor') for x in excluded.split(',') if x):
+        raise ValueError('invalid disabled_graph_optimizations')
+    result['disabled_graph_optimizations'] = ','.join(sorted(set(filter(None, excluded.split(',')))))
     if result['mode'] not in ('direct', 'ninja') or result['graph'] not in ('off', 'safe', 'aggressive'):
         raise ValueError('invalid mode or graph profile')
-    for key in ('recursive_cache', 'strict', 'workspace'):
+    for key in ('recursive_cache', 'strict', 'workspace', 'build_stats', 'regen_debug'):
         if type(result[key]) is not bool:
             raise ValueError(key + ' must be boolean')
     for key in ('jobs', 'load', 'root', 'mode', 'graph'):
@@ -59,10 +66,10 @@ def option_value(name, value):
         if value.lower() not in ('true', 'false'):
             raise ValueError(name + ' must be true or false')
         return value.lower() == 'true'
-    return '' if name in ('jobs', 'load') and value == 'inherit' else value
+    return '' if (name in ('jobs', 'load') and value == 'inherit') or (name == 'disabled_graph_optimizations' and value == 'none') else value
 
 
-def environment(values):
+def environment(values, legacy=False):
     v = settings(values)
     lines = [f'export MAKE="/usr/bin/omktr-portage"', f'export OMKTR_PORTAGE_MODE="{v["mode"]}"',
              f'export OMKTR_PORTAGE_GRAPH_OPTIMIZATIONS="{v["graph"]}"',
@@ -74,6 +81,10 @@ def environment(values):
     if v['workspace']:
         lines += ['export OMKTR_WORKSPACE_ROOT=' + shlex.quote(v['root']),
                   'export EXTRA_ECONF="${EXTRA_ECONF} --enable-dependency-tracking"']
+    if not legacy:
+        lines += [f'export OMKTR_PORTAGE_DISABLED_GRAPH_OPTIMIZATIONS="{v["disabled_graph_optimizations"]}"', f'export OMKTR_PORTAGE_BUILD_STATS="{int(v["build_stats"])}"', f'export OMKTR_PORTAGE_REGEN_DEBUG="{int(v["regen_debug"])}"']
+    else:
+        for key in ('disabled_graph_optimizations', 'build_stats', 'regen_debug'): v.pop(key)
     return '# SPDX-License-Identifier: MPL-2.0\n# settings: ' + json.dumps(v, sort_keys=True) + '\n' + '\n'.join(lines) + '\n'
 
 
@@ -105,7 +116,38 @@ class Portage:
 class Backend:
     def __init__(self, root=Path('/etc/portage'), portage=None):
         self.root = Path(root)
-        self.portage = portage or Portage()
+        self._portage = portage
+
+    @property
+    def portage(self):
+        if self._portage is None: self._portage = Portage()
+        return self._portage
+
+    def snapshot(self):
+        view = Backend(self.root, self.portage)
+        cache = {}
+        def read(relative):
+            key = str(relative)
+            if key not in cache:
+                try: cache[key] = self.read(relative)
+                except (ValueError, RuntimeError, OSError) as exc: cache[key] = exc
+            if isinstance(cache[key], Exception): raise cache[key]
+            return cache[key]
+        view.read = read
+        entries = self.entries()
+        for name in {name for entry in entries for name in entry[3]}:
+            try: read(Path('env') / name)
+            except (ValueError, RuntimeError, OSError): pass
+        view.entries = lambda: entries
+        indexed, broad = {}, []
+        for entry in entries:
+            atom = self.portage.atom(entry[2])
+            key = getattr(atom, 'cp', None)
+            if key is None and re.fullmatch(r'[A-Za-z0-9_+.-]+/[A-Za-z0-9_+.-]+', entry[2]): key = entry[2]
+            if key and '*' not in key: indexed.setdefault(key, []).append(entry)
+            else: broad.append(entry)
+        view.entries_for = lambda package: [e for e in indexed.get(package, []) + broad if e[2] == package or self.portage.matches(e[2], package)]
+        return view
 
     def read(self, relative):
         relative = Path(relative)
@@ -130,9 +172,24 @@ class Backend:
                     result.append((path, number, words[0], words[1:]))
         return result
 
+    def catalog_info(self, package):
+        try:
+            info = self.show(package)
+            if info['state'] not in ('conflicting', 'indeterminate'):
+                try: info['effective'] = self.effective_settings(package)
+                except (ValueError, RuntimeError, OSError) as exc:
+                    info['effective_error'] = str(exc).strip() or type(exc).__name__ + ': settings unavailable'
+            return info
+        except (ValueError, RuntimeError, OSError) as exc:
+            return dict(package=package, state='indeterminate', settings=None, entries=[],
+                        effective_error=str(exc).strip() or type(exc).__name__ + ': settings unavailable')
+
+    def entries_for(self, package):
+        return [e for e in self.entries() if e[2] == package or self.portage.matches(e[2], package)]
+
     def show(self, package):
         self.portage.atom(package)
-        entries = [e for e in self.entries() if e[2] == package or self.portage.matches(e[2], package)]
+        entries = self.entries_for(package)
         managed = [e for e in entries if any(x.startswith(PREFIX) for x in e[3])]
         activations = [(e, name) for e in entries for name in e[3]
                        if self.activates(name)]
@@ -145,7 +202,7 @@ class Backend:
                 text = self.read(Path('env') / names[0])
                 try:
                     values = settings(json.loads(text.split('# settings: ', 1)[1].splitlines()[0]))
-                    if text != environment(values):
+                    if text not in (environment(values), environment(values, legacy=True)):
                         state = 'indeterminate'
                 except (ValueError, IndexError):
                     state = 'indeterminate'
@@ -221,7 +278,7 @@ class Backend:
                 if previous:
                     try:
                         old = settings(json.loads(previous.split('# settings: ', 1)[1].splitlines()[0]))
-                        if environment(old) != previous: raise ValueError('custom environment')
+                        if previous not in (environment(old), environment(old, legacy=True)): raise ValueError('custom environment')
                     except (ValueError, IndexError) as error:
                         raise RuntimeError('reserved environment file contains custom settings') from error
                 replace(Path('env') / name, environment(v))
@@ -418,8 +475,16 @@ def gui(backend):
     import queue
     app = tk.Tk()
     app.title('Openmktr Portage Manager')
-    app.geometry('1280x850')
-    app.minsize(1100, 750)
+    app.geometry(f'{min(1280, app.winfo_screenwidth()-60)}x{min(850, app.winfo_screenheight()-80)}')
+    app.minsize(640, 480)
+    normal_geometry = []
+    def fullscreen(event=None):
+        enabled = bool(app.attributes('-fullscreen'))
+        if not enabled: normal_geometry[:] = [app.geometry()]
+        app.attributes('-fullscreen', not enabled)
+        if enabled and normal_geometry: app.geometry(normal_geometry[0])
+    app.bind('<F11>', fullscreen)
+    app.bind('<Escape>', lambda event: fullscreen() if app.attributes('-fullscreen') else None)
     from tkinter import font as tkfont
     if 'Liberation Sans' in tkfont.families(app):
         for name in ('TkDefaultFont', 'TkTextFont', 'TkMenuFont', 'TkHeadingFont'):
@@ -441,13 +506,21 @@ def gui(backend):
     selected, rows, information = [], [], {}
     draft = SettingsDraft({k: v[0] for k, v in OPTIONS.items()})
     loading = False
+    rendering = False
     busy = False
     events = queue.Queue()
     poll_timer = []
+    auxiliary_buttons = []
+    cpu_button = None
+    def auxiliary(parent, **options):
+        button = ttk.Button(parent, **options)
+        auxiliary_buttons.append(button)
+        return button
     shell = ttk.Frame(app, padding=18)
     shell.pack(fill='both', expand=True)
     ttk.Label(shell, text='Openmktr', style='Heading.TLabel').pack(anchor='w')
     ttk.Label(shell, text='Portage Manager  /  Select packages, adjust settings, review and save.').pack(anchor='w', pady=(4, 16))
+    ttk.Button(shell, text='Fullscreen (F11)', command=fullscreen).pack(anchor='e')
     navigation = ttk.Notebook(shell)
     navigation.pack(fill='both', expand=True)
     package_page = ttk.Frame(navigation, padding=14)
@@ -472,7 +545,7 @@ def gui(backend):
     table = ttk.Treeview(holder, columns=('installed', 'state'), selectmode='extended')
     for key, label, width in (('#0', 'Package', 205), ('installed', 'Installed', 65), ('state', 'Configuration', 100)):
         table.heading(key, text=label)
-        table.column(key, width=width, minwidth=width, stretch=key == '#0')
+        table.column(key, width=width, minwidth=40, stretch=key == '#0')
     scrollbar = ttk.Scrollbar(holder, command=table.yview)
     table.configure(yscrollcommand=scrollbar.set)
     table.pack(side='left', fill='both', expand=True)
@@ -482,14 +555,16 @@ def gui(backend):
     title = tk.StringVar(app, value='Select a package')
     hint = tk.StringVar(app, value='Use Ctrl or Shift to select multiple packages.')
     ttk.Label(editor, textvariable=title, style='Title.TLabel').pack(anchor='w')
-    ttk.Label(editor, textvariable=hint, wraplength=510).pack(anchor='w', pady=(8, 12))
+    hint_label = ttk.Label(editor, textvariable=hint, wraplength=510)
+    hint_label.pack(anchor='w', pady=(8, 12))
+    editor.bind('<Configure>', lambda e: hint_label.configure(wraplength=max(80, e.width-32)))
     tabs = ttk.Notebook(editor)
     tabs.pack(fill='both', expand=True)
     variables, fields, inherits, pages = {}, {}, {}, {}
     inherit_fields = {}
     reset_buttons = []
-    groups = [('Build', ('mode', 'strict')), ('Performance', ('jobs', 'load', 'graph', 'recursive_cache')), ('Workspaces', ('workspace', 'root'))]
-    labels = dict(mode='Build mode', strict='Strict compatibility', jobs='Parallel jobs', load='Load limit', graph='Graph optimizations', recursive_cache='Recursive no-op cache', workspace='Persistent workspace', root='Workspace cache root')
+    groups = [('Build', ('mode', 'strict')), ('Performance', ('jobs', 'load', 'graph', 'recursive_cache', 'disabled_graph_optimizations', 'build_stats', 'regen_debug')), ('Workspaces', ('workspace', 'root'))]
+    labels = dict(disabled_graph_optimizations='Excluded graph optimizations', build_stats='Build statistics', regen_debug='Regeneration explanations', mode='Build mode', strict='Strict compatibility', jobs='Parallel jobs', load='Load limit', graph='Graph optimizations', recursive_cache='Recursive no-op cache', workspace='Persistent workspace', root='Workspace cache root')
     error = tk.StringVar(app)
     status = tk.StringVar(app, value='Loading package catalog...')
 
@@ -524,9 +599,22 @@ def gui(backend):
         controls()
 
     for name, keys in groups:
-        page = ttk.Frame(tabs, padding=16)
+        container = ttk.Frame(tabs)
+        canvas = tk.Canvas(container, width=1, highlightthickness=0)
+        bar = ttk.Scrollbar(container, command=canvas.yview)
+        canvas.configure(yscrollcommand=bar.set)
+        bar.pack(side='right', fill='y'); canvas.pack(fill='both', expand=True)
+        page = ttk.Frame(canvas, padding=16)
+        window = canvas.create_window(0, 0, anchor='nw', window=page)
+        page.bind('<Configure>', lambda e, c=canvas: c.configure(scrollregion=c.bbox('all')))
+        def resize_settings(event, c=canvas, w=window, page=page):
+            c.itemconfigure(w, width=event.width)
+            for child in page.winfo_children():
+                if isinstance(child, ttk.Label): child.configure(wraplength=max(80, event.width-40))
+        canvas.bind('<Configure>', resize_settings)
         page.columnconfigure(0, weight=1)
-        tabs.add(page, text=name)
+        tabs.add(container, text=name)
+        page.tab_container = container
         pages[name] = page
         for index, key in enumerate(keys):
             row = index * 4
@@ -537,17 +625,17 @@ def gui(backend):
             if type(default) is bool:
                 field = ttk.Checkbutton(page, text='Enabled', variable=variable, command=lambda k=key: changed(k))
             elif key in ('mode', 'graph'):
-                field = ttk.Combobox(page, textvariable=variable, values=kind.split('|') + ['Mixed (unchanged)'], state='readonly')
+                field = ttk.Combobox(page, textvariable=variable, width=12, values=kind.split('|') + ['Mixed (unchanged)'], state='readonly')
                 field.bind('<<ComboboxSelected>>', lambda e, k=key: changed(k))
             else:
-                field = ttk.Entry(page, textvariable=variable)
+                field = ttk.Entry(page, textvariable=variable, width=12)
                 variable.trace_add('write', lambda *args, k=key: changed(k))
             fields[key] = field
             field.grid(row=row+1, column=0, sticky='ew')
             reset_button = ttk.Button(page, text='Keep existing', command=lambda k=key: reset(k))
             reset_button.grid(row=row+1, column=1, padx=(8, 0))
             reset_buttons.append(reset_button)
-            ttk.Label(page, text=help_text, wraplength=440).grid(row=row+2, column=0, columnspan=2, sticky='w', pady=(4, 6))
+            ttk.Label(page, text=help_text + ' Default: ' + (str(default) if type(default) is bool else str(default or 'inherit / none')) + '.', wraplength=320).grid(row=row+2, column=0, columnspan=2, sticky='w', pady=(4, 6))
             if key in ('jobs', 'load'):
                 inherits[key] = tk.BooleanVar(app)
                 inherit_fields[key] = ttk.Checkbutton(page, text='Inherit from Portage', variable=inherits[key], command=lambda k=key: changed(k))
@@ -575,8 +663,12 @@ def gui(backend):
         return not (draft.edits or controller.pending) or messagebox.askyesno('Discard changes?', 'Discard current unsaved changes?', parent=app)
 
     def controls():
+        for button in auxiliary_buttons:
+            button.configure(state='disabled' if busy else 'normal')
+        for button in operation_buttons: button.configure(state='disabled' if busy else 'normal')
         states = [information[p]['state'] for p in selected]
         valid = bool(selected) and not any(s in ('conflicting', 'indeterminate') for s in states)
+        if cpu_button is not None: cpu_button.configure(state='normal' if valid and not busy and not controller.pending else 'disabled')
         for widget, enabled in ((configure, valid and 'manual' not in states), (adopt, valid and 'manual' in states), (disable, valid and 'manual' not in states), (save_button, bool(controller.pending))):
             widget.configure(state='normal' if enabled and not busy and (widget == save_button or not controller.pending) else 'disabled')
         for widget in [*inherit_fields.values(), *reset_buttons]:
@@ -591,21 +683,29 @@ def gui(backend):
         for key in variables: reset(key)
         write_preview(''); error.set(''); controls()
 
+    def initial_from_information(packages):
+        for p in packages:
+            if information[p].get('effective_error'): raise RuntimeError(p + ': ' + information[p]['effective_error'])
+        if any(information[p]['state'] in ('conflicting', 'indeterminate') for p in packages):
+            raise RuntimeError('Resolve conflicting or custom package environments manually before editing.')
+        values = [information[p].get('effective') or settings({}) for p in packages]
+        return {k: values[0][k] if all(v[k] == values[0][k] for v in values) else None for k in OPTIONS}
+
     def selection(event=None):
         nonlocal selected, draft
-        if loading: return
+        if loading or rendering: return
         if busy:
-            table.selection_set(selected)
+            table.selection_set([p for p in selected if table.exists(p)])
             return
-        upcoming = list(table.selection())
-        if upcoming == selected: return
+        upcoming = [p for p in selected if not table.exists(p)] + list(table.selection())
+        if set(upcoming) == set(selected): return
         if not permit_discard():
-            table.selection_set(selected); return
+            table.selection_set([p for p in selected if table.exists(p)]); return
         selected = upcoming
         controller.pending = None
         write_preview('')
         try:
-            draft = SettingsDraft(controller.initial_settings(selected) if selected else {k: v[0] for k, v in OPTIONS.items()})
+            draft = SettingsDraft(initial_from_information(selected) if selected else {k: v[0] for k, v in OPTIONS.items()})
             hint.set('Mixed values stay unchanged until edited.' if len(selected) > 1 else 'Edit settings below, then review changes before saving.')
         except (RuntimeError, ValueError, OSError) as exc:
             draft = SettingsDraft({k: v[0] for k, v in OPTIONS.items()})
@@ -615,20 +715,33 @@ def gui(backend):
         count.set(str(len(table.get_children())) + ' results / ' + str(len(selected)) + ' selected')
         error.set(''); controls()
 
+    render_generation = [0]
+    search_timer = []
     def refresh(*args):
-        nonlocal loading
-        if loading or busy: return
-        if not permit_discard(): return
-        clear()
-        loading = True
+        nonlocal rendering
+        if busy: return
+        render_generation[0] += 1
+        generation = render_generation[0]
+        rendering = True
         table.delete(*table.get_children())
-        for row in rows:
-            p = row['package']; info = information[p]
-            matches = scope.get() == 'all' or (scope.get() == 'configured' and info['state'] != 'disabled') or row.get(scope.get(), False)
-            if matches and query.get().lower() in p.lower(): table.insert('', 'end', iid=p, text=p, values=('Yes' if row['installed'] else 'No', info['state']))
-        loading = False
-        selection()
-        count.set(str(len(table.get_children())) + ' results / ' + str(len(selected)) + ' selected')
+        filtered = [r for r in rows if query.get().lower() in r['package'].lower() and
+                    (scope.get() == 'all' or (scope.get() == 'configured' and information[r['package']]['state'] != 'disabled') or r.get(scope.get(), False))]
+        def batch(offset=0):
+            nonlocal rendering
+            if generation != render_generation[0]: return
+            for row in filtered[offset:offset+100]:
+                p = row['package']
+                table.insert('', 'end', iid=p, text=p, values=('Yes' if row['installed'] else 'No', information[p]['state']))
+            if offset+100 < len(filtered): app.after(1, lambda: batch(offset+100))
+            else:
+                table.selection_set([p for p in selected if table.exists(p)])
+                rendering = False
+                count.set(str(len(filtered)) + ' results / ' + str(len(selected)) + ' selected')
+        batch()
+
+    def search_changed(*args):
+        if search_timer: app.after_cancel(search_timer.pop())
+        search_timer[:] = [app.after(200, lambda: (search_timer.clear(), refresh()))]
 
     def stage(action):
         if busy: return
@@ -642,17 +755,17 @@ def gui(backend):
         except (ValueError, RuntimeError, OSError) as exc:
             error.set(str(exc))
             key = next((k for k in fields if k in str(exc)), next(iter(draft.edits), 'mode'))
-            tabs.select(pages[next(name for name, keys in groups if key in keys)])
+            tabs.select(pages[next(name for name, keys in groups if key in keys)].tab_container)
             fields[key].focus_set()
 
     def back():
         if busy: return
-        controller.pending = None; write_preview(''); tabs.select(pages['Build']); controls()
+        controller.pending = None; write_preview(''); tabs.select(pages['Build'].tab_container); controls()
 
-    def background(work, done):
+    def background(work, done, description='Working; controls are temporarily unavailable...'):
         nonlocal busy
         if busy: return
-        busy = True; status.set('Working...'); controls()
+        busy = True; error.set(''); status.set(description); controls()
         def worker():
             try: events.put((done, work(), None))
             except Exception as exc: events.put((done, None, exc))
@@ -663,8 +776,8 @@ def gui(backend):
         try:
             done, result, exc = events.get_nowait()
             busy = False
-            status.set(str(exc) if exc else 'Ready')
-            if exc: error.set(str(exc))
+            status.set((str(exc).strip() or type(exc).__name__ + ': operation failed') if exc else 'Ready')
+            if exc: error.set(str(exc).strip() or type(exc).__name__ + ': operation failed')
             else: done(result)
             controls()
         except queue.Empty: pass
@@ -672,14 +785,19 @@ def gui(backend):
 
     def discover():
         catalog = backend.portage.packages()
-        return catalog, {r['package']: backend.show(r['package']) for r in catalog}
+        snapshot = backend.snapshot()
+        return catalog, {r['package']: snapshot.catalog_info(r['package']) for r in catalog}
 
     def loaded(result):
-        nonlocal rows, information
+        nonlocal rows, information, selected
         rows, information = result
+        selected = [p for p in selected if p in information]
         refresh()
         if selected:
-            draft.initial = controller.initial_settings(selected)
+            try: draft.initial = initial_from_information(selected)
+            except (ValueError, RuntimeError, OSError) as exc:
+                draft.initial = {k: v[0] for k, v in OPTIONS.items()}
+                hint.set(str(exc))
             for key in variables: reset(key)
 
     def commit():
@@ -694,11 +812,11 @@ def gui(backend):
     configure = ttk.Button(actions, text='Review changes', command=lambda: stage('configure')); configure.pack(side='left')
     adopt = ttk.Button(actions, text='Adopt', command=lambda: stage('adopt')); adopt.pack(side='left', padx=8)
     disable = ttk.Button(actions, text='Disable', command=lambda: stage('disable')); disable.pack(side='left')
-    ttk.Button(review, text='Back to settings', command=back).pack(side='left', pady=10)
+    auxiliary(review, text='Back to settings', command=back).pack(side='left', pady=10)
     save_button = ttk.Button(review, text='Save changes', command=commit); save_button.pack(side='left', padx=8)
-    ttk.Button(review, text='Discard changes', command=lambda: clear() if permit_discard() else None).pack(side='left')
+    auxiliary(review, text='Discard changes', command=lambda: clear() if permit_discard() else None).pack(side='left')
     ttk.Label(pages['Workspaces'], text='Persistent workspaces require Ninja mode and installed Portage hooks.', wraplength=440).grid(row=9, column=0, columnspan=2, sticky='w', pady=16)
-    ttk.Button(pages['Workspaces'], text='Review workspace setup', command=lambda: stage('setup-workspaces')).grid(row=10, column=0, sticky='w')
+    auxiliary(pages['Workspaces'], text='Review workspace setup', command=lambda: stage('setup-workspaces')).grid(row=10, column=0, sticky='w')
     ttk.Label(workspace_page, text='Retained workspaces', style='Title.TLabel').pack(anchor='w')
     ttk.Label(workspace_page, text='Private operations may require authentication. Compress idle retains all data.').pack(anchor='w', pady=12)
     form = ttk.Frame(workspace_page); form.pack(fill='x')
@@ -711,6 +829,7 @@ def gui(backend):
     form.columnconfigure(1, weight=1)
     toolbar = ttk.Frame(workspace_page); toolbar.pack(fill='x', pady=14)
     output = tk.Text(workspace_page, wrap='word', height=15, state='disabled'); output.pack(fill='both', expand=True)
+    operation_buttons = []
     def operation(action):
         keys = ['root']
         if action in ('status', 'pack', 'unpack'): keys += ['name', 'profile']
@@ -721,10 +840,12 @@ def gui(backend):
         if action in ('status', 'pack', 'unpack') and not request['name']:
             status.set('Enter a workspace name from Refresh / List.'); return
         def done(result):
-            output.configure(state='normal'); output.delete('1.0', 'end'); output.insert('1.0', result); output.configure(state='disabled')
+            output.configure(state='normal'); output.delete('1.0', 'end'); output.insert('1.0', result.strip() or ('No workspaces found.' if action == 'list' else 'Operation completed without output.')); output.configure(state='disabled')
         background(lambda: workspace(request), done)
     for label, action in (('Refresh / List', 'list'), ('Status', 'status'), ('Pack', 'pack'), ('Unpack', 'unpack'), ('Compress idle', 'gc')):
-        ttk.Button(toolbar, text=label, command=lambda a=action: operation(a)).pack(side='left', padx=(0, 8))
+        button = ttk.Button(toolbar, text=label, command=lambda a=action: operation(a))
+        button.pack(side='left', padx=(0, 8))
+        operation_buttons.append(button)
     def tab_changed(event=None):
         if busy and controller.pending:
             tabs.select(review)
@@ -735,15 +856,33 @@ def gui(backend):
             controls()
     tabs.bind('<<NotebookTabChanged>>', tab_changed)
     table.bind('<<TreeviewSelect>>', selection)
-    query.trace_add('write', refresh); scope.trace_add('write', refresh)
+    query.trace_add('write', search_changed); scope.trace_add('write', refresh)
+    search.bind('<Return>', refresh)
+    auxiliary(browser, text='Search', command=refresh).pack(fill='x')
+    auxiliary(browser, text='Clear', command=lambda: (query.set(''), refresh())).pack(fill='x')
+    def reload_catalog():
+        if busy: return
+        if permit_discard():
+            clear(); background(discover, loaded, 'Refreshing package catalog...')
+    auxiliary(browser, text='Refresh catalog', command=reload_catalog).pack(fill='x')
+    cpu_button = ttk.Button(pages['Performance'], text='Use available CPUs', command=lambda: (inherits['jobs'].set(False), variables['jobs'].set(str(available_cpus()))))
+    cpu_button.grid(row=40, column=0, sticky='w')
     app.bind('<Control-f>', lambda event: search.focus_set())
     app.protocol('WM_DELETE_WINDOW', lambda: app.destroy() if not busy and permit_discard() else None)
-    app.manager = dict(table=table, variables=variables, inherits=inherits, tabs=tabs, pages=pages, review=review, stage=stage, back=back, clear=clear, commit=commit, controller=controller, query=query, navigation=navigation, workspace_vars=workspace_vars, operation=operation, error=error)
+    app.manager = dict(table=table, variables=variables, inherits=inherits, tabs=tabs, pages=pages, review=review, stage=stage, back=back, clear=clear, commit=commit, controller=controller, query=query, navigation=navigation, workspace_vars=workspace_vars, operation=operation, error=error, hint=hint)
     controls()
     poll_timer[:] = [app.after(60, poll)]
-    app.bind('<Destroy>', lambda event: app.after_cancel(poll_timer[0]) if event.widget is app and poll_timer else None)
-    background(discover, loaded)
+    def destroyed(event):
+        if event.widget is app:
+            for timer in app.tk.splitlist(app.tk.call('after', 'info')): app.after_cancel(timer)
+    app.bind('<Destroy>', destroyed)
+    app.after(0, lambda: background(discover, loaded, 'Loading package catalog...'))
     app.mainloop()
+
+def available_cpus():
+    try: return max(1, len(os.sched_getaffinity(0)))
+    except (AttributeError, OSError): return max(1, (getattr(os, 'process_cpu_count', os.cpu_count)() or 1))
+
 
 def tui(backend):
     try:
@@ -751,15 +890,31 @@ def tui(backend):
     except ImportError as error:
         raise RuntimeError('install Python curses / enable the tui USE flag') from error
     controller = Controller(backend)
+    from concurrent.futures import ThreadPoolExecutor
+    executor = ThreadPoolExecutor(max_workers=1)
     def run(screen):
         selected, index, query, message, scope = set(), 0, '', '', 'all'
-        package_rows = backend.portage.packages()
+        def work(function):
+            future = executor.submit(function)
+            while not future.done():
+                screen.erase()
+                screen.addnstr(0, 0, 'Working... please wait', max(1, screen.getmaxyx()[1]-1))
+                screen.refresh()
+                import time
+                time.sleep(.02)
+            return future.result()
+        def discover():
+            package_rows = backend.portage.packages()
+            snapshot = backend.snapshot()
+            return package_rows, {r['package']: snapshot.catalog_info(r['package']) for r in package_rows}
+        package_rows, information = work(discover)
+        row_index = {r['package']: r for r in package_rows}
         rows = [r['package'] for r in package_rows]
         def ask(prompt):
             if '\n' in prompt:
                 pager(prompt)
                 return ''
-            screen.erase()
+            screen.clear()
             screen.addstr(0, 0, prompt[:max(1, screen.getmaxyx()[1]-1)])
             curses.echo()
             try:
@@ -778,14 +933,17 @@ def tui(backend):
                 if key in (10, 13, 27): return
                 if key == curses.KEY_DOWN: offset = min(max(0,len(lines)-1),offset+1)
                 if key == curses.KEY_UP: offset = max(0,offset-1)
+        previous_filter, visible = None, []
         while True:
-            visible = [p for p in rows if query.lower() in p.lower() and (scope == 'all' or (scope == 'configured' and backend.show(p)['state'] != 'disabled') or next(r for r in package_rows if r['package'] == p).get(scope, False))]
+            if previous_filter != (query, scope):
+                visible = [p for p in rows if query.lower() in p.lower() and (scope == 'all' or (scope == 'configured' and information[p]['state'] != 'disabled') or row_index[p].get(scope, False))]
+                previous_filter = (query, scope)
             index = max(0, min(index, len(visible)-1))
             screen.erase()
             height, width = screen.getmaxyx()
-            lines = ['Openmktr: arrows navigate; space selects; / search; f filter; c configure; a adopt; d disable', 'w workspace setup; x workspace maintenance; r review; s save; z discard; q quit; ? help']
+            lines = ['Openmktr: arrows navigate; space selects; / search; f filter; c configure; a adopt; d disable', 'w workspace setup; x workspace maintenance; r review; s save; z discard; q quit; R refresh; ? help']
             for p in visible[max(0, index-height+5):index+height-4]:
-                lines.append(('> ' if visible[index] == p else '  ') + ('[x] ' if p in selected else '[ ] ') + p + ' [' + backend.show(p)['state'] + ']')
+                lines.append(('> ' if visible[index] == p else '  ') + ('[x] ' if p in selected else '[ ] ') + p + ' [' + information[p]['state'] + ']')
             lines.append(message)
             for n, line in enumerate(lines[:height-1]):
                 screen.addnstr(n, 0, line, max(1, width-1))
@@ -805,7 +963,8 @@ def tui(backend):
                         initial = controller.initial_settings(sorted(selected))
                         for name, (default, kind, help_text) in OPTIONS.items():
                             current = initial[name] if initial[name] is not None else '<mixed>'
-                            value = ask(f'{name}: {help_text} ({kind}; current {current}; Enter keeps; inherit clears jobs/load)')
+                            value = ask(f'{name}: {help_text} ({kind}; current {current}; Enter keeps; inherit clears jobs/load; jobs=cpus uses available CPUs)')
+                            if value == 'cpus' and name == 'jobs': value = str(available_cpus())
                             if value:
                                 values[name] = option_value(name, value)
                     controller.stage(action, sorted(selected), values)
@@ -818,21 +977,36 @@ def tui(backend):
                         request['profile'] = ask('Profile (empty = current):')
                     if action in ('pack', 'gc'): request['compression'] = ask('Compression: xz or zstd') or 'xz'
                     if action == 'gc': request['idle_seconds'] = ask('Idle seconds (default 3600):') or 3600
-                    ask(workspace(request))
+                    pager(work(lambda: workspace(request)) or 'Operation completed without output.')
                 elif key == ord('r'):
                     pager(diff(controller.pending) if controller.pending else 'No pending edits.')
                     controller.reviewed = True
                 elif key == ord('s'):
                     if not controller.reviewed: raise RuntimeError('Press r to review before saving')
-                    controller.save(); message = 'Saved.'
+                    work(controller.save)
+                    package_rows, information = work(discover)
+                    rows = [r['package'] for r in package_rows]
+                    row_index = {r['package']: r for r in package_rows}
+                    selected.intersection_update(rows)
+                    previous_filter = None; message = 'Saved.'
+                elif key == ord('R'):
+                    if not controller.pending or ask('Discard pending edits and refresh? type yes:') == 'yes':
+                        controller.pending = None
+                        package_rows, information = work(discover)
+                        rows = [r['package'] for r in package_rows]
+                        row_index = {r['package']: r for r in package_rows}
+                        selected.intersection_update(rows)
+                        previous_filter = None
+                        message = 'Catalog refreshed.'
                 elif key == ord('?'): ask('\n'.join(k + ': ' + v[2] for k, v in OPTIONS.items()))
                 elif key == ord('z'):
                     if ask('Discard pending edits? type yes:') == 'yes': controller.pending = None
                 elif key == ord('q'):
                     if not controller.pending or ask('Discard pending edits? type yes:') == 'yes': return
             except (RuntimeError, ValueError, OSError) as error:
-                message = str(error)
-    curses.wrapper(run)
+                message = str(error).strip() or type(error).__name__ + ': operation failed'
+    try: curses.wrapper(run)
+    finally: executor.shutdown(wait=True, cancel_futures=True)
 
 
 def main():

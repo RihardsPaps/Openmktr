@@ -237,3 +237,30 @@ The workspace screen shows the form before running an operation.
 ![Mixed batch settings](../../docs/screenshots/portage-manager-mixed.png)
 
 ![Workspace management form](../../docs/screenshots/portage-manager-workspaces.png)
+### Responsive browsing and advanced settings
+
+The manager loads Portage after opening its interface and snapshots package
+configuration for browsing. Refresh catalog reloads external changes. Search
+and Enter apply the query immediately; typing waits 200 ms. Clear restores the
+catalog without discarding selected packages or edits. F11 toggles fullscreen;
+Escape restores the window. Settings scroll in smaller windows.
+
+Jobs inherit Portage MAKEOPTS unless explicitly changed. The GUI's Use available
+CPUs button (or `cpus` at the TUI jobs prompt) stages an explicit job count.
+Build jobs govern recipes, independently of interface discovery and rendering.
+An inherited limit is resolved by Portage during a build, not inferred from the
+manager's process environment. A zero load limit serializes recipes.
+
+Advanced settings include `disabled_graph_optimizations` (comma-separated
+`evaluation,includes,recursive,compact,monitor` exclusions), `build_stats`, and
+`regen_debug`. Exclusions override the selected graph profile; statistics add
+build log output, and regeneration explanations apply to Ninja regeneration.
+At the TUI exclusions prompt, `none` clears all exclusions; Enter keeps them.
+Boolean values use `true` or `false` with CLI `--set`. Defaults are no exclusions
+and both diagnostics disabled. Existing generated files remain readable and are
+upgraded only through a reviewed save.
+
+For graphical checks, first build `openmktr-test`, then run
+`docker build -f Dockerfile.frontend -t openmktr-frontend .` and
+`docker run --rm openmktr-frontend`. This extends Chimera with Tk, Xvfb, and the
+optional CPython Tk extension compiled with Clang. No host display is used.

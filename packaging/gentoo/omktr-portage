@@ -22,6 +22,22 @@ case ${OMKTR_PORTAGE_STRICT_COMPAT:-0} in
   0) ;; 1) set -- --strict-compat "$@" ;; *) exit 2 ;;
 esac
 
+case ${OMKTR_PORTAGE_BUILD_STATS:-0} in
+  0) ;; 1) set -- --kati_stats "$@" ;; *) exit 2 ;;
+esac
+case ${OMKTR_PORTAGE_REGEN_DEBUG:-0} in
+  0) ;; 1) set -- --regen_debug "$@" ;; *) exit 2 ;;
+esac
+exclusions=${OMKTR_PORTAGE_DISABLED_GRAPH_OPTIMIZATIONS:-}
+while [ -n "$exclusions" ]; do
+  feature=${exclusions%%,*}
+  case $feature in
+    evaluation|includes|recursive|compact|monitor) set -- "--disable_graph_optimization=$feature" "$@" ;;
+    *) exit 2 ;;
+  esac
+  case $exclusions in *,*) exclusions=${exclusions#*,} ;; *) exclusions= ;; esac
+done
+
 # Portage configuration uses an absolute pathname. Also permit PATH invocation
 # for diagnostics, without changing the caller's recipe working directory.
 wrapper=$0

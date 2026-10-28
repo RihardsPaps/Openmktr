@@ -11,3 +11,7 @@ validation/ninja/reproducible-date text eol=lf
 testcase/*.mk text eol=lf
 testcase/crlf.mk -text
 testcase/crlf_after_directive.mk -text
+
+# Keep reference package constraints usable in Windows Docker build contexts.
+*.lock text eol=lf
+Dockerfile.frontend text eol=lf

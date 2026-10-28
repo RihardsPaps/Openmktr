@@ -30,6 +30,68 @@ class ManagerTests(unittest.TestCase):
         plan = self.backend.plan(action, packages or ['cat/pkg'], values or {})
         self.backend.apply(plan)
         return plan
+    def test_snapshot_retains_environment_errors_per_package(self):
+        (self.root / 'env').mkdir()
+        (self.root / 'env/custom').symlink_to('/dev/null')
+        (self.root / 'package.env').write_text('other/removed custom\n')
+        snapshot = self.backend.snapshot()
+        self.assertEqual(snapshot.catalog_info('cat/pkg')['state'], 'disabled')
+        affected = snapshot.catalog_info('other/removed')
+        self.assertEqual(affected['state'], 'indeterminate')
+        self.assertIn('symlink', affected['effective_error'])
+        (self.root / 'env/custom').unlink()
+        (self.root / 'env/custom').write_text('CFLAGS="-O2"\n')
+        self.assertEqual(snapshot.catalog_info('other/removed')['state'], 'indeterminate')
+        self.assertEqual(self.backend.snapshot().catalog_info('other/removed')['state'], 'disabled')
+
+    def test_tui_can_clear_graph_exclusions(self):
+        from unittest import mock
+        import types
+        self.apply(values={'disabled_graph_optimizations':'monitor'})
+        keys = iter([ord(' '), ord('c'), ord('r'), 10, ord('s'), ord('q')])
+        replies = iter([b'none', *([b''] * (len(m.OPTIONS)-1))])
+        screen = mock.Mock()
+        screen.getmaxyx.return_value = (30, 120)
+        screen.getch.side_effect = lambda: next(keys)
+        screen.getstr.side_effect = lambda *args: next(replies)
+        fake = types.SimpleNamespace(KEY_DOWN=258, KEY_UP=259, echo=lambda:None, noecho=lambda:None, wrapper=lambda run:run(screen))
+        with mock.patch.dict('sys.modules', curses=fake), mock.patch.object(m, 'save', side_effect=lambda b, p:b.apply(p)):
+            m.tui(self.backend)
+        self.assertEqual(self.backend.show('cat/pkg')['settings']['disabled_graph_optimizations'], '')
+
+    def test_snapshot_large_catalog_and_external_edit(self):
+        from unittest import mock
+        (self.root / 'package.env').write_text('cat/pkg custom\n')
+        (self.root / 'env').mkdir()
+        (self.root / 'env/custom').write_text('CFLAGS="-O2"\n')
+        for count in (1000, 10000, 30000):
+            with self.subTest(count=count), mock.patch.object(self.backend, 'read', wraps=self.backend.read) as read:
+                snapshot = self.backend.snapshot()
+                for index in range(count): snapshot.show(f'cat/pkg{index}')
+                self.assertEqual(read.call_count, 2)
+        snapshot = self.backend.snapshot()
+        self.assertEqual(snapshot.show('cat/pkg')['state'], 'disabled')
+        (self.root / 'env/custom').write_text('export MAKE=/usr/bin/omktr-portage\n')
+        self.assertEqual(snapshot.show('cat/pkg')['state'], 'disabled')
+        self.assertEqual(self.backend.snapshot().show('cat/pkg')['state'], 'indeterminate')
+
+    def test_legacy_configuration_and_new_options(self):
+        import hashlib
+        values = m.settings({'jobs':'4'})
+        name = m.PREFIX + hashlib.sha256(b'cat/pkg').hexdigest()[:24]
+        (self.root / 'env').mkdir()
+        path = self.root / 'env' / name
+        path.write_text(m.environment(values, legacy=True))
+        (self.root / 'package.env').write_text('cat/pkg ' + name + '\n')
+        self.assertEqual(self.backend.show('cat/pkg')['state'], 'managed')
+        self.apply(values={'build_stats':True, 'regen_debug':True, 'disabled_graph_optimizations':'monitor,evaluation'})
+        info = self.backend.show('cat/pkg')
+        self.assertEqual(info['settings']['disabled_graph_optimizations'], 'evaluation,monitor')
+        self.assertTrue(info['settings']['build_stats'])
+        path.write_text(path.read_text() + '# custom edit\n')
+        self.assertEqual(self.backend.show('cat/pkg')['state'], 'indeterminate')
+        with self.assertRaises(ValueError): m.settings({'disabled_graph_optimizations':'unknown'})
+
     def test_batch_and_idempotency(self):
         self.apply(packages=['cat/a', 'cat/b'])
         self.assertEqual(self.backend.show('cat/a')['state'], 'managed')
