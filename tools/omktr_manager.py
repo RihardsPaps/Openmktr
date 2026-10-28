@@ -519,6 +519,7 @@ def gui(backend):
             fields[key].state(['alternate'] if value is None else ['!alternate'])
             fields[key].configure(text='Mixed (unchanged)' if value is None else 'Enabled')
         loading = False
+        controls()
 
     for name, keys in groups:
         page = ttk.Frame(tabs, padding=16)
