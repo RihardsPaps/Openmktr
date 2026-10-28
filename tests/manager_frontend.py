@@ -45,6 +45,17 @@ class NativeTk(unittest.TestCase):
                     performance = view['pages']['Performance']
                     inherit_jobs = next(w for w in performance.winfo_children() if w.winfo_class() == 'TCheckbutton' and str(w.cget('variable')) == str(view['inherits']['jobs']))
                     jobs_entry = next(w for w in performance.winfo_children() if w.winfo_class() == 'TEntry' and str(w.cget('textvariable')) == str(view['variables']['jobs']))
+                    release_workspace = threading.Event()
+                    def slow_workspace(request):
+                        release_workspace.wait(5)
+                        return '[]'
+                    with mock.patch.object(m, 'workspace', side_effect=slow_workspace):
+                        view['operation']('list'); root.update()
+                        self.assertTrue(inherit_jobs.instate(['disabled']))
+                        inherit_jobs.invoke()
+                        self.assertFalse(view['inherits']['jobs'].get())
+                        release_workspace.set()
+                        wait(lambda: not inherit_jobs.instate(['disabled']))
                     inherit_jobs.invoke()
                     self.assertTrue(jobs_entry.instate(['disabled']))
                     reset_jobs = next(w for w in performance.winfo_children() if w.winfo_class() == 'TButton' and int(w.grid_info()['row']) == 1)
@@ -64,6 +75,17 @@ class NativeTk(unittest.TestCase):
                     performance = view['pages']['Performance']
                     inherit_jobs = next(w for w in performance.winfo_children() if w.winfo_class() == 'TCheckbutton' and str(w.cget('variable')) == str(view['inherits']['jobs']))
                     jobs_entry = next(w for w in performance.winfo_children() if w.winfo_class() == 'TEntry' and str(w.cget('textvariable')) == str(view['variables']['jobs']))
+                    release_workspace = threading.Event()
+                    def slow_workspace(request):
+                        release_workspace.wait(5)
+                        return '[]'
+                    with mock.patch.object(m, 'workspace', side_effect=slow_workspace):
+                        view['operation']('list'); root.update()
+                        self.assertTrue(inherit_jobs.instate(['disabled']))
+                        inherit_jobs.invoke()
+                        self.assertFalse(view['inherits']['jobs'].get())
+                        release_workspace.set()
+                        wait(lambda: not inherit_jobs.instate(['disabled']))
                     inherit_jobs.invoke()
                     self.assertTrue(jobs_entry.instate(['disabled']))
                     reset_jobs = next(w for w in performance.winfo_children() if w.winfo_class() == 'TButton' and int(w.grid_info()['row']) == 1)

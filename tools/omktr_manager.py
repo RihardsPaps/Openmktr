@@ -486,6 +486,8 @@ def gui(backend):
     tabs = ttk.Notebook(editor)
     tabs.pack(fill='both', expand=True)
     variables, fields, inherits, pages = {}, {}, {}, {}
+    inherit_fields = {}
+    reset_buttons = []
     groups = [('Build', ('mode', 'strict')), ('Performance', ('jobs', 'load', 'graph', 'recursive_cache')), ('Workspaces', ('workspace', 'root'))]
     labels = dict(mode='Build mode', strict='Strict compatibility', jobs='Parallel jobs', load='Load limit', graph='Graph optimizations', recursive_cache='Recursive no-op cache', workspace='Persistent workspace', root='Workspace cache root')
     error = tk.StringVar(app)
@@ -542,11 +544,14 @@ def gui(backend):
                 variable.trace_add('write', lambda *args, k=key: changed(k))
             fields[key] = field
             field.grid(row=row+1, column=0, sticky='ew')
-            ttk.Button(page, text='Keep existing', command=lambda k=key: reset(k)).grid(row=row+1, column=1, padx=(8, 0))
+            reset_button = ttk.Button(page, text='Keep existing', command=lambda k=key: reset(k))
+            reset_button.grid(row=row+1, column=1, padx=(8, 0))
+            reset_buttons.append(reset_button)
             ttk.Label(page, text=help_text, wraplength=440).grid(row=row+2, column=0, columnspan=2, sticky='w', pady=(4, 6))
             if key in ('jobs', 'load'):
                 inherits[key] = tk.BooleanVar(app)
-                ttk.Checkbutton(page, text='Inherit from Portage', variable=inherits[key], command=lambda k=key: changed(k)).grid(row=row+3, column=0, sticky='w')
+                inherit_fields[key] = ttk.Checkbutton(page, text='Inherit from Portage', variable=inherits[key], command=lambda k=key: changed(k))
+                inherit_fields[key].grid(row=row+3, column=0, sticky='w')
     review = ttk.Frame(tabs, padding=12)
     tabs.add(review, text='Review')
     summary = tk.StringVar(app, value='Review changes to see the affected packages and exact file diff.')
@@ -574,6 +579,8 @@ def gui(backend):
         valid = bool(selected) and not any(s in ('conflicting', 'indeterminate') for s in states)
         for widget, enabled in ((configure, valid and 'manual' not in states), (adopt, valid and 'manual' in states), (disable, valid and 'manual' not in states), (save_button, bool(controller.pending))):
             widget.configure(state='normal' if enabled and not busy and (widget == save_button or not controller.pending) else 'disabled')
+        for widget in [*inherit_fields.values(), *reset_buttons]:
+            widget.configure(state='normal' if valid and not busy and not controller.pending else 'disabled')
         for key, field in fields.items():
             inherited = key in inherits and inherits[key].get()
             field.configure(state='disabled' if not valid or busy or controller.pending or inherited else 'readonly' if isinstance(field, ttk.Combobox) else 'normal')
