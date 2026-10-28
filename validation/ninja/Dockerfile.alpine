@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MPL-2.0
+# External release comparison environment. GNU prerequisites stay outside core.
+ARG BASE_IMAGE=openmktr-alpine
+FROM ${BASE_IMAGE}
+RUN apk add --no-cache make bison flex perl pkgconf linux-headers elfutils-dev \
+      openssl-dev bc nasm sed m4 dash llvm22
+# Historical reference graphs use shell -nt; both tools need precise timestamps.
+# The independent Alpine core lane retains BusyBox and tests the native fix.
+RUN ln -sf /usr/bin/dash /bin/sh
+COPY validation/ninja/reproducible-date /opt/openmktr-campaign-tools/date
+RUN chmod 755 /opt/openmktr-campaign-tools/date
+ENV PATH=/opt/openmktr-campaign-tools:/usr/lib/llvm22/bin:${PATH}
+ENV M4=/usr/bin/m4
+WORKDIR /campaign
+ENTRYPOINT []
+CMD ["/bin/sh"]

@@ -1,20 +1,22 @@
 # SPDX-License-Identifier: MPL-2.0
 # External glibc comparison environment, separate from the GNU-free core.
-FROM gentoo/stage3:latest
+FROM gentoo/stage3@sha256:1ca7647d1ce968d02c2858ee4201e2173675fd3fc0754a8acd583d9288b75478
 # Only the native ABI is needed; avoid optional 32-bit runtime builds.
 RUN mkdir -p /etc/portage/package.use && \
     printf '%s\n' 'llvm-runtimes/libcxx -abi_x86_32' \
       'llvm-runtimes/libcxxabi -abi_x86_32' \
       'llvm-runtimes/libunwind -abi_x86_32' > /etc/portage/package.use/openmktr
 RUN emerge-webrsync && emerge --getbinpkg --jobs=4 \
-      llvm-core/clang llvm-core/lld llvm-runtimes/libcxx dev-build/ninja dev-lang/python dev-vcs/git
+      llvm-core/clang llvm-core/lld llvm-runtimes/libcxx '>=dev-build/ninja-1.13.2' '>=dev-lang/python-3.14' dev-vcs/git
 # External qualification dependencies: exercise Ninja alternatives and the
 # recursive Automake libpipeline package's upstream tests.
 RUN emerge --getbinpkg --oneshot --jobs=4 dev-build/samurai dev-libs/check
+# Keep the FIFO-capable reference Ninja available when Samurai is the system alternative.
+RUN mkdir -p /opt/openmktr-ninja && ln -s /usr/bin/ninja-reference /opt/openmktr-ninja/ninja
 WORKDIR /workspace
 COPY . .
 ARG OMKTR_SOURCE_REVISION
 ENV OMKTR_SOURCE_REVISION=$OMKTR_SOURCE_REVISION
-RUN . /etc/profile && ninja -j4 omktr tests
+RUN . /etc/profile && PATH=/opt/openmktr-ninja:$PATH ninja -j4 omktr tests
 ENTRYPOINT ["sh", "validation/compatibility/gentoo-environment.sh"]
 CMD ["sh", "validation/compatibility/check.sh"]

@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: MPL-2.0
 
 EAPI=8
-LLVM_COMPAT=( {19..22} )
-PYTHON_COMPAT=( python3_{11..14} )
+LLVM_COMPAT=( {22..23} )
+PYTHON_COMPAT=( python3_{14..15} )
 NINJA=ninja-reference
 
 inherit git-r3 llvm-r2 ninja-utils python-single-r1
@@ -22,10 +22,11 @@ RESTRICT="!test? ( test )"
 
 RDEPEND="llvm-runtimes/libcxx:=
 	${PYTHON_DEPS}
-	>=dev-build/ninja-1.13"
+	>=dev-build/ninja-1.13.2"
 DEPEND="llvm-runtimes/libcxx:="
 BDEPEND="${PYTHON_DEPS}
-	${NINJA_DEPEND}
+	>=dev-build/ninja-1.13.2
+	test? ( app-arch/zstd )
 	$(llvm_gen_dep '
 		llvm-core/clang:${LLVM_SLOT}
 		llvm-core/lld:${LLVM_SLOT}

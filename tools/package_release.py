@@ -25,6 +25,9 @@ LICENSE_FILES = (
 )
 SUPPORT_FILES = {'bin/omktr-workspace': 'tools/omktr_workspace.py',
                  'docs/workspaces.md': 'docs/workspaces.md',
+                 'docs/dependencies.md': 'docs/dependencies.md',
+                 'tools/dependencies.json': 'tools/dependencies.json',
+                 'tools/chimera-packages.lock': 'tools/chimera-packages.lock',
                  'packaging/gentoo/README.md': 'packaging/gentoo/README.md'}
 
 
@@ -92,9 +95,13 @@ image from Dockerfile. It requires musl and compatible LLVM libc++ runtime
 libraries. It is not a standalone binary for glibc Linux. Install the matching
 runtime libraries from your musl distribution. Ninja is required for generated
 graphs; recipes use the shell and tools supplied by your Makefile.
-The optional `omktr workspace` frontend additionally requires Python 3.11 or
-newer with its standard-library lzma module. See docs/workspaces.md for persistent
-incremental workspaces and idle compression.
+The optional `omktr workspace` frontend additionally requires Python 3.14 or
+newer with its standard-library lzma module (and compression.zstd or the
+distribution zstd executable for Zstandard).
+Ninja workflows require Ninja 1.13.2 or newer. See docs/workspaces.md for persistent
+incremental workspaces and idle compression. The tested toolchain versions and
+reference image digest are included in tools/dependencies.json and
+tools/chimera-packages.lock; see docs/dependencies.md for the upgrade policy.
 
 Extract this archive, then run ./{prefix}/bin/omktr --version. Keep the accompanying
 LICENSE, NOTICE, LICENSES/, and docs/LICENSING.md when redistributing it.

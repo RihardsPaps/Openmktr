@@ -2,7 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-"""Persistent, version-independent build workspaces and idle xz compression."""
+"""Persistent, version-independent build workspaces and idle compression."""
 
 import argparse
 from contextlib import contextmanager
@@ -24,6 +24,8 @@ import time
 
 
 SCHEMA = 1
+DEFAULT_COMPRESSION = "xz"
+ARCHIVES = {"xz": "content.tar.xz", "zstd": "content.tar.zst"}
 CONFIG_ENV = ("CC", "CXX", "CPP", "LD", "AR", "AS", "NM", "RANLIB",
               "CFLAGS", "CXXFLAGS", "CPPFLAGS", "LDFLAGS", "CHOST", "CBUILD",
               "CTARGET", "SYSROOT", "PKG_CONFIG_PATH", "PKG_CONFIG_LIBDIR",
@@ -285,11 +287,63 @@ def synchronize(source, destination, state, workspace, force=False):
     return changed
 
 
-def pack(workspace, state):
+def has_zstd_module():
+    try:
+        from compression import zstd
+        return True
+    except ImportError:
+        return False
+
+
+@contextmanager
+def workspace_archive(path, compression=None):
+    writing = compression is not None
+    if not writing:
+        with path.open("rb") as stream:
+            compression = "zstd" if stream.read(4) == b"\x28\xb5\x2f\xfd" else "xz"
+    if compression != "zstd" or has_zstd_module():
+        options = dict(format=tarfile.PAX_FORMAT) if writing else {}
+        if writing:
+            options.update(dict(preset=6) if compression == "xz" else dict(level=3))
+        mode = ("w:xz" if compression == "xz" else "w:zst") if writing else "r:*"
+        with tarfile.open(path, mode, **options) as archive:
+            yield archive
+        return
+    # Alpine's stable Python omits _zstd. Keep the same archive format through
+    # its distribution compressor; the reference path still uses Python's module.
+    compressor = shutil.which("zstd")
+    if not compressor:
+        raise RuntimeError("Zstandard requires Python's compression.zstd module or the zstd command")
+    # A private, unnamed spool avoids pipe deadlocks and is removed on signals
+    # and exceptions. Verification and publication remain in the caller.
+    with tempfile.TemporaryFile(dir=path.parent) as spool:
+        if writing:
+            with tarfile.open(fileobj=spool, mode="w:", format=tarfile.PAX_FORMAT) as archive:
+                yield archive
+            spool.seek(0)
+            with path.open("wb") as output:
+                status = subprocess.run([compressor, "-q", "-3", "-c"], stdin=spool,
+                                        stdout=output, stderr=subprocess.PIPE)
+        else:
+            with path.open("rb") as incoming:
+                status = subprocess.run([compressor, "-q", "-d", "-c"], stdin=incoming,
+                                        stdout=spool, stderr=subprocess.PIPE)
+            if status.returncode == 0:
+                spool.seek(0)
+                with tarfile.open(fileobj=spool, mode="r:") as archive:
+                    yield archive
+        if status.returncode:
+            raise RuntimeError("Zstandard command failed: " + status.stderr.decode(errors="replace").strip())
+
+
+def pack(workspace, state, compression=DEFAULT_COMPRESSION):
     check_owner(state)
     require_synchronized(state)
     if state.get("packed"):
-        return dict(already_packed=True)
+        stored_format = state.get("archive_format", "xz")
+        if stored_format not in ARCHIVES:
+            raise RuntimeError("unsupported workspace archive format")
+        return dict(already_packed=True, compression=stored_format)
     content = workspace / "content"
     entries = tree(content)
     if any(item.get("links", 1) > 1 for item in entries.values()):
@@ -298,7 +352,7 @@ def pack(workspace, state):
     os.close(fd)
     original_bytes = sum(v["identity"][3] for v in entries.values() if v["kind"] == "file")
     try:
-        with tarfile.open(temporary, "w:xz", preset=6, format=tarfile.PAX_FORMAT) as archive:
+        with workspace_archive(Path(temporary), compression) as archive:
             for name, item in sorted(entries.items()):
                 path = content / name
                 member = tarfile.TarInfo("payload/" + name)
@@ -325,10 +379,10 @@ def pack(workspace, state):
         # A concurrent external write or an interrupted archive cannot destroy
         # the only usable copy of the workspace.
         restore_archive(Path(temporary))
-        archive_path = workspace / "content.tar.xz"
+        archive_path = workspace / ARCHIVES[compression]
         checksum = digest(Path(temporary))
         os.replace(temporary, archive_path)
-        state.update(packed=True, archive_sha256=checksum)
+        state.update(packed=True, archive_sha256=checksum, archive_format=compression)
         atomic_json(workspace / "state.json", state)
         detached = workspace / ".packed-content"
         if detached.exists():
@@ -338,7 +392,8 @@ def pack(workspace, state):
         (content / "source").mkdir(parents=True)
         remove_owned(detached, workspace)
         (workspace / "inputs.json").unlink(missing_ok=True)
-        return dict(original_bytes=original_bytes, compressed_bytes=archive_path.stat().st_size)
+        return dict(original_bytes=original_bytes, compressed_bytes=archive_path.stat().st_size,
+                    compression=compression)
     finally:
         Path(temporary).unlink(missing_ok=True)
 
@@ -346,7 +401,7 @@ def pack(workspace, state):
 def restore_archive(archive_path, staging=None):
     # No tarfile extraction API is used: parent types are checked and links
     # are created last, so neither absolute links nor .. can redirect writes.
-    with tarfile.open(archive_path, "r:xz") as archive:
+    with workspace_archive(archive_path) as archive:
         inventory = archive.getmembers()
         if sum(m.name == "manifest.json" for m in inventory) != 1:
             raise RuntimeError("workspace archive is missing its manifest")
@@ -408,7 +463,10 @@ def restore_archive(archive_path, staging=None):
 def unpack(workspace, state):
     if not state.get("packed"):
         return
-    archive_path = workspace / "content.tar.xz"
+    compression = state.get("archive_format", "xz")
+    if compression not in ARCHIVES:
+        raise RuntimeError("unsupported workspace archive format")
+    archive_path = workspace / ARCHIVES[compression]
     if digest(archive_path) != state["archive_sha256"]:
         raise RuntimeError("workspace archive checksum mismatch; expanded files were not replaced")
     staging = Path(tempfile.mkdtemp(prefix=".restore-", dir=workspace))
@@ -422,6 +480,7 @@ def unpack(workspace, state):
         atomic_json(workspace / "inputs.json", manifest["inputs"])
         state["last_used"] = time.time()
         state.pop("archive_sha256", None)
+        state.pop("archive_format", None)
         atomic_json(workspace / "state.json", state)
         archive_path.unlink()
         detached = workspace / ".packed-content"
@@ -591,6 +650,8 @@ def portage_context():
 
 
 def main():
+    if sys.version_info < (3, 14):
+        raise RuntimeError("workspace commands require Python 3.14 or newer")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("run", "path", "status", "pack", "unpack", "gc",
                                            "portage-prepare", "portage-enter"))
@@ -604,6 +665,8 @@ def main():
     layout.add_argument("--in-source", dest="out_of_tree", action="store_false")
     parser.add_argument("--configure", help="explicit POSIX shell command; workspace paths are exported")
     parser.add_argument("--idle-seconds", type=float, default=3600)
+    parser.add_argument("--compression", choices=tuple(ARCHIVES), default=None,
+                        help="packing format for pack/gc (default: " + DEFAULT_COMPRESSION + ")")
     # REMAINDER is split explicitly so workspace options remain ordinary options.
     arguments = sys.argv[1:]
     command = []
@@ -611,6 +674,9 @@ def main():
         split = arguments.index("--")
         arguments, command = arguments[:split], arguments[split + 1:]
     args = parser.parse_args(arguments)
+    if args.compression is not None and args.action not in ("pack", "gc"):
+        parser.error("--compression applies only to pack and gc")
+    args.compression = args.compression or DEFAULT_COMPRESSION
     root = args.root.resolve()
     root.mkdir(parents=True, exist_ok=True)
     cache_owner = root.stat()
@@ -639,7 +705,7 @@ def main():
                         workspace, state = current_profile(base, {**index, "current": key})
                         if not state.get("packed") and time.time() - state["last_used"] >= args.idle_seconds:
                             try:
-                                pack(workspace, state)
+                                pack(workspace, state, args.compression)
                                 count += 1
                             except WorkspaceBusy:
                                 pass
@@ -718,7 +784,7 @@ def main():
         if args.action != "status":
             check_owner(state, owner)
         if args.action == "pack":
-            print(json.dumps(pack(workspace, state)))
+            print(json.dumps(pack(workspace, state, args.compression)))
         elif args.action in ("unpack", "portage-enter"):
             if owner and state.get("owner") != owner:
                 raise WorkspaceBusy("workspace is leased to a different Portage build")
@@ -740,6 +806,7 @@ def main():
             print(paths(workspace, state)[1])
         else:
             print(json.dumps(dict(name=args.name, profile=str(workspace), packed=state.get("packed", False),
+                                  archive_format=state.get("archive_format", "xz") if state.get("packed") else None,
                                   active_owner=bool(state.get("owner") and owner_busy(state["owner"])),
                                   synchronization_pending=state.get("sync_pending"),
                                   source=state.get("source"), input_count=state.get("input_count", 0),

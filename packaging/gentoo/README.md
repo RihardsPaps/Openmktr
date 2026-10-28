@@ -40,7 +40,7 @@ Then run `emerge --ask dev-build/openmktr::openmktr`. The ebuild installs
 It declares LLVM/libc++ build requirements and Python/Ninja runtime dependencies. It honors
 `CPPFLAGS`, `CXXFLAGS`, and `LDFLAGS` while selecting C++17, libc++, and LLD.
 The Gentoo build invokes `/usr/bin/ninja-reference` explicitly at runtime and
-requires Ninja 1.13 or newer. Your system's `ninja` alternative may remain Samurai;
+requires Ninja 1.13.2 or newer. Your system's `ninja` alternative may remain Samurai;
 installing Openmktr does not change that alternative. The portable source build
 continues to use `ninja` from `PATH` unless configured at build time with
 `OMKTR_NINJA_EXECUTABLE`.
@@ -130,6 +130,9 @@ compresses idle profiles; `pack --name CATEGORY/PN:SLOT:CHOST --root ...` packs 
 selected profile immediately. The next prepared build restores it before use.
 See [workspace usage and compression](../../docs/workspaces.md) for standalone
 commands, cache ownership, configuration isolation and recovery behavior.
+Zstandard uses Python's module when installed and otherwise the distribution
+`zstd` executable. `USE=test` installs `app-arch/zstd` to exercise that alternative
+backend and its interoperability with Python archives. XZ remains the default.
 
 ## Load limits and troubleshooting
 

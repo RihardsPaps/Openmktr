@@ -1,0 +1,960 @@
+{
+  "schema": 1,
+  "resolved_on": "2026-10-27",
+  "policy": "Current stable upstream inputs; distribution-supported host toolchains; historical campaigns preserved",
+  "components": [
+    {
+      "id": "autoconf",
+      "version": "2.73",
+      "source": "https://ftp.gnu.org/gnu/autoconf/autoconf-2.73.tar.xz",
+      "archive": "autoconf-2.73.tar.xz",
+      "sha256": "9fd672b1c8425fac2fa67fa0477b990987268b90ff36d5f016dae57be0d6b52e",
+      "release_metadata": "https://ftp.gnu.org/gnu/autoconf/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "automake",
+      "version": "1.19",
+      "source": "https://ftp.gnu.org/gnu/automake/automake-1.19.tar.xz",
+      "archive": "automake-1.19.tar.xz",
+      "sha256": "e3e2c2e3abf37898138db5b6c1d1dc35c9160c5978be7947d2c741705251d445",
+      "release_metadata": "https://ftp.gnu.org/gnu/automake/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "binutils",
+      "version": "2.47",
+      "source": "https://ftp.gnu.org/gnu/binutils/binutils-2.47.tar.xz",
+      "archive": "binutils-2.47.tar.xz",
+      "sha256": "154ab23b60070e8f27013c22977f1129425d67d1e8acd6e13010e617811e4cff",
+      "release_metadata": "https://ftp.gnu.org/gnu/binutils/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "buildroot",
+      "version": "2026.08.1",
+      "source": "https://buildroot.org/downloads/buildroot-2026.08.1.tar.xz",
+      "archive": "buildroot-2026.08.1.tar.xz",
+      "sha256": "34fb7bea8a213ffde39cc02e61703391560f26e0850f03138c722d0b09880f2b",
+      "status": "pending qualification",
+      "release_metadata": "https://buildroot.org/download.html",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "busybox",
+      "version": "1.38.0",
+      "source": "https://busybox.net/downloads/busybox-1.38.0.tar.bz2",
+      "archive": "busybox-1.38.0.tar.bz2",
+      "sha256": "34f9ea6ff8636f2c9241153b9114eefa9e65674a45318ae1ef95bb5f31c53bb2",
+      "release_metadata": "https://busybox.net/downloads/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "coreboot",
+      "version": "26.09",
+      "source": "https://coreboot.org/releases/coreboot-26.09.tar.xz",
+      "archive": "coreboot-26.09.tar.xz",
+      "sha256": "cd980020c811627fe816eee933de15723681c9bcf370f7a680c41f0663c207da",
+      "release_metadata": "https://coreboot.org/releases/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "emacs",
+      "version": "31.1",
+      "source": "https://ftp.gnu.org/gnu/emacs/emacs-31.1.tar.xz",
+      "archive": "emacs-31.1.tar.xz",
+      "sha256": "1da5790d9580c81932b5bf700633114468da7b3412d69faa767daebf974f4586",
+      "release_metadata": "https://ftp.gnu.org/gnu/emacs/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "ffmpeg",
+      "version": "9.0.2",
+      "source": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+      "archive": "ffmpeg-9.0.2.tar.xz",
+      "directory": "ffmpeg-9.0.2",
+      "sha256": "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e",
+      "status": "selected configuration passed correctness; aggressive performance gate failed",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true,
+      "qualification": {
+        "configuration": "Clang default enabled components; autodetect/doc/debug disabled",
+        "profiles": [
+          "safe",
+          "aggressive"
+        ],
+        "jobs": [
+          8,
+          16
+        ],
+        "scenarios": [
+          "clean",
+          "noop",
+          "single-source"
+        ],
+        "direct": "clean and repeat passed",
+        "evidence": "dependency-upgrade-results.json",
+        "performance": "six scenarios measured; seven pairs after one warmup; all supported regressions"
+      }
+    },
+    {
+      "id": "gcc",
+      "version": "16.2.0",
+      "source": "https://ftp.gnu.org/gnu/gcc/gcc-16.2.0/gcc-16.2.0.tar.xz",
+      "archive": "gcc-16.2.0.tar.xz",
+      "sha256": "e6738e29597f733270731aa90600f37ffdc045079dfc27ec7e8192cc81085c3e",
+      "release_metadata": "https://ftp.gnu.org/gnu/gcc/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "gdb",
+      "version": "18.1",
+      "source": "https://ftp.gnu.org/gnu/gdb/gdb-18.1.tar.xz",
+      "archive": "gdb-18.1.tar.xz",
+      "sha256": "cd9fc3fe2b47743840e42c1592d3d87f8302eb18639c0b8b4ba0898002e2348f",
+      "release_metadata": "https://ftp.gnu.org/gnu/gdb/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "git",
+      "version": "2.56.0",
+      "source": "https://www.kernel.org/pub/software/scm/git/git-2.56.0.tar.xz",
+      "archive": "git-2.56.0.tar.xz",
+      "sha256": "26c56c296b38c0695b26fa95f475f1d01704d2d38e73465ca30b0b2f5dc789d3",
+      "release_metadata": "https://www.kernel.org/pub/software/scm/git/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "glibc",
+      "version": "2.44",
+      "source": "https://ftp.gnu.org/gnu/glibc/glibc-2.44.tar.xz",
+      "archive": "glibc-2.44.tar.xz",
+      "sha256": "37f600f2bef3c5e8300147059568b2a2e40a7ad6ccc65ce942556d49429cc667",
+      "release_metadata": "https://ftp.gnu.org/gnu/glibc/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "grub",
+      "version": "2.14",
+      "source": "https://ftp.gnu.org/gnu/grub/grub-2.14.tar.xz",
+      "archive": "grub-2.14.tar.xz",
+      "sha256": "bc8d3c73535b8838d8c8e2654d73edc4e6ae8c8acdb45d5df5dc9a1547446d43",
+      "release_metadata": "https://ftp.gnu.org/gnu/grub/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "guile",
+      "version": "3.0.11",
+      "source": "https://ftp.gnu.org/gnu/guile/guile-3.0.11.tar.xz",
+      "archive": "guile-3.0.11.tar.xz",
+      "sha256": "818c79d236657a7fa96fb364137cc7b41b3bdee0d65c6174ca03769559579460",
+      "release_metadata": "https://ftp.gnu.org/gnu/guile/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "guix",
+      "version": "1.5.0",
+      "source": "https://ftp.gnu.org/gnu/guix/guix-1.5.0.tar.gz",
+      "archive": "guix-1.5.0.tar.gz",
+      "sha256": "df2102eed00aff0b17275654a42f094c8a1117ec065884eb1ff76005e47415c5",
+      "release_metadata": "https://ftp.gnu.org/gnu/guix/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "imagemagick",
+      "version": "7.1.2-34",
+      "source": "https://github.com/ImageMagick/ImageMagick/releases/download/7.1.2-34/ImageMagick-7.1.2-34.tar.xz",
+      "archive": "ImageMagick-7.1.2-34.tar.xz",
+      "sha256": "55fe0ec246245b46c429f9e6bc65294ad4a78a66b88abd9817971ca157856323",
+      "status": "pending qualification",
+      "release_metadata": "https://github.com/ImageMagick/ImageMagick/releases/tag/7.1.2-34",
+      "hash_provenance": "Publisher SHA-256 verified against the downloaded official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "lapack",
+      "version": "3.12.1",
+      "source": "https://github.com/Reference-LAPACK/lapack/archive/refs/tags/v3.12.1.tar.gz",
+      "archive": "lapack-3.12.1.tar.gz",
+      "sha256": "2ca6407a001a474d4d4d35f3a61550156050c48016d949f0da0529c0aa052422",
+      "status": "pending qualification",
+      "release_metadata": "https://github.com/Reference-LAPACK/lapack/tree/v3.12.1",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "libreoffice",
+      "version": "26.8.2.2",
+      "source": "https://download.documentfoundation.org/libreoffice/src/26.8.2/libreoffice-26.8.2.2.tar.xz",
+      "archive": "libreoffice-26.8.2.2.tar.xz",
+      "sha256": "f0012302d9cc70955bd55890d3aaccf6c55677c4a6a46e1003f996b1b0dae8e7",
+      "release_metadata": "https://download.documentfoundation.org/libreoffice/src/26.8.2/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "libtool",
+      "version": "2.6.2",
+      "source": "https://ftp.gnu.org/gnu/libtool/libtool-2.6.2.tar.xz",
+      "archive": "libtool-2.6.2.tar.xz",
+      "sha256": "2ef1067c16c97db930fd740cc9bc3d3ba9a583804ae5ac42cc3e8719e49e191e",
+      "release_metadata": "https://ftp.gnu.org/gnu/libtool/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "libx11",
+      "version": "1.8.14",
+      "source": "https://xorg.freedesktop.org/archive/individual/lib/libX11-1.8.14.tar.xz",
+      "archive": "libX11-1.8.14.tar.xz",
+      "sha256": "bbc78c46217174655c2b32b138ad119f3ac15f50808b4d0b3a2677a4b1afc950",
+      "release_metadata": "https://xorg.freedesktop.org/archive/individual/lib/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "libxext",
+      "version": "1.3.7",
+      "source": "https://xorg.freedesktop.org/archive/individual/lib/libXext-1.3.7.tar.xz",
+      "archive": "libXext-1.3.7.tar.xz",
+      "sha256": "6c643c7035cdacf67afd68f25d01b90ef889d546c9fcd7c0adf7c2cf91e3a32d",
+      "release_metadata": "https://xorg.freedesktop.org/archive/individual/lib/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "linux",
+      "version": "7.3",
+      "source": "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.3.tar.xz",
+      "archive": "linux-7.3.tar.xz",
+      "directory": "linux-7.3",
+      "sha256": "87363c24f10e06321eb362765521094e94471f6bff8bce2d6b3e40f39f004953",
+      "status": "selected x86 defconfig passed correctness; complete six-scenario regression comparison failed strict performance gate",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true,
+      "qualification": {
+        "configuration": "x86 defconfig; LLVM=1 LLVM_IAS=1 HOSTCC=clang HOSTCXX=clang++",
+        "comparison": "Historical baseline revision 58bb206 versus final FIFO candidate; independent from same-binary profile promotion",
+        "candidate_sha256": "8027d04f6693a10801536d4e17da008b98595eb42875a652ee3e93eefbd240cf",
+        "jobs": [
+          8,
+          16
+        ],
+        "scenarios": [
+          "clean",
+          "noop",
+          "single-source"
+        ],
+        "protocol": "one discarded warmup pair; seven alternating measured pairs per scenario",
+        "direct": "candidate safe/default, j8 clean and repeat passed",
+        "checks": [
+          "ELF x86_64 and bzImage HdrS headers",
+          "matching vmlinux/bzImage hashes across all fresh modes/scenarios",
+          "unchanged configuration",
+          "required init/main.o rebuilt; unrelated kernel/fork.o unchanged",
+          "no object changes on repeats",
+          "release source contents unchanged"
+        ],
+        "evidence": "dependency-followup-results.json",
+        "performance_gate_passed": false,
+        "limits": "No boot test, all-architecture claim or twelve-scenario same-binary profile promotion established."
+      },
+      "initial_qualification": {
+        "configuration": "x86 defconfig; LLVM=1 LLVM_IAS=1 HOSTCC=clang HOSTCXX=clang++",
+        "ninja_modes": [
+          {
+            "profile": "safe",
+            "jobs": 8
+          },
+          {
+            "profile": "aggressive",
+            "jobs": 16
+          }
+        ],
+        "direct": {
+          "jobs": 8
+        },
+        "scenarios": [
+          "clean",
+          "noop",
+          "single-source"
+        ],
+        "checks": [
+          "ELF x86_64 and bzImage HdrS headers",
+          "matching vmlinux/bzImage hashes across all fresh modes/scenarios",
+          "unchanged configuration",
+          "required init/main.o rebuilt; unrelated kernel/fork.o unchanged",
+          "no object changes on repeats",
+          "release source contents unchanged"
+        ],
+        "evidence": "dependency-upgrade-results.json",
+        "limits": "No boot test, all-architecture claim, complete j8/j16 performance matrix, or historical performance regression fix established."
+      }
+    },
+    {
+      "id": "llvm",
+      "version": "23.1.4",
+      "source": "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.4/llvm-project-23.1.4.src.tar.xz",
+      "archive": "llvm-project-23.1.4.src.tar.xz",
+      "sha256": "819ecf7351f1a66f76b2d701d8942faaf5faeb324cb90c9d5b090de142434bb2",
+      "status": "pending qualification",
+      "release_metadata": "https://github.com/llvm/llvm-project/releases/tag/llvmorg-23.1.4",
+      "hash_provenance": "Publisher SHA-256 verified against the downloaded official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "m4",
+      "version": "1.4.21",
+      "source": "https://ftp.gnu.org/gnu/m4/m4-1.4.21.tar.xz",
+      "archive": "m4-1.4.21.tar.xz",
+      "sha256": "f25c6ab51548a73a75558742fb031e0625d6485fe5f9155949d6486a2408ab66",
+      "release_metadata": "https://ftp.gnu.org/gnu/m4/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "make",
+      "version": "4.4.1",
+      "source": "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz",
+      "archive": "make-4.4.1.tar.gz",
+      "sha256": "dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3",
+      "release_metadata": "https://ftp.gnu.org/gnu/make/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "mariadb",
+      "version": "13.0.2",
+      "source": "https://archive.mariadb.org/mariadb-13.0.2/source/mariadb-13.0.2.tar.gz",
+      "archive": "mariadb-13.0.2.tar.gz",
+      "sha256": "8ee8d955530faedcea344535de85495afb5b98128bbf660e56893e93e21ee8f7",
+      "status": "pending qualification",
+      "release_metadata": "https://mariadb.org/mariadb/all-releases/",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "mesa",
+      "version": "26.2.5",
+      "source": "https://archive.mesa3d.org/mesa-26.2.5.tar.xz",
+      "archive": "mesa-26.2.5.tar.xz",
+      "sha256": "794b3d1729075dae7ebd47c7283b7ca0cdb5dec668f7f11cc0a5d82f6138a0a5",
+      "release_metadata": "https://archive.mesa3d.org/",
+      "status": "inapplicable to Make compatibility qualification",
+      "reason": "Current upstream uses Meson; historical 19.0.8 Autotools evidence remains separate.",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "mpich",
+      "version": "5.0.2",
+      "source": "https://github.com/pmodels/mpich/releases/download/v5.0.2/mpich-5.0.2.tar.gz",
+      "archive": "mpich-5.0.2.tar.gz",
+      "sha256": "928c2f18d350a91443fe8024ad01ce2c6009e9c551e0a73e797fc567f119137d",
+      "status": "pending qualification",
+      "release_metadata": "https://github.com/pmodels/mpich/releases/tag/v5.0.2",
+      "hash_provenance": "Publisher SHA-256 verified against the downloaded official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "mysql",
+      "version": "26.10.0",
+      "source": "https://cdn.mysql.com/Downloads/MySQL-26.10/mysql-26.10.0.tar.gz",
+      "archive": "mysql-26.10.0.tar.gz",
+      "sha256": "984507622ddfa4d84ad23fc56ec5b5f18f4fda328af5a23e5f5b1a062301ea2c",
+      "status": "pending qualification",
+      "release_metadata": "https://dev.mysql.com/downloads/mysql/?os=src",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "openblas",
+      "version": "0.3.34",
+      "source": "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.34/OpenBLAS-0.3.34.tar.gz",
+      "archive": "OpenBLAS-0.3.34.tar.gz",
+      "sha256": "cd7e129868320cc2d033afa920e31202dfe0b8066a5b66661900ccc0f197dfed",
+      "status": "pending qualification",
+      "release_metadata": "https://github.com/OpenMathLib/OpenBLAS/releases/tag/v0.3.34",
+      "hash_provenance": "Publisher SHA-256 verified against the downloaded official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "openmpi",
+      "version": "5.0.11",
+      "source": "https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-5.0.11.tar.bz2",
+      "archive": "openmpi-5.0.11.tar.bz2",
+      "sha256": "e668a3c4acd50c41dc204c8a6dd98a611e0f26af89cf677577fa9be8a2698003",
+      "status": "pending qualification",
+      "release_metadata": "https://www.open-mpi.org/software/ompi/v5.0/",
+      "hash_provenance": "Publisher SHA-256 verified against the downloaded official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "openssl",
+      "version": "4.1.0",
+      "source": "https://github.com/openssl/openssl/releases/download/openssl-4.1.0/openssl-4.1.0.tar.gz",
+      "archive": "openssl-4.1.0.tar.gz",
+      "sha256": "50c17baf54cb008f6ce42d50deb4b28050a1aad711636cabd4b241c7e90cc2fd",
+      "status": "pending qualification",
+      "release_metadata": "https://github.com/openssl/openssl/releases/tag/openssl-4.1.0",
+      "hash_provenance": "Publisher SHA-256 verified against the downloaded official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "openwrt",
+      "version": "25.12.6",
+      "source": "https://github.com/openwrt/openwrt/archive/refs/tags/v25.12.6.tar.gz",
+      "archive": "openwrt-25.12.6.tar.gz",
+      "sha256": "f5ff8258572a82df960470608ceb025655a42bc94b8e7e2a77a4373db46263d9",
+      "release_metadata": "https://github.com/openwrt/openwrt/tree/v25.12.6",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "optee",
+      "version": "4.11.0",
+      "source": "https://github.com/OP-TEE/optee_os/archive/refs/tags/4.11.0.tar.gz",
+      "archive": "optee-4.11.0.tar.gz",
+      "sha256": "e357633822c5382adbbb3c62781eb362afd8260599a5ce158a243ead74beee8e",
+      "status": "pending qualification",
+      "release_metadata": "https://github.com/OP-TEE/optee_os/tree/4.11.0",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "petsc",
+      "version": "3.26.0",
+      "source": "https://gitlab.com/petsc/petsc/-/archive/v3.26.0/petsc-v3.26.0.tar.gz",
+      "archive": "petsc-v3.26.0.tar.gz",
+      "sha256": "cc8d22eade950b8125e65ba90f95f582937182c71308ed7b2b6184c760706765",
+      "status": "pending qualification",
+      "release_metadata": "https://petsc.org/release/install/download/",
+      "source_note": "Documented official Git repository release tag; release-snapshots download returned HTTP 403.",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "pgvector",
+      "version": "0.8.7",
+      "source": "https://github.com/pgvector/pgvector/archive/refs/tags/v0.8.7.tar.gz",
+      "archive": "pgvector-0.8.7.tar.gz",
+      "sha256": "cac0b10c360f05b2d521200105ba3697e773d4cd3731f5a915a7e37ebe0bea85",
+      "status": "pending qualification",
+      "release_metadata": "https://github.com/pgvector/pgvector/tree/v0.8.7",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "postgis",
+      "version": "3.6.4",
+      "source": "https://download.osgeo.org/postgis/source/postgis-3.6.4.tar.gz",
+      "archive": "postgis-3.6.4.tar.gz",
+      "sha256": "ed8dc6679f1e06f7b113592b04cde2a7e00f1b1e681294c8ca2204058990cec6",
+      "release_metadata": "https://download.osgeo.org/postgis/source/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "postgresql",
+      "version": "18.6",
+      "source": "https://ftp.postgresql.org/pub/source/v18.6/postgresql-18.6.tar.bz2",
+      "archive": "postgresql-18.6.tar.bz2",
+      "sha256": "555610c24d53e4316da5b7d3fc25c279d96856d5e0e23ee308c328c5fa881d9f",
+      "release_metadata": "https://ftp.postgresql.org/pub/source/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "qemu",
+      "version": "11.1.2",
+      "source": "https://download.qemu.org/qemu-11.1.2.tar.xz",
+      "archive": "qemu-11.1.2.tar.xz",
+      "sha256": "731b5681e4bb18be313231579b8efd0296c5b015fa36dc533874b639ba838016",
+      "release_metadata": "https://download.qemu.org/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "redis",
+      "version": "8.10.3",
+      "source": "https://github.com/redis/redis/releases/download/8.10.3/redis-full.tar.gz",
+      "archive": "redis-full.tar.gz",
+      "sha256": "5e0c00ed77f789fb1a4a30f1fbb58a793cc88c41c0f11f0e38e1b4f192991188",
+      "status": "pending qualification",
+      "release_metadata": "https://github.com/redis/redis/releases/tag/8.10.3",
+      "hash_provenance": "Publisher SHA-256 verified against the downloaded official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "sdl",
+      "version": "3.4.18",
+      "source": "https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz",
+      "archive": "SDL3-3.4.18.tar.gz",
+      "sha256": "9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3",
+      "status": "inapplicable to historical Autotools Make qualification",
+      "release_metadata": "https://github.com/libsdl-org/SDL/releases/tag/release-3.4.18",
+      "hash_provenance": "Publisher SHA-256 verified against the downloaded official archive; no signature verification claimed",
+      "archive_verified": true,
+      "reason": "SDL 3 removed Autotools; verified current archive has CMakeLists.txt and no root configure/Makefile. CMake-generated Makefiles would need a separately specified future campaign."
+    },
+    {
+      "id": "sqlite",
+      "version": "3.54.1",
+      "source": "https://www.sqlite.org/2026/sqlite-autoconf-3540100.tar.gz",
+      "archive": "sqlite-autoconf-3540100.tar.gz",
+      "sha256": "926ef8d3eab93fbf6e06011901273eec076b25594a4e1cdadd50c987f4f6d64e",
+      "status": "pending qualification",
+      "release_metadata": "https://www.sqlite.org/news.html",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "tfa",
+      "version": "2.15.0",
+      "source": "https://github.com/ARM-software/arm-trusted-firmware/archive/refs/tags/v2.15.0.tar.gz",
+      "archive": "tfa-2.15.0.tar.gz",
+      "sha256": "ec4d6779225c5243a05dd190cd25c06ae79bec293afea780f0eb63541341a505",
+      "status": "pending qualification",
+      "release_metadata": "https://github.com/ARM-software/arm-trusted-firmware/tree/v2.15.0",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "uboot",
+      "version": "2026.10",
+      "source": "https://git.u-boot-project.org/u-boot/u-boot/-/releases/v2026.10/downloads/u-boot-2026.10.tar.bz2",
+      "archive": "u-boot-2026.10.tar.bz2",
+      "sha256": "3f856da3cbbc93af51ff95fde18588a348b4a26723b01d9841e999d988481015",
+      "release_metadata": "https://docs.u-boot-project.org/en/stable/develop/release_cycle.html",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "vlc",
+      "version": "3.0.24",
+      "source": "https://download.videolan.org/pub/videolan/vlc/3.0.24/vlc-3.0.24.tar.xz",
+      "archive": "vlc-3.0.24.tar.xz",
+      "sha256": "e7cab503d1d7d5849b89d2cf0e1ee60d0ef6d012407791b644b9cfc0cc225fdf",
+      "release_metadata": "https://download.videolan.org/pub/videolan/vlc/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "wine",
+      "version": "11.0",
+      "source": "https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz",
+      "archive": "wine-11.0.tar.xz",
+      "sha256": "c07a6857933c1fc60dff5448d79f39c92481c1e9db5aa628db9d0358446e0701",
+      "status": "pending qualification",
+      "release_metadata": "https://list.winehq.org/hyperkitty/list/wine-releases@list.winehq.org/",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "xorgproto",
+      "version": "2026.1",
+      "source": "https://xorg.freedesktop.org/archive/individual/proto/xorgproto-2026.1.tar.xz",
+      "archive": "xorgproto-2026.1.tar.xz",
+      "sha256": "f9bfe4a9ed8c8ab9d2a3b0d49797f046052dadd06b7a8b45dbffaffb137e8290",
+      "release_metadata": "https://xorg.freedesktop.org/archive/individual/proto/",
+      "status": "pending qualification",
+      "hash_provenance": "Locally observed SHA-256 of official archive; no signature verification claimed",
+      "archive_verified": true
+    },
+    {
+      "id": "yocto",
+      "version": "6.1",
+      "source": "https://downloads.yoctoproject.org/releases/yocto/yocto-6.1/oecore-419c1b0f1ed0e3ce22b1022061f763d007883121.tar.bz2",
+      "archive": "oecore-419c1b0f1ed0e3ce22b1022061f763d007883121.tar.bz2",
+      "sha256": "2619d7b6104324debe382938dfddc6e3b23d8b258e09a3d22c440d0dcafb17be",
+      "release_metadata": "https://downloads.yoctoproject.org/releases/yocto/yocto-6.1/",
+      "status": "pending qualification",
+      "hash_provenance": "Publisher .sha256sum in official Yocto 6.1 release directory",
+      "source_note": "Yocto 6.1 publishes split OpenEmbedded Core, BitBake and meta-yocto archives; assemble the component set before qualification.",
+      "archive_verified": true
+    },
+    {
+      "id": "yocto-bitbake",
+      "version": "6.1",
+      "archive": "bitbake-634f8dede6b9d71b5a6691499fd05a8678b46eae.tar.bz2",
+      "source": "https://downloads.yoctoproject.org/releases/yocto/yocto-6.1/bitbake-634f8dede6b9d71b5a6691499fd05a8678b46eae.tar.bz2",
+      "sha256": "bb9f71d0d6de0d8f456bfe35f6e3f9db518e39d15af3cd49b51a90f2c5488c58",
+      "status": "pending qualification",
+      "release_metadata": "https://downloads.yoctoproject.org/releases/yocto/yocto-6.1/",
+      "hash_provenance": "Publisher .sha256sum in official Yocto 6.1 release directory",
+      "source_note": "Yocto 6.1 publishes split OpenEmbedded Core, BitBake and meta-yocto archives; assemble the component set before qualification.",
+      "archive_verified": true
+    },
+    {
+      "id": "yocto-meta",
+      "version": "6.1",
+      "archive": "meta-yocto-43946d08974e61361f6313ae348c5d87c12be934.tar.bz2",
+      "source": "https://downloads.yoctoproject.org/releases/yocto/yocto-6.1/meta-yocto-43946d08974e61361f6313ae348c5d87c12be934.tar.bz2",
+      "sha256": "cc2c54afc85fce7cd429eb356ada6b3b921fe6065169a297c085adba16bead21",
+      "status": "pending qualification",
+      "release_metadata": "https://downloads.yoctoproject.org/releases/yocto/yocto-6.1/",
+      "hash_provenance": "Publisher .sha256sum in official Yocto 6.1 release directory",
+      "source_note": "Yocto 6.1 publishes split OpenEmbedded Core, BitBake and meta-yocto archives; assemble the component set before qualification.",
+      "archive_verified": true
+    }
+  ],
+  "campaign_rows": [
+    {
+      "historical_row": 1,
+      "components": [
+        "binutils"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 2,
+      "components": [
+        "binutils",
+        "gcc",
+        "glibc",
+        "linux"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 3,
+      "components": [
+        "libreoffice"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 4,
+      "components": [
+        "qemu"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 5,
+      "components": [
+        "postgresql"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 6,
+      "components": [
+        "mysql"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 7,
+      "components": [
+        "wine"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 8,
+      "components": [
+        "ffmpeg"
+      ],
+      "status": "selected configuration passed correctness; aggressive performance gate failed",
+      "scope": "Selected configuration only; no full FFmpeg FATE claim"
+    },
+    {
+      "historical_row": 9,
+      "components": [
+        "openssl"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 10,
+      "components": [
+        "llvm"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 11,
+      "components": [
+        "gcc"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 12,
+      "components": [
+        "gdb"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 13,
+      "components": [
+        "m4",
+        "autoconf",
+        "automake",
+        "libtool"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 14,
+      "components": [
+        "emacs"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 15,
+      "components": [
+        "guile"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 16,
+      "components": [
+        "uboot"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 17,
+      "components": [
+        "busybox"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 18,
+      "components": [
+        "buildroot"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 19,
+      "components": [
+        "openwrt"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 20,
+      "components": [
+        "yocto",
+        "yocto-bitbake",
+        "yocto-meta"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 21,
+      "components": [
+        "coreboot"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 22,
+      "components": [
+        "grub"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 23,
+      "components": [
+        "tfa",
+        "optee",
+        "uboot"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 24,
+      "components": [
+        "mariadb"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 25,
+      "components": [
+        "sqlite"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 26,
+      "components": [
+        "redis"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 27,
+      "components": [
+        "git"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 28,
+      "components": [
+        "postgresql",
+        "pgvector",
+        "postgis"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 29,
+      "components": [
+        "mesa"
+      ],
+      "status": "inapplicable to Make compatibility qualification"
+    },
+    {
+      "historical_row": 30,
+      "components": [
+        "xorgproto",
+        "libx11",
+        "libxext"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 31,
+      "components": [
+        "imagemagick"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 32,
+      "components": [
+        "sdl"
+      ],
+      "status": "inapplicable to historical Autotools Make qualification",
+      "reason": "SDL 3 removed Autotools; verified current archive has CMakeLists.txt and no root configure/Makefile. CMake-generated Makefiles would need a separately specified future campaign."
+    },
+    {
+      "historical_row": 33,
+      "components": [
+        "vlc"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 34,
+      "components": [
+        "openblas"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 35,
+      "components": [
+        "lapack"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 36,
+      "components": [
+        "petsc",
+        "openmpi",
+        "openblas"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 37,
+      "components": [
+        "openmpi"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 38,
+      "components": [
+        "mpich"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 39,
+      "components": [
+        "make"
+      ],
+      "status": "pending qualification"
+    },
+    {
+      "historical_row": 40,
+      "components": [
+        "linux"
+      ],
+      "status": "pending qualification",
+      "configuration": "all architectures remain pending; representative qualification covers x86 only"
+    },
+    {
+      "historical_row": 41,
+      "components": [],
+      "status": "out of scope",
+      "reason": "NetBSD uses the BSD Make dialect; preserve historical out-of-scope decision"
+    },
+    {
+      "historical_row": 42,
+      "components": [
+        "guix"
+      ],
+      "status": "pending qualification"
+    }
+  ],
+  "exclusions": [
+    {
+      "project": "AOSP",
+      "reason": "Preserve previously recorded user-requested skip; no current qualification claimed"
+    }
+  ]
+}

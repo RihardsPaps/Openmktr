@@ -7,17 +7,25 @@ relax them or claim compatibility with every third-party Makefile.
 Pull requests that change this workflow, its environment files, the jobserver
 test, or the benchmark harness also run the lanes to validate those changes.
 
-The Alpine 3.23 lane builds with Clang, LLD, musl, libc++, and BusyBox. Alpine's
+The pinned Alpine 3.24.3 lane builds with Clang, LLD, musl, libc++, and BusyBox. Alpine's
 LLVM packages also pull in GNU toolchain components as distribution dependencies.
 The Gentoo stage3 lane is an external glibc environment, with its own system
 utilities and package build dependencies. Both are external comparison images;
 neither changes the portable Dockerfile or Openmktr's runtime requirements.
 Gentoo uses binary packages when available; source package fallback can make its
-initial build slow. Tags and package feeds can move; retain Docker build logs
+initial build slow. Base images are pinned; package feeds can move. Retain Docker build logs
 and printed tool versions with results.
+The Gentoo comparison image puts its reference Ninja first on its private PATH,
+so installing Samurai does not substitute an implementation without FIFO support.
+The installed Portage adapter continues to select `/usr/bin/ninja-reference`.
 
-Both environments run unit, version, correctness, Make compatibility, include
-dump, and explicit Ninja >= 1.13 jobserver checks. Environment-specific snapshot
+Both environments run unit, version, correctness, workspace, graph optimization,
+Make compatibility, include dump, and explicit Ninja >= 1.13.2 jobserver checks.
+Alpine installs its supported `zstd` package for Python builds without `_zstd`.
+Workspace checks exercise subsecond input changes with a shell that rejects
+`test -nt`, as well as both archive backends and interrupted publication.
+The same jobserver suite is
+now mandatory in the reference gate. Environment-specific snapshot
 output is left to the reference Chimera gate. The jobserver check supplies a
 GNU-protocol FIFO using Python, verifies a plain Ninja client, then runs generated
 launchers with recursive Openmktr children, with and without explicit `-j1`.
@@ -26,8 +34,9 @@ under timeouts. GNU and Openmktr FIFOs are distinct; this does not claim that
 Openmktr adopts an enclosing GNU Make job budget.
 
 Ninja's [jobserver documentation](https://ninja-build.org/manual.html#_gnu_jobserver_support)
-describes the no-`-j`, `MAKEFLAGS`, and FIFO conditions. A version below 1.13
-fails this optional check rather than silently omitting coverage.
+describes the no-`-j`, `MAKEFLAGS`, and FIFO conditions. A version below 1.13.2
+fails the check rather than silently omitting coverage. Interruption tests verify
+token return and successful recovery through the generated launcher.
 
 The separate GNU reference job runs the existing differential incremental
 fixtures at both `-j1` and `-j4`, using the

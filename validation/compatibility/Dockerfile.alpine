@@ -1,9 +1,15 @@
 # SPDX-License-Identifier: MPL-2.0
 # Independent musl/BusyBox toolchain; no GNU reference tools in this image.
-FROM alpine:3.23
-RUN apk add --no-cache clang lld libc++-dev llvm-libunwind-dev ninja-build python3
+FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
+RUN apk upgrade --no-cache && apk add --no-cache clang lld compiler-rt libc++-dev llvm-libunwind-dev 'ninja-build>=1.13.2' 'python3>=3.14' zstd
 ENV PATH=/usr/lib/ninja-build/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 RUN ln -s /usr/bin/python3 /usr/local/bin/python
+# Use LLVM runtime objects for both this build and cc/c++ recipes in fixtures.
+RUN clang_major=$(clang -dumpversion | cut -d. -f1) && \
+      clang_target=$(clang -dumpmachine) && \
+      printf '%s\n' '--rtlib=compiler-rt' '--unwindlib=libunwind' '-fuse-ld=lld' >> "/etc/clang${clang_major}/${clang_target}.cfg" && \
+      ln -s /usr/bin/clang /usr/local/bin/cc && \
+      ln -s /usr/bin/clang++ /usr/local/bin/c++
 WORKDIR /workspace
 COPY . .
 ARG OMKTR_SOURCE_REVISION

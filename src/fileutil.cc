@@ -1,20 +1,24 @@
 // FORK MODIFICATION NOTICE (2026)
-// Track and validate incremental evaluation, include proofs and imported Ninja
-// graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
-// Paps. Changed build execution, evaluation, or portability for this fork.
-// Supervise Ninja interruption cleanup without a separate timestamp process.
-// Atomically retain exact managed-workspace recipe identities.
-// Validate recursive reuse, regeneration inputs, and shared recipe budgets.
-// Bypass cache bookkeeping in observation regions overlapping active effects.
-// Preserve shell parsing of multi-option flags in recipe supervisors.
-// Prevent recipe exports from duplicating a live jobserver reservation.
-// Elide pure no-op commands for the default POSIX shell and flags.
-// Validate inherited FIFO endpoints before using the shared job budget.
-// Forward build interruptions, reap recipes, and identify changed outputs.
-// Coordinate generated recipes' load admission with process-owned locks.
-// Upstream material retains its Apache-2.0 terms. Fork modifications are
-// covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
-// at the repository root. Original notices below remain applicable.
+// Wake reservation waiters without adding FIFO capacity; serialize local
+// readers. Create Linux recipe pipes with atomic close-on-exec flags. Avoid
+// temporary path allocations on cached filesystem probes. Wake recipe
+// supervisors on Linux process exit instead of timed reaping sleeps. Track and
+// validate incremental evaluation, include proofs and imported Ninja graphs.
+// Changed by the Openmktr fork, maintained by Rihards Paps and Haralds Paps.
+// Changed build execution, evaluation, or portability for this fork. Supervise
+// Ninja interruption cleanup without a separate timestamp process. Atomically
+// retain exact managed-workspace recipe identities. Validate recursive reuse,
+// regeneration inputs, and shared recipe budgets. Bypass cache bookkeeping in
+// observation regions overlapping active effects. Preserve shell parsing of
+// multi-option flags in recipe supervisors. Prevent recipe exports from
+// duplicating a live jobserver reservation. Elide pure no-op commands for the
+// default POSIX shell and flags. Validate inherited FIFO endpoints before using
+// the shared job budget. Forward build interruptions, reap recipes, and
+// identify changed outputs. Coordinate generated recipes' load admission with
+// process-owned locks. Upstream material retains its Apache-2.0 terms. Fork
+// modifications are covered by Mozilla Public License 2.0; see
+// docs/LICENSING.md and NOTICE at the repository root. Original notices below
+// remain applicable.
 
 // Copyright 2015 Google Inc. All rights reserved
 //
@@ -42,6 +46,10 @@
 #include <signal.h>
 #include <spawn.h>
 #include <sys/stat.h>
+#if defined(__linux__)
+#include <sys/eventfd.h>
+#include <sys/syscall.h>
+#endif
 
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -49,6 +57,7 @@
 #include <algorithm>
 #include <atomic>
 #include <deque>
+#include <mutex>
 #include <vector>
 
 #if defined(__APPLE__)
@@ -157,9 +166,19 @@ ScopedFileObservations::Identities() const {
   return result;
 }
 bool ObserveFile(const char* path, struct stat* st) {
+  if (!ScopedFileObservations::active_)
+    return stat(path, st) == 0;
+  return ObserveFile(std::string(path), st);
+}
+
+bool ObserveFile(const std::string& name, struct stat* st) {
+  const char* path = name.c_str();
   auto* state = ScopedFileObservations::active_;
   if (!state)
     return stat(path, st) == 0;
+  // Preserve the existing C-path interpretation even for embedded NULs.
+  if (name.find('\0') != std::string::npos)
+    return ObserveFile(path, st);
   const uint64_t epoch = FilesystemObservationEpoch();
   if (state->epoch != epoch) {
     state->files.clear();
@@ -172,7 +191,7 @@ bool ObserveFile(const char* path, struct stat* st) {
     state->files.clear();
     return stat(path, st) == 0;
   }
-  auto found = state->files.find(path);
+  auto found = state->files.find(name);
   if (found == state->files.end()) {
     if (state->files.size() >= 100000) {
       state->valid = false;
@@ -181,7 +200,7 @@ bool ObserveFile(const char* path, struct stat* st) {
     ++state->misses;
     FileObservationState::Observation observation{};
     observation.error = stat(path, &observation.metadata) == 0 ? 0 : errno;
-    found = state->files.emplace(path, observation).first;
+    found = state->files.emplace(name, observation).first;
   } else {
     ++state->hits;
   }
@@ -206,11 +225,19 @@ void InvalidateFileObservations() {
 
 bool Exists(std::string_view filename) {
   CHECK(filename.size() < PATH_MAX);
+  return Exists(std::string(filename));
+}
+
+bool Exists(const std::string& filename) {
+  CHECK(filename.size() < PATH_MAX);
   struct stat st;
-  if (!ObserveFile(std::string(filename).c_str(), &st)) {
-    return false;
-  }
-  return true;
+  return ObserveFile(filename, &st);
+}
+
+bool Exists(const char* filename) {
+  CHECK(strlen(filename) < PATH_MAX);
+  struct stat st;
+  return ObserveFile(filename, &st);
 }
 
 double GetTimestampFromStat(const struct stat& st) {
@@ -223,8 +250,21 @@ double GetTimestampFromStat(const struct stat& st) {
 
 double GetTimestamp(std::string_view filename) {
   CHECK(filename.size() < PATH_MAX);
+  return GetTimestamp(std::string(filename));
+}
+
+double GetTimestamp(const std::string& filename) {
+  CHECK(filename.size() < PATH_MAX);
   struct stat st;
-  if (!ObserveFile(std::string(filename).c_str(), &st)) {
+  if (!ObserveFile(filename, &st))
+    return -2.0;
+  return GetTimestampFromStat(st);
+}
+
+double GetTimestamp(const char* filename) {
+  CHECK(strlen(filename) < PATH_MAX);
+  struct stat st;
+  if (!ObserveFile(filename, &st)) {
     return -2.0;
   }
   return GetTimestampFromStat(st);
@@ -357,6 +397,43 @@ thread_local int kati_jobserver_fd = -1;
 thread_local std::string kati_jobserver_path;
 constexpr int kReservedKatiJobToken = -2;
 std::atomic<bool> reserved_kati_job_in_use{false};
+std::mutex kati_jobserver_read_mu;
+#if defined(__linux__)
+std::atomic<int> reserved_kati_wakeup_fd{-1};
+bool reserved_kati_wakeup_initialized = false;
+#endif
+
+// Called with kati_jobserver_read_mu held. The descriptor carries wakeups,
+// never job tokens, and must not survive a recipe exec.
+int ReservedKatiWakeupFd() {
+#if defined(__linux__)
+  if (!reserved_kati_wakeup_initialized) {
+    int fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+    if (fd >= 0 && fd <= STDERR_FILENO) {
+      const int replacement = fcntl(fd, F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
+      close(fd);
+      fd = replacement;
+    }
+    reserved_kati_wakeup_fd.store(fd, std::memory_order_release);
+    reserved_kati_wakeup_initialized = true;
+  }
+  return reserved_kati_wakeup_fd.load(std::memory_order_relaxed);
+#else
+  return -1;
+#endif
+}
+
+void WakeReservedKatiWaiters() {
+#if defined(__linux__)
+  const int fd = reserved_kati_wakeup_fd.load(std::memory_order_acquire);
+  const uint64_t notification = 1;
+  if (fd >= 0 &&
+      HANDLE_EINTR(write(fd, &notification, sizeof(notification))) < 0 &&
+      errno != EAGAIN) {
+    LOG("failed to notify reservation waiters");
+  }
+#endif
+}
 
 int OpenKatiJobserver() {
   const char* fifo = getenv("KATI_JOBSERVER_FIFO");
@@ -406,6 +483,9 @@ int AcquireKatiJobToken() {
   if (fifo == nullptr || *fifo == '\0')
     return -1;
 
+  // One reader per process waits on the shared FIFO. Waking every local
+  // recipe for one token only creates read/EAGAIN contention.
+  std::unique_lock<std::mutex> reader_lock(kati_jobserver_read_mu);
   if (kati_jobserver_fd >= 0 && kati_jobserver_path != fifo) {
     close(kati_jobserver_fd);
     kati_jobserver_fd = -1;
@@ -423,16 +503,29 @@ int AcquireKatiJobToken() {
       PERROR("fcntl(O_NONBLOCK) failed");
   }
 
+  const char* inherited = getenv("KATI_JOBSERVER_RESERVED");
+  const int wakeup_fd =
+      inherited && strcmp(inherited, "1") == 0 ? ReservedKatiWakeupFd() : -1;
   char token;
   while (true) {
     if (GetBuildSignal() != 0)
       return -1;
-    struct pollfd ready = {kati_jobserver_fd, POLLIN, 0};
-    int available = poll(&ready, 1, 100);
+    // A previously busy inherited slot can become free while this thread
+    // waits for FIFO capacity owned by another process.
+    if (TryAcquireReservedKatiJobToken() == kReservedKatiJobToken)
+      return kReservedKatiJobToken;
+    struct pollfd ready[2] = {{kati_jobserver_fd, POLLIN, 0},
+                              {wakeup_fd, POLLIN, 0}};
+    int available = poll(ready, wakeup_fd >= 0 ? 2 : 1, 100);
     if (available == 0 || (available < 0 && errno == EINTR))
       continue;
     if (available < 0)
       break;
+    if (wakeup_fd >= 0 && (ready[1].revents & POLLIN)) {
+      uint64_t notifications;
+      HANDLE_EINTR(read(wakeup_fd, &notifications, sizeof(notifications)));
+      continue;
+    }
     ssize_t n = HANDLE_EINTR(read(kati_jobserver_fd, &token, 1));
     if (n == 1)
       return kati_jobserver_fd;
@@ -451,6 +544,7 @@ int AcquireKatiJobToken() {
 void ReleaseKatiJobToken(int fd) {
   if (fd == kReservedKatiJobToken) {
     reserved_kati_job_in_use.store(false);
+    WakeReservedKatiWaiters();
     return;
   }
   if (fd < 0)
@@ -647,11 +741,19 @@ int RunCommand(const std::string& shell,
   }
 
   int pipefd[2];
+#if defined(__linux__)
+  // Parallel spawns must never inherit another recipe's pipe ends. Setting
+  // FD_CLOEXEC after pipe() leaves a window where a sibling keeps the writer
+  // alive, preventing EOF even after the intended child has exited.
+  if (pipe2(pipefd, O_CLOEXEC) != 0)
+    PERROR("pipe2 failed");
+#else
   if (pipe(pipefd) != 0)
     PERROR("pipe failed");
   if (fcntl(pipefd[0], F_SETFD, FD_CLOEXEC) < 0 ||
       fcntl(pipefd[1], F_SETFD, FD_CLOEXEC) < 0)
     PERROR("fcntl(FD_CLOEXEC) failed");
+#endif
 
   posix_spawn_file_actions_t action;
   int err = posix_spawn_file_actions_init(&action);
@@ -777,6 +879,8 @@ int RunCommand(const std::string& shell,
       s->append(buf, buf + r);
   }
   close(pipefd[0]);
+  int process_fd = -1;
+  bool process_fd_attempted = false;
   while (true) {
     forward_signal();
     pid_t waited = waitpid(pid, &status, WNOHANG);
@@ -784,8 +888,25 @@ int RunCommand(const std::string& shell,
       break;
     if (waited < 0 && errno != EINTR)
       PERROR("waitpid failed");
-    poll(nullptr, 0, 10);
+#if defined(__linux__) && defined(SYS_pidfd_open)
+    // A shell can close stdout just before exiting. Wake on process exit
+    // without adding 10 ms, but do not open a descriptor for reaped children.
+    // Older kernels and restricted containers retain the portable fallback.
+    if (!process_fd_attempted) {
+      process_fd = static_cast<int>(syscall(SYS_pidfd_open, pid, 0));
+      process_fd_attempted = true;
+    }
+#else
+    (void)process_fd_attempted;
+#endif
+    struct pollfd exited = {process_fd, POLLIN, 0};
+    if (poll(process_fd >= 0 ? &exited : nullptr, process_fd >= 0 ? 1 : 0, 10) <
+            0 &&
+        errno != EINTR)
+      PERROR("poll process failed");
   }
+  if (process_fd >= 0)
+    close(process_fd);
   if (!recipe_path.empty() && unlink(recipe_path.c_str()) != 0)
     PERROR("unlink recipe failed");
 

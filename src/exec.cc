@@ -1,4 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
+// Check recipe-less leaves inline instead of queuing a future per input.
+// Reject rank-zero helping without scanning the pending task queue.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -258,7 +260,7 @@ class WorkerPool {
     // Strict rank descent rules out waiting on any node this thread owns.
     // Borrowing an arbitrary task can otherwise manufacture a same-thread
     // cycle in an acyclic graph. Bound additional helping on deep graphs.
-    if (active_dependency_nodes >= 128)
+    if (active_dependency_nodes >= 128 || active_dependency_rank == 0)
       return tasks_.end();
     return std::find_if(tasks_.begin(), tasks_.end(),
                         [](const TaskHandle& task) {
@@ -600,6 +602,12 @@ class Executor {
                        input) != n.low_resolution_inputs.end();
     };
     auto visit_child = [&](const auto& d, bool order_only) {
+      // Included dependency files contribute thousands of empty source rules.
+      // These leaves have no work to schedule: keep the ordinary ownership and
+      // timestamp checks, without allocating a future and waking the pool.
+      const bool timestamp_leaf =
+          d.second->cmds.empty() && d.second->deps.empty() &&
+          d.second->order_onlys.empty() && d.second->validations.empty();
       // A dependency subgraph is independent from its siblings.  Dispatch
       // the whole subgraph asynchronously and wait for all futures before
       // running this node's recipe.  Limiting this to leaves serialized
@@ -608,7 +616,8 @@ class Executor {
       // Waiters cooperate on lower-rank tasks. Merely waiting for an already
       // owned node leaves its independent descendants queued behind blocked
       // workers, even though the dependency graph itself is acyclic.
-      if (parallel_ && n.deps.size() + n.order_onlys.size() > 1) {
+      if (parallel_ && !timestamp_leaf &&
+          n.deps.size() + n.order_onlys.size() > 1) {
         children.emplace_back(
             worker_pool_.Submit(
                 [this, child = d.second, output = n.output, ancestry, &n]() {

@@ -7,11 +7,13 @@
 import importlib.util
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 spec = importlib.util.spec_from_file_location(
@@ -21,6 +23,46 @@ spec.loader.exec_module(benchmark)
 
 
 class Evidence(unittest.TestCase):
+    def test_dependency_budget_survives_failure_and_reopen(self):
+        spec = importlib.util.spec_from_file_location(
+            "qualify_dependencies", Path(benchmark.__file__).with_name("qualify_dependencies.py"))
+        qualification = importlib.util.module_from_spec(spec)
+        with mock.patch.dict(sys.modules, benchmark_ninja=benchmark):
+            spec.loader.exec_module(qualification)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            ledger = root / "budget.jsonl"
+            budget = qualification.Budget(ledger)
+            budget.reserve([sys.executable, "-c", "raise SystemExit(7)"], root, "failed build")
+            budget.close()
+            budget = qualification.Budget(ledger)
+            self.assertEqual(budget.used, 1)
+            # Reservations consume slots even if the process never starts.
+            for _ in range(199):
+                budget.reserve(["not-executed"], root, "reserved")
+            with self.assertRaisesRegex(RuntimeError, "budget exhausted"):
+                budget.reserve(["must-not-start"], root, "over budget")
+            budget.close()
+            self.assertEqual(len(ledger.read_text().splitlines()), 200)
+            prefix = ledger.read_bytes()
+            # An explicit increased cap retains every consumed reservation.
+            budget = qualification.Budget(ledger, limit=250)
+            self.assertEqual(budget.used, 200)
+            for _ in range(50):
+                budget.reserve(["not-executed"], root, "authorized continuation")
+            with self.assertRaisesRegex(RuntimeError, "250-command budget exhausted"):
+                budget.reserve(["must-not-start"], root, "over extended budget")
+            budget.close()
+            self.assertTrue(ledger.read_bytes().startswith(prefix))
+            self.assertEqual(len(ledger.read_text().splitlines()), 250)
+            budget = qualification.Budget(ledger)
+            with self.assertRaisesRegex(RuntimeError, "200-command budget exhausted"):
+                budget.reserve(["must-not-start"], root, "default cap retained")
+            budget.close()
+            ledger.write_text('{"slot": 2}\n')
+            with self.assertRaisesRegex(RuntimeError, "invalid budget ledger"):
+                qualification.Budget(ledger)
+
     def test_budgeted_campaign_rejects_extra_work_before_running_tools(self):
         script = Path(benchmark.__file__).with_name("benchmark_graph_budget.py")
         for limit, used in ((20, 3), (21, 0), (20, -1)):
@@ -87,10 +129,8 @@ class Evidence(unittest.TestCase):
     def test_retained_campaign_separates_setup_and_preserves_each_log(self):
         binary = Path(os.environ.get("OMKTR_BINARY", str(
             Path(__file__).resolve().parents[1] / "omktr"))).resolve()
-        compilers = sorted(p for p in Path("/usr/bin").glob("clang-*")
-                           if p.name.removeprefix("clang-").isdigit())
-        if not binary.is_file() or not compilers:
-            self.skipTest("built Openmktr and versioned Clang are required")
+        if not binary.is_file() or not shutil.which("clang"):
+            self.skipTest("built Openmktr and distribution Clang are required")
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "campaign"
             result = subprocess.run([
@@ -101,8 +141,7 @@ class Evidence(unittest.TestCase):
                 "--baseline-option=--graph_optimizations=off",
                 "--candidate-option=--graph_optimizations=aggressive",
                 "--entrypoints", "build", "--jobs", "2", "--samples", "1",
-                "--warmups", "1", "--llvm-version",
-                compilers[-1].name.removeprefix("clang-"), "--retained", "--monitor",
+                "--warmups", "1", "--retained", "--monitor",
             ], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             report = json.loads((root / "report.json").read_text())

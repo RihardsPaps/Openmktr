@@ -1,0 +1,482 @@
+{
+  "schema": 1,
+  "date": "2026-10-27",
+  "host": "User PC; local Docker Desktop Linux containers; no NAS",
+  "status": "Dependency implementation complete; aggressive and complete campaign qualification not achieved",
+  "branch": "codex/dependency-upgrades",
+  "dependencies": "tools/dependencies.json",
+  "package_lock": "tools/chimera-packages.lock",
+  "campaign_manifest": "validation/dependency-campaign.json",
+  "defaults": {
+    "graph_profile": "safe",
+    "workspace_compression": "xz",
+    "implicit_monitor": false,
+    "graph_reason": "FFmpeg intervals fail promotion; Linux statistical matrix incomplete",
+    "compression_reason": "Zstandard level 3 archive is 37.89% larger than XZ preset 6; limit is 25%"
+  },
+  "binaries": {
+    "profile_comparison_sha256": "c41bbadb8c1597b395f9ff383ef558553591a247e53550ba0f3573668a6c31ca",
+    "current_fifo_fix_sha256": "4c020ea93477b2415ff20823dae37d7ba8ae865b124caa686180d7424ca6ce1b",
+    "toolchain": "Both C++ builds use the same updated Chimera Clang 22.1.8, libc++, musl, C++17, O2 and ThinLTO",
+    "limits": "FFmpeg timings precede the FIFO launch fix. All measured commands supplied explicit -j; no statistical qualification of the later binary is claimed."
+  },
+  "checks": [
+    {
+      "name": "Complete portable Chimera gate",
+      "status": "passed",
+      "evidence": "checks/openmktr-dependency-core-final.log",
+      "coverage": "C++ units; version; 175 correctness cases in safe and aggressive; 53 graph cases; Make regressions; Portage/load/evidence; 7 benchmark-harness cases; 27 workspace cases; 3 FIFO cases; 6 release packaging cases; 858 snapshot scenarios in each profile; dump smoke"
+    },
+    {
+      "name": "ASan/UBSan required suites",
+      "status": "passed after test correction",
+      "evidence": [
+        "checks/openmktr-dependency-sanitizers-final.log",
+        "checks/openmktr-sanitizer-remaining.log"
+      ],
+      "note": "Original workspace assertion incorrectly required parallel recipe order ab. Changed it to compare with the observed initial order. Remaining 27 workspace, 3 FIFO and 6 Make-regression cases pass using the same sanitized binary; original failure retained."
+    },
+    {
+      "name": "FIFO interruption exit status and recovery",
+      "status": "passed",
+      "evidence": [
+        "checks/openmktr-fifo-status.log",
+        "checks/openmktr-fifo-status-sanitized.log"
+      ],
+      "coverage": "Exit 130, bounded concurrency, explicit job overrides, private reservation separation, failure, token return and successful retry"
+    },
+    {
+      "name": "Changed C++ formatting",
+      "status": "passed",
+      "files": [
+        "src/flags.cc",
+        "src/flags.h",
+        "src/main.cc",
+        "src/ninja.cc"
+      ]
+    },
+    {
+      "name": "All three workflow files",
+      "status": "actionlint passed",
+      "note": "Release action tags and exact commits verified with GitHub integration; Node 24, runner >=2.329.0, zipped upload/download and injected github client checked. Hosted workflows were not dispatched for this working tree."
+    },
+    {
+      "name": "Release packaging and incremental harness",
+      "status": "passed",
+      "evidence": "checks/openmktr-packaging-current.log",
+      "packaging_cases": 6,
+      "harness_cases": 6
+    },
+    {
+      "name": "External GNU Make differential incremental fixtures",
+      "status": "passed",
+      "jobs": [
+        1,
+        4
+      ],
+      "scenarios_per_job_count": 27,
+      "performance_defects": false,
+      "evidence": [
+        "checks/incremental-j1",
+        "checks/incremental-j4"
+      ]
+    },
+    {
+      "name": "Alpine core compatibility",
+      "status": "passed",
+      "evidence": "checks/openmktr-dependency-alpine-checked.log"
+    },
+    {
+      "name": "Alpine extended workspace",
+      "status": "failed; qualification incomplete",
+      "evidence": [
+        "checks/openmktr-alpine-workspace.log",
+        "checks/openmktr-alpine-workspace-diagnostic-details.log"
+      ],
+      "reason": "Distribution Python 3.14.10 omits _zstd; BusyBox test -nt compares whole seconds and existing generated guards can suppress subsecond rebuilds. No workaround or passing workspace claim."
+    },
+    {
+      "name": "Gentoo core, workspace and graph suites",
+      "status": "passed",
+      "workspace_cases": 27,
+      "graph_cases": 53,
+      "evidence": [
+        "checks/openmktr-dependency-gentoo-tests.log",
+        "checks/openmktr-gentoo-workspace.log"
+      ]
+    },
+    {
+      "name": "Gentoo Portage installed overlay lifecycle",
+      "status": "passed",
+      "use_test": true,
+      "namespace_sandboxes": [
+        "ipc-sandbox",
+        "network-sandbox",
+        "pid-sandbox"
+      ],
+      "ninja_alternative": "samurai",
+      "real_packages": [
+        {
+          "atom": "=app-misc/hello-2.12.2",
+          "mode": "direct",
+          "status": "passed",
+          "upstream_tests": 7
+        },
+        {
+          "atom": "=dev-libs/libpipeline-1.5.8",
+          "mode": "direct",
+          "status": "passed",
+          "upstream_tests": 7
+        },
+        {
+          "atom": "=app-arch/gzip-1.14-r1",
+          "mode": "direct",
+          "status": "passed",
+          "upstream_tests": 30
+        },
+        {
+          "atom": "=app-misc/hello-2.12.2",
+          "mode": "ninja",
+          "status": "passed",
+          "upstream_tests": 7
+        },
+        {
+          "atom": "=dev-libs/libpipeline-1.5.8",
+          "mode": "ninja",
+          "status": "passed",
+          "upstream_tests": 7
+        },
+        {
+          "atom": "=app-arch/gzip-1.14-r1",
+          "mode": "ninja",
+          "status": "passed",
+          "upstream_tests": 30
+        }
+      ],
+      "note": "Pinned historical package checks remain separate from current 50-component campaign inputs.",
+      "evidence": "checks/portage-current/result.json"
+    }
+  ],
+  "budget": {
+    "limit": 200,
+    "used": 115,
+    "remaining": 85,
+    "reset": false,
+    "ledger": "campaign/budget.jsonl",
+    "reserved_before_every_large_command": true,
+    "planned_matrix_commands": 198,
+    "protocol": "Two shared configurations; one discarded warmup pair and seven alternating pairs for clean/no-op/single-source at j8/j16 for FFmpeg/Linux; four direct checks; two contingency slots.",
+    "deviation": "After configuration retries and a Linux external recipe failure, the complete 12-scenario performance matrix no longer fit. FFmpeg already failed all six intervals. Remaining work switched to focused Linux correctness using the same ledger; unused slots were not reset."
+  },
+  "campaign": {
+    "components": 50,
+    "all_archive_sha256_recorded_and_verified": true,
+    "ffmpeg": {
+      "version": "9.0.2",
+      "selected_configuration_correctness": "passed",
+      "direct_clean_repeat": "passed",
+      "smoke": "passed",
+      "performance_gate_passed": false,
+      "measured_scenarios": [
+        {
+          "project": "ffmpeg",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "clean",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            -2.4690461649830686,
+            -1.2314532579731807,
+            -2.1599477354894425,
+            -2.032176572196831,
+            -1.2557956332497122,
+            -1.118853340124537,
+            -1.4037804800167475
+          ],
+          "median_improvement_percent": -1.4037804800167475,
+          "bootstrap_95_percent": [
+            -2.1599477354894425,
+            -1.2314532579731807
+          ],
+          "supported_improvement": false,
+          "supported_regression": true,
+          "baseline_median_seconds": 45.04894885900012,
+          "candidate_median_seconds": 45.81215137000004
+        },
+        {
+          "project": "ffmpeg",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "noop",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            -63.3525620323967,
+            -61.19323331298465,
+            -62.720478399010204,
+            -57.332127206769144,
+            -58.173315249348676,
+            -59.84315945534207,
+            -57.57868835846595
+          ],
+          "median_improvement_percent": -59.84315945534207,
+          "bootstrap_95_percent": [
+            -62.720478399010204,
+            -57.57868835846595
+          ],
+          "supported_improvement": false,
+          "supported_regression": true,
+          "baseline_median_seconds": 1.0018544629999724,
+          "candidate_median_seconds": 1.5991590120002002
+        },
+        {
+          "project": "ffmpeg",
+          "entrypoint": "build",
+          "jobs": 8,
+          "scenario": "source",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            -85.80317732289558,
+            -73.9033969878354,
+            -76.70454064095762,
+            -79.43470554970827,
+            -82.55367347969941,
+            -83.49397830243255,
+            -77.387740085851
+          ],
+          "median_improvement_percent": -79.43470554970827,
+          "bootstrap_95_percent": [
+            -83.49397830243255,
+            -76.70454064095762
+          ],
+          "supported_improvement": false,
+          "supported_regression": true,
+          "baseline_median_seconds": 0.7308735469998737,
+          "candidate_median_seconds": 1.311440796999932
+        },
+        {
+          "project": "ffmpeg",
+          "entrypoint": "build",
+          "jobs": 16,
+          "scenario": "clean",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            -2.408168323627091,
+            -3.998802339118912,
+            -1.8658569368577904,
+            -1.9860414007020877,
+            -2.030120763867127,
+            -2.006334759175954,
+            -2.3641955275463866
+          ],
+          "median_improvement_percent": -2.030120763867127,
+          "bootstrap_95_percent": [
+            -2.408168323627091,
+            -1.9860414007020877
+          ],
+          "supported_improvement": false,
+          "supported_regression": true,
+          "baseline_median_seconds": 31.733804435000366,
+          "candidate_median_seconds": 32.38495108999996
+        },
+        {
+          "project": "ffmpeg",
+          "entrypoint": "build",
+          "jobs": 16,
+          "scenario": "noop",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            -68.494713708061,
+            -67.46071588960649,
+            -66.77270728133425,
+            -70.7948007248721,
+            -68.67016490055009,
+            -69.55829746991937,
+            -67.138415701843
+          ],
+          "median_improvement_percent": -68.494713708061,
+          "bootstrap_95_percent": [
+            -69.55829746991937,
+            -67.138415701843
+          ],
+          "supported_improvement": false,
+          "supported_regression": true,
+          "baseline_median_seconds": 0.8723920579996047,
+          "candidate_median_seconds": 1.4637007369999537
+        },
+        {
+          "project": "ffmpeg",
+          "entrypoint": "build",
+          "jobs": 16,
+          "scenario": "source",
+          "pairs": 7,
+          "paired_improvement_percent": [
+            -80.41324508767256,
+            -78.80198479070857,
+            -97.04321677055813,
+            -74.5481685668203,
+            -79.5392279449231,
+            -86.97370003313421,
+            -83.14258338065297
+          ],
+          "median_improvement_percent": -80.41324508767256,
+          "bootstrap_95_percent": [
+            -86.97370003313421,
+            -78.80198479070857
+          ],
+          "supported_improvement": false,
+          "supported_regression": true,
+          "baseline_median_seconds": 0.7360014930000034,
+          "candidate_median_seconds": 1.3214980359998663
+        }
+      ],
+      "source_changes": false
+    },
+    "linux": {
+      "version": "7.3",
+      "configuration": "x86 defconfig",
+      "selected_configuration_correctness": true,
+      "performance_defects": [],
+      "source_changes": false,
+      "modes": [
+        {
+          "mode": "ninja-safe",
+          "scenario": "clean",
+          "artifacts": {
+            "vmlinux": "4804660fbcbd5b000e1a4f128aa0c9410d70df27220c6690d83ce80d9fd7d615",
+            "arch/x86/boot/bzImage": "cf981405c4a7a5c016efcc2bcd404b944d035fc991dd6c54b9e8729dc238ae4d"
+          },
+          "changed_object_count": 3140
+        },
+        {
+          "mode": "ninja-safe",
+          "scenario": "noop",
+          "artifacts": {
+            "vmlinux": "4804660fbcbd5b000e1a4f128aa0c9410d70df27220c6690d83ce80d9fd7d615",
+            "arch/x86/boot/bzImage": "cf981405c4a7a5c016efcc2bcd404b944d035fc991dd6c54b9e8729dc238ae4d"
+          },
+          "changed_object_count": 0
+        },
+        {
+          "mode": "ninja-safe",
+          "scenario": "source",
+          "artifacts": {
+            "vmlinux": "4804660fbcbd5b000e1a4f128aa0c9410d70df27220c6690d83ce80d9fd7d615",
+            "arch/x86/boot/bzImage": "cf981405c4a7a5c016efcc2bcd404b944d035fc991dd6c54b9e8729dc238ae4d"
+          },
+          "changed_object_count": 8
+        },
+        {
+          "mode": "ninja-aggressive",
+          "scenario": "clean",
+          "artifacts": {
+            "vmlinux": "4804660fbcbd5b000e1a4f128aa0c9410d70df27220c6690d83ce80d9fd7d615",
+            "arch/x86/boot/bzImage": "cf981405c4a7a5c016efcc2bcd404b944d035fc991dd6c54b9e8729dc238ae4d"
+          },
+          "changed_object_count": 3140
+        },
+        {
+          "mode": "ninja-aggressive",
+          "scenario": "noop",
+          "artifacts": {
+            "vmlinux": "4804660fbcbd5b000e1a4f128aa0c9410d70df27220c6690d83ce80d9fd7d615",
+            "arch/x86/boot/bzImage": "cf981405c4a7a5c016efcc2bcd404b944d035fc991dd6c54b9e8729dc238ae4d"
+          },
+          "changed_object_count": 0
+        },
+        {
+          "mode": "ninja-aggressive",
+          "scenario": "source",
+          "artifacts": {
+            "vmlinux": "4804660fbcbd5b000e1a4f128aa0c9410d70df27220c6690d83ce80d9fd7d615",
+            "arch/x86/boot/bzImage": "cf981405c4a7a5c016efcc2bcd404b944d035fc991dd6c54b9e8729dc238ae4d"
+          },
+          "changed_object_count": 8
+        },
+        {
+          "mode": "direct",
+          "scenario": "clean",
+          "artifacts": {
+            "vmlinux": "4804660fbcbd5b000e1a4f128aa0c9410d70df27220c6690d83ce80d9fd7d615",
+            "arch/x86/boot/bzImage": "cf981405c4a7a5c016efcc2bcd404b944d035fc991dd6c54b9e8729dc238ae4d"
+          },
+          "changed_object_count": 3140
+        },
+        {
+          "mode": "direct",
+          "scenario": "noop",
+          "artifacts": {
+            "vmlinux": "4804660fbcbd5b000e1a4f128aa0c9410d70df27220c6690d83ce80d9fd7d615",
+            "arch/x86/boot/bzImage": "cf981405c4a7a5c016efcc2bcd404b944d035fc991dd6c54b9e8729dc238ae4d"
+          },
+          "changed_object_count": 0
+        },
+        {
+          "mode": "direct",
+          "scenario": "source",
+          "artifacts": {
+            "vmlinux": "4804660fbcbd5b000e1a4f128aa0c9410d70df27220c6690d83ce80d9fd7d615",
+            "arch/x86/boot/bzImage": "cf981405c4a7a5c016efcc2bcd404b944d035fc991dd6c54b9e8729dc238ae4d"
+          },
+          "changed_object_count": 8
+        }
+      ],
+      "statistical_performance_qualification": false,
+      "historical_performance_regression": "unresolved; no fix claimed"
+    },
+    "other_releases": "Pending qualification; Mesa Meson-only and removed SDL Autotools entry point inapplicable to historical Make checks; NetBSD out of scope and AOSP skip preserved"
+  },
+  "failed_stages": [
+    {
+      "slot": 2,
+      "reason": "Linux configuration: flex could not execute /usr/bin/m4; use distribution gm4 via M4."
+    },
+    {
+      "slot": 103,
+      "reason": "Linux first warmup: BSD sed cannot perform Kbuild binary substitution; select distribution gsed in external image."
+    },
+    {
+      "slot": 105,
+      "reason": "Build succeeded but artifact comparison failed: BSD date rejected Kbuild -d; three initramfs timestamps and ELF build ID varied. Supply campaign-only ISO date adapter and preflight; fresh correctness now passes."
+    }
+  ],
+  "compression": {
+    "report": "validation/compression-results.json",
+    "settings": {
+      "xz_preset": 6,
+      "zstd_level": 3
+    },
+    "medians": {
+      "xz": {
+        "pack_seconds": 1.5251519370003734,
+        "restore_seconds": 0.13634738800010382,
+        "compressed_bytes": 2353276
+      },
+      "zstd": {
+        "pack_seconds": 0.06737255300049583,
+        "restore_seconds": 0.0387458590003007,
+        "compressed_bytes": 3244999
+      }
+    },
+    "selected_default": "xz",
+    "input_manifest_sha256": "283641205250a94aa07a671c3e865a1ee019075318c9879a7e80ee23e454d332"
+  },
+  "small_benchmark": {
+    "report": "checks/small-benchmark.json",
+    "repeats": 3,
+    "baseline_sha256": "c41bbadb8c1597b395f9ff383ef558553591a247e53550ba0f3573668a6c31ca",
+    "candidate_sha256": "4c020ea93477b2415ff20823dae37d7ba8ae865b124caa686180d7424ca6ce1b",
+    "interpretation": "Descriptive existing synthetic harness only; no confidence intervals or promotion claim. Run alone after large and Portage workloads completed."
+  },
+  "limits": [
+    "No complete current campaign compatibility claim.",
+    "Aggressive promotion and Linux performance qualification remain incomplete; safe retained.",
+    "Linux correctness is selected x86 defconfig, not boot or all-architecture qualification.",
+    "Alpine workspace qualification fails as recorded; core lane passes.",
+    "No host-wide tool replacement, historical evidence overwrite, source patching, automatic release publication, or NAS access."
+  ],
+  "evidence": {
+    "archive": "validation/evidence/dependency-upgrade-2026-10-27.zip",
+    "contents": "Package inventories, immutable per-run reports and logs, failed attempts, original durable command ledger, raw measured samples, shared configurations, current/frozen harness inputs, suite and distribution checks; no release source trees or compiled release binaries.",
+    "sha256": "8860e90a058458d875e50d8b612bc7197ed1b39850a5f2b2ac12d248354d4846"
+  }
+}

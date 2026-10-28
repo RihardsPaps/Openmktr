@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Preserve owned path strings through filesystem-probe cache lookups.
 // Track and validate incremental evaluation, include proofs and imported Ninja
 // graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
 // Paps. Changed build execution, evaluation, or portability for this fork.
@@ -42,8 +43,12 @@
 #include <vector>
 
 bool Exists(std::string_view f);
+bool Exists(const std::string& f);
+bool Exists(const char* f);
 double GetTimestampFromStat(const struct stat& st);
 double GetTimestamp(std::string_view f);
+double GetTimestamp(const std::string& f);
+double GetTimestamp(const char* f);
 // Identity includes ctime so timestamp-preserving replacements invalidate
 // caches.
 std::string GetFileIdentity(std::string_view path);
@@ -76,10 +81,12 @@ class ScopedFileObservations {
   std::shared_ptr<FileObservationState> state_;
   FileObservationState* previous_;
   friend bool ObserveFile(const char*, struct stat*);
+  friend bool ObserveFile(const std::string&, struct stat*);
   friend void InvalidateFileObservations();
   static thread_local FileObservationState* active_;
 };
 bool ObserveFile(const char* path, struct stat* st);
+bool ObserveFile(const std::string& path, struct stat* st);
 void InvalidateFileObservations();
 uint64_t FilesystemObservationEpoch();
 bool FilesystemEffectsActive();

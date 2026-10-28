@@ -17,6 +17,18 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_direct_execution_does_not_require_ninja_on_path(self):
+        self.makefile("all:\n\t@printf direct > result\n")
+        empty_path = self.directory / "empty-path"
+        empty_path.mkdir()
+        env = {key: value for key, value in os.environ.items()
+               if not key.startswith("KATI_") and key not in ("MAKEFLAGS", "MAKEOVERRIDES")}
+        env["PATH"] = str(empty_path)
+        result = subprocess.run([str(KATI), "all"], cwd=self.directory, env=env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.directory / "result").read_text(), "direct")
+
     def test_background_recipes_remain_valid_inside_freshness_guards(self):
         for mode in ("direct", "ninja"):
             for existing in (False, True):
@@ -1853,6 +1865,33 @@ class BuildCorrectness(unittest.TestCase):
         self.ninja()
         self.assertTrue((self.directory / "a").exists())
         self.assertTrue((self.directory / "b").exists())
+
+    def test_shared_empty_leaf_rules_preserve_recipe_parallelism(self):
+        inputs = [f"header-{i:03d}" for i in range(128)]
+        for name in inputs:
+            (self.directory / name).write_bytes(b"x")
+        self.makefile("INPUTS := " + " ".join(inputs) + "\n"
+                      "all: a b\n$(INPUTS):\na b: $(INPUTS)\n"
+                      "\t@python3 worker.py $@\n")
+        (self.directory / "worker.py").write_text(
+            "from pathlib import Path\nimport sys,time\n"
+            "Path('start-' + sys.argv[1]).touch()\n"
+            "deadline = time.monotonic() + 2\n"
+            "while not (Path('start-a').exists() and Path('start-b').exists()):\n"
+            "    if time.monotonic() > deadline: raise SystemExit(1)\n"
+            "    time.sleep(.01)\n"
+            "inputs = sorted(Path('.').glob('header-*'))\n"
+            "Path(sys.argv[1]).write_bytes(b''.join(p.read_bytes() for p in inputs))\n")
+        for mode in ("direct", "ninja"):
+            with self.subTest(mode=mode):
+                if mode == "direct":
+                    self.direct("-j2")
+                else:
+                    self.ninja()
+                for name in ("a", "b"):
+                    self.assertEqual((self.directory / name).read_bytes(), b"x" * 128)
+                for name in ("a", "b", "start-a", "start-b"):
+                    (self.directory / name).unlink()
 
     def test_nested_kati_in_recipe_uses_reserved_jobserver_slot(self):
         self.makefile("all:\n\t@python3 nested.py\n")

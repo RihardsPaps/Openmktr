@@ -5,6 +5,7 @@
 # Cover persistent workspace recipe state with the sanitizer build.
 # Include load admission and adapter checks with sanitized executors.
 # Exercise graph optimization behavior with sanitized executors.
+# Pin current stable Actions and gate FIFO jobserver recovery in both builds.
 # Upstream material retains its Apache-2.0 terms. Fork modifications are
 # covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 # at the repository root. Original notices below remain applicable.
@@ -22,7 +23,7 @@ jobs:
   chimera:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Build Openmktr test image
@@ -57,9 +58,10 @@ jobs:
           elif [ "$status" -ne 0 ]; then
             exit "$status"
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
+          archive: true
           name: incremental-evidence
           path: incremental-evidence/
           if-no-files-found: ignore
@@ -78,9 +80,11 @@ jobs:
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/graph_optimizations.py &&
             OMKTR_TEST_GRAPH_PROFILE=aggressive OMKTR_BINARY=/workspace/omktr-sanitized python tests/correctness.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/workspace.py &&
+            OMKTR_BINARY=/workspace/omktr-sanitized python tests/ninja_jobserver.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/make_compat_regressions.py' 2>&1 | tee sanitizer.log
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
+          archive: true
           name: chimera-logs
           path: '*.log'

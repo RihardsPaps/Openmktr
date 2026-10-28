@@ -4,4 +4,6 @@
 set -e
 . /etc/profile
 set -u
+PATH=/opt/openmktr-ninja:$PATH
+export PATH
 exec "$@"

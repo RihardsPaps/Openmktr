@@ -1,5 +1,27 @@
 # Validate external Makefile builds
 
+For current stable release inputs and dependency upgrades, use
+[`dependency-campaign.json`](dependency-campaign.json) and the
+[dependency guide](../docs/dependencies.md). Their pending statuses are separate
+from the historical results below. `qualify_dependencies.py` uses the refreshed
+distribution LLVM/Ninja toolchain and a durable 200-command ledger on the PC.
+The user authorized a total cap of 400 for the Linux/Alpine follow-up after the
+earlier extensions to 250 and 335;
+`requalify_dependencies.py --command-limit=400` continues the same ledger without
+resetting its consumed reservations. Each comparison retains one discarded
+warmup pair and seven measured alternating pairs.
+`benchmark_graph_budget.py` retains the earlier, exhausted 20-command protocol
+for its historical evidence; it is not the current qualification runner.
+The [dependency upgrade results](dependency-upgrade-results.json) record the
+current qualification, failed promotion gate and remaining platform limits.
+The [Linux/Alpine follow-up](dependency-followup-results.json) preserves those
+results and records the subsequent workspace fixes and controlled Linux retry.
+That retry now completes the Linux 7.3 j8/j16 matrix and direct clean/repeat
+checks at 394 of 400 commands. All correctness and source-integrity checks pass;
+both clean-build confidence intervals cross zero, so strict performance
+qualification remains unresolved and safe stays the default. The separate
+Linux 6.12 historical-toolchain variant passes its j8 clean comparison.
+
 Use this directory to investigate real builds and inspect recorded compatibility
 evidence. [The results matrix](PROGRESS.md) names the pinned releases,
 configurations, and limits. It records 41 selected passes, one user-requested
@@ -73,7 +95,7 @@ Historical results retain their original execution-only meaning; rerun this
 helper to obtain end-to-end totals rather than inferring them from old reports.
 
 For paired Openmktr baseline/candidate comparisons on the same Linux builder,
-use `benchmark_ninja.py`. It needs Python 3.12+, Ninja, Clang 18 by default, and the
+use `benchmark_ninja.py`. It needs Python 3.12+, Ninja 1.13.2+, distribution Clang, and the
 unmodified `ffmpeg-7.1.1.tar.xz` or `linux-6.12.tar.xz` release archive:
 
 ```sh

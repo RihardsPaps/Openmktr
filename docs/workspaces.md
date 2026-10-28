@@ -3,7 +3,7 @@
 `omktr workspace` keeps a stable source/build location across release-directory
 changes. Unchanged source bytes retain their workspace timestamps, so Ninja can
 reuse objects and its dependency/build logs. Changed sources, headers and recipes
-still rebuild. Python 3.11 or newer, including its standard-library `lzma` module,
+still rebuild. Python 3.14 or newer, including its standard-library `lzma` module,
 is required for these optional commands.
 
 ## Build and upgrade
@@ -115,7 +115,23 @@ omktr workspace status --name my-project
 omktr workspace run --name my-project
 ```
 
-Packing uses xz compression and reports original and compressed byte counts.
+Packing defaults to XZ and reports original and compressed byte counts and the
+selected format. Use `omktr workspace pack --name my-project --compression=zstd`
+for Zstandard level 3, or `--compression=xz` for XZ preset 6. The same option
+applies to `gc`. Zstandard uses Python's optional `compression.zstd` module when
+available. Distributions that omit it, including stable Alpine, can provide the
+distribution `zstd` executable instead. That backend uses an unnamed temporary
+tar file, so it needs additional temporary disk space. Both backends read the
+same archives and retain checksum, restoration and atomic publication checks.
+The reference image checks both standard-library compression modules.
+
+The archive format is recorded with the workspace; archives without that field
+are restored as legacy XZ workspaces. Existing archives are converted only when
+you restore and explicitly repack them. An unknown format fails without replacing
+expanded files. The mixed source/object measurement in
+[compression-results.json](../validation/compression-results.json) found Zstandard
+archives about 38% larger. This exceeds the 25% default-selection limit, so XZ
+remains the default despite faster packing and restoration in that workload.
 The next `run` automatically restores the workspace at the same absolute paths.
 File modes, symlinks and nanosecond timestamps are restored, allowing existing
 objects and Ninja dependency logs to remain useful. Compression and restoration

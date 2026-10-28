@@ -123,15 +123,16 @@ def main():
     parser.add_argument("--baseline-revision", required=True)
     parser.add_argument("--candidate-revision", required=True)
     parser.add_argument("--project", choices=("ffmpeg", "linux", "synthetic"), required=True)
-    parser.add_argument("--llvm-version", type=int, default=18,
-                        help="external campaign's version-suffixed LLVM tools (default: 18)")
+    parser.add_argument("--llvm-version", type=int,
+                        help="optional version suffix for historical LLVM tools; default: distribution clang")
     parser.add_argument("--entrypoints", nargs="+", choices=("build", "legacy"),
                         default=["build", "legacy"])
     parser.add_argument("--jobs", type=int, nargs="+", default=[8, 16])
     parser.add_argument("--samples", type=int, default=7)
     parser.add_argument("--warmups", type=int, default=2)
     args = parser.parse_args()
-    if args.samples < 1 or args.warmups < 0 or min(args.jobs) < 1 or args.llvm_version < 1:
+    if (args.samples < 1 or args.warmups < 0 or min(args.jobs) < 1 or
+            (args.llvm_version is not None and args.llvm_version < 1)):
         parser.error("positive samples/jobs and nonnegative warmups required")
     if args.monitor and not effective_settings(args.candidate_option)["enabled"]["monitor"]:
         parser.error("--monitor requires candidate aggressive mode with monitoring enabled")
@@ -149,8 +150,9 @@ def main():
     env.update(CCACHE_DISABLE="1", LC_ALL="C", TZ="UTC", SOURCE_DATE_EPOCH="1731888000",
                KBUILD_BUILD_USER="benchmark", KBUILD_BUILD_HOST="benchmark",
                KBUILD_BUILD_VERSION="1", KBUILD_BUILD_TIMESTAMP="Mon Nov 18 00:00:00 UTC 2024")
+    suffix = f"-{args.llvm_version}" if args.llvm_version is not None else ""
     versions = {name: subprocess.check_output(command, env=env, text=True)
-                for name, command in {"clang": [f"clang-{args.llvm_version}", "--version"],
+                for name, command in {"clang": [f"clang{suffix}", "--version"],
                                       "ninja": ["ninja", "--version"]}.items()}
     metadata = dict(project=args.project, jobs=args.jobs, samples=args.samples,
                     build_state="retained incremental only" if args.retained else "fresh clean per pair",
@@ -227,15 +229,15 @@ def main():
                         tool = str(tools[variant])
                         common = []
                         if args.project == "ffmpeg":
-                            configure = [str(source / "configure"), f"--cc=clang-{args.llvm_version}",
-                                         f"--cxx=clang++-{args.llvm_version}", f"--ld=clang-{args.llvm_version}",
+                            configure = [str(source / "configure"), f"--cc=clang{suffix}",
+                                         f"--cxx=clang++{suffix}", f"--ld=clang{suffix}",
                                          "--disable-autodetect", "--disable-doc", "--disable-debug"]
                             artifacts = ("ffmpeg", "ffprobe")
                             changed_source, missing = source / "fftools/ffmpeg.c", "fftools/ffmpeg.o"
                             unrelated = "libavutil/adler32.o"
                             configs = ("config.h", "config_components.h")
                         elif args.project == "linux":
-                            common = ["-f", str(source / "Makefile"), f"LLVM=-{args.llvm_version}",
+                            common = ["-f", str(source / "Makefile"), f"LLVM={suffix or '1'}",
                                       "LLVM_IAS=1", "ARCH=x86"]
                             configure = [tool, *common, "defconfig"]
                             artifacts = ("vmlinux", "arch/x86/boot/bzImage")

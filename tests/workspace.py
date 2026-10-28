@@ -5,6 +5,7 @@
 """Version-independent source synchronization, Ninja reuse and compression."""
 
 import hashlib
+import importlib.util
 import fcntl
 import io
 import json
@@ -18,6 +19,7 @@ import tarfile
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -269,6 +271,143 @@ class Workspace(unittest.TestCase):
         self.assertEqual(before, {p: (directory / p).stat().st_mtime_ns for p in before})
         self.assertEqual(os.readlink(directory / "alias"), "a.c")
         self.assertFalse((profile / "content.tar.xz").exists())
+
+    def test_explicit_formats_and_legacy_archives_restore_build_state(self):
+        (self.source / "alias").symlink_to("a.c")
+        (self.source / "a.c").chmod(0o751)
+        self.build(self.source)
+        directory, profile = self.directory(), self.profile()
+        expected_runs = (directory / "runs").read_text()
+        for compression, suffix in (("xz", "xz"), ("zstd", "zst")):
+            with self.subTest(compression=compression):
+                before = {p.name: (p.lstat().st_mode, p.lstat().st_mtime_ns)
+                          for p in directory.iterdir()}
+                result = json.loads(self.command("pack", "--compression=" + compression).stdout)
+                self.assertEqual(result["compression"], compression)
+                archive = profile / ("content.tar." + suffix)
+                self.assertTrue(archive.exists())
+                state_path = profile / "state.json"
+                state = json.loads(state_path.read_text())
+                self.assertEqual(state["archive_format"], compression)
+                if compression == "xz":
+                    # A pre-upgrade workspace has no archive_format field.
+                    state.pop("archive_format")
+                    state_path.write_text(json.dumps(state))
+                self.command("unpack")
+                self.assertEqual(before, {p.name: (p.lstat().st_mode, p.lstat().st_mtime_ns)
+                                          for p in directory.iterdir()})
+                self.assertEqual(os.readlink(directory / "alias"), "a.c")
+                self.assertFalse(archive.exists())
+                self.build()
+                self.assertEqual((directory / "runs").read_text(), expected_runs)
+
+    def test_zstd_corruption_and_unknown_format_preserve_archive(self):
+        self.build(self.source)
+        profile = self.profile()
+        self.command("pack", "--compression=zstd")
+        archive = profile / "content.tar.zst"
+        state_path = profile / "state.json"
+        state = json.loads(state_path.read_text())
+        state["archive_format"] = "unknown"
+        state_path.write_text(json.dumps(state))
+        self.assertIn("unsupported workspace archive format",
+                      self.command("unpack", success=False).stderr)
+        self.assertIn("unsupported workspace archive format",
+                      self.command("pack", success=False).stderr)
+        state["archive_format"] = "zstd"
+        state_path.write_text(json.dumps(state))
+        archive.write_bytes(b"corrupt" + archive.read_bytes()[7:])
+        self.assertIn("checksum mismatch", self.command("unpack", success=False).stderr)
+        self.assertTrue(archive.exists())
+        self.assertFalse((profile / "content/source/app").exists())
+
+    def test_zstd_distribution_command_roundtrip_and_failed_publication(self):
+        self.build(self.source)
+        profile = self.profile()
+        state_path = profile / "state.json"
+        original_state = state_path.read_bytes()
+        spec = importlib.util.spec_from_file_location("workspace_helper", HELPER)
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        with mock.patch.object(helper, "has_zstd_module", return_value=False):
+            state = json.loads(original_state)
+            with mock.patch.object(helper.shutil, "which", return_value=None):
+                with self.assertRaisesRegex(RuntimeError, "compression.zstd module or the zstd command"):
+                    helper.pack(profile, state, "zstd")
+            self.assertEqual(original_state, state_path.read_bytes())
+            with mock.patch.object(helper.subprocess, "run", return_value=mock.Mock(
+                    returncode=1, stderr=b"injected compressor failure")):
+                with self.assertRaisesRegex(RuntimeError, "injected compressor failure"):
+                    helper.pack(profile, state, "zstd")
+            self.assertEqual(original_state, state_path.read_bytes())
+            self.assertFalse((profile / "content.tar.zst").exists())
+            before = {str(p.relative_to(profile / "content")): (p.read_bytes(), p.stat().st_mtime_ns)
+                      for p in (profile / "content").rglob("*") if p.is_file()}
+            helper.pack(profile, state, "zstd")
+        # Exercise CLI -> stdlib and stdlib -> CLI interoperability wherever
+        # Python supplies the module; Alpine exercises CLI in both directions.
+        helper.unpack(profile, state)
+        helper.pack(profile, state, "zstd")
+        with mock.patch.object(helper, "has_zstd_module", return_value=False):
+            helper.unpack(profile, state)
+        self.assertEqual(before, {str(p.relative_to(profile / "content")): (p.read_bytes(), p.stat().st_mtime_ns)
+                                  for p in (profile / "content").rglob("*") if p.is_file()})
+
+    def test_subsecond_inputs_rebuild_with_a_shell_rejecting_test_nt(self):
+        temporary_shell = tempfile.TemporaryDirectory(prefix="omktr-precision-")
+        self.addCleanup(temporary_shell.cleanup)
+        shell = Path(temporary_shell.name) / "shell"
+        shell.write_text("#!/bin/sh\ncase \"$*\" in *' -nt '*) exit 92 ;; esac\nexec /bin/sh \"$@\"\n")
+        shell.chmod(0o755)
+        (self.source / "Makefile").write_text(
+            f"SHELL := {shell}\nall: result\nresult: input\n\t@cat input > result\n")
+        (self.source / "input").write_text("old")
+        self.build(self.source)
+        directory = self.directory()
+        (directory / "input").write_text("new")
+        stamp = time.time_ns() // 10**9 * 10**9 - 10**9
+        os.utime(directory / "result", ns=(stamp + 100_000_000, stamp + 100_000_000))
+        os.utime(directory / "input", ns=(stamp + 200_000_000, stamp + 200_000_000))
+        with (directory / "Makefile").open("a") as makefile:
+            makefile.write("\n# Regenerate while the previous output exists.\n")
+        self.build()
+        self.assertEqual((directory / "result").read_text(), "new")
+
+    def test_interrupted_pack_keeps_expanded_files_and_metadata(self):
+        self.build(self.source)
+        directory, profile = self.directory(), self.profile()
+        state_path = profile / "state.json"
+        before = state_path.read_bytes()
+        spec = importlib.util.spec_from_file_location("workspace_helper", HELPER)
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        for compression in ("xz", "zstd"):
+            with self.subTest(compression=compression):
+                with mock.patch.object(helper, "restore_archive", side_effect=KeyboardInterrupt):
+                    with self.assertRaises(KeyboardInterrupt):
+                        helper.pack(profile, json.loads(before), compression)
+                self.assertEqual(before, state_path.read_bytes())
+                self.assertTrue((directory / "app").is_file())
+                self.assertEqual(list(profile.glob(".archive-*")), [])
+                self.assertEqual(list(profile.glob("content.tar.*")), [])
+
+    def test_compression_options_are_validated_before_using_workspace(self):
+        result = self.command("pack", "--compression=invalid", success=False)
+        self.assertEqual(result.returncode, 2)
+        result = self.command("run", "--compression=zstd", success=False)
+        self.assertEqual(result.returncode, 2)
+
+    def test_gc_records_selected_format_without_implicitly_repacking(self):
+        self.build(self.source)
+        profile = self.profile()
+        self.command("gc", "--idle-seconds=0", "--compression=zstd")
+        archive = profile / "content.tar.zst"
+        before = archive.read_bytes()
+        self.assertEqual(json.loads(self.command("status").stdout)["archive_format"], "zstd")
+        result = json.loads(self.command("pack", "--compression=xz").stdout)
+        self.assertEqual(result, dict(already_packed=True, compression="zstd"))
+        self.assertEqual(before, archive.read_bytes())
+        self.build()
 
     def test_corrupt_archive_fails_without_publishing_partial_restore(self):
         self.build(self.source)

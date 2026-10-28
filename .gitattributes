@@ -7,6 +7,7 @@ clang-format-check text eol=lf
 packaging/gentoo/omktr-portage text eol=lf
 packaging/gentoo/examples/* text eol=lf
 validation/compatibility/portage-fixture/files/configure text eol=lf
+validation/ninja/reproducible-date text eol=lf
 testcase/*.mk text eol=lf
 testcase/crlf.mk -text
 testcase/crlf_after_directive.mk -text

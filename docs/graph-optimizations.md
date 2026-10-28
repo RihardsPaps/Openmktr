@@ -140,6 +140,13 @@ graphs and deep helper stacks retain ordinary waiting. Recipe admission,
 force. This executor fix applies in every profile, including `off`, so feature
 ablations use the same scheduler on both sides.
 
+FIFO admission uses one local reader at a time. A released inherited reservation
+wakes that reader through a separate Linux event descriptor; the notification
+never enters the token FIFO. The reader retries reservation ownership before
+waiting for capacity held by other processes. This prevents an idle inherited
+slot from leaving all queued recipes blocked. Systems without the wake descriptor
+retain bounded retries and the existing interruption checks.
+
 ## Content-preserving output generation
 
 The stdout producer participates in the inherited shared job budget, including
@@ -311,3 +318,152 @@ discarded, measured pairs still alternate, and each sample keeps distinct logs.
 `--toolchain-dir=DIR --llvm-version=19` selects a private external LLVM
 executable directory for both variants and records its wrapper and manifest
 hashes. It does not change Openmktr's GNU-free build toolchain.
+
+## Current dependency qualification (2026-10-27)
+
+The dependency refresh uses distribution Clang 22.1.8 and Ninja 1.13.2 on the
+local PC. It has its own persistent 200-command ledger, separate from the
+exhausted historical 20-command campaign. Original sources, failures and earlier
+results remain intact. The protocol is **one discarded warmup pair and seven
+alternating measured pairs**, comparing explicit safe/aggressive profiles of the
+same binary and toolchain. Compiler caches are disabled and configurations cloned
+for each pair. See the [dependency results](../validation/dependency-upgrade-results.json)
+and their raw evidence for identities, timings, command reservations and limits.
+
+FFmpeg 9.0.2 passes artifact, rebuild-set, configuration, direct-repeat, smoke and
+source-integrity checks for the selected configuration. Its six measured scenarios
+all show a supported regression. Median paired improvements and bootstrap 95%
+intervals are:
+
+| Scenario | j8 | j16 |
+| --- | --- | --- |
+| Clean | -1.40% [-2.16, -1.23] | -2.03% [-2.41, -1.99] |
+| No-op | -59.84% [-62.72, -57.58] | -68.49% [-69.56, -67.14] |
+| Single source | -79.43% [-83.49, -76.70] | -80.41% [-86.97, -78.80] |
+
+Linux 7.3's statistical matrix is incomplete. The external environment initially
+lacked flex's correctly named m4, GNU sed's binary substitutions, and a working
+fixed-date conversion for initramfs timestamps. The campaign image fixes those
+prerequisites without editing release sources. Focused fresh Linux correctness
+checks use the same ledger and do not substitute for performance measurements.
+Those initial checks did not establish a fix for the historical Linux performance
+regression. The separate follow-up below records later comparisons.
+
+The twelve-scenario promotion gate has failed. **Safe remains the default**;
+aggressive, off and individual exclusions remain available. No filesystem monitor
+starts implicitly. Other refreshed current releases remain pending qualification;
+their historical passes do not transfer to new releases.
+
+## Linux and Alpine follow-up (2026-10-27–28)
+
+The [follow-up report](../validation/dependency-followup-results.json) preserves
+the preceding reports and archives. Alpine's workspace failures are fixed with
+native timestamp comparisons and a distribution Zstandard command backend when
+Python omits `_zstd`. All 29 workspace and 53 graph tests pass on Alpine, Gentoo
+and Chimera. The final Chimera binary also passes the complete reference and
+ASan/UBSan gates. Linux process supervision now waits on a lazily opened process
+descriptor after stdout closes, retaining timed fallback on unsupported systems.
+
+The Linux comparison rebuilds the unmodified historical baseline revision
+`58bb206` and the candidate with identical updated Chimera compiler/linker flags.
+Both compile unmodified Linux sources using Alpine's supported Clang 22.1.3 in
+the same pinned comparison image. This is a candidate regression comparison;
+it does not isolate safe versus aggressive behavior within one binary. A failed
+Chimera compiler attempt and its successful standalone reproducer remain separate.
+
+Linux 7.3 j8 completes one discarded warmup pair and seven alternating measured
+pairs with matching artifacts, configurations, rebuild sets and source contents:
+
+| Scenario | Median paired improvement | Paired bootstrap 95% interval |
+| --- | ---: | ---: |
+| Clean | -0.08% | [-1.25%, +0.31%] |
+| No-op | +23.04% | [+18.73%, +25.21%] |
+| Single source | +3.67% | [+3.50%, +5.84%] |
+
+The same candidate's j16 clean result is -0.55% [-0.73%, -0.26%], a supported
+regression. Its j16 no-op and single-source intervals improve by +4.78%
+[+2.43%, +9.87%] and +1.78% [+1.04%, +5.37%], respectively. This candidate fails
+the strict improvement gate. All its direct/Ninja correctness checks pass.
+
+A subsequent allocation fix retains callers' owned path strings during timestamp
+cache lookup. It preserves the cache's mutation invalidation and C-string/bounded
+view semantics. The isolated million-query benchmark improves by 20.56% on Chimera
+and 29.45% under Alpine's runtime; its same-binary control shows no supported
+difference. These synthetic results do not establish release qualification.
+The new candidate passes the complete reference, Alpine, Gentoo and sanitizer
+gates, including additional native and sanitized path-probe edge tests.
+
+That allocation-only cohort was interrupted after 13 reservations when the next
+investigation identified excessive scheduling of recipe-less dependency leaves.
+Its incomplete samples are retained and do not count toward qualification.
+The executor now checks those leaves inline while continuing to schedule nodes
+with recipes or dependencies. Ownership, mutation invalidation and dependency
+rank protections remain in force.
+
+The Alpine overlap gate then exposed a pipe inheritance race: a parallel recipe
+could inherit a sibling's pipe between `pipe()` and `fcntl(FD_CLOEXEC)`, keeping
+its writer open after the intended child exited. Linux recipe pipes now use
+[`pipe2(O_CLOEXEC)`](https://man7.org/linux/man-pages/man2/pipe.2.html).
+A regression test widens the former race and checks children for inherited
+sibling pipes; it fails on the preceding binary and passes with atomic creation.
+The original failed gate and captured process/descriptor state are preserved.
+The fixed binary passes the complete Chimera, sanitizer, Alpine and Gentoo gates,
+all four incremental comparison lanes, and 10,000 repeated overlap iterations.
+
+Its first three current-Linux j8 clean pairs improve by -0.283%, -0.072% and
++0.349%. With two negative pairs already recorded, even hypothetical +99%
+improvements in all four remaining pairs leave the prescribed bootstrap lower
+bound negative. This cohort was explicitly interrupted at reservation 262 to
+avoid spending the remaining allowance on a binary that cannot meet that
+criterion. It is **unqualified**, with no completed seven-pair result claimed.
+The samples, early-rejection calculation, interruption and unchanged-source
+check remain intact. Separate reserved clean-build CPU profiles investigate
+the remaining overhead; their instrumented timings are excluded from acceptance.
+
+The subsequent reservation fix has a direct reproducer: with no free FIFO tokens
+and one inherited slot, four queued recipes formerly stalled after the first
+completed. They now finish with peak concurrency one and no FIFO token added.
+All seven jobserver/process cases pass, including a separate run with eventfd
+deliberately unavailable. A synthetic recursive contention workload improves by
+36.11% [+34.70%, +37.52%] using seven alternating pairs after one discarded
+warmup. Its artifacts and token return are checked. These are mechanism results;
+the separate release comparisons below determine qualification.
+
+The historical Linux 6.12 comparison completes one discarded warmup pair and
+seven measured alternating pairs using the supported Clang/LLVM 20 historical
+image. Its median paired clean-build improvement is +0.17%, with a positive
+95% interval of [+0.09%, +0.29%]. All artifacts match and source contents are
+unchanged. This is a new toolchain/timing variant, separate from the preserved
+LLVM 19 execution-only evidence. Current Linux 7.3 still uses Clang 22.1.3.
+
+The final Linux 7.3 matrix completes seven alternating measured pairs after one
+discarded warmup pair at each job count. The final binary is
+`8027d04f6693a10801536d4e17da008b98595eb42875a652ee3e93eefbd240cf`.
+All artifact, configuration, rebuild-set and source-content checks pass, as do
+the separate default-safe direct clean/repeat checks. Paired improvements and
+bootstrap 95% intervals are:
+
+| Scenario | j8 | j16 |
+| --- | --- | --- |
+| Clean | +0.31% [-0.58%, +1.05%] | +0.52% [-0.07%, +0.76%] |
+| No-op | +29.16% [+27.47%, +39.00%] | +32.87% [+25.20%, +36.86%] |
+| Single source | +7.98% [+5.54%, +8.19%] | +7.69% [+6.36%, +8.15%] |
+
+Both clean intervals cross zero. Neither establishes a supported regression or
+the required positive improvement, so the strict six-scenario Linux performance
+gate **does not pass**. Four incremental/no-op scenarios pass. These comparisons
+also do not isolate safe/aggressive features within one binary or replace the
+failed initial FFmpeg profile comparison.
+
+The interrupted pre-update Docker cohort and its samples remain separate. A new
+independent source check matches all 96,080 entries to the official archive using
+the original Python data-filter extraction policy; the first raw-link comparison
+is retained with its symlink-normalization limitation documented. No interrupted
+timings were transferred to the complete restart.
+
+**Safe remains the default.** The same durable ledger ends at **394 of 400**
+authorized commands, leaving six unused; no reservations were reset. The
+[follow-up report](../validation/dependency-followup-results.json) and
+[separate evidence archive](../validation/evidence/dependency-followup-2026-10-28.zip)
+retain completed, failed and interrupted cohorts. No full campaign or
+aggressive-default qualification is claimed.
