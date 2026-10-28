@@ -705,7 +705,12 @@ def gui(backend):
     toolbar = ttk.Frame(workspace_page); toolbar.pack(fill='x', pady=14)
     output = tk.Text(workspace_page, wrap='word', height=15, state='disabled'); output.pack(fill='both', expand=True)
     def operation(action):
-        request = {k: v.get() for k, v in workspace_vars.items()}; request['action'] = action
+        keys = ['root']
+        if action in ('status', 'pack', 'unpack'): keys += ['name', 'profile']
+        if action in ('pack', 'gc'): keys.append('compression')
+        if action == 'gc': keys.append('idle_seconds')
+        request = {key: workspace_vars[key].get() for key in keys}
+        request['action'] = action
         if action in ('status', 'pack', 'unpack') and not request['name']:
             status.set('Enter a workspace name from Refresh / List.'); return
         def done(result):

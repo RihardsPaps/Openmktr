@@ -88,9 +88,24 @@ class NativeTk(unittest.TestCase):
                     view['stage']('configure')
                     self.assertIn('workspace root', view['error'].get())
                     view['clear']()
-                    view['operation']('list')
-                    wait(lambda: workspace.called)
-                    root.update()
+                    view['workspace_vars']['profile'].set('existing-profile')
+                    view['workspace_vars']['name'].set('cat/a:0:host')
+                    for action in ('list', 'gc', 'status', 'pack', 'unpack'):
+                        workspace.reset_mock()
+                        view['operation'](action)
+                        wait(lambda: workspace.called)
+                        # Wait until the completion is delivered before the next action.
+                        for _ in range(5): root.update(); time.sleep(.03)
+                        request = workspace.call_args.args[0]
+                        self.assertEqual(request['action'], action)
+                        if action in ('list', 'gc'):
+                            self.assertNotIn('profile', request)
+                            self.assertNotIn('name', request)
+                        else:
+                            self.assertEqual(request['profile'], 'existing-profile')
+                            self.assertEqual(request['name'], 'cat/a:0:host')
+                        self.assertEqual('compression' in request, action in ('pack', 'gc'))
+                        self.assertEqual('idle_seconds' in request, action == 'gc')
                 except Exception as exc:
                     failure.append(exc)
                 finally:
