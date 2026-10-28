@@ -653,11 +653,12 @@ def main():
     if sys.version_info < (3, 14):
         raise RuntimeError("workspace commands require Python 3.14 or newer")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("run", "path", "status", "pack", "unpack", "gc",
+    parser.add_argument("action", choices=("run", "path", "status", "pack", "unpack", "gc", "list",
                                            "portage-prepare", "portage-enter"))
     parser.add_argument("--root", type=Path, default=Path(os.environ.get("OMKTR_WORKSPACE_ROOT",
                         str(Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "openmktr/workspaces"))))
     parser.add_argument("--name")
+    parser.add_argument("--profile")
     parser.add_argument("--source", type=Path)
     parser.add_argument("--context")
     layout = parser.add_mutually_exclusive_group()
@@ -678,6 +679,11 @@ def main():
         parser.error("--compression applies only to pack and gc")
     args.compression = args.compression or DEFAULT_COMPRESSION
     root = args.root.resolve()
+    if args.profile and args.action not in ("status", "pack", "unpack"):
+        parser.error("--profile applies only to status, pack and unpack")
+    if args.action == "list" and not root.exists():
+        print("[]")
+        return
     root.mkdir(parents=True, exist_ok=True)
     cache_owner = root.stat()
     if os.geteuid() == 0 and cache_owner.st_uid != 0:
@@ -692,6 +698,27 @@ def main():
         raise RuntimeError("workspace cache must belong to the current build user")
     if stat.S_IMODE(cache_owner.st_mode) & 0o022:
         raise RuntimeError("workspace cache must not be writable by other users")
+    if args.action == "list":
+        result = []
+        for marker in sorted(root.glob("*/index.json")):
+            if marker.is_symlink() or marker.parent.is_symlink():
+                raise RuntimeError("workspace index must not be a symlink")
+            index = read_json(marker)
+            if hashlib.sha256(index["name"].encode()).hexdigest()[:24] != marker.parent.name:
+                raise RuntimeError("workspace index path mismatch")
+            for key in index["profiles"]:
+                if len(key) != 24 or any(c not in "0123456789abcdef" for c in key):
+                    raise RuntimeError("invalid profile")
+                profile = marker.parent / key
+                if profile.is_symlink() or (profile / "state.json").is_symlink():
+                    raise RuntimeError("workspace profile must not be a symlink")
+                state = read_json(profile / "state.json")
+                if index.get("schema") != SCHEMA or state.get("schema") != SCHEMA:
+                    raise RuntimeError("unsupported workspace schema")
+                result.append(dict(name=index["name"], profile=key, current=key == index.get("current"),
+                                   packed=state.get("packed", False), last_used=state.get("last_used")))
+        print(json.dumps(result))
+        return
     if args.action == "gc":
         count = 0
         for marker in sorted(root.glob("*/index.json")):
@@ -780,6 +807,8 @@ def main():
                 state["last_used"] = time.time()
                 atomic_json(workspace / "state.json", state)
             return
+        if args.profile:
+            index = {**index, "current": args.profile}
         workspace, state = current_profile(base, index)
         if args.action != "status":
             check_owner(state, owner)

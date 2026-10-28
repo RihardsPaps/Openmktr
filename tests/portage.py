@@ -64,6 +64,18 @@ class PortageWrapper(unittest.TestCase):
                     self.assertEqual(json.loads(result.stdout)['args'], prefix + ['all'])
         self.assertEqual(json.loads(self.invoke('all').stdout)['args'], ['all'])
 
+    def test_manager_defaults_precede_explicit_arguments(self):
+        result = self.invoke('--graph_optimizations=off', '-j1',
+                             OMKTR_PORTAGE_MODE='ninja', EBUILD_PHASE='compile',
+                             OMKTR_PORTAGE_GRAPH_OPTIMIZATIONS='safe',
+                             OMKTR_PORTAGE_RECURSIVE_CACHE='1',
+                             OMKTR_PORTAGE_STRICT_COMPAT='1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['args'],
+                         ['build', '--strict-compat', '--recursive_cache',
+                          '--graph_optimizations=safe', '--graph_optimizations=off', '-j1'])
+        self.assertEqual(self.invoke(OMKTR_PORTAGE_RECURSIVE_CACHE='bad').returncode, 2)
+
     def test_arguments_environment_and_cwd(self):
         args = ['-j4', '-l2.5', '-C', 'a b', 'DESTDIR=/image with spaces',
                 'VALUE=$literal; *', 'MAKE=/explicit/tool', 'install']

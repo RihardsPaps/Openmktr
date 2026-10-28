@@ -199,3 +199,9 @@ Maintenance invoked by root for a cache owned by the build user drops privileges
 to that owner. New builds must run as the cache owner. Unselecting the environment
 restores the package's normal workspace lifecycle; retained state stays available
 until explicitly removed by its owner.
+
+The Portage manager can enumerate all retained configurations. The underlying
+`omktr workspace list --root DIR` returns JSON without creating missing workspaces.
+`status`, `pack`, and `unpack` accept `--profile ID` to inspect or maintain a retained
+configuration without changing the current build profile. Existing locking and
+cache-owner checks apply. See the Gentoo guide for interactive management.

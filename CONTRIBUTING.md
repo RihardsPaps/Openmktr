@@ -214,3 +214,16 @@ Read [the campaign guide](validation/README.md) and
 scripts or claiming compatibility. The tools target a recorded WSL builder
 and pinned third-party releases. They do not replace CI. Never patch release
 source trees to make campaign checks pass.
+
+Portage manager backend checks run with `python tests/manager.py` without Portage,
+curses, or Tkinter. The reference Docker gate includes them. Optional frontend
+smoke checks require curses or Tkinter and a display; real package discovery
+requires the Gentoo system Python and Portage.
+
+Run `python tests/manager_frontend.py` with Tkinter and a display (or through
+Xvfb) for actual widget interaction checks. The portable suite separately tests
+frontend controllers without requiring graphical dependencies.
+
+`python tests/manager_terminal.py` exercises an actual curses session through
+a private pseudoterminal. It writes only a temporary configuration and tests
+authentication separately. This check runs in the reference Docker gate.

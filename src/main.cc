@@ -8,6 +8,7 @@
 // Ninja's --. Add a locked, regenerating single-command Ninja build supervisor.
 // Expose native output stamps for generated recipes' interruption cleanup.
 // Pass Ninja output cleanup to the existing native recipe supervisor.
+// Add workspace profile enumeration for the Portage manager.
 // Dispatch optional persistent-workspace management to the Python frontend.
 // Let changed workspace recipes bypass initial-file timestamp guards.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
@@ -1627,8 +1628,8 @@ static int HandleFileRead(int argc, char** argv) {
 
 static bool IsWorkspaceAction(const char* argument) {
   for (const char* action :
-       {"run", "path", "status", "pack", "unpack", "gc", "portage-prepare",
-        "portage-enter", "--help", "-h"}) {
+       {"run", "path", "status", "pack", "unpack", "gc", "list",
+        "portage-prepare", "portage-enter", "--help", "-h"}) {
     if (!strcmp(action, argument))
       return true;
   }

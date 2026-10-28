@@ -147,3 +147,24 @@ against old-version-only caches, with explicit positive controls and uncached
 new-state comparisons. Its path profiles produced no cross-version hits;
 the investigation stopped before the conditional C++ benchmark. See the
 same report for the evidence, limitations and retained-container reproduction.
+
+## Manager frontend and privilege checks
+
+`python3 tests/manager_terminal.py` drives the real curses interface through a
+private pseudoterminal. With Python's Tk support and Xvfb installed, start a
+private display and run `DISPLAY=:99 python3 tests/manager_frontend.py` to
+exercise actual Tk widgets on Linux. These checks use disposable configuration
+and simulate a failed authentication at the frontend boundary.
+
+`validation/compatibility/manager_polkit.py` separately exercises real pkexec
+and polkit denial, authorization, and privileged stale-request rejection. Run
+only in a disposable Gentoo container with `OMKTR_PORTAGE_VALIDATION=1`, an
+installed `/usr/bin/omktr-manager`, a private system D-Bus/polkit daemon, and an
+`omktr-manager-test` account. It temporarily authorizes only that account to
+execute the installed helper, verifies root-owned output, and removes the rule
+and restores configuration afterwards. It tests the privilege transition and
+policy enforcement; it does not automate a desktop password prompt.
+
+The installed manager fixture also parses optional GUI/TUI interpreter
+dependencies using Portage, so invalid USE-dependency syntax fails the lane
+even when the ebuild is installed with only the CLI enabled.

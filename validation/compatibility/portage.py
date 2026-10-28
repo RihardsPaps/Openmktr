@@ -294,6 +294,7 @@ def lifecycle(output, result, real_packages):
             for file in config.rglob('*'):
                 if file.is_file() and file not in cleanup:
                     assert 'omktr-portage' not in file.read_text(errors='replace'), file
+            run(['python3', str(ROOT / 'validation/compatibility/portage_manager.py')], output, 'installed-manager')
             run(['/usr/bin/omktr', '--version'], output, 'installed-version')
             (output / 'binary.sha256').write_text(
                 hashlib.sha256(Path('/usr/bin/omktr').read_bytes()).hexdigest() + '\n')
