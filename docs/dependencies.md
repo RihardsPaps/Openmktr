@@ -64,20 +64,13 @@ option records locally observed hashes when establishing a new input. Hash
 provenance distinguishes publisher metadata from local observations; neither is a
 claim that an upstream signature was verified.
 
-`qualify_dependencies.py` compares explicit safe/aggressive profiles using the same
-binary and updated toolchain. Its required `--budget-ledger` holds a process lock
-and persists/fsyncs every reservation before starting a large command. Use the
-same ledger for further attempts. Failed commands and interrupted reservations
-consume slots; the initial hard limit was 200. One shared configuration per project,
-one discarded warmup and seven alternating measured pairs at j8/j16 consume 194
-commands. Four direct-mode clean/repeat checks bring the matrix to 198. The two
-remaining commands cover failed attempts; they are never silently replenished.
-Core suites and small synthetic checks are separate. No monitor starts implicitly.
-For the follow-up, the user explicitly raised the total cap to 250, then 335,
-and finally 400 to complete Linux qualification after the fixes. Continuation tools accept
-`--command-limit=400` and retain the same ledger and its original
-reservations. The initial runner still defaults to the original 200-command cap.
-An increased allowance does not relax the one-warmup, seven-pair acceptance gate.
+External profile comparisons use explicit Safe/Aggressive selections, matched
+toolchains, disabled compiler caches and cloned configurations. The completed
+protocol uses one discarded warmup pair and seven alternating measured pairs.
+Campaign runners persist command reservations in a locked ledger; failed and
+interrupted commands remain accounted for. Historical allowances are recorded
+in their reports and do not authorize new workloads. See
+[performance results](ninja-performance.md) for completed comparisons and limits.
 
 Current Kbuild requires GNU sed's binary substitutions, so the external image
 selects distribution `gsed` on a private PATH. Chimera has no GNU date package.
@@ -116,22 +109,9 @@ and generated freshness guards compare timestamps through Openmktr's native
 helper. Mandatory workspace and graph suites now pass on Alpine and Gentoo.
 The original failing evidence remains in the initial qualification archive.
 
-The [2026-10-27 qualification report](../validation/dependency-upgrade-results.json)
-and its checksummed evidence retain 115 of 200 large-command reservations.
-That initial run passes selected FFmpeg 9.0.2 and Linux 7.3 x86 build correctness,
-but all six FFmpeg performance intervals fail promotion and its Linux matrix is
-incomplete. Zstandard's 37.9% larger archive fails the size
-gate, so XZ stays the workspace default. The reference, required sanitizer,
-release packaging and external incremental checks pass; Gentoo also passes the
-installed-overlay and pinned real-package lifecycle checks. See the report for
-the exact coverage and the original corrected test failure.
-The separate [Linux/Alpine follow-up report](../validation/dependency-followup-results.json)
-records subsequent fixes and measurements without replacing that initial report.
-It completes the historical Linux 6.12 j8 clean comparison with a positive
-paired interval using the supported Clang 20 variant. The complete Linux 7.3
-j8/j16 matrix and default-safe direct checks pass correctness with unchanged
-source contents. No-op builds improve by 29.16–32.87%, and single-source builds
-by 7.69–7.98%, with positive paired bootstrap 95% intervals. Both clean-build
-intervals cross zero, leaving the strict Linux improvement gate unresolved.
-The ledger ends at 394 of 400 commands; six remain unused. Safe stays the graph
-default, and the full twelve-scenario profile-promotion gate has not passed.
+The [performance summary](ninja-performance.md) reconciles the initial
+[dependency qualification](../validation/dependency-upgrade-results.json) and
+[Linux/Alpine follow-up](../validation/dependency-followup-results.json).
+The initial Alpine failures are resolved in the follow-up; their original
+evidence remains available. Safe and XZ remain defaults. Historical
+qualification does not establish support for untested release inputs.

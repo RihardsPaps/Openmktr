@@ -190,7 +190,7 @@ omktr-manager workspaces --workspace-action list
 omktr-manager workspaces --workspace-action pack --name CATEGORY/PN:SLOT:CHOST --profile PROFILE --compression xz
 ```
 
-Settings are `mode`, `jobs`, `load`, `graph`, `recursive_cache`, `strict`,
+Core settings are `mode`, `jobs`, `load`, `graph`, `recursive_cache`, `strict`,
 `workspace`, and `root`. Booleans use `true` or `false`; empty jobs/load inherit
 Portage settings. Workspace roots must be below `/var/cache/openmktr/`.
 Workspace mode enables Automake dependency tracking and requires Ninja compilation.
@@ -237,6 +237,7 @@ The workspace screen shows the form before running an operation.
 ![Mixed batch settings](../../docs/screenshots/portage-manager-mixed.png)
 
 ![Workspace management form](../../docs/screenshots/portage-manager-workspaces.png)
+
 ### Responsive browsing and advanced settings
 
 The manager loads Portage after opening its interface and snapshots package

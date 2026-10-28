@@ -54,6 +54,8 @@ python tests/graph_optimizations.py
 OMKTR_TEST_GRAPH_PROFILE=aggressive python tests/correctness.py
 python tests/make_compat_regressions.py
 python tests/portage.py
+python tests/manager.py
+python tests/manager_terminal.py
 python tests/load_limits.py
 python tests/portage_validation.py
 python tests/cross_version_cache.py
@@ -62,6 +64,7 @@ python tests/workspace.py
 python tests/ninja_jobserver.py
 python tests/release_packaging.py
 python tests/regression.py
+OMKTR_TEST_GRAPH_PROFILE=aggressive python tests/regression.py
 sh testcase/dump/run.sh
 ```
 
@@ -184,15 +187,11 @@ Use `--cache-kind ninja` to measure explicit `build` children instead.
 The [investigation guide](docs/recursive-cache.md) documents the cache
 safety boundaries, measurement limits and recorded results.
 
-For opt-in compiler-cache experiments across fresh Portage version directories,
+For the closed compiler-cache investigation across fresh Portage version directories,
 see [cross-version reuse](docs/cross-version-reuse.md). That external campaign
 is separate from the recursive no-op cache and the portable PR gate.
 
-[PR #1](https://github.com/RihardsPaps/Openmktr/pull/1)
-records the original C++ comparison, test results, and GNU dependency audit.
-On its fixed workloads, the refactor showed no material runtime or peak-memory
-regression and reduced the binary from 894,896 to 836,960 bytes. Those historical
-measurements are not a performance guarantee for other builds.
+Recorded comparisons and their limits are summarized in [performance results](docs/ninja-performance.md).
 
 ## Find the implementation
 
@@ -211,7 +210,7 @@ Both modes share parsing, evaluation, and dependency resolution.
 
 Read [the campaign guide](validation/README.md) and
 [its results matrix](validation/PROGRESS.md) before running `validation/`
-scripts or claiming compatibility. The tools target a recorded WSL builder
+scripts or claiming compatibility. The tools include helpers for a recorded WSL builder
 and pinned third-party releases. They do not replace CI. Never patch release
 source trees to make campaign checks pass.
 
@@ -233,3 +232,12 @@ using disposable synthetic catalogs of 1,000, 10,000 and 30,000 packages. These
 measure manager overhead rather than real Portage repository startup. GUI checks
 run in the separate Chimera `Dockerfile.frontend` image after building
 `openmktr-test`; this compiles Python's optional Tk extension and uses Xvfb.
+
+To run the graphical gate locally:
+
+```sh
+docker build -f Dockerfile.frontend -t openmktr-frontend .
+docker run --rm openmktr-frontend
+```
+
+Build `openmktr-test` first. The frontend image supplies its own display.
