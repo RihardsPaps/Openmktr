@@ -395,100 +395,339 @@ def workspace(request, elevate=True):
     return result.stdout
 
 
+class SettingsDraft:
+    """Keep untouched values independent for every package in a batch."""
+    def __init__(self, initial):
+        self.initial = initial
+        self.edits = {}
+
+    def set(self, key, value):
+        if value == self.initial[key]:
+            self.edits.pop(key, None)
+        else:
+            self.edits[key] = value
+
+
 def gui(backend):
     try:
         import tkinter as tk
-        from tkinter import ttk, messagebox, simpledialog
+        from tkinter import ttk, messagebox
     except ImportError as error:
         raise RuntimeError('install Python Tkinter / enable the gui USE flag') from error
+    import threading
+    import queue
     app = tk.Tk()
     app.title('Openmktr Portage Manager')
+    app.geometry('1280x850')
+    app.minsize(1100, 750)
+    from tkinter import font as tkfont
+    if 'Liberation Sans' in tkfont.families(app):
+        for name in ('TkDefaultFont', 'TkTextFont', 'TkMenuFont', 'TkHeadingFont'):
+            tkfont.nametofont(name).configure(family='Liberation Sans', size=10)
+        tkfont.nametofont('TkFixedFont').configure(family='Liberation Mono', size=9)
+    family = tkfont.nametofont('TkDefaultFont').actual('family')
+    style = ttk.Style(app)
+    if 'clam' in style.theme_names(): style.theme_use('clam')
+    style.configure('.', background='#f3f5f7', foreground='#243447')
+    style.configure('TNotebook', background='#f3f5f7', borderwidth=0)
+    style.configure('Treeview', background='white', fieldbackground='white', rowheight=27)
+    style.map('Treeview', background=[('selected', '#d9eafa')], foreground=[('selected', '#173b61')])
+    style.map('TNotebook.Tab', background=[('selected', 'white')])
+    style.configure('TButton', padding=(10, 6))
+    style.configure('TNotebook.Tab', padding=(14, 8))
+    style.configure('Heading.TLabel', font=(family, 17, 'bold'))
+    style.configure('Title.TLabel', font=(family, 11, 'bold'))
     controller = Controller(backend)
-    query = tk.StringVar()
-    ttk.Entry(app, textvariable=query).pack(fill='x')
-    listing = tk.Listbox(app, selectmode='extended', width=90, height=20)
-    listing.pack(fill='both', expand=True)
-    rows = backend.portage.packages()
-    scope = tk.StringVar(value='all')
-    ttk.Combobox(app, textvariable=scope, values=('all', 'installed', 'available', 'configured'), state='readonly').pack(fill='x')
-    displayed = []
-    def refresh(*unused):
-        listing.delete(0, 'end')
-        displayed.clear()
-        for row in rows:
-            info = backend.show(row['package'])
-            matches = scope.get() == 'all' or (scope.get() == 'configured' and info['state'] != 'disabled') or row.get(scope.get(), False)
-            if matches and query.get().lower() in row['package'].lower():
-                displayed.append(row['package'])
-                listing.insert('end', row['package'] + '  [' + info['state'] + ']')
-    query.trace_add('write', refresh)
-    scope.trace_add('write', refresh)
-    refresh()
-    preview = tk.Text(app, width=100, height=16)
-    preview.pack(fill='both', expand=True)
-    def act(action):
-        try:
-            packages = [displayed[i] for i in listing.curselection()]
-            values = {}
-            if action in ('configure', 'adopt'):
-                initial = controller.initial_settings(packages)
-                for key, (default, kind, help_text) in OPTIONS.items():
-                    current = str(initial[key]) if initial[key] is not None else '<mixed; unchanged>'
-                    value = simpledialog.askstring(key, help_text + '\n' + kind + '\nKeep the shown value to leave this setting unchanged.', initialvalue=current, parent=app)
-                    if value is None:
-                        return
-                    if value != current:
-                        values[key] = option_value(key, value)
-            text = controller.stage(action, packages, values)
-            preview.delete('1.0', 'end')
-            preview.insert('end', text)
-        except (ValueError, RuntimeError, OSError) as error:
-            messagebox.showerror('Openmktr', str(error))
-    def discard():
-        if not controller.pending or messagebox.askyesno('Discard edits?', 'Discard pending changes?'):
-            controller.pending = None
-            preview.delete('1.0', 'end')
-    ttk.Button(app, text='Discard edits', command=discard).pack(side='left')
-    def commit():
-        try:
-            controller.save()
-            preview.delete('1.0', 'end')
-            refresh()
-        except (ValueError, RuntimeError, OSError) as error:
-            messagebox.showerror('Openmktr', str(error))
-    def close():
-        if not controller.pending or messagebox.askyesno('Discard edits?', 'Discard pending changes?'):
-            app.destroy()
-    for label, command in [('Configure', lambda: act('configure')), ('Adopt', lambda: act('adopt')), ('Disable', lambda: act('disable')), ('Setup workspaces', lambda: act('setup-workspaces')), ('Save', commit), ('Cancel', close)]:
-        ttk.Button(app, text=label, command=command).pack(side='left')
-    def workspace_window():
-        window = tk.Toplevel(app)
-        window.title('Workspace profiles')
-        output = tk.Text(window, width=100, height=24)
-        output.pack(fill='both', expand=True)
-        def operation(action):
-            request = dict(action=action)
-            try:
-                if action in ('status', 'pack', 'unpack'):
-                    request['name'] = simpledialog.askstring('Workspace', 'Workspace name (from List):', parent=window)
-                    if not request['name']: return
-                    request['profile'] = simpledialog.askstring('Profile', 'Profile identifier (empty selects current):', parent=window)
-                if action in ('pack', 'gc'):
-                    request['compression'] = simpledialog.askstring('Compression', 'xz or zstd:', initialvalue='xz', parent=window)
-                    if request['compression'] is None: return
-                if action == 'gc':
-                    request['idle_seconds'] = simpledialog.askstring('Idle age', 'Idle seconds:', initialvalue='3600', parent=window)
-                    if request['idle_seconds'] is None: return
-                output.delete('1.0', 'end')
-                output.insert('end', workspace(request))
-            except (RuntimeError, ValueError, OSError) as error:
-                messagebox.showerror('Workspaces', str(error), parent=window)
-        for action in ('list', 'status', 'pack', 'unpack', 'gc'):
-            ttk.Button(window, text=action.title(), command=lambda a=action: operation(a)).pack(side='left')
-    ttk.Button(app, text='Workspaces', command=workspace_window).pack(side='left')
-    app.protocol('WM_DELETE_WINDOW', close)
-    app.mainloop()
+    selected, rows, information = [], [], {}
+    draft = SettingsDraft({k: v[0] for k, v in OPTIONS.items()})
+    loading = False
+    busy = False
+    events = queue.Queue()
+    poll_timer = []
+    shell = ttk.Frame(app, padding=18)
+    shell.pack(fill='both', expand=True)
+    ttk.Label(shell, text='Openmktr', style='Heading.TLabel').pack(anchor='w')
+    ttk.Label(shell, text='Portage Manager  /  Select packages, adjust settings, review and save.').pack(anchor='w', pady=(4, 16))
+    navigation = ttk.Notebook(shell)
+    navigation.pack(fill='both', expand=True)
+    package_page = ttk.Frame(navigation, padding=14)
+    workspace_page = ttk.Frame(navigation, padding=18)
+    navigation.add(package_page, text='Packages')
+    navigation.add(workspace_page, text='Workspace manager')
+    split = ttk.Panedwindow(package_page, orient='horizontal')
+    split.pack(fill='both', expand=True)
+    browser = ttk.Frame(split, padding=(0, 0, 16, 0))
+    editor = ttk.Frame(split, padding=(16, 0, 0, 0))
+    split.add(browser, weight=2)
+    split.add(editor, weight=3)
+    ttk.Label(browser, text='Package catalog', style='Title.TLabel').pack(anchor='w')
+    query = tk.StringVar(app)
+    scope = tk.StringVar(app, value='all')
+    ttk.Label(browser, text='Search category or package').pack(anchor='w', pady=(12, 4))
+    search = ttk.Entry(browser, textvariable=query)
+    search.pack(fill='x')
+    ttk.Combobox(browser, textvariable=scope, values=('all', 'installed', 'available', 'configured'), state='readonly').pack(fill='x', pady=8)
+    holder = ttk.Frame(browser)
+    holder.pack(fill='both', expand=True)
+    table = ttk.Treeview(holder, columns=('installed', 'state'), selectmode='extended')
+    for key, label, width in (('#0', 'Package', 205), ('installed', 'Installed', 65), ('state', 'Configuration', 100)):
+        table.heading(key, text=label)
+        table.column(key, width=width, minwidth=width, stretch=key == '#0')
+    scrollbar = ttk.Scrollbar(holder, command=table.yview)
+    table.configure(yscrollcommand=scrollbar.set)
+    table.pack(side='left', fill='both', expand=True)
+    scrollbar.pack(side='right', fill='y')
+    count = tk.StringVar(app, value='Loading catalog...')
+    ttk.Label(browser, textvariable=count).pack(anchor='w', pady=8)
+    title = tk.StringVar(app, value='Select a package')
+    hint = tk.StringVar(app, value='Use Ctrl or Shift to select multiple packages.')
+    ttk.Label(editor, textvariable=title, style='Title.TLabel').pack(anchor='w')
+    ttk.Label(editor, textvariable=hint, wraplength=510).pack(anchor='w', pady=(8, 12))
+    tabs = ttk.Notebook(editor)
+    tabs.pack(fill='both', expand=True)
+    variables, fields, inherits, pages = {}, {}, {}, {}
+    groups = [('Build', ('mode', 'strict')), ('Performance', ('jobs', 'load', 'graph', 'recursive_cache')), ('Workspaces', ('workspace', 'root'))]
+    labels = dict(mode='Build mode', strict='Strict compatibility', jobs='Parallel jobs', load='Load limit', graph='Graph optimizations', recursive_cache='Recursive no-op cache', workspace='Persistent workspace', root='Workspace cache root')
+    error = tk.StringVar(app)
+    status = tk.StringVar(app, value='Loading package catalog...')
 
+    def changed(key):
+        if loading or busy: return
+        value = variables[key].get()
+        if type(OPTIONS[key][0]) is bool:
+            value = None if value == -1 else bool(value)
+            fields[key].configure(text='Mixed (unchanged)' if value is None else 'Enabled')
+        if key in inherits and inherits[key].get(): value = ''
+        if value is None or value == 'Mixed (unchanged)': draft.edits.pop(key, None)
+        else: draft.set(key, value)
+        if key in inherits:
+            fields[key].configure(state='disabled' if inherits[key].get() else 'normal')
+        error.set('')
+
+    def reset(key):
+        nonlocal loading
+        if busy: return
+        if not loading and controller.pending:
+            controller.pending = None
+            write_preview('')
+        loading = True
+        value = draft.initial[key]
+        variables[key].set((-1 if type(OPTIONS[key][0]) is bool else 'Mixed (unchanged)') if value is None else value)
+        if key in inherits: inherits[key].set(value == '')
+        draft.edits.pop(key, None)
+        if type(OPTIONS[key][0]) is bool:
+            fields[key].state(['alternate'] if value is None else ['!alternate'])
+            fields[key].configure(text='Mixed (unchanged)' if value is None else 'Enabled')
+        loading = False
+
+    for name, keys in groups:
+        page = ttk.Frame(tabs, padding=16)
+        page.columnconfigure(0, weight=1)
+        tabs.add(page, text=name)
+        pages[name] = page
+        for index, key in enumerate(keys):
+            row = index * 4
+            default, kind, help_text = OPTIONS[key]
+            ttk.Label(page, text=labels[key], style='Title.TLabel').grid(row=row, column=0, sticky='w', pady=(8, 4))
+            variable = tk.IntVar(app, value=-1) if type(default) is bool else tk.StringVar(app)
+            variables[key] = variable
+            if type(default) is bool:
+                field = ttk.Checkbutton(page, text='Enabled', variable=variable, command=lambda k=key: changed(k))
+            elif key in ('mode', 'graph'):
+                field = ttk.Combobox(page, textvariable=variable, values=kind.split('|') + ['Mixed (unchanged)'], state='readonly')
+                field.bind('<<ComboboxSelected>>', lambda e, k=key: changed(k))
+            else:
+                field = ttk.Entry(page, textvariable=variable)
+                variable.trace_add('write', lambda *args, k=key: changed(k))
+            fields[key] = field
+            field.grid(row=row+1, column=0, sticky='ew')
+            ttk.Button(page, text='Keep existing', command=lambda k=key: reset(k)).grid(row=row+1, column=1, padx=(8, 0))
+            ttk.Label(page, text=help_text, wraplength=440).grid(row=row+2, column=0, columnspan=2, sticky='w', pady=(4, 6))
+            if key in ('jobs', 'load'):
+                inherits[key] = tk.BooleanVar(app)
+                ttk.Checkbutton(page, text='Inherit from Portage', variable=inherits[key], command=lambda k=key: changed(k)).grid(row=row+3, column=0, sticky='w')
+    review = ttk.Frame(tabs, padding=12)
+    tabs.add(review, text='Review')
+    summary = tk.StringVar(app, value='Review changes to see the affected packages and exact file diff.')
+    ttk.Label(review, textvariable=summary, wraplength=510).pack(anchor='w', pady=(0, 8))
+    diff_frame = ttk.Frame(review)
+    diff_frame.pack(fill='both', expand=True)
+    preview = tk.Text(diff_frame, wrap='none', height=14, width=45, font='TkFixedFont', state='disabled')
+    xbar = ttk.Scrollbar(diff_frame, orient='horizontal', command=preview.xview)
+    ybar = ttk.Scrollbar(diff_frame, command=preview.yview)
+    preview.configure(xscrollcommand=xbar.set, yscrollcommand=ybar.set)
+    xbar.pack(side='bottom', fill='x'); ybar.pack(side='right', fill='y')
+    preview.pack(fill='both', expand=True)
+    ttk.Label(editor, textvariable=error, foreground='#a32b26', wraplength=510).pack(anchor='w', pady=8)
+    actions = ttk.Frame(editor); actions.pack(fill='x')
+    ttk.Label(shell, textvariable=status).pack(anchor='w', pady=(12, 0))
+
+    def write_preview(text):
+        preview.configure(state='normal'); preview.delete('1.0', 'end'); preview.insert('1.0', text); preview.configure(state='disabled')
+
+    def permit_discard():
+        return not (draft.edits or controller.pending) or messagebox.askyesno('Discard changes?', 'Discard current unsaved changes?', parent=app)
+
+    def controls():
+        states = [information[p]['state'] for p in selected]
+        valid = bool(selected) and not any(s in ('conflicting', 'indeterminate') for s in states)
+        for widget, enabled in ((configure, valid and 'manual' not in states), (adopt, valid and 'manual' in states), (disable, valid and 'manual' not in states), (save_button, bool(controller.pending))):
+            widget.configure(state='normal' if enabled and not busy and (widget == save_button or not controller.pending) else 'disabled')
+        for key, field in fields.items():
+            inherited = key in inherits and inherits[key].get()
+            field.configure(state='disabled' if not valid or busy or controller.pending or inherited else 'readonly' if isinstance(field, ttk.Combobox) else 'normal')
+
+    def clear():
+        if busy: return
+        controller.pending = None
+        for key in variables: reset(key)
+        write_preview(''); error.set(''); controls()
+
+    def selection(event=None):
+        nonlocal selected, draft
+        if loading: return
+        if busy:
+            table.selection_set(selected)
+            return
+        upcoming = list(table.selection())
+        if upcoming == selected: return
+        if not permit_discard():
+            table.selection_set(selected); return
+        selected = upcoming
+        controller.pending = None
+        write_preview('')
+        try:
+            draft = SettingsDraft(controller.initial_settings(selected) if selected else {k: v[0] for k, v in OPTIONS.items()})
+            hint.set('Mixed values stay unchanged until edited.' if len(selected) > 1 else 'Edit settings below, then review changes before saving.')
+        except (RuntimeError, ValueError, OSError) as exc:
+            draft = SettingsDraft({k: v[0] for k, v in OPTIONS.items()})
+            hint.set(str(exc))
+        for key in variables: reset(key)
+        title.set(selected[0] if len(selected) == 1 else str(len(selected)) + ' packages selected')
+        count.set(str(len(table.get_children())) + ' results / ' + str(len(selected)) + ' selected')
+        error.set(''); controls()
+
+    def refresh(*args):
+        nonlocal loading
+        if loading or busy: return
+        if not permit_discard(): return
+        clear()
+        loading = True
+        table.delete(*table.get_children())
+        for row in rows:
+            p = row['package']; info = information[p]
+            matches = scope.get() == 'all' or (scope.get() == 'configured' and info['state'] != 'disabled') or row.get(scope.get(), False)
+            if matches and query.get().lower() in p.lower(): table.insert('', 'end', iid=p, text=p, values=('Yes' if row['installed'] else 'No', info['state']))
+        loading = False
+        selection()
+        count.set(str(len(table.get_children())) + ' results / ' + str(len(selected)) + ' selected')
+
+    def stage(action):
+        if busy: return
+        try:
+            if action in ('configure', 'adopt'):
+                for package in selected: settings({**backend.effective_settings(package), **draft.edits})
+            values = draft.edits if action in ('configure', 'adopt') else {'root': variables['root'].get()} if action == 'setup-workspaces' else {}
+            text = controller.stage(action, selected, values)
+            summary.set(action.title() + ': ' + (', '.join(selected) if action != 'setup-workspaces' else 'Portage hooks') + '\n' + ', '.join(labels[k] + ': ' + str(v) for k, v in values.items()))
+            write_preview(text); tabs.select(review); controls()
+        except (ValueError, RuntimeError, OSError) as exc:
+            error.set(str(exc))
+            key = next((k for k in fields if k in str(exc)), next(iter(draft.edits), 'mode'))
+            tabs.select(pages[next(name for name, keys in groups if key in keys)])
+            fields[key].focus_set()
+
+    def back():
+        if busy: return
+        controller.pending = None; write_preview(''); tabs.select(pages['Build']); controls()
+
+    def background(work, done):
+        nonlocal busy
+        if busy: return
+        busy = True; status.set('Working...'); controls()
+        def worker():
+            try: events.put((done, work(), None))
+            except Exception as exc: events.put((done, None, exc))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def poll():
+        nonlocal busy
+        try:
+            done, result, exc = events.get_nowait()
+            busy = False
+            status.set(str(exc) if exc else 'Ready')
+            if exc: error.set(str(exc))
+            else: done(result)
+            controls()
+        except queue.Empty: pass
+        poll_timer[:] = [app.after(60, poll)]
+
+    def discover():
+        catalog = backend.portage.packages()
+        return catalog, {r['package']: backend.show(r['package']) for r in catalog}
+
+    def loaded(result):
+        nonlocal rows, information
+        rows, information = result
+        refresh()
+        if selected:
+            draft.initial = controller.initial_settings(selected)
+            for key in variables: reset(key)
+
+    def commit():
+        if not controller.pending: return
+        def work():
+            controller.save()
+            return discover()
+        def done(result):
+            draft.edits.clear(); loaded(result); status.set('Changes saved')
+        background(work, done)
+
+    configure = ttk.Button(actions, text='Review changes', command=lambda: stage('configure')); configure.pack(side='left')
+    adopt = ttk.Button(actions, text='Adopt', command=lambda: stage('adopt')); adopt.pack(side='left', padx=8)
+    disable = ttk.Button(actions, text='Disable', command=lambda: stage('disable')); disable.pack(side='left')
+    ttk.Button(review, text='Back to settings', command=back).pack(side='left', pady=10)
+    save_button = ttk.Button(review, text='Save changes', command=commit); save_button.pack(side='left', padx=8)
+    ttk.Button(review, text='Discard changes', command=lambda: clear() if permit_discard() else None).pack(side='left')
+    ttk.Label(pages['Workspaces'], text='Persistent workspaces require Ninja mode and installed Portage hooks.', wraplength=440).grid(row=9, column=0, columnspan=2, sticky='w', pady=16)
+    ttk.Button(pages['Workspaces'], text='Review workspace setup', command=lambda: stage('setup-workspaces')).grid(row=10, column=0, sticky='w')
+    ttk.Label(workspace_page, text='Retained workspaces', style='Title.TLabel').pack(anchor='w')
+    ttk.Label(workspace_page, text='Private operations may require authentication. Compress idle retains all data.').pack(anchor='w', pady=12)
+    form = ttk.Frame(workspace_page); form.pack(fill='x')
+    workspace_vars = {}
+    for row, (key, label, default) in enumerate((('root', 'Cache root', OPTIONS['root'][0]), ('name', 'Workspace name (from List)', ''), ('profile', 'Profile (empty selects current)', ''), ('compression', 'Compression', 'xz'), ('idle_seconds', 'Idle age in seconds', '3600'))):
+        ttk.Label(form, text=label).grid(row=row, column=0, sticky='w', padx=(0, 16), pady=6)
+        workspace_vars[key] = tk.StringVar(app, value=default)
+        field = ttk.Combobox(form, textvariable=workspace_vars[key], values=('xz', 'zstd'), state='readonly') if key == 'compression' else ttk.Entry(form, textvariable=workspace_vars[key])
+        field.grid(row=row, column=1, sticky='ew')
+    form.columnconfigure(1, weight=1)
+    toolbar = ttk.Frame(workspace_page); toolbar.pack(fill='x', pady=14)
+    output = tk.Text(workspace_page, wrap='word', height=15, state='disabled'); output.pack(fill='both', expand=True)
+    def operation(action):
+        request = {k: v.get() for k, v in workspace_vars.items()}; request['action'] = action
+        if action in ('status', 'pack', 'unpack') and not request['name']:
+            status.set('Enter a workspace name from Refresh / List.'); return
+        def done(result):
+            output.configure(state='normal'); output.delete('1.0', 'end'); output.insert('1.0', result); output.configure(state='disabled')
+        background(lambda: workspace(request), done)
+    for label, action in (('Refresh / List', 'list'), ('Status', 'status'), ('Pack', 'pack'), ('Unpack', 'unpack'), ('Compress idle', 'gc')):
+        ttk.Button(toolbar, text=label, command=lambda a=action: operation(a)).pack(side='left', padx=(0, 8))
+    def tab_changed(event=None):
+        if controller.pending and str(tabs.select()) != str(review):
+            controller.pending = None
+            write_preview('')
+            controls()
+    tabs.bind('<<NotebookTabChanged>>', tab_changed)
+    table.bind('<<TreeviewSelect>>', selection)
+    query.trace_add('write', refresh); scope.trace_add('write', refresh)
+    app.bind('<Control-f>', lambda event: search.focus_set())
+    app.protocol('WM_DELETE_WINDOW', lambda: app.destroy() if not busy and permit_discard() else None)
+    app.manager = dict(table=table, variables=variables, inherits=inherits, tabs=tabs, pages=pages, review=review, stage=stage, back=back, clear=clear, commit=commit, controller=controller, query=query, navigation=navigation, workspace_vars=workspace_vars, operation=operation, error=error)
+    controls()
+    poll_timer[:] = [app.after(60, poll)]
+    app.bind('<Destroy>', lambda event: app.after_cancel(poll_timer[0]) if event.widget is app and poll_timer else None)
+    background(discover, loaded)
+    app.mainloop()
 
 def tui(backend):
     try:

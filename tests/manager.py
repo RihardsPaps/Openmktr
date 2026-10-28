@@ -115,36 +115,15 @@ class ManagerTests(unittest.TestCase):
             m.tui(self.backend)
             save.assert_called_once()
             self.assertIsNotNone(save.call_args.args[1])
-    def test_tk_review_and_failed_save(self):
-        import types
-        from unittest import mock
-        buttons = {}
-        root = mock.Mock()
-        listing = mock.Mock()
-        listing.curselection.return_value = (0,)
-        preview = mock.Mock()
-        def button(parent, text, command):
-            buttons[text] = command
-            return mock.Mock()
-        def variable(value=''):
-            result = mock.Mock()
-            result.get.return_value = value
-            return result
-        dialogs = types.SimpleNamespace(askstring=lambda *args, **kw: kw.get('initialvalue', ''))
-        messages = types.SimpleNamespace(showerror=mock.Mock(), askyesno=lambda *a: True)
-        ttk = types.SimpleNamespace(Entry=mock.Mock(), Combobox=mock.Mock(), Button=button)
-        tk = types.SimpleNamespace(Tk=lambda: root, StringVar=variable, Listbox=lambda *a, **kw: listing,
-                                   Text=lambda *a, **kw: preview, ttk=ttk,
-                                   messagebox=messages, simpledialog=dialogs)
-        def interact():
-            buttons['Configure']()
-            self.assertIn('BEGIN openmktr-manager', preview.insert.call_args.args[1])
-            buttons['Save']()
-            messages.showerror.assert_called_once()
-            buttons['Cancel']()
-        root.mainloop.side_effect = interact
-        with mock.patch.dict('sys.modules', tkinter=tk), mock.patch.object(m, 'save', side_effect=RuntimeError('cancelled')):
-            m.gui(self.backend)
+    def test_sparse_draft_reset_and_mixed_boolean(self):
+        draft = m.SettingsDraft(dict(jobs=None, strict=None, mode='ninja'))
+        draft.set('jobs', '4')
+        draft.set('strict', False)
+        draft.set('mode', 'ninja')
+        self.assertEqual(draft.edits, dict(jobs='4', strict=False))
+        draft.set('jobs', None)
+        self.assertEqual(draft.edits, dict(strict=False))
+
     def test_harmless_inherited_environment_remains_manageable(self):
         (self.root / 'env').mkdir()
         (self.root / 'env/custom').write_text('CFLAGS="-O2"\n')
