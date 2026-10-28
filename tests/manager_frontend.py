@@ -5,6 +5,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import time
+import threading
 import unittest
 from unittest import mock
 import tkinter as tk
@@ -18,6 +19,10 @@ class NativeTk(unittest.TestCase):
     def test_editor_review_failure_batch_and_workspace(self):
         root = tk.Tk()
         failure = []
+        release_save = threading.Event()
+        def failed_save(*args):
+            release_save.wait(5)
+            raise RuntimeError('authentication cancelled')
         root.report_callback_exception = lambda *args: failure.append(args[1])
         with tempfile.TemporaryDirectory() as directory:
             catalog = checks.FakePortage()
@@ -67,7 +72,12 @@ class NativeTk(unittest.TestCase):
                     self.assertFalse(view['inherits']['jobs'].get())
                     self.assertFalse(jobs_entry.instate(['disabled']))
                     view['variables']['jobs'].set('4'); view['stage']('configure')
+                    pending = view['controller'].pending
                     view['commit']()
+                    view['tabs'].select(view['pages']['Build']); root.update()
+                    self.assertIs(view['controller'].pending, pending)
+                    self.assertEqual(str(view['tabs'].select()), str(view['review']))
+                    release_save.set()
                     wait(lambda: 'authentication cancelled' in view['error'].get())
                     self.assertIsNotNone(view['controller'].pending)
                     view['clear']()
@@ -111,7 +121,7 @@ class NativeTk(unittest.TestCase):
                 finally:
                     for timer in root.tk.splitlist(root.tk.call('after', 'info')): root.after_cancel(timer)
                     root.destroy()
-            with mock.patch.object(tk, 'Tk', return_value=root), mock.patch.object(root, 'mainloop', side_effect=interact), mock.patch.object(m, 'save', side_effect=RuntimeError('authentication cancelled')), mock.patch.object(m, 'workspace', return_value='[]') as workspace:
+            with mock.patch.object(tk, 'Tk', return_value=root), mock.patch.object(root, 'mainloop', side_effect=interact), mock.patch.object(m, 'save', side_effect=failed_save), mock.patch.object(m, 'workspace', return_value='[]') as workspace:
                 m.gui(backend)
         if failure: raise failure[0]
 

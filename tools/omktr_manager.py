@@ -719,6 +719,9 @@ def gui(backend):
     for label, action in (('Refresh / List', 'list'), ('Status', 'status'), ('Pack', 'pack'), ('Unpack', 'unpack'), ('Compress idle', 'gc')):
         ttk.Button(toolbar, text=label, command=lambda a=action: operation(a)).pack(side='left', padx=(0, 8))
     def tab_changed(event=None):
+        if busy and controller.pending:
+            tabs.select(review)
+            return
         if controller.pending and str(tabs.select()) != str(review):
             controller.pending = None
             write_preview('')
