@@ -681,7 +681,7 @@ def gui(backend):
             table.selection_set([p for p in selected if table.exists(p)])
             return
         upcoming = [p for p in selected if not table.exists(p)] + list(table.selection())
-        if upcoming == selected: return
+        if set(upcoming) == set(selected): return
         if not permit_discard():
             table.selection_set([p for p in selected if table.exists(p)]); return
         selected = upcoming
