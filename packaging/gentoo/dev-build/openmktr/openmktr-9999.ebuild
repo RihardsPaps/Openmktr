@@ -4,7 +4,6 @@
 EAPI=8
 LLVM_COMPAT=( {22..23} )
 PYTHON_COMPAT=( python3_{14..15} )
-PYTHON_REQ_USE="gui? ( tk ) tui? ( ncurses )"
 NINJA=ninja-reference
 
 inherit git-r3 llvm-r2 ninja-utils python-single-r1
@@ -24,7 +23,9 @@ RESTRICT="!test? ( test )"
 RDEPEND="llvm-runtimes/libcxx:=
 	${PYTHON_DEPS}
 	>=dev-build/ninja-1.13.2
-	policykit? ( sys-auth/polkit )"
+	policykit? ( sys-auth/polkit )
+	gui? ( $(python_gen_impl_dep 'tk') )
+	tui? ( $(python_gen_impl_dep 'ncurses') )"
 DEPEND="llvm-runtimes/libcxx:="
 BDEPEND="${PYTHON_DEPS}
 	>=dev-build/ninja-1.13.2

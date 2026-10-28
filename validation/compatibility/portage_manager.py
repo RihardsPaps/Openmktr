@@ -10,6 +10,18 @@ import subprocess
 def main():
     if os.environ.get('OMKTR_PORTAGE_VALIDATION') != '1' or os.geteuid() != 0 or not Path('/etc/gentoo-release').exists():
         raise RuntimeError('requires the disposable Gentoo validation container')
+    # Parse every optional frontend dependency, even when installation uses
+    # the minimal CLI configuration. Invalid interpreter USE syntax previously
+    # masked the entire ebuild before any manager tests could run.
+    import portage
+    dependencies = portage.db[portage.root]['porttree'].dbapi.aux_get(
+        'dev-build/openmktr-9999', ['RDEPEND'])[0]
+    for frontend, python_flag in (('gui', 'tk'), ('tui', 'ncurses')):
+        atoms = portage.dep.use_reduce(
+            dependencies, uselist=[frontend, 'python_single_target_python3_14'],
+            flat=True, token_class=portage.dep.Atom)
+        assert any(atom.cp == 'dev-lang/python' and python_flag in atom.use.enabled
+                   for atom in atoms if atom.use), frontend
     root = Path('/etc/portage')
     snippet = root / 'package.env/openmktr-manager' if (root / 'package.env').is_dir() else root / 'package.env'
     paths = [snippet, root / 'env/openmktr-direct', root / 'bashrc',
