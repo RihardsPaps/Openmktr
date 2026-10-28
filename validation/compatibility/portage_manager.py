@@ -13,6 +13,9 @@ def main():
     # Parse every optional frontend dependency, even when installation uses
     # the minimal CLI configuration. Invalid interpreter USE syntax previously
     # masked the entire ebuild before any manager tests could run.
+    import sys
+    # The adjacent lifecycle driver is also named portage.py.
+    sys.path = [p for p in sys.path if Path(p).resolve() != Path(__file__).resolve().parent]
     import portage
     dependencies = portage.db[portage.root]['porttree'].dbapi.aux_get(
         'dev-build/openmktr-9999', ['RDEPEND'])[0]

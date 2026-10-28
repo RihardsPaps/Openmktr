@@ -223,3 +223,7 @@ requires the Gentoo system Python and Portage.
 Run `python tests/manager_frontend.py` with Tkinter and a display (or through
 Xvfb) for actual widget interaction checks. The portable suite separately tests
 frontend controllers without requiring graphical dependencies.
+
+`python tests/manager_terminal.py` exercises an actual curses session through
+a private pseudoterminal. It writes only a temporary configuration and tests
+authentication separately. This check runs in the reference Docker gate.

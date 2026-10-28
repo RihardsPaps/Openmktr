@@ -16,6 +16,7 @@ on:
       - 'tools/omktr_manager.py'
       - 'tests/manager.py'
       - 'tests/manager_frontend.py'
+      - 'tests/manager_terminal.py'
       - 'tests/load_limits.py'
       - 'tests/portage_validation.py'
       - 'src/load_limit*'
