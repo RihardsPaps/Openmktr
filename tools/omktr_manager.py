@@ -490,6 +490,7 @@ def gui(backend):
     selected, rows, information = [], [], {}
     draft = SettingsDraft({k: v[0] for k, v in OPTIONS.items()})
     loading = False
+    rendering = False
     busy = False
     events = queue.Queue()
     poll_timer = []
@@ -676,7 +677,7 @@ def gui(backend):
 
     def selection(event=None):
         nonlocal selected, draft
-        if loading: return
+        if loading or rendering: return
         if busy:
             table.selection_set([p for p in selected if table.exists(p)])
             return
@@ -701,16 +702,16 @@ def gui(backend):
     render_generation = [0]
     search_timer = []
     def refresh(*args):
-        nonlocal loading
+        nonlocal rendering
         if busy: return
         render_generation[0] += 1
         generation = render_generation[0]
-        loading = True
+        rendering = True
         table.delete(*table.get_children())
         filtered = [r for r in rows if query.get().lower() in r['package'].lower() and
                     (scope.get() == 'all' or (scope.get() == 'configured' and information[r['package']]['state'] != 'disabled') or r.get(scope.get(), False))]
         def batch(offset=0):
-            nonlocal loading
+            nonlocal rendering
             if generation != render_generation[0]: return
             for row in filtered[offset:offset+100]:
                 p = row['package']
@@ -718,7 +719,7 @@ def gui(backend):
             if offset+100 < len(filtered): app.after(1, lambda: batch(offset+100))
             else:
                 table.selection_set([p for p in selected if table.exists(p)])
-                loading = False
+                rendering = False
                 count.set(str(len(filtered)) + ' results / ' + str(len(selected)) + ' selected')
         batch()
 

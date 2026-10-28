@@ -93,7 +93,14 @@ class NativeTk(unittest.TestCase):
                     wait(lambda: not view['table'].get_children())
                     self.assertEqual(view['variables']['jobs'].get(), jobs)
                     buttons['Clear'].invoke()
+                    # Clear has inserted only its first batch; edit before yielding.
+                    self.assertEqual(len(view['table'].get_children()), 100)
+                    jobs = '7'
+                    view['variables']['jobs'].set(jobs)
                     wait(lambda: len(view['table'].get_children()) == 1000)
+                    view['stage']('configure')
+                    self.assertEqual(view['controller'].pending['values']['jobs'], jobs)
+                    view['back']()
                     self.assertIn('cat/pkg1', view['table'].selection())
                     self.assertEqual(view['variables']['jobs'].get(), jobs)
                     with mock.patch.object(checks.m, 'workspace', side_effect=RuntimeError()):
