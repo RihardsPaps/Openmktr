@@ -1,4 +1,5 @@
 > FORK MODIFICATION NOTICE (2026)
+> Reconciled current usage, Portage manager interfaces and measured performance.
 > Locked current distribution dependencies and added selectable Zstandard workspace packing.
 > Fixed reuse of inherited recursive recipe reservations.
 > Added configurable graph optimizations, content-preserving output generation and monitoring.
@@ -46,7 +47,7 @@ does not replace the reference gate.
 | Regeneration checks | Reuse a generated graph when its recorded inputs remain current. |
 | Persistent workspaces | Retain source paths, objects and Ninja state across prepared release directories; compress inactive workspaces. |
 | Recursive builds | Run child Openmktr builds with shared job limits. |
-| Opt-in Portage integration | Use a local Gentoo overlay and select direct or experimental Ninja compilation per package. |
+| Gentoo package manager | Configure opt-in Portage integration through a graphical, terminal or scripted interface. |
 | GNU-free project toolchain | Build, test, and run Openmktr with LLVM, musl, libc++, Ninja, Python, and POSIX shell tools. |
 
 Openmktr is an actively developed Makefile translator, with direct and Ninja
@@ -82,17 +83,7 @@ source. They require compatible musl and LLVM libc++ runtime libraries;
 consult `README.txt` and `runtime-dependencies.txt` inside the archive.
 Other platforms remain best effort.
 
-Maintainers publish a release by pushing a `vMAJOR.MINOR.PATCH` tag, such as
-`v0.1.0`, on a commit contained in the repository's default branch (currently
-`main`). Its `.github/workflows/` files must match the default branch tip;
-the workflow rejects other targets before building because the Actions token
-cannot publish releases with differing workflow files. The
-[release workflow](.github/workflows/release.yml) builds in the pinned Chimera
-image and runs the standard suites, sanitizer checks, and packaging checks
-before publishing. All assets are uploaded to a draft before it becomes
-public. A failed upload leaves a draft that the same tag run can retry;
-published assets are never replaced. Pull requests affecting release tooling
-and manual workflow runs validate and retain artifacts without publishing.
+Release packaging and qualification are defined in the [release workflow](.github/workflows/release.yml).
 
 ### Build requirements
 
@@ -211,7 +202,7 @@ Ninja should report that there is no work to do. The demo remains in
 | Makefile evaluation | Reads and evaluates Makefiles on each invocation. | Evaluates Makefiles when generating the graph. |
 | Recipe scheduling | Openmktr schedules work under its job limit. | Ninja schedules the generated edges. |
 | Exported variables | Captured at recipe boundaries. | Recorded during generation and restored by generated recipes. |
-| Recursive builds | Child Openmktr processes read their own Makefiles. | Recursive commands remain recipes; child graphs are not flattened into the parent graph. |
+| Recursive builds | Child Openmktr processes read their own Makefiles. | Recursive commands normally remain recipes; Aggressive can import eligible static child graphs. |
 | Input changes | Handled on the next Openmktr invocation. | Checked automatically by `omktr build`; legacy launchers need an explicit regeneration check. |
 
 Use direct execution to start evaluating an existing project, especially when
@@ -316,13 +307,53 @@ sh ./.kati/ninja.sh -j4
 `--ninja_dir` changes where generated files are written. It does not change
 the working directory for the build's recipes.
 
+### Gentoo graphical and terminal manager
+
+The Gentoo overlay includes a package configuration manager with GUI, TUI and
+CLI interfaces. Enable the optional `gui`, `tui` and `policykit` USE flags
+for Tkinter, curses and authentication when saving system changes:
+
+```sh
+omktr-manager gui
+omktr-manager tui
+omktr-manager packages --filter installed --search sys-libs --json
+```
+
+The GUI browses packages and edits Build, Performance and Workspaces settings.
+Choose direct or Ninja compilation, parallel jobs, load limits, graph profiles,
+recursive caching and persistent workspaces. Search, batch edits, reviewed file
+diffs and workspace compression are available. Browsing runs as the current
+user; saving system configuration authenticates through polkit.
+
+![Gentoo Portage manager](docs/screenshots/portage-manager-packages.png)
+
+This manager configures Gentoo Portage integration. Installing it activates no
+packages automatically. See the [Gentoo guide](packaging/gentoo/README.md#interactive-and-scripted-manager)
+for installation, settings, authentication and recovery.
+
+### Graph optimization profiles
+
+Safe is the default profile. Aggressive additionally enables eligible statement
+replay, recursive graph import and use of an already-running filesystem monitor.
+Try it explicitly with:
+
+```sh
+omktr build --graph_optimizations=aggressive -j8 all
+```
+
+Performance depends on the workload. The measured Aggressive candidate improved
+Linux no-op and single-source builds against a historical binary, while the
+separate same-binary FFmpeg profile comparison regressed. See the
+[performance results](docs/ninja-performance.md) and
+[optimization controls](docs/graph-optimizations.md) before choosing a profile.
+
 ### Common options
 
 | Option | Purpose |
 | --- | --- |
 | `-f FILE` | Read a Makefile; `-f -` reads standard input. |
 | `-C DIR` | Change the working directory before processing the build. |
-| `-jN` | Set direct execution concurrency. For Ninja builds, pass `-jN` to the launcher. |
+| `-jN` | Set direct or `omktr build` concurrency; for legacy Ninja builds, pass it to the launcher. |
 | `-lN` | Delay additional recipes while load average is at least N; one recipe can always progress. Zero serializes; bare `-l` clears the limit. |
 | `-k` | Continue independent work after recipe failures. |
 | `-n` | Print ordinary recipes without executing them. Recursive Make commands and recipes marked `+` can still run. |
@@ -356,7 +387,7 @@ GNU Make compatibility.
 See [Ninja graph optimizations](docs/graph-optimizations.md) for evaluation reuse,
 generated-include certificates, selective recursive import, compact rules,
 `write-if-changed`, and the optional Linux filesystem monitor. The guide records
-current coverage and the unverified real-project performance objective.
+current behavior and links to measured performance results.
 
 Both modes share the same parser, evaluator, and dependency resolver. The
 execution path branches after Openmktr has interpreted the Makefile's rules.
@@ -371,17 +402,10 @@ flowchart LR
     F --> G[Ninja schedules recipes]
 ```
 
-| Stage | Main implementation |
-| --- | --- |
-| Parse statements and expressions | [parser.cc](src/parser.cc), [expr.cc](src/expr.cc) |
-| Cache parsed includes | [file_cache.cc](src/file_cache.cc) |
-| Evaluate variables, directives, functions, and rules | [eval.cc](src/eval.cc), [stmt.cc](src/stmt.cc), [func.cc](src/func.cc) |
-| Resolve rules and dependencies | [dep.cc](src/dep.cc) |
-| Expand recipes and execute direct builds | [command.cc](src/command.cc), [exec.cc](src/exec.cc) |
-| Generate Ninja files and check regeneration | [ninja.cc](src/ninja.cc), [regen.cc](src/regen.cc) |
+See the [source layout](CONTRIBUTING.md#find-the-implementation) for implementation entry points.
 
 Recursive recipes using `$(MAKE)` invoke Openmktr through its executable path.
-Child builds evaluate their own Makefiles at execution time. In Ninja mode,
+Opaque child builds evaluate their own Makefiles at execution time. Aggressive mode can import eligible static child graphs (see the optimization guide). In Ninja mode,
 the generated launcher supplies the shared Openmktr jobserver for those children.
 
 For repeated recursive builds, opt into conservative child no-op caching:
@@ -431,7 +455,7 @@ or explicit depfile describe every required input.
 ### Makefile support
 
 Openmktr supports a subset of GNU Make syntax and behavior. The dynamic-extension
-`load` directive is unsupported, and BSD Make dialect support is incomplete.
+`load` directive and the BSD Make dialect are outside the supported scope.
 Some dynamic Makefile features have no exact Ninja equivalent.
 
 Pay particular attention to parse-time `$(shell ...)` expressions when
@@ -469,49 +493,20 @@ not replace the portable CI checks.
 ## Validation and performance
 
 The [Ninja performance report](docs/ninja-performance.md) records incremental
-gains, workspace compression results and the incomplete Linux comparison.
+gains, graph-profile comparisons, workspace compression and qualification limits.
 
 The portable pull-request gate is defined in
 [cpp-ci.yml](.github/workflows/cpp-ci.yml). It builds and tests the Chimera
 image, checks changed C++ formatting, and runs a separate sanitizer build.
 
-Inside Chimera, run the standard checks with:
+Use the [contributor validation commands](CONTRIBUTING.md#run-the-portable-checks)
+for the current portable, sanitizer, manager frontend and external incremental
+gates. The suites use self-contained expectations and checked-in snapshots;
+GNU Make is used only in the separate external comparison image.
 
-```sh
-ninja -f build.ninja -j4 omktr tests
-out/find_test && out/ninja_test && out/strutil_test && out/load_limit_test
-python tests/version_generator.py
-python tests/correctness.py
-python tests/make_compat_regressions.py
-python tests/portage.py
-python tests/load_limits.py
-python tests/portage_validation.py
-python tests/regression.py
-sh testcase/dump/run.sh
-```
-
-The suites cover C++ helpers, revision generation, incremental builds,
-failures, exports, regeneration, dependency and variable semantics, recursive
-builds, and parallel execution. They use self-contained expectations and
-checked-in snapshots, without requiring a GNU Make reference executable.
-Some fixtures intentionally expect a nonzero exit status.
-
-For a focused snapshot run:
-
-```sh
-python tests/regression.py --case automake_stdin_recursive
-```
-
-To measure conversion, regeneration, direct execution, peak memory, and binary
-size, build baseline and candidate binaries with the same toolchain and run:
-
-```sh
-python tests/bench.py ./omktr
-python tests/bench.py ./omktr --baseline /path/to/baseline/omktr
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for formatting checks, snapshot updates,
-sanitizer commands, and benchmark guidance.
+For performance comparisons, build baseline and candidate binaries with the same
+toolchain and follow [the benchmark guidance](CONTRIBUTING.md#measure-performance).
+Recorded results describe their named binaries, configurations and environments.
 
 ## Troubleshooting
 
@@ -520,7 +515,7 @@ recipe location, resolved normal and order-only prerequisites, expanded recipe,
 and freshness decision. The report includes visited prerequisites and identifies
 missing outputs, phony targets, newer prerequisites, planned prerequisite
 updates, independent double-colon groups, and recursive directory recipes.
-Recursive calls are labeled as child builds evaluated at runtime; their graphs
+Ordinary recursive calls are labeled as child builds evaluated at runtime; their graphs
 are not flattened into the parent graph.
 
 For conversion diagnostics, repeat the generation command with `--explain`, for
@@ -571,6 +566,9 @@ GNU-free toolchain and all applicable copyright and license notices.
 
 | Guide | What you will find |
 | --- | --- |
+| [Gentoo manager](packaging/gentoo/README.md) | Overlay installation, GUI/TUI/CLI settings and workspace management. |
+| [Performance](docs/ninja-performance.md) | Completed measurements, comparison identities and evidence. |
+| [Workspaces](docs/workspaces.md) | Persistent build state, compression and recovery. |
 | [Contributing](CONTRIBUTING.md) | Validation commands, fixtures, formatting, sanitizers, benchmarks, and source layout. |
 | [Compatibility validation](validation/README.md) | Campaign workflow, evidence requirements, and recursive-build diagnosis. |
 | [Campaign results](validation/PROGRESS.md) | Recorded configurations, outcomes, and known limits. |
