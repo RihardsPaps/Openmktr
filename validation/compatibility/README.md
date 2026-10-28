@@ -175,3 +175,7 @@ in the Gentoo Xvfb environment with a true-color display. The helper captures
 actual X11 window pixels using the system X11 library, uses the live package
 catalog, and writes configuration only to a temporary directory. It never saves
 changes to `/etc/portage`.
+
+The capture helper selects the categorized inline editor, review page, mixed
+package selection and workspace form through the application's real view handles.
+It does not invoke workspace operations or save the displayed preview.

@@ -208,22 +208,32 @@ if interrupted. `omktr-manager recover`, run as administrator, rolls back a part
 save only when the files still match the journal; manual edits stop recovery.
 An interrupted cache setup may leave a prepared directory, which is safe to reuse.
 
-Configuration dialogs start with the selected package's existing settings,
-including recognized manual Ninja selections during adoption. Mixed batch
-settings show `<mixed; unchanged>`; leaving a field unchanged preserves each
-package's value. The TUI uses Enter to keep a value and `inherit` to clear an
-explicit jobs/load override. Unrelated inherited environments, such as a global
-CFLAGS selection, remain in place and do not prevent disabling integration.
+The GUI keeps package browsing beside categorized Build, Performance, and
+Workspaces settings. Dropdowns select build and graph modes; checkboxes control
+boolean settings. Jobs and load can explicitly inherit Portage settings.
+Mixed batch fields stay unchanged until edited; Keep existing restores each
+package's original value. Review changes shows the affected packages and exact
+file diff before Save changes requests authentication. Back to settings
+invalidates the preview. Authentication failures retain pending changes.
+
+The Workspace manager provides inline fields for workspace/profile selection,
+compression and idle age. Refresh / List discovers retained workspace names;
+Status, Pack, Unpack and Compress idle use the entered selectors. Compress idle
+retains data. The TUI keeps its existing keyboard and text-input workflow.
 
 ### GUI screenshots
 
-These are captures of the actual Tk application under Xvfb, with Gentoo's real
-package catalog and disposable configuration. No system package was activated.
-The example edits only jobs from 8 to 4 while retaining Ninja mode, strict
-compatibility, and persistent workspaces.
+These captures show actual Tk widgets under Xvfb with Gentoo's live package
+catalog and disposable configuration. No system package was activated or saved.
+The review changes jobs from 8 to 4 while preserving the other package settings.
+The workspace screen shows the form before running an operation.
 
-![Package selection](../../docs/screenshots/portage-manager-packages.png)
+![Package browser and Build settings](../../docs/screenshots/portage-manager-packages.png)
 
-![Existing job setting](../../docs/screenshots/portage-manager-settings.png)
+![Categorized Performance settings](../../docs/screenshots/portage-manager-settings.png)
 
 ![Review before saving](../../docs/screenshots/portage-manager-review.png)
+
+![Mixed batch settings](../../docs/screenshots/portage-manager-mixed.png)
+
+![Workspace management form](../../docs/screenshots/portage-manager-workspaces.png)

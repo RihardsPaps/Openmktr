@@ -58,52 +58,54 @@ def capture(window, path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output',type=Path,required=True)
-    args=parser.parse_args()
-    args.output.mkdir(parents=True,exist_ok=True)
-    root_path=Path(__file__).resolve().parents[2]
-    sys.path=[p for p in sys.path if Path(p).resolve()!=Path(__file__).resolve().parent]
-    spec=importlib.util.spec_from_file_location('manager',root_path/'tools/omktr_manager.py')
-    manager=importlib.util.module_from_spec(spec)
+    parser.add_argument('--output', type=Path, required=True)
+    args = parser.parse_args()
+    args.output.mkdir(parents=True, exist_ok=True)
+    root_path = Path(__file__).resolve().parents[2]
+    sys.path = [p for p in sys.path if Path(p).resolve() != Path(__file__).resolve().parent]
+    spec = importlib.util.spec_from_file_location('manager', root_path/'tools/omktr_manager.py')
+    manager = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(manager)
     import tkinter as tk
-    from tkinter import simpledialog
-    app=tk.Tk()
-    app.tk.call('tk', 'scaling', 1.4)
-    app.geometry('1200x850+20+20')
+    app = tk.Tk()
+    app.tk.call('tk', 'scaling', 1.3)
+    failures = []
+    app.report_callback_exception = lambda *args: (failures.append(args[1]), app.destroy())
     with tempfile.TemporaryDirectory(prefix='omktr-gui-capture-') as directory:
-        backend=manager.Backend(Path(directory))
+        backend = manager.Backend(Path(directory))
         (backend.root/'bashrc').write_text(manager.BEGIN)
-        backend.apply(backend.plan('configure',['app-arch/gzip'],dict(mode='ninja',jobs='8',strict=True,workspace=True)))
-        original=simpledialog.askstring
-        def answer(name,*pos,**kwargs):
-            if name!='jobs': return kwargs['initialvalue']
-            def snap():
-                dialog=next(w for w in app.winfo_children() if isinstance(w,tk.Toplevel))
-                capture(dialog,args.output/'portage-manager-settings.png')
-                entry=next(w for frame in dialog.winfo_children() for w in frame.winfo_children() if isinstance(w,tk.Entry))
-                entry.delete(0,'end')
-                entry.insert(0,'4')
-                dialog.ok()
-            app.after(350,snap)
-            return original(name,*pos,**kwargs)
+        backend.apply(backend.plan('configure', ['app-arch/gzip'], dict(mode='ninja', jobs='8', strict=True, workspace=True)))
         def ready():
-            entry=next(w for w in app.winfo_children() if w.winfo_class()=='TEntry')
-            entry.insert(0,'app-arch/')
-            listing=next(w for w in app.winfo_children() if isinstance(w,tk.Listbox))
-            index=next(i for i in range(listing.size()) if listing.get(i).startswith('app-arch/gzip '))
-            listing.selection_set(index)
-            listing.see(index)
-            capture(app,args.output/'portage-manager-packages.png')
-            buttons={w.cget('text'):w for w in app.winfo_children() if w.winfo_class()=='TButton'}
-            buttons['Configure'].invoke()
-            app.after(200,finish)
-        def finish():
-            capture(app,args.output/'portage-manager-review.png')
+            view = app.manager
+            if not view['table'].get_children():
+                app.after(100, ready)
+                return
+            view['query'].set('app-arch/')
+            view['table'].selection_set('app-arch/gzip')
+            app.update()
+            view['table'].see('app-arch/gzip')
+            capture(app, args.output/'portage-manager-packages.png')
+            view['tabs'].select(view['pages']['Performance'])
+            app.update()
+            capture(app, args.output/'portage-manager-settings.png')
+            view['variables']['jobs'].set('4')
+            view['stage']('configure')
+            app.update()
+            capture(app, args.output/'portage-manager-review.png')
+            view['clear']()
+            view['table'].selection_set(('app-arch/gzip', 'app-arch/hardlink'))
+            app.update()
+            view['tabs'].select(view['pages']['Build'])
+            app.update()
+            capture(app, args.output/'portage-manager-mixed.png')
+            view['navigation'].select(1)
+            app.update()
+            capture(app, args.output/'portage-manager-workspaces.png')
             app.destroy()
-        app.after(300,ready)
-        with mock.patch.object(tk,'Tk',return_value=app),mock.patch.object(simpledialog,'askstring',side_effect=answer):
+        app.after(150, ready)
+        with mock.patch.object(tk, 'Tk', return_value=app):
             manager.gui(backend)
-    print('Captured actual GUI with Gentoo catalog and temporary configuration')
+    if failures: raise failures[0]
+    print('Captured real widgets with live Gentoo catalog and disposable configuration; no changes saved.')
 
-if __name__=='__main__': main()
+if __name__ == '__main__': main()
