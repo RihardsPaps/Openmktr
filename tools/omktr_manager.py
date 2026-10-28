@@ -128,12 +128,16 @@ class Backend:
         cache = {}
         def read(relative):
             key = str(relative)
-            if key not in cache: cache[key] = self.read(relative)
+            if key not in cache:
+                try: cache[key] = self.read(relative)
+                except (ValueError, RuntimeError, OSError) as exc: cache[key] = exc
+            if isinstance(cache[key], Exception): raise cache[key]
             return cache[key]
         view.read = read
         entries = self.entries()
         for name in {name for entry in entries for name in entry[3]}:
-            read(Path('env') / name)
+            try: read(Path('env') / name)
+            except (ValueError, RuntimeError, OSError): pass
         view.entries = lambda: entries
         indexed, broad = {}, []
         for entry in entries:
@@ -167,6 +171,18 @@ class Backend:
                 if words and not words[0].startswith('#'):
                     result.append((path, number, words[0], words[1:]))
         return result
+
+    def catalog_info(self, package):
+        try:
+            info = self.show(package)
+            if info['state'] not in ('conflicting', 'indeterminate'):
+                try: info['effective'] = self.effective_settings(package)
+                except (ValueError, RuntimeError, OSError) as exc:
+                    info['effective_error'] = str(exc).strip() or type(exc).__name__ + ': settings unavailable'
+            return info
+        except (ValueError, RuntimeError, OSError) as exc:
+            return dict(package=package, state='indeterminate', settings=None, entries=[],
+                        effective_error=str(exc).strip() or type(exc).__name__ + ': settings unavailable')
 
     def entries_for(self, package):
         return [e for e in self.entries() if e[2] == package or self.portage.matches(e[2], package)]
@@ -770,15 +786,7 @@ def gui(backend):
     def discover():
         catalog = backend.portage.packages()
         snapshot = backend.snapshot()
-        information = {}
-        for row in catalog:
-            p = row['package']; info = snapshot.show(p)
-            if info['state'] not in ('conflicting', 'indeterminate'):
-                try: info['effective'] = snapshot.effective_settings(p)
-                except (ValueError, RuntimeError, OSError) as exc:
-                    info['effective_error'] = str(exc).strip() or type(exc).__name__ + ': settings unavailable'
-            information[p] = info
-        return catalog, information
+        return catalog, {r['package']: snapshot.catalog_info(r['package']) for r in catalog}
 
     def loaded(result):
         nonlocal rows, information, selected
@@ -898,7 +906,7 @@ def tui(backend):
         def discover():
             package_rows = backend.portage.packages()
             snapshot = backend.snapshot()
-            return package_rows, {r['package']: snapshot.show(r['package']) for r in package_rows}
+            return package_rows, {r['package']: snapshot.catalog_info(r['package']) for r in package_rows}
         package_rows, information = work(discover)
         row_index = {r['package']: r for r in package_rows}
         rows = [r['package'] for r in package_rows]

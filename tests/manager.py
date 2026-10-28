@@ -30,6 +30,20 @@ class ManagerTests(unittest.TestCase):
         plan = self.backend.plan(action, packages or ['cat/pkg'], values or {})
         self.backend.apply(plan)
         return plan
+    def test_snapshot_retains_environment_errors_per_package(self):
+        (self.root / 'env').mkdir()
+        (self.root / 'env/custom').symlink_to('/dev/null')
+        (self.root / 'package.env').write_text('other/removed custom\n')
+        snapshot = self.backend.snapshot()
+        self.assertEqual(snapshot.catalog_info('cat/pkg')['state'], 'disabled')
+        affected = snapshot.catalog_info('other/removed')
+        self.assertEqual(affected['state'], 'indeterminate')
+        self.assertIn('symlink', affected['effective_error'])
+        (self.root / 'env/custom').unlink()
+        (self.root / 'env/custom').write_text('CFLAGS="-O2"\n')
+        self.assertEqual(snapshot.catalog_info('other/removed')['state'], 'indeterminate')
+        self.assertEqual(self.backend.snapshot().catalog_info('other/removed')['state'], 'disabled')
+
     def test_tui_can_clear_graph_exclusions(self):
         from unittest import mock
         import types
