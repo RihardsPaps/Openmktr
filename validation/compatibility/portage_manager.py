@@ -18,6 +18,8 @@ def main():
     generated = root / 'env' / ('openmktr-manager-' + hashlib.sha256(b'dev-build/openmktr-portage-fixture').hexdigest()[:24])
     paths.append(generated)
     before = {p: p.read_bytes() if p.exists() else None for p in paths}
+    cache = Path('/var/cache/openmktr/workspaces')
+    cache_existed = cache.exists()
     def run(*args):
         result = subprocess.run(['/usr/bin/omktr-manager', *args], text=True, capture_output=True)
         if result.returncode: raise RuntimeError(result.stderr)
@@ -31,6 +33,14 @@ def main():
         info = json.loads(run('show', 'dev-build/openmktr-portage-fixture', '--json'))[0]
         assert info['state'] == 'managed' and info['settings']['mode'] == 'ninja'
         run('disable', 'dev-build/openmktr-portage-fixture')
+        if not before[root / 'bashrc'] and not cache_existed:
+            import pwd
+            run('setup-workspaces', '--dry-run')
+            assert not cache.exists()
+            run('setup-workspaces')
+            assert cache.stat().st_uid == pwd.getpwnam('portage').pw_uid
+            run('configure', 'dev-build/openmktr-portage-fixture', '--set', 'mode=ninja', '--set', 'workspace=true')
+            run('disable', 'dev-build/openmktr-portage-fixture')
         env = root / 'env/openmktr-direct'
         if before[env] is None:
             env.write_text('export MAKE="/usr/bin/omktr-portage"\nexport OMKTR_PORTAGE_MODE="direct"\n')
@@ -39,6 +49,7 @@ def main():
             assert json.loads(run('show', 'dev-build/openmktr-portage-fixture', '--json'))[0]['state'] == 'managed'
             run('disable', 'dev-build/openmktr-portage-fixture')
     finally:
+        if not cache_existed and cache.exists(): cache.rmdir()
         for path, data in before.items():
             if data is None: path.unlink(missing_ok=True)
             else: path.write_bytes(data)
