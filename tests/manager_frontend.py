@@ -16,6 +16,71 @@ spec.loader.exec_module(checks)
 m = checks.m
 
 class NativeTk(unittest.TestCase):
+    def test_search_resize_and_cpu_shortcut(self):
+        root = tk.Tk()
+        failures = []
+        root.report_callback_exception = lambda *args: failures.append(args[1])
+        with tempfile.TemporaryDirectory() as directory:
+            catalog = checks.FakePortage()
+            release_catalog = threading.Event()
+            def packages():
+                if not release_catalog.wait(2): raise RuntimeError('GUI did not process timers during discovery')
+                return [dict(package=f'cat/pkg{i}', installed=True, available=True) for i in range(1000)]
+            catalog.packages = packages
+            def children(widget):
+                for child in widget.winfo_children():
+                    yield child
+                    yield from children(child)
+            def wait(predicate):
+                deadline = time.monotonic()+8
+                while not predicate():
+                    if time.monotonic()>deadline: self.fail('UI timed out')
+                    root.update(); time.sleep(.01)
+            def interact():
+                try:
+                    view = root.manager
+                    root.after(50, release_catalog.set)
+                    wait(lambda: len(view['table'].get_children()) == 1000)
+                    buttons = {w.cget('text'):w for w in children(root) if w.winfo_class()=='TButton'}
+                    root.geometry('640x480'); root.update()
+                    self.assertEqual(root.minsize(), (640,480))
+                    fullscreen_state = [False]
+                    def attributes(*args):
+                        if len(args)==1: return fullscreen_state[0]
+                        fullscreen_state[0] = bool(args[1])
+                    with mock.patch.object(root, 'attributes', side_effect=attributes):
+                        buttons['Fullscreen (F11)'].invoke()
+                        self.assertTrue(fullscreen_state[0])
+                        root.event_generate('<Escape>'); root.update()
+                        if fullscreen_state[0]: buttons['Fullscreen (F11)'].invoke()
+                        self.assertFalse(fullscreen_state[0])
+                    view['table'].selection_set('cat/pkg1'); root.update()
+                    buttons['Use available CPUs'].invoke()
+                    jobs = view['variables']['jobs'].get()
+                    self.assertGreaterEqual(int(jobs), 1)
+                    view['query'].set('pkg9'); buttons['Search'].invoke()
+                    view['query'].set('missing'); buttons['Search'].invoke()
+                    wait(lambda: not view['table'].get_children())
+                    self.assertEqual(view['variables']['jobs'].get(), jobs)
+                    buttons['Clear'].invoke()
+                    wait(lambda: len(view['table'].get_children()) == 1000)
+                    self.assertIn('cat/pkg1', view['table'].selection())
+                    self.assertEqual(view['variables']['jobs'].get(), jobs)
+                    with mock.patch.object(checks.m, 'workspace', side_effect=RuntimeError()):
+                        view['operation']('list')
+                        wait(lambda: 'RuntimeError: operation failed' in view['error'].get())
+                    with mock.patch.object(checks.m, 'workspace', return_value=''):
+                        view['operation']('list')
+                        wait(lambda: any('No workspaces found.' in w.get('1.0','end') for w in children(root) if w.winfo_class()=='Text'))
+                    view['clear']()
+                    buttons['Refresh catalog'].invoke()
+                    wait(lambda: len(view['table'].get_children()) == 1000)
+                except Exception as exc: failures.append(exc)
+                finally: root.destroy()
+            with mock.patch.object(tk,'Tk',return_value=root), mock.patch.object(root,'mainloop',side_effect=interact):
+                m.gui(m.Backend(Path(directory),catalog))
+        if failures: raise failures[0]
+
     def test_editor_review_failure_batch_and_workspace(self):
         root = tk.Tk()
         failure = []
@@ -96,7 +161,7 @@ class NativeTk(unittest.TestCase):
                     view['variables']['jobs'].set('4'); view['stage']('configure')
                     pending = view['controller'].pending
                     view['commit']()
-                    view['tabs'].select(view['pages']['Build']); root.update()
+                    view['tabs'].select(view['pages']['Build'].tab_container); root.update()
                     self.assertIs(view['controller'].pending, pending)
                     self.assertEqual(str(view['tabs'].select()), str(view['review']))
                     release_save.set()

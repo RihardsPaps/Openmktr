@@ -227,3 +227,9 @@ frontend controllers without requiring graphical dependencies.
 `python tests/manager_terminal.py` exercises an actual curses session through
 a private pseudoterminal. It writes only a temporary configuration and tests
 authentication separately. This check runs in the reference Docker gate.
+
+Manager browsing performance can be sampled with `python tests/manager_benchmark.py`
+using disposable synthetic catalogs of 1,000, 10,000 and 30,000 packages. These
+measure manager overhead rather than real Portage repository startup. GUI checks
+run in the separate Chimera `Dockerfile.frontend` image after building
+`openmktr-test`; this compiles Python's optional Tk extension and uses Xvfb.

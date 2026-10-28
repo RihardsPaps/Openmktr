@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: MPL-2.0
+# Build the optional Tk extension missing from Chimera's Python package.
+FROM openmktr-test
+RUN printf 'https://repo.chimera-linux.org/current/user\n' >> /etc/apk/repositories && apk update && apk add fonts-liberation-ttf tk tcl python-devel tk-devel xserver-xorg-xvfb curl libx11-devel pkgconf
+RUN curl -fL https://www.python.org/ftp/python/3.14.6/Python-3.14.6.tgz -o /tmp/python.tgz && python -c "import hashlib; from pathlib import Path; assert hashlib.sha256(Path('/tmp/python.tgz').read_bytes()).hexdigest() == '74d0d71d0600e477651a077101d6e62d1e2e69b8e992ba18c993dd643b7ba222'" && python -m tarfile -e /tmp/python.tgz /tmp && clang -shared -fPIC $(python3-config --includes) -I/tmp/Python-3.14.6/Include/internal -I/usr/include/tcl8.6 -I/usr/include/tk8.6 /tmp/Python-3.14.6/Modules/_tkinter.c -ltk8.6 -ltcl8.6 -o /usr/lib/python3.14/lib-dynload/_tkinter.so && cp -R /tmp/Python-3.14.6/Lib/tkinter /usr/lib/python3.14/
+WORKDIR /workspace
+COPY . .
+CMD ["sh", "-c", "Xvfb :99 -screen 0 1366x768x24 & display_pid=$!; trap 'kill $display_pid' EXIT; export DISPLAY=:99; python tests/manager_frontend.py"]

@@ -53,6 +53,14 @@ class PortageWrapper(unittest.TestCase):
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               timeout=15)
 
+    def test_manager_diagnostics_and_exclusions(self):
+        for mode in ('direct', 'ninja'):
+            result = self.invoke('all', OMKTR_PORTAGE_MODE=mode, EBUILD_PHASE='compile', OMKTR_PORTAGE_BUILD_STATS='1', OMKTR_PORTAGE_REGEN_DEBUG='1', OMKTR_PORTAGE_DISABLED_GRAPH_OPTIMIZATIONS='evaluation,monitor')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            arguments = json.loads(result.stdout)['args']
+            for flag in ('--kati_stats', '--regen_debug', '--disable_graph_optimization=evaluation', '--disable_graph_optimization=monitor'): self.assertIn(flag, arguments)
+        self.assertEqual(self.invoke(OMKTR_PORTAGE_DISABLED_GRAPH_OPTIMIZATIONS='bad').returncode, 2)
+
     def test_modes_and_phases(self):
         for mode in ('direct', 'ninja'):
             for phase in ('', 'setup', 'configure', 'compile', 'test', 'install'):
