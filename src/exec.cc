@@ -1,4 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
+// Keep one-job execution serial, including dependency traversal and goal order.
+// Retain successful bootstrap runtime reads without relinking live tools.
+// Rank cyclic components independently to retain safe cooperative parallelism.
 // Check recipe-less leaves inline instead of queuing a future per input.
 // Reject rank-zero helping without scanning the pending task queue.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
@@ -47,6 +50,7 @@
 #include <cmath>
 #include <condition_variable>
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <limits>
 #include <list>
@@ -65,6 +69,7 @@
 #include "expr.h"
 #include "fileutil.h"
 #include "flags.h"
+#include "graph_optimization.h"
 #include "load_limit.h"
 #include "log.h"
 #include "stats.h"
@@ -315,13 +320,14 @@ class Executor {
   };
 
  public:
-  explicit Executor(Evaluator* ev, bool parallel)
+  explicit Executor(Evaluator* ev, bool parallel, bool runtime_bootstrap)
       : ce_(ev),
         job_limit_(EffectiveJobLimit()),
         active_jobs_(0),
         num_commands_(0),
-        parallel_(parallel),
-        worker_pool_(parallel ? job_limit_ : 0) {
+        parallel_(parallel && job_limit_ > 1),
+        runtime_bootstrap_(runtime_bootstrap),
+        worker_pool_(parallel_ ? job_limit_ : 0) {
     shell_ = ev->GetShell();
     shellflag_ = ev->GetShellFlag();
   }
@@ -431,7 +437,7 @@ class Executor {
         return false;
       const double child_timestamp = GetTimestamp(child.output.c_str());
       if (child_timestamp == kNotExist &&
-          (!child.intermediate || child.deps.empty() ||
+          (!child.intermediate || (child.deps.empty() && child.cmds.empty()) ||
            !DependenciesAreCurrent(child, target_timestamp, visiting)))
         return false;
       if (child_timestamp != kNotExist &&
@@ -780,8 +786,33 @@ class Executor {
     // Expand only the recipes of groups that were dirty before any recipe
     // runs. Expansion itself can invoke $(shell), $(file), or $(error).
     std::vector<Command> commands;
+    std::string bootstrap_owner, bootstrap_identity;
     {
       std::lock_guard<std::mutex> lock(eval_mu_);
+      std::unique_ptr<RuntimeRecipeReadCapture> capture;
+      if (runtime_bootstrap_ && !g_flags.is_dry_run && !g_flags.is_question &&
+          !g_flags.explain && !n.is_phony && !output_is_directory &&
+          n.double_colon_group_inputs.empty()) {
+        const std::string directory =
+            g_flags.ninja_dir ? g_flags.ninja_dir : ".";
+        std::error_code error;
+        std::filesystem::create_directories(directory, error);
+        if (error)
+          ERROR("cannot create bootstrap recipe directory: %s",
+                directory.c_str());
+        std::vector<Command> metadata;
+        if (MakeRuntimeRecipe(n, ce_.evaluator(), directory, &metadata)) {
+          bootstrap_identity = "OMKTR_RECIPE1\n" + n.output.str();
+          bootstrap_identity += '\0';
+          bootstrap_identity += metadata.front().runtime_identity;
+          AbsPath(directory + "/.kati_bootstrap-" + GraphDigest(n.output.str()),
+                  &bootstrap_owner);
+          WriteNinjaRecipeState(bootstrap_owner, bootstrap_identity);
+          unlink((bootstrap_owner + ".reads-pending").c_str());
+          capture.reset(
+              new RuntimeRecipeReadCapture(metadata.front(), ce_.evaluator()));
+        }
+      }
       if (group_needs_build.empty() || g_flags.explain) {
         commands = ce_.Eval(n, output_ts);
       } else {
@@ -794,6 +825,8 @@ class Executor {
                           std::make_move_iterator(group_commands.end()));
         }
       }
+      if (capture)
+        capture->Finish(bootstrap_owner);
     }
     // A directory is a normal timestamped target unless its recipe enters a
     // recursive make that may update files inside it without changing the
@@ -986,6 +1019,10 @@ class Executor {
       }
     }
 
+    if (ran_recipe && !node_failed && !bootstrap_owner.empty()) {
+      CommitRuntimeRecipeReads(bootstrap_owner, bootstrap_identity);
+      WriteNinjaRecipeState(bootstrap_owner + ".success", bootstrap_identity);
+    }
     double completed_ts =
         ran_recipe ? GetTimestamp(n.output.c_str()) : logical_ts;
     // A successful recipe counts as updating its target for this invocation,
@@ -1182,6 +1219,7 @@ class Executor {
       append(node->validations);
     }
     std::unordered_map<Symbol, unsigned char> colors;
+    std::vector<Symbol> finished;
     std::vector<std::pair<Symbol, size_t>> stack;
     for (const auto& item : dependencies) {
       if (colors[item.first] != 0)
@@ -1193,25 +1231,51 @@ class Executor {
         const auto& inputs = dependencies.at(frame.first);
         if (frame.second < inputs.size()) {
           Symbol input = inputs[frame.second++];
-          if (colors[input] == 1) {
-            // Ordinary evaluation retains its established circular-edge
-            // diagnostics. Never use speculative ranks for a cyclic graph.
-            dependency_ranks_.clear();
-            return;
-          }
           if (colors[input] == 0) {
             colors[input] = 1;
             stack.emplace_back(input, 0);
           }
           continue;
         }
-        size_t rank = 0;
-        for (Symbol input : inputs)
-          rank = std::max(rank, dependency_ranks_.at(input) + 1);
-        dependency_ranks_[frame.first] = rank;
+        finished.push_back(frame.first);
         colors[frame.first] = 2;
         stack.pop_back();
       }
+    }
+    // Kosaraju's second pass groups cycles without recursive C++ calls.
+    // Components are discovered from parents to prerequisites. Strict rank
+    // descent therefore permits helping across components, never within a
+    // cycle; ordinary ownership checks still diagnose circular edges.
+    std::unordered_map<Symbol, std::vector<Symbol>> reverse;
+    for (const auto& item : dependencies)
+      for (Symbol input : item.second)
+        reverse[input].push_back(item.first);
+    std::unordered_map<Symbol, size_t> component;
+    std::vector<std::vector<Symbol>> members;
+    for (auto it = finished.rbegin(); it != finished.rend(); ++it) {
+      if (component.count(*it))
+        continue;
+      const size_t id = members.size();
+      members.emplace_back();
+      std::vector<Symbol> todo{*it};
+      component.emplace(*it, id);
+      while (!todo.empty()) {
+        Symbol node = todo.back();
+        todo.pop_back();
+        members[id].push_back(node);
+        for (Symbol parent : reverse[node])
+          if (component.emplace(parent, id).second)
+            todo.push_back(parent);
+      }
+    }
+    std::vector<size_t> ranks(members.size(), 0);
+    for (size_t id = members.size(); id-- > 0;) {
+      for (Symbol node : members[id])
+        for (Symbol input : dependencies.at(node))
+          if (component.at(input) != id)
+            ranks[id] = std::max(ranks[id], ranks[component.at(input)] + 1);
+      for (Symbol node : members[id])
+        dependency_ranks_[node] = ranks[id];
     }
   }
 
@@ -1311,6 +1375,7 @@ class Executor {
   std::atomic<bool> failed_{false};
   std::atomic<bool> cancel_requested_{false};
   bool parallel_;
+  bool runtime_bootstrap_;
   WorkerPool worker_pool_;
 };
 
@@ -1322,7 +1387,8 @@ bool IsRecursiveKatiCommand(const std::string& command) {
 
 ExecResult Exec(const std::vector<NamedDepNode>& roots,
                 Evaluator* ev,
-                bool parallel) {
+                bool parallel,
+                bool runtime_bootstrap) {
   if (g_flags.explain)
     parallel = false;
   ScopedBuildSignals signals;
@@ -1332,7 +1398,7 @@ ExecResult Exec(const std::vector<NamedDepNode>& roots,
       break;
     }
   }
-  Executor executor(ev, parallel);
+  Executor executor(ev, parallel, runtime_bootstrap);
   executor.RunRoots(roots);
   LOG_STAT("executor cooperative tasks: %zu", executor.CooperativeTasks());
   std::unordered_set<Symbol> visited;

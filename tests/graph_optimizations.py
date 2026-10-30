@@ -21,6 +21,100 @@ BINARY = Path(os.environ.get("OMKTR_BINARY", Path(__file__).resolve().parents[1]
 
 
 class GraphOptimizations(unittest.TestCase):
+    def test_dependency_fragments_recheck_directory_aliases_after_effects(self):
+        (self.root / "dir").mkdir()
+        self.makefile(
+            ".PHONY: all dir\nall: a b dir\na b: dir/\n"
+            "a: .KATI_TAGS = $(if $(shell rmdir dir),removed,removed)\n"
+            "a:\n\t@printf a > $@\nb:\n\t@test -d dir && printf b > $@\n"
+            "dir:\n\t@mkdir -p dir\ndir/:\n\t@mkdir -p dir\n")
+        # Visit the existing directory alias before the tag removes it.
+        self.run_tool("--ninja", "-j32", "--graph_optimizations=aggressive",
+                      "dir/", "all")
+        graph = (self.root / "build.ninja").read_text()
+        self.assertRegex(graph, r"(?m)^build a: \S+$")
+        self.assertRegex(graph, r"(?m)^build b: \S+ dir/$")
+        subprocess.run(["ninja", "-j32"], cwd=self.root, check=True,
+                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                       timeout=30)
+        self.assertEqual((self.root / "a").read_text(), "a")
+        self.assertEqual((self.root / "b").read_text(), "b")
+
+    def test_shared_prerequisite_fragments_preserve_duplicates_and_target_scopes(self):
+        (self.root / "first").write_text("ready")
+        (self.root / "second").write_text("unused")
+        self.makefile(
+            "all: a b\na: WORD = alpha\nb: WORD = beta\n"
+            "a b: first second first\n"
+            "\t@printf '%s' '$^|$+|$<|$(WORD)|$(shell cat first)' > $@\n")
+        for mode in ("direct", "build"):
+            with self.subTest(mode=mode):
+                for name in ("a", "b"):
+                    (self.root / name).unlink(missing_ok=True)
+                args = ["-j32", "--graph_optimizations=aggressive", "all"]
+                if mode == "build":
+                    args.insert(0, "build")
+                self.run_tool(*args)
+                for name, word in (("a", "alpha"), ("b", "beta")):
+                    self.assertEqual((self.root / name).read_text(),
+                                     f"first second|first second first|first|{word}|ready")
+        (self.root / "first").write_text("changed")
+        self.run_tool("build", "-j32", "--graph_optimizations=aggressive", "all")
+        for name, word in (("a", "alpha"), ("b", "beta")):
+            self.assertEqual((self.root / name).read_text(),
+                             f"first second|first second first|first|{word}|changed")
+
+    def test_single_expression_admission_is_bounded_and_keeps_nested_effects(self):
+        words = " ".join(str(i) for i in range(70000))
+        self.makefile(
+            "VALUES := $(foreach item," + words + ","
+            "$(if $(filter 69999,$(item)),$(info EXPANSION-END))"
+            "$(subst x,y,x$(item)))\n"
+            "$(eval LAST := $(lastword $(VALUES)))\n"
+            "all:\n\t@printf '%s' '$(words $(VALUES)):$(firstword $(VALUES)):$(LAST)' > result\n")
+        output = self.run_tool("build", "-j32", "--graph_optimizations=aggressive",
+                               "--kati_stats", "all").stdout
+        self.assertLess(output.index("evaluation recording disabled"),
+                        output.index("EXPANSION-END"))
+        match = re.search(r"recording disabled after (\d+) hits and (\d+) misses", output)
+        self.assertIsNotNone(match, output)
+        self.assertLessEqual(int(match[1]) + int(match[2]), 65536)
+        self.assertEqual((self.root / "result").read_text(), "70000:y0:y69999")
+        self.run_tool("-j32", "all")
+        self.assertEqual((self.root / "result").read_text(), "70000:y0:y69999")
+
+    def test_unproductive_recording_falls_back_without_losing_effects(self):
+        (self.root / "bulk.mk").write_text(
+            "".join(f"V{i} := $(subst X,Y,X{i})\n" for i in range(70000)) +
+            "$(info ADMISSION-NESTED-END)\n")
+        self.makefile("$(eval include bulk.mk)\n"
+                      "$(eval EFFECT := $(V69999))\n"
+                      "all:\n\t@printf '%s' '$(V0):$(EFFECT)' > result\n")
+        output = self.run_tool("build", "-j32", "--graph_optimizations=aggressive",
+                               "--kati_stats", "all").stdout
+        self.assertIn("evaluation recording disabled", output)
+        self.assertLess(output.index("evaluation recording disabled"),
+                        output.index("ADMISSION-NESTED-END"))
+        self.assertEqual((self.root / "result").read_text(), "Y0:Y69999")
+        output = self.run_tool("-j32", "--graph_optimizations=aggressive", "all").stdout
+        self.assertEqual((self.root / "result").read_text(), "Y0:Y69999")
+
+    def test_compact_absolute_paths_preserve_outputs(self):
+        directory = self.root / ("long-directory-" * 4) / "build"
+        directory.mkdir(parents=True)
+        target = directory / "output"
+        (directory / "Makefile").write_text(
+            f"all: {target}\n{target}:\n\t@printf done > $@\n")
+        for profile in ("off", "aggressive"):
+            if target.exists():
+                target.unlink()
+            subprocess.run([str(BINARY), "build", "-j32",
+                            "--graph_optimizations=" + profile], cwd=directory,
+                           capture_output=True, check=True, timeout=30)
+            self.assertEqual(target.read_text(), "done")
+            graph = (directory / ".openmktr/build.ninja").read_text()
+            self.assertEqual("omktr_path_" in graph, profile == "aggressive")
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="omktr-graph-")
         self.addCleanup(self.temp.cleanup)
@@ -59,12 +153,15 @@ Path(sys.argv[1]).write_text('built')
         for mode, jobs, serialized in (("direct", 1, False), ("direct", 8, False),
                                        ("direct", 16, False), ("build", 8, False),
                                        ("build", 16, False), ("recursive", 8, False),
-                                       ("recursive", 16, False), ("direct", 8, True)):
+                                       ("recursive", 16, False), ("direct", 8, True),
+                                       ("direct-cycle", 8, False),
+                                       ("recursive-cycle", 8, False)):
             with self.subTest(mode=mode, jobs=jobs, serialized=serialized):
                 build = self.root / f"{mode}-{jobs}-{serialized}"
                 build.mkdir()
                 outputs = build
-                if mode == "recursive":
+                execution_mode = mode.removesuffix("-cycle")
+                if execution_mode == "recursive":
                     outputs = build / "child"
                     outputs.mkdir()
                     (build / "Makefile").write_text(
@@ -80,16 +177,19 @@ Path(sys.argv[1]).write_text('built')
                     source += f"{alias}: shared extra{i}\n\t@printf done > $@\n"
                     source += f"extra{i}:\n\t@:\n"
                 source += "shared: " + " ".join(leaves) + "\n\t@printf done > $@\n"
+                if mode.endswith("-cycle"):
+                    source += "shared: cycle-a\ncycle-a: cycle-b\ncycle-b: cycle-a\n"
                 source += " ".join(leaves) + f":\n\t@python worker.py $@ {expected}\n"
                 (outputs / "Makefile").write_text(source)
-                command = [str(BINARY), *(["build"] if mode != "direct" else []),
+                command = [str(BINARY), *(["build"] if execution_mode != "direct" else []),
                            f"-j{jobs}", "all", "--kati_stats"]
-                if mode == "recursive":
+                if execution_mode == "recursive":
                     command.append("--graph_optimizations=aggressive")
                 result = subprocess.run(command, cwd=build, text=True,
                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                         timeout=30, check=True)
-                self.assertNotIn("Circular", result.stdout)
+                if not mode.endswith("-cycle"):
+                    self.assertNotIn("Circular", result.stdout)
                 counter = json.loads((outputs / "counter").read_text())
                 self.assertEqual(counter["started"], 16)
                 self.assertEqual(counter["active"], 0)
@@ -1190,12 +1290,15 @@ print(sys.argv[1])
             "'$(origin KATI_GRAPH_SETTINGS)' '$(MAKE)' > result\n")
         cases = [
             (["--graph_optimizations=off"], "v1:off",
-             "evaluation=0 includes=0 recursive=0 compact=0 monitor=0 full=0"),
+             "evaluation=0 includes=0 recursive=0 compact=0 monitor=0 full=0 pattern_index=0"),
             (["--graph_optimizations=safe"], "v1:safe",
-             "evaluation=1 includes=1 recursive=0 compact=1 monitor=0 full=0"),
+             "evaluation=1 includes=1 recursive=0 compact=1 monitor=0 full=0 pattern_index=1"),
             (["--graph_optimizations=aggressive", "--disable_graph_optimization=evaluation",
               "--disable_graph_optimization=compact"], "v1:aggressive:evaluation:compact",
-             "evaluation=0 includes=1 recursive=1 compact=0 monitor=1 full=1"),
+             "evaluation=0 includes=1 recursive=1 compact=0 monitor=1 full=1 pattern_index=1"),
+            (["--graph_optimizations=aggressive", "--disable_graph_optimization=pattern_index"],
+             "v1:aggressive:pattern_index",
+             "evaluation=1 includes=1 recursive=1 compact=1 monitor=1 full=1 pattern_index=0"),
         ]
         for jobs in (1, 8, 16):
             for options, transport, settings in cases:

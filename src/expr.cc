@@ -1,4 +1,8 @@
 // FORK MODIFICATION NOTICE (2026)
+// Validate serialized runtime expressions before lazily restoring their ASTs.
+// Share immutable serialized expression storage until an AST is needed.
+// Preserve the recipe caller's location in restored expressions.
+// Restore unevaluated expressions from checked runtime recipe records.
 // Track and validate incremental evaluation, include proofs and imported Ninja
 // graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
 // Paps. Changed pattern substitution, build execution, evaluation, and
@@ -70,7 +74,8 @@ class Literal : public Value {
     AppendGraphString(s_, data);
     return true;
   }
-  explicit Literal(std::string_view s) : Value(Loc()), s_(s) {}
+  explicit Literal(std::string_view s, const Loc& loc = Loc())
+      : Value(loc), s_(s) {}
 
   std::string_view val() const { return s_; }
 
@@ -398,6 +403,166 @@ class Func : public Value {
   const FuncInfo* fi_;
   std::vector<Value*> args_;
 };
+
+class RuntimeTargetAppend : public Value {
+ public:
+  RuntimeTargetAppend(Value* prefix, Value* suffix, const Loc& loc)
+      : Value(loc), prefix_(prefix), suffix_(suffix) {}
+  bool IsFunc(Evaluator* ev) const override {
+    return prefix_->IsFunc(ev) || suffix_->IsFunc(ev);
+  }
+  void Eval(Evaluator* ev, std::string* output) const override {
+    std::string prefix = prefix_->Eval(ev);
+    std::string suffix = suffix_->Eval(ev);
+    if (prefix.empty() && !suffix.empty() && suffix.front() == ' ')
+      suffix.erase(suffix.begin());
+    *output += prefix;
+    *output += suffix;
+  }
+
+ protected:
+  std::string DebugString_() const override { return "runtime target append"; }
+
+ private:
+  std::unique_ptr<Value> prefix_, suffix_;
+};
+
+namespace {
+bool ValidateRuntimeExpression(std::string_view record, unsigned depth = 0) {
+  if (depth > 256)
+    return false;
+  std::string_view kind, field;
+  if (!ConsumeGraphStringView(&record, &kind))
+    return false;
+  if (kind == "literal" || kind == "reference")
+    return ConsumeGraphStringView(&record, &field) && record.empty();
+  const FuncInfo* info = nullptr;
+  if (kind == "function") {
+    if (!ConsumeGraphStringView(&record, &field) ||
+        !(info = GetFuncInfo(std::string(field))))
+      return false;
+  }
+  size_t count = 0;
+  while (!record.empty()) {
+    if (!ConsumeGraphStringView(&record, &field) ||
+        !ValidateRuntimeExpression(field, depth + 1))
+      return false;
+    ++count;
+  }
+  return kind == "list" || (kind == "dynamic-reference" && count == 1) ||
+         (kind == "target-append" && count == 2) ||
+         (kind == "substitution" && count == 3) ||
+         (info && count >= static_cast<size_t>(info->min_arity) &&
+          (info->arity == 0 || count <= static_cast<size_t>(info->arity)));
+}
+
+class LazyRuntimeExpression : public Value {
+ public:
+  LazyRuntimeExpression(std::string_view record,
+                        std::shared_ptr<const void> storage)
+      : Value(Loc()), storage_(std::move(storage)), record_(record) {}
+  void Eval(Evaluator* ev, std::string* out) const override {
+    Decode()->Eval(ev, out);
+  }
+  bool IsFunc(Evaluator* ev) const override { return Decode()->IsFunc(ev); }
+  bool IsLiteral() const override { return Decode()->IsLiteral(); }
+  std::string_view GetLiteralValueUnsafe() const override {
+    return Decode()->GetLiteralValueUnsafe();
+  }
+
+ protected:
+  bool AppendIncrementalIdentity(std::string* out) const override {
+    out->append(record_);
+    return true;
+  }
+  std::string DebugString_() const override {
+    return Value::DebugString(Decode());
+  }
+
+ private:
+  Value* Decode() const {
+    if (!decoded_) {
+      decoded_.reset(Value::RestoreRecipeExpression(record_));
+      CHECK(decoded_ != nullptr);
+    }
+    return decoded_.get();
+  }
+  const std::shared_ptr<const void> storage_;
+  const std::string_view record_;
+  mutable std::unique_ptr<Value> decoded_;
+};
+}  // namespace
+
+Value* Value::RestoreLazyRecipeExpression(std::string_view record) {
+  if (!ValidateRuntimeExpression(record))
+    return nullptr;
+  auto storage = std::make_shared<const std::string>(record);
+  return new LazyRuntimeExpression(*storage, storage);
+}
+
+bool Value::ValidateRecipeExpression(std::string_view record) {
+  return ValidateRuntimeExpression(record);
+}
+
+Value* Value::RestoreValidatedLazyRecipeExpression(
+    std::string_view record,
+    std::shared_ptr<const void> storage) {
+  CHECK(storage != nullptr);
+  return new LazyRuntimeExpression(record, std::move(storage));
+}
+
+Value* Value::RestoreRecipeExpression(std::string_view record,
+                                      unsigned depth,
+                                      const Loc& loc) {
+  if (depth > 256)
+    return nullptr;
+  std::string kind, text;
+  if (!ConsumeGraphString(&record, &kind))
+    return nullptr;
+  if (kind == "literal" || kind == "reference") {
+    if (!ConsumeGraphString(&record, &text) || !record.empty())
+      return nullptr;
+    return kind == "literal"
+               ? static_cast<Value*>(new Literal(Intern(text).str(), loc))
+               : new SymRef(loc, Intern(text));
+  }
+  const FuncInfo* info = nullptr;
+  if (kind == "function") {
+    if (!ConsumeGraphString(&record, &text) || !(info = GetFuncInfo(text)))
+      return nullptr;
+  }
+  std::vector<std::unique_ptr<Value>> children;
+  while (!record.empty()) {
+    if (!ConsumeGraphString(&record, &text))
+      return nullptr;
+    children.emplace_back(RestoreRecipeExpression(text, depth + 1, loc));
+    if (!children.back())
+      return nullptr;
+  }
+  if (kind == "list") {
+    std::vector<Value*> values;
+    for (auto& child : children)
+      values.push_back(child.release());
+    return NewExpr(loc, &values);
+  }
+  if (kind == "dynamic-reference" && children.size() == 1)
+    return new VarRef(loc, children[0].release());
+  if (kind == "target-append" && children.size() == 2)
+    return new RuntimeTargetAppend(children[0].release(), children[1].release(),
+                                   loc);
+  if (kind == "substitution" && children.size() == 3)
+    return new VarSubst(loc, children[0].release(), children[1].release(),
+                        children[2].release());
+  if (info && children.size() >= static_cast<size_t>(info->min_arity) &&
+      (info->arity == 0 ||
+       children.size() <= static_cast<size_t>(info->arity))) {
+    auto* function = new Func(loc, info);
+    for (auto& child : children)
+      function->AddArg(child.release());
+    return function;
+  }
+  return nullptr;
+}
 
 static char CloseParen(char c) {
   switch (c) {

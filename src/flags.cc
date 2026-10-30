@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Control pattern-variable indexing independently of evaluation memoization.
 // Preserve inherited FIFO authentication without treating it as an explicit -j.
 // Add configurable Ninja graph optimizations and content-preserving output
 // generation. Changed by the Openmktr fork, maintained by Rihards Paps and
@@ -46,8 +47,9 @@
 Flags g_flags;
 
 static bool IsGraphOptimizationFeature(std::string_view feature) {
-  return feature == "evaluation" || feature == "includes" ||
-         feature == "recursive" || feature == "compact" || feature == "monitor";
+  return feature == "evaluation" || feature == "pattern_index" ||
+         feature == "includes" || feature == "recursive" ||
+         feature == "compact" || feature == "monitor";
 }
 
 static bool ReadInheritedGraphOptimizations(const char* value, Flags* flags) {
@@ -81,8 +83,8 @@ std::string Flags::GraphOptimizationTransport() const {
       graph_optimizations == GraphOptimizations::kOff    ? "v1:off"
       : graph_optimizations == GraphOptimizations::kSafe ? "v1:safe"
                                                          : "v1:aggressive";
-  for (const char* feature :
-       {"evaluation", "includes", "recursive", "compact", "monitor"})
+  for (const char* feature : {"evaluation", "pattern_index", "includes",
+                              "recursive", "compact", "monitor"})
     if (std::find(disabled_graph_optimizations.begin(),
                   disabled_graph_optimizations.end(),
                   feature) != disabled_graph_optimizations.end()) {
@@ -112,6 +114,8 @@ std::string Flags::GraphOptimizationIdentity() const {
   }
   result += graph_optimizations == GraphOptimizations::kAggressive ? " full=1"
                                                                    : " full=0";
+  result += GraphOptimizationEnabled("pattern_index") ? " pattern_index=1"
+                                                      : " pattern_index=0";
   return result;
 }
 

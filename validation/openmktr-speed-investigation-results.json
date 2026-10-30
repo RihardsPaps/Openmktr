@@ -1,0 +1,1236 @@
+{
+  "schema": "openmktr-speed-investigation-v1",
+  "date": "2026-10-30",
+  "local_workspace": "/root/openmktr-speed-20261030",
+  "scope": "Performance investigation and disposable diagnostic prototypes; no production C++ edits or completed full clean-build speedup claim.",
+  "protocol": {
+    "jobs": 32,
+    "wsl_memory_gib": 30,
+    "host_physical_bytes": 34130411520,
+    "clock": "CLOCK_MONOTONIC_RAW",
+    "sequential_workloads": true,
+    "cache_policy": "filesystem caches uncontrolled; compiler caches disabled for LibreOffice phases",
+    "generation": "one initial and two repeated generations per variant, original build protected by private overlay mounts",
+    "clean_front": "fresh out-of-tree configurations; original source mounted read-only; candidate first, baseline second; graph preparation only",
+    "toolchain": "Clang 22.1.8, musl, libc++, O2, ThinLTO; diagnostic changes only IncrementalEvaluator enabled_ to false",
+    "runtime": "four alternating batches per variant, 256 recipes per batch, 32 concurrent workers, outputs checked after every batch; instrumented timings separate",
+    "standard_bench": "disposable tests/bench.py copy changes job limits to 32, removes 1/4 job lanes, uses raw clock; 2 warmups and 3 measured samples in Chimera"
+  },
+  "historical": {
+    "report": "validation/libreoffice-improvements-results.json",
+    "sha256": "00a71279e8877808ec72a63746883eb776253fbbafaa1ddfa3b2a68218dde58d",
+    "runs": {
+      "gnu-build": {
+        "command": [
+          "/usr/bin/make",
+          "-j32",
+          "-rs",
+          "-f",
+          "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/gnu/libreoffice-25.2.7.2/Makefile.gbuild",
+          "MAKE=/usr/bin/make",
+          "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+          "build"
+        ],
+        "cwd": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/gnu/build",
+        "started_utc": "2026-10-30T10:00:58.933168+00:00",
+        "environment_overrides": {
+          "SRCDIR": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/gnu/libreoffice-25.2.7.2",
+          "BUILDDIR": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/gnu/build",
+          "WORKDIR": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/gnu/build/workdir"
+        },
+        "exit_code": 0,
+        "wall_seconds": 834.1120467840001,
+        "user_seconds": 24783.605642,
+        "system_seconds": 1230.050738,
+        "average_cpu_cores": 31.187244543821393,
+        "peak_individual_rss_kib": 763392,
+        "sampled_peak_tree_rss_bytes": 11856465920,
+        "minimum_mem_available_kib": 18470644,
+        "maximum_swap_used_kib": 0,
+        "log": "gnu-build.log",
+        "elapsed_clock": "CLOCK_MONOTONIC_RAW",
+        "clock_validation": {
+          "realtime_discontinuities_seconds": [],
+          "maximum_sample_offset_span_seconds": 2.0742416381835938e-05
+        }
+      },
+      "aggressive-v17-build": {
+        "command": [
+          "/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "build",
+          "--graph_optimizations=aggressive",
+          "-j32",
+          "-rs",
+          "-f",
+          "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/libreoffice-25.2.7.2/Makefile.gbuild",
+          "MAKE=/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+          "build"
+        ],
+        "cwd": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/build",
+        "started_utc": "2026-10-30T10:16:09.702726+00:00",
+        "environment_overrides": {
+          "SRCDIR": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/libreoffice-25.2.7.2",
+          "BUILDDIR": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/build",
+          "WORKDIR": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/build/workdir"
+        },
+        "exit_code": 0,
+        "wall_seconds": 960.2232783,
+        "user_seconds": 25900.230816,
+        "system_seconds": 1608.805624,
+        "average_cpu_cores": 28.648583159432036,
+        "peak_individual_rss_kib": 8575068,
+        "sampled_peak_tree_rss_bytes": 13220605952,
+        "minimum_mem_available_kib": 17262396,
+        "maximum_swap_used_kib": 0,
+        "log": "aggressive-v17-build.log",
+        "elapsed_clock": "CLOCK_MONOTONIC_RAW",
+        "clock_validation": {
+          "realtime_discontinuities_seconds": [],
+          "maximum_sample_offset_span_seconds": 9.202957153320312e-05
+        }
+      }
+    },
+    "gap_seconds": 126.11123151599986
+  },
+  "clean_front": {
+    "baseline": {
+      "command": [
+        "/root/libreoffice-improvements-20261029/omktr-candidate17",
+        "--ninja",
+        "--kati_stats",
+        "--ninja_stats",
+        "--graph_optimizations=aggressive",
+        "--ninja_dir",
+        ".openmktr",
+        "-j32",
+        "-rs",
+        "-f",
+        "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/libreoffice-25.2.7.2/Makefile.gbuild",
+        "MAKE=/root/libreoffice-improvements-20261029/omktr-candidate17",
+        "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+        "build"
+      ],
+      "cwd": "/root/openmktr-speed-20261030/clean-front-baseline",
+      "exit_code": 0,
+      "wall_seconds": 90.269529143,
+      "user_seconds": 85.104018,
+      "system_seconds": 7.0805,
+      "maxrss_kib": 8126596
+    },
+    "diagnostic": {
+      "command": [
+        "/root/openmktr-speed-20261030/omktr-no-memo",
+        "--ninja",
+        "--kati_stats",
+        "--ninja_stats",
+        "--graph_optimizations=aggressive",
+        "--ninja_dir",
+        ".openmktr",
+        "-j32",
+        "-rs",
+        "-f",
+        "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/libreoffice-25.2.7.2/Makefile.gbuild",
+        "MAKE=/root/openmktr-speed-20261030/omktr-no-memo",
+        "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+        "build"
+      ],
+      "cwd": "/root/openmktr-speed-20261030/clean-front-nomemo",
+      "exit_code": 0,
+      "wall_seconds": 34.62937188800004,
+      "user_seconds": 29.072164,
+      "system_seconds": 6.915366,
+      "maxrss_kib": 7848548
+    },
+    "saving_seconds": 55.64015725499996,
+    "saving_percent": 61.63780600523339,
+    "saving_as_percent_of_historical_gap": 44.119906360553486
+  },
+  "generation": {
+    "aggressive": [
+      {
+        "command": [
+          "/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "--ninja",
+          "--kati_stats",
+          "--ninja_stats",
+          "--graph_optimizations=aggressive",
+          "--ninja_dir",
+          ".openmktr",
+          "-j32",
+          "-rs",
+          "-f",
+          "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/libreoffice-25.2.7.2/Makefile.gbuild",
+          "MAKE=/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+          "build"
+        ],
+        "cwd": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/build",
+        "exit_code": 0,
+        "wall_seconds": 81.466989012,
+        "user_seconds": 66.149598,
+        "system_seconds": 9.456777,
+        "maxrss_kib": 13400592
+      },
+      {
+        "command": [
+          "/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "--ninja",
+          "--kati_stats",
+          "--ninja_stats",
+          "--graph_optimizations=aggressive",
+          "--ninja_dir",
+          ".openmktr",
+          "-j32",
+          "-rs",
+          "-f",
+          "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/libreoffice-25.2.7.2/Makefile.gbuild",
+          "MAKE=/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+          "build"
+        ],
+        "cwd": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/build",
+        "exit_code": 0,
+        "wall_seconds": 71.59505996799999,
+        "user_seconds": 65.332477,
+        "system_seconds": 6.855085,
+        "maxrss_kib": 13410956
+      },
+      {
+        "command": [
+          "/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "--ninja",
+          "--kati_stats",
+          "--ninja_stats",
+          "--graph_optimizations=aggressive",
+          "--ninja_dir",
+          ".openmktr",
+          "-j32",
+          "-rs",
+          "-f",
+          "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/libreoffice-25.2.7.2/Makefile.gbuild",
+          "MAKE=/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+          "build"
+        ],
+        "cwd": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/build",
+        "exit_code": 0,
+        "wall_seconds": 70.32051540499992,
+        "user_seconds": 63.620281,
+        "system_seconds": 7.284598,
+        "maxrss_kib": 13402164
+      }
+    ],
+    "safe": [
+      {
+        "command": [
+          "/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "--ninja",
+          "--kati_stats",
+          "--ninja_stats",
+          "--graph_optimizations=safe",
+          "--ninja_dir",
+          ".openmktr",
+          "-j32",
+          "-rs",
+          "-f",
+          "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/libreoffice-25.2.7.2/Makefile.gbuild",
+          "MAKE=/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+          "build"
+        ],
+        "cwd": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/build",
+        "exit_code": 0,
+        "wall_seconds": 59.003405393999856,
+        "user_seconds": 45.336347,
+        "system_seconds": 8.640557,
+        "maxrss_kib": 11641052
+      },
+      {
+        "command": [
+          "/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "--ninja",
+          "--kati_stats",
+          "--ninja_stats",
+          "--graph_optimizations=safe",
+          "--ninja_dir",
+          ".openmktr",
+          "-j32",
+          "-rs",
+          "-f",
+          "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/libreoffice-25.2.7.2/Makefile.gbuild",
+          "MAKE=/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+          "build"
+        ],
+        "cwd": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/build",
+        "exit_code": 0,
+        "wall_seconds": 49.825904592999905,
+        "user_seconds": 43.95621,
+        "system_seconds": 6.387295,
+        "maxrss_kib": 11600864
+      },
+      {
+        "command": [
+          "/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "--ninja",
+          "--kati_stats",
+          "--ninja_stats",
+          "--graph_optimizations=safe",
+          "--ninja_dir",
+          ".openmktr",
+          "-j32",
+          "-rs",
+          "-f",
+          "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/libreoffice-25.2.7.2/Makefile.gbuild",
+          "MAKE=/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+          "build"
+        ],
+        "cwd": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/build",
+        "exit_code": 0,
+        "wall_seconds": 49.72513922600001,
+        "user_seconds": 44.591498,
+        "system_seconds": 5.7190010000000004,
+        "maxrss_kib": 11627496
+      }
+    ],
+    "nomemo": [
+      {
+        "command": [
+          "/root/openmktr-speed-20261030/omktr-no-memo",
+          "--ninja",
+          "--kati_stats",
+          "--ninja_stats",
+          "--graph_optimizations=aggressive",
+          "--ninja_dir",
+          ".openmktr",
+          "-j32",
+          "-rs",
+          "-f",
+          "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/libreoffice-25.2.7.2/Makefile.gbuild",
+          "MAKE=/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+          "build"
+        ],
+        "cwd": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/build",
+        "exit_code": 0,
+        "wall_seconds": 44.41162552999998,
+        "user_seconds": 31.478113,
+        "system_seconds": 8.795029,
+        "maxrss_kib": 11563464
+      },
+      {
+        "command": [
+          "/root/openmktr-speed-20261030/omktr-no-memo",
+          "--ninja",
+          "--kati_stats",
+          "--ninja_stats",
+          "--graph_optimizations=aggressive",
+          "--ninja_dir",
+          ".openmktr",
+          "-j32",
+          "-rs",
+          "-f",
+          "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/libreoffice-25.2.7.2/Makefile.gbuild",
+          "MAKE=/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+          "build"
+        ],
+        "cwd": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/build",
+        "exit_code": 0,
+        "wall_seconds": 36.58515403000001,
+        "user_seconds": 30.847675,
+        "system_seconds": 6.342227,
+        "maxrss_kib": 11568620
+      },
+      {
+        "command": [
+          "/root/openmktr-speed-20261030/omktr-no-memo",
+          "--ninja",
+          "--kati_stats",
+          "--ninja_stats",
+          "--graph_optimizations=aggressive",
+          "--ninja_dir",
+          ".openmktr",
+          "-j32",
+          "-rs",
+          "-f",
+          "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/libreoffice-25.2.7.2/Makefile.gbuild",
+          "MAKE=/root/libreoffice-improvements-20261029/omktr-candidate17",
+          "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+          "build"
+        ],
+        "cwd": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/build",
+        "exit_code": 0,
+        "wall_seconds": 36.298147985000014,
+        "user_seconds": 31.086418,
+        "system_seconds": 5.819466,
+        "maxrss_kib": 11582008
+      }
+    ]
+  },
+  "warm_generation_mean_seconds": {
+    "aggressive": 70.95778768649996,
+    "safe": 49.77552190949996,
+    "nomemo": 36.44165100750001
+  },
+  "phase_statistics": {
+    "clean-front-baseline-generate": {
+      "eval time": [
+        27.992574,
+        28.271457
+      ],
+      "make dep time": [
+        4.431049
+      ],
+      "ninja gen (eval)": [
+        12.167872
+      ],
+      "ninja gen (emit)": [
+        1.159412
+      ],
+      "generate ninja time": [
+        13.439533
+      ],
+      "execute included makefiles time": [
+        13.473326,
+        0.105145
+      ],
+      "action_tags": {
+        "C  ": 1,
+        "LNK": 1,
+        "DEP": 303
+      }
+    },
+    "clean-front-nomemo-generate": {
+      "eval time": [
+        3.705065,
+        2.755223
+      ],
+      "make dep time": [
+        4.60043
+      ],
+      "ninja gen (eval)": [
+        7.258879
+      ],
+      "ninja gen (emit)": [
+        1.128261
+      ],
+      "generate ninja time": [
+        8.435036
+      ],
+      "execute included makefiles time": [
+        13.230069,
+        0.093701
+      ],
+      "action_tags": {
+        "C  ": 1,
+        "LNK": 1,
+        "DEP": 303
+      }
+    },
+    "aggressive-1": {
+      "eval time": [
+        38.047518
+      ],
+      "make dep time": [
+        11.603398
+      ],
+      "ninja gen (eval)": [
+        19.000907
+      ],
+      "ninja gen (emit)": [
+        9.567915
+      ],
+      "generate ninja time": [
+        28.719455
+      ],
+      "execute included makefiles time": [
+        0.0589
+      ],
+      "action_tags": {}
+    },
+    "aggressive-1-warm-1": {
+      "eval time": [
+        36.166299
+      ],
+      "make dep time": [
+        10.314971
+      ],
+      "ninja gen (eval)": [
+        16.180566
+      ],
+      "ninja gen (emit)": [
+        5.240351
+      ],
+      "generate ninja time": [
+        21.571337
+      ],
+      "execute included makefiles time": [
+        0.060133
+      ],
+      "action_tags": {}
+    },
+    "aggressive-1-warm-2": {
+      "eval time": [
+        35.087924
+      ],
+      "make dep time": [
+        10.326552
+      ],
+      "ninja gen (eval)": [
+        16.013852
+      ],
+      "ninja gen (emit)": [
+        5.166122
+      ],
+      "generate ninja time": [
+        21.350143
+      ],
+      "execute included makefiles time": [
+        0.068779
+      ],
+      "action_tags": {}
+    },
+    "safe-1": {
+      "eval time": [
+        20.513897
+      ],
+      "make dep time": [
+        11.479223
+      ],
+      "ninja gen (eval)": [
+        15.111069
+      ],
+      "ninja gen (emit)": [
+        9.088168
+      ],
+      "generate ninja time": [
+        24.348266
+      ],
+      "execute included makefiles time": [
+        0.065289
+      ],
+      "action_tags": {}
+    },
+    "safe-1-warm-1": {
+      "eval time": [
+        18.46329
+      ],
+      "make dep time": [
+        10.383501
+      ],
+      "ninja gen (eval)": [
+        12.784008
+      ],
+      "ninja gen (emit)": [
+        5.005509
+      ],
+      "generate ninja time": [
+        17.917567
+      ],
+      "execute included makefiles time": [
+        0.052231
+      ],
+      "action_tags": {}
+    },
+    "safe-1-warm-2": {
+      "eval time": [
+        18.703197
+      ],
+      "make dep time": [
+        10.049681
+      ],
+      "ninja gen (eval)": [
+        12.669095
+      ],
+      "ninja gen (emit)": [
+        5.012564
+      ],
+      "generate ninja time": [
+        17.821469
+      ],
+      "execute included makefiles time": [
+        0.069005
+      ],
+      "action_tags": {}
+    },
+    "nomemo-1": {
+      "eval time": [
+        7.568276
+      ],
+      "make dep time": [
+        11.714041
+      ],
+      "ninja gen (eval)": [
+        13.781451
+      ],
+      "ninja gen (emit)": [
+        8.7224
+      ],
+      "generate ninja time": [
+        22.577872
+      ],
+      "execute included makefiles time": [
+        0.067904
+      ],
+      "action_tags": {}
+    },
+    "nomemo-1-warm-1": {
+      "eval time": [
+        6.617985
+      ],
+      "make dep time": [
+        10.238221
+      ],
+      "ninja gen (eval)": [
+        11.027178
+      ],
+      "ninja gen (emit)": [
+        5.525403
+      ],
+      "generate ninja time": [
+        16.635782
+      ],
+      "execute included makefiles time": [
+        0.063827
+      ],
+      "action_tags": {}
+    },
+    "nomemo-1-warm-2": {
+      "eval time": [
+        6.805861
+      ],
+      "make dep time": [
+        10.384809
+      ],
+      "ninja gen (eval)": [
+        11.042783
+      ],
+      "ninja gen (emit)": [
+        5.003977
+      ],
+      "generate ninja time": [
+        16.121707
+      ],
+      "execute included makefiles time": [
+        0.064564
+      ],
+      "action_tags": {}
+    }
+  },
+  "runtime": {
+    "jobs": 32,
+    "context_bytes": 32735354,
+    "context_sha256": "f960942d950510aa39e7155bede8ea9bdf01c2e4296e7298ffbec00e17d648bf",
+    "variables": 4574,
+    "flavors": {
+      "simple": 1678,
+      "recursive": 2896
+    },
+    "samples": {
+      "small": [
+        {
+          "wall_seconds": 0.10503067100000862,
+          "cpu_seconds": 0.49
+        },
+        {
+          "wall_seconds": 0.10324110099998052,
+          "cpu_seconds": 0.5099999999999909
+        },
+        {
+          "wall_seconds": 0.10030283699995834,
+          "cpu_seconds": 0.5
+        },
+        {
+          "wall_seconds": 0.10355460599998878,
+          "cpu_seconds": 0.4999999999999858
+        }
+      ],
+      "libreoffice": [
+        {
+          "wall_seconds": 1.5794227229999933,
+          "cpu_seconds": 45.91
+        },
+        {
+          "wall_seconds": 1.5051742140000215,
+          "cpu_seconds": 44.27000000000001
+        },
+        {
+          "wall_seconds": 1.5268268849999913,
+          "cpu_seconds": 44.88999999999998
+        },
+        {
+          "wall_seconds": 1.526783929999965,
+          "cpu_seconds": 44.86999999999999
+        }
+      ]
+    }
+  },
+  "runtime_medians": {
+    "small": {
+      "wall_seconds": 0.10339785349998465,
+      "cpu_seconds": 0.4999999999999929
+    },
+    "libreoffice": {
+      "wall_seconds": 1.5268054074999782,
+      "cpu_seconds": 44.87999999999998
+    }
+  },
+  "graph_compaction": {
+    "original_bytes": 438672627,
+    "compact_bytes": 249794087,
+    "prefix_replacements": [
+      1363796,
+      1172447
+    ],
+    "identity_reconstruction_passed": true,
+    "queries": {
+      "original": {
+        "wall_seconds": 0.9623188570000138,
+        "maxrss_kib": 592828,
+        "sha256": "4f6df7a8f74ba4d8e720cd12623357c97e554b599a56788e6636b1562ad58901"
+      },
+      "compact": {
+        "wall_seconds": 1.1024286589999974,
+        "maxrss_kib": 407736,
+        "sha256": "4f6df7a8f74ba4d8e720cd12623357c97e554b599a56788e6636b1562ad58901"
+      },
+      "compact-repeat": {
+        "wall_seconds": 1.148461263999934,
+        "maxrss_kib": 408264,
+        "sha256": "4f6df7a8f74ba4d8e720cd12623357c97e554b599a56788e6636b1562ad58901"
+      },
+      "original-repeat": {
+        "wall_seconds": 0.9764406580000013,
+        "maxrss_kib": 592880,
+        "sha256": "4f6df7a8f74ba4d8e720cd12623357c97e554b599a56788e6636b1562ad58901"
+      }
+    }
+  },
+  "audit": {
+    "retained": {
+      "active_runtime_recipes": 4357,
+      "contexts_by_file_bytes": {
+        "32735410": 3455,
+        "91678": 235,
+        "108640": 281,
+        "93331": 207,
+        "91828": 137,
+        "111812": 2,
+        "97126": 33,
+        "97081": 1,
+        "93181": 2,
+        "95796": 1,
+        "99375": 1,
+        "104376": 1,
+        "704457": 1
+      },
+      "logical_context_bytes_if_each_executes_once": 113189529902,
+      "graph_bytes": 438672627
+    },
+    "clean-baseline": {
+      "active_runtime_recipes": 4356,
+      "contexts_by_file_bytes": {
+        "32639855": 3454,
+        "90879": 235,
+        "92531": 207,
+        "91028": 137,
+        "107361": 281,
+        "96325": 33,
+        "96281": 1,
+        "110452": 2,
+        "92381": 2,
+        "94995": 1,
+        "98575": 1,
+        "703657": 1,
+        "103576": 1
+      },
+      "logical_context_bytes_if_each_executes_once": 112825890404,
+      "graph_bytes": 74755679
+    },
+    "clean-nomemo": {
+      "active_runtime_recipes": 4356,
+      "contexts_by_file_bytes": {
+        "32635099": 3454,
+        "107296": 281,
+        "90988": 137,
+        "90839": 235,
+        "92491": 207,
+        "96285": 33,
+        "92342": 2,
+        "703617": 1,
+        "98534": 1,
+        "96240": 1,
+        "110385": 2,
+        "94955": 1,
+        "103508": 1
+      },
+      "logical_context_bytes_if_each_executes_once": 112809419993,
+      "graph_bytes": 74049603
+    },
+    "working_source_differences_from_frozen_baseline": [],
+    "clean_normalized_config_sha256": [
+      "7a73b21d73366bdf6ab1e2559585ee260e96efae478edb766856c35ff78838c1",
+      "7a73b21d73366bdf6ab1e2559585ee260e96efae478edb766856c35ff78838c1"
+    ],
+    "clean_configurations_match": true,
+    "retained_graph_sha256": "3ba4bba049d3defd467d98ccd62f3a0acb805dd510a3bb064c9ee3724187007c",
+    "source_integrity_exit_code": 0
+  },
+  "standard_bench": {
+    "baseline": {
+      "binary_bytes": 1581288,
+      "convert": {
+        "median_seconds": 0.1001555410000492,
+        "peak_rss_kib": 26568
+      },
+      "direct_recipe_launch_j32": {
+        "median_seconds": 0.022961798000096678,
+        "peak_rss_kib": 25336
+      },
+      "end_to_end": {
+        "clean": {
+          "median_seconds": {
+            "configuration": 0.013808902999926431,
+            "end_to_end": 0.027968361000148434,
+            "graph_generation": 0.002467261999981929,
+            "recipe_execution": 0.011669492000009996
+          },
+          "samples_seconds": [
+            {
+              "configuration": 0.013618700000051831,
+              "end_to_end": 0.028221834999840212,
+              "graph_generation": 0.0024921449999055767,
+              "recipe_execution": 0.012087450000080935
+            },
+            {
+              "configuration": 0.014132737999943856,
+              "end_to_end": 0.027110525000125563,
+              "graph_generation": 0.002407480000101714,
+              "recipe_execution": 0.010547050000013769
+            },
+            {
+              "configuration": 0.013808902999926431,
+              "end_to_end": 0.027968361000148434,
+              "graph_generation": 0.002467261999981929,
+              "recipe_execution": 0.011669492000009996
+            }
+          ]
+        },
+        "graph_change": {
+          "median_seconds": {
+            "end_to_end": 0.015109498000128951,
+            "recipe_execution": 0.012892192999970575,
+            "regeneration": 0.002200137000045288
+          },
+          "samples_seconds": [
+            {
+              "end_to_end": 0.014461443999834955,
+              "recipe_execution": 0.012399212999980591,
+              "regeneration": 0.0020428829998309084
+            },
+            {
+              "end_to_end": 0.022419722999984515,
+              "recipe_execution": 0.016251043000011123,
+              "regeneration": 0.006141414000012446
+            },
+            {
+              "end_to_end": 0.015109498000128951,
+              "recipe_execution": 0.012892192999970575,
+              "regeneration": 0.002200137000045288
+            }
+          ]
+        },
+        "noop": {
+          "median_seconds": {
+            "end_to_end": 0.0038690889998633793,
+            "recipe_execution": 0.0028667110000242246,
+            "regeneration": 0.0009797420000268175
+          },
+          "samples_seconds": [
+            {
+              "end_to_end": 0.0038690889998633793,
+              "recipe_execution": 0.002878194999993866,
+              "regeneration": 0.0009797420000268175
+            },
+            {
+              "end_to_end": 0.0037645479999355302,
+              "recipe_execution": 0.002787207999972452,
+              "regeneration": 0.0009667620001891919
+            },
+            {
+              "end_to_end": 0.003899854000110281,
+              "recipe_execution": 0.0028667110000242246,
+              "regeneration": 0.001020656000036979
+            }
+          ]
+        },
+        "single_file_change": {
+          "median_seconds": {
+            "end_to_end": 0.0069859469999755675,
+            "recipe_execution": 0.005719407000015053,
+            "regeneration": 0.0012724749999506457
+          },
+          "samples_seconds": [
+            {
+              "end_to_end": 0.006847557999890341,
+              "recipe_execution": 0.005479745999991792,
+              "regeneration": 0.0013530889998492057
+            },
+            {
+              "end_to_end": 0.0069859469999755675,
+              "recipe_execution": 0.005719407000015053,
+              "regeneration": 0.0012487450001117395
+            },
+            {
+              "end_to_end": 0.007372793000058664,
+              "recipe_execution": 0.006081800999936604,
+              "regeneration": 0.0012724749999506457
+            }
+          ]
+        }
+      },
+      "incremental_noop": {
+        "median_seconds": 0.0014597459999095008,
+        "peak_rss_kib": 25336
+      },
+      "nested_parallel_exec": {
+        "median_seconds": 0.05332784500001253,
+        "peak_rss_kib": 25336
+      },
+      "ninja_recipe_launch_j32": {
+        "median_seconds": 0.18251396300001943,
+        "peak_rss_kib": 25336
+      },
+      "noop_regen": {
+        "median_seconds": 0.0010262080002121365,
+        "peak_rss_kib": 25336
+      },
+      "parallel_exec": {
+        "median_seconds": 0.05277241200019489,
+        "peak_rss_kib": 25336
+      }
+    },
+    "current": {
+      "binary_bytes": 1570720,
+      "convert": {
+        "median_seconds": 0.10092747299995608,
+        "peak_rss_kib": 26616
+      },
+      "direct_recipe_launch_j32": {
+        "median_seconds": 0.02327361299990116,
+        "peak_rss_kib": 24276
+      },
+      "end_to_end": {
+        "clean": {
+          "median_seconds": {
+            "configuration": 0.013717137000185176,
+            "end_to_end": 0.027952784000035535,
+            "graph_generation": 0.0024058019998847158,
+            "recipe_execution": 0.011519703999965714
+          },
+          "samples_seconds": [
+            {
+              "configuration": 0.013717137000185176,
+              "end_to_end": 0.02694940000014867,
+              "graph_generation": 0.0024058019998847158,
+              "recipe_execution": 0.010784005000004981
+            },
+            {
+              "configuration": 0.0139401699998416,
+              "end_to_end": 0.027952784000035535,
+              "graph_generation": 0.0024706350000087696,
+              "recipe_execution": 0.011519703999965714
+            },
+            {
+              "configuration": 0.013627892999920732,
+              "end_to_end": 0.02833875100009209,
+              "graph_generation": 0.0023632879999695433,
+              "recipe_execution": 0.012325415000077555
+            }
+          ]
+        },
+        "graph_change": {
+          "median_seconds": {
+            "end_to_end": 0.014329136000014842,
+            "recipe_execution": 0.012332835000052,
+            "regeneration": 0.0019656810000014957
+          },
+          "samples_seconds": [
+            {
+              "end_to_end": 0.014376954999988811,
+              "recipe_execution": 0.012332835000052,
+              "regeneration": 0.0020270190000246657
+            },
+            {
+              "end_to_end": 0.014329136000014842,
+              "recipe_execution": 0.01234497299992654,
+              "regeneration": 0.0019656810000014957
+            },
+            {
+              "end_to_end": 0.013861638999969728,
+              "recipe_execution": 0.011896532000037041,
+              "regeneration": 0.0019468430000415538
+            }
+          ]
+        },
+        "noop": {
+          "median_seconds": {
+            "end_to_end": 0.004294876999892949,
+            "recipe_execution": 0.0033343959999001527,
+            "regeneration": 0.0009727290000682842
+          },
+          "samples_seconds": [
+            {
+              "end_to_end": 0.004337300000088362,
+              "recipe_execution": 0.003352509000023929,
+              "regeneration": 0.0009727290000682842
+            },
+            {
+              "end_to_end": 0.004294876999892949,
+              "recipe_execution": 0.0033343959999001527,
+              "regeneration": 0.0009482339999067335
+            },
+            {
+              "end_to_end": 0.004016993000050206,
+              "recipe_execution": 0.0030295340000066062,
+              "regeneration": 0.0009769629998572782
+            }
+          ]
+        },
+        "single_file_change": {
+          "median_seconds": {
+            "end_to_end": 0.006789200999946843,
+            "recipe_execution": 0.00547886300000755,
+            "regeneration": 0.0013038309998592013
+          },
+          "samples_seconds": [
+            {
+              "end_to_end": 0.006789200999946843,
+              "recipe_execution": 0.00547886300000755,
+              "regeneration": 0.0012953780001225823
+            },
+            {
+              "end_to_end": 0.006730833000119674,
+              "recipe_execution": 0.005415611999978864,
+              "regeneration": 0.0013038309998592013
+            },
+            {
+              "end_to_end": 0.007065683000064382,
+              "recipe_execution": 0.005634653000015533,
+              "regeneration": 0.0014084550000461604
+            }
+          ]
+        }
+      },
+      "incremental_noop": {
+        "median_seconds": 0.0013809609999952954,
+        "peak_rss_kib": 24276
+      },
+      "nested_parallel_exec": {
+        "median_seconds": 0.05343706700000439,
+        "peak_rss_kib": 24276
+      },
+      "ninja_recipe_launch_j32": {
+        "median_seconds": 0.18427392899980077,
+        "peak_rss_kib": 24276
+      },
+      "noop_regen": {
+        "median_seconds": 0.0009725879999678,
+        "peak_rss_kib": 24276
+      },
+      "parallel_exec": {
+        "median_seconds": 0.05325041099990813,
+        "peak_rss_kib": 24276
+      }
+    }
+  },
+  "standard_bench_status": {
+    "command": [
+      "chroot",
+      "/root/universal-tool-campaign-20260927/chimera-root-complete",
+      "/bin/sh",
+      "-c",
+      "python /omktr-speed-no-memo/bench-j32.py /omktr-speed-no-memo/omktr --baseline /lo-improvements-candidate/omktr --repeats 3"
+    ],
+    "exit_code": 0,
+    "baseline_sha256": "b82bf0ae012cbf79000db431de80370fc510767aea13c11d0c179b12b39a4578",
+    "candidate_sha256": "d9d80c6d1390e0bb2e907ddb3e4881ddb6a4e3fe5b1b7011e40fa1913cdde9a1"
+  },
+  "diagnostic_build": {
+    "link": [
+      "clang++",
+      "-stdlib=libc++",
+      "-fuse-ld=lld",
+      "-pthread",
+      "-flto=thin",
+      "-Wl,--gc-sections",
+      "-Wl,--icf=safe",
+      "out/main.o",
+      "out/affinity.o",
+      "out/command.o",
+      "out/dep.o",
+      "out/eval.o",
+      "out/exec.o",
+      "out/expr.o",
+      "out/file.o",
+      "out/file_cache.o",
+      "out/fileutil.o",
+      "out/find.o",
+      "out/flags.o",
+      "out/graph_optimization.o",
+      "out/graph_import.o",
+      "out/incremental_eval.o",
+      "out/native_observation.o",
+      "out/func.o",
+      "out/io.o",
+      "out/log.o",
+      "out/ninja.o",
+      "out/monitor.o",
+      "out/parser.o",
+      "out/regen.o",
+      "out/recursive_cache.o",
+      "out/regen_dump.o",
+      "out/rule.o",
+      "out/stats.o",
+      "out/stmt.o",
+      "out/stringprintf.o",
+      "out/strutil.o",
+      "out/symtab.o",
+      "out/timeutil.o",
+      "out/var.o",
+      "out/version_generated.o",
+      "-Wl,--dynamic-linker=/root/libreoffice-improvements-20261029/runtime/libc.so",
+      "-Wl,-rpath,/root/libreoffice-improvements-20261029/runtime",
+      "-o",
+      "omktr-no-memo"
+    ],
+    "binary_sha256": "0efec3561e4c79f42a67b7bc734c317e6b9fafd21a42cb4b1137756ece5aa5a2",
+    "diagnostic_only": true
+  },
+  "profiler": {
+    "generation": {
+      "command": [
+        "/usr/lib/linux-tools/6.18.54.1-microsoft-standard-WSL2/bin/perf",
+        "record",
+        "-e",
+        "cpu-clock",
+        "-F",
+        "99",
+        "--call-graph",
+        "dwarf,4096",
+        "--no-inherit",
+        "-o",
+        "/root/openmktr-speed-20261030/generation.perf",
+        "--",
+        "/root/libreoffice-improvements-20261029/omktr-candidate17",
+        "--ninja",
+        "--kati_stats",
+        "--ninja_stats",
+        "--graph_optimizations=aggressive",
+        "--ninja_dir",
+        ".openmktr",
+        "-j32",
+        "-rs",
+        "-f",
+        "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/libreoffice-25.2.7.2/Makefile.gbuild",
+        "MAKE=/root/libreoffice-improvements-20261029/omktr-candidate17",
+        "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+        "build"
+      ],
+      "cwd": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/build",
+      "exit_code": 0,
+      "wall_seconds": 76.994885796,
+      "user_seconds": 63.712584,
+      "system_seconds": 9.633612,
+      "maxrss_kib": 13573772
+    },
+    "note": "Sampling only; WSL perf lacks ELF/DWARF unwind support. Leaf offsets were mapped through ELF load segments and llvm-symbolizer. Unresolved library symbols remain unresolved. Raw stack data retained locally, excluded from archive."
+  },
+  "excluded": {
+    "disabling_entire_evaluation_feature": {
+      "command": [
+        "/root/libreoffice-improvements-20261029/omktr-candidate17",
+        "--disable_graph_optimization=evaluation",
+        "--ninja",
+        "--kati_stats",
+        "--ninja_stats",
+        "--graph_optimizations=aggressive",
+        "--ninja_dir",
+        ".openmktr",
+        "-j32",
+        "-rs",
+        "-f",
+        "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/libreoffice-25.2.7.2/Makefile.gbuild",
+        "MAKE=/root/libreoffice-improvements-20261029/omktr-candidate17",
+        "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+        "build"
+      ],
+      "cwd": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/build",
+      "exit_code": -15,
+      "wall_seconds": 165.052828111,
+      "user_seconds": 151.164059,
+      "system_seconds": 8.84302,
+      "maxrss_kib": 11574880
+    },
+    "interrupted_execution_probe": {
+      "command": [
+        "/usr/lib/linux-tools/6.18.54.1-microsoft-standard-WSL2/bin/perf",
+        "record",
+        "-e",
+        "cpu-clock",
+        "-F",
+        "49",
+        "--call-graph",
+        "dwarf,4096",
+        "-o",
+        "/root/openmktr-speed-20261030/execution.perf",
+        "--",
+        "sh",
+        ".openmktr/ninja.sh",
+        "-j32"
+      ],
+      "cwd": "/root/libreoffice-improvements-20261029/final-pair17-clock-controlled/aggressive-v17/build",
+      "exit_code": -2,
+      "wall_seconds": 35.359744593000016,
+      "user_seconds": 817.805888,
+      "system_seconds": 128.09494,
+      "maxrss_kib": 593088
+    },
+    "reasons": [
+      "Entire evaluation switch also disables pattern-variable indexing; stopped after 165 seconds while still resolving dependencies.",
+      "Execution following diagnostic regeneration scheduled compilation; interrupted after 35 seconds, never counted as no-op or complete clean timing.",
+      "Setup retries corrected an absolute perf path, a relative fixture context path, a reused fixture directory, and an unmounted Chimera /proc. Only successful timed results are compared."
+    ]
+  },
+  "restoration": {
+    "tested_memory_gib": 30,
+    "restored_configuration_applies_at_next_wsl_start": true,
+    "restored_sha256": "359538deb7d243a51603cc594e2df502b5e4a96770dec01a0b5da66b9550e9cb",
+    "host_physical_bytes": 34130411520,
+    "tested_processors": 32,
+    "original_sha256": "359538deb7d243a51603cc594e2df502b5e4a96770dec01a0b5da66b9550e9cb",
+    "final_timesync_service": "active",
+    "final_memory_status": [
+      "MemTotal:       24605896 kB",
+      "MemFree:        22496016 kB",
+      "MemAvailable:   23667836 kB"
+    ]
+  },
+  "limits": [
+    "No fresh full GNU/Openmktr clean comparison or completed full application validation for diagnostic variant.",
+    "Initial preparation pair and two warm repetitions per profile are not randomized statistical confidence intervals.",
+    "Microbenchmark isolates context load/restore and trivial expansion, excluding production supervision and read-certificate publication.",
+    "Generated graph identities can change with executable path and inherited environment; original WSL_INTEROP differs after restarting WSL. Standalone launcher probes are not qualified no-op comparisons.",
+    "Normal and sanitizer gates and new CI were not run for this disposable diagnostic experiment. Prior full-build correctness remains the historical report boundary."
+  ],
+  "evidence_archive": {
+    "path": "validation/evidence/openmktr-speed-investigation-2026-10-30.zip",
+    "sha256": "7885e5a4f4efcd7531cb6e295acbd6a8d3300339a2da4d705e6e10f27b146cba",
+    "bytes": 23229100,
+    "entries": 82,
+    "crc_and_entry_hashes_verified": true
+  }
+}

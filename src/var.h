@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Allow evaluator-owned retirement of target variables retained by recipes.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -246,7 +247,10 @@ class Vars : public std::unordered_map<Symbol, Var*> {
   Var* Lookup(Symbol name) const;
   Var* Peek(Symbol name) const;
 
-  void Assign(Symbol name, Var* v, bool* readonly);
+  void Assign(Symbol name,
+              Var* v,
+              bool* readonly,
+              std::vector<std::unique_ptr<Var>>* retired = nullptr);
 
   // Target-specific export state is scoped with the variables themselves.
   // GNU make allows a target-specific assignment such as

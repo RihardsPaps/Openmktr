@@ -1,4 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
+// Expose scoped lookup observation for successful runtime recipe identities.
+// Own replaced recipe-time target bindings until dependent scopes expire.
 // Track and validate incremental evaluation, include proofs and imported Ninja
 // graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
 // Paps. Changed build execution, evaluation, or portability for this fork.
@@ -196,6 +198,15 @@ class Evaluator {
     return rule_vars_order_;
   }
   const std::unordered_map<Symbol, bool>& exports() const { return exports_; }
+  uint64_t recipe_snapshot_epoch() const { return recipe_snapshot_epoch_; }
+  void set_recipe_reads(std::unordered_set<Symbol>* reads) {
+    recipe_reads_ = reads;
+  }
+  void RestoreRecipeExport(Symbol name, bool exported) {
+    exports_[name] = exported;
+    runtime_recipe_exports_ = true;
+  }
+  bool runtime_recipe_exports() const { return runtime_recipe_exports_; }
 
   void PrintIncludeStack();
   void Error(const std::string& msg);
@@ -205,6 +216,7 @@ class Evaluator {
   void in_toplevel_makefile();
 
   void set_current_scope(Vars* v) { current_scope_ = v; }
+  void ApplyRecipeTargetUpdates(Symbol target);
   Vars* current_scope() const { return current_scope_; }
 
   bool avoid_io() const { return avoid_io_; }
@@ -295,6 +307,9 @@ class Evaluator {
   std::set<Symbol> symbols_for_eval_;
 
   std::unique_ptr<IncrementalEvaluator> incremental_;
+  std::vector<std::unique_ptr<Var>> retired_recipe_variables_;
+  std::unordered_map<Symbol, std::unordered_map<Symbol, Var*>>
+      recipe_target_updates_;
   Rule* last_rule_;
   Vars* current_scope_;
 
@@ -343,6 +358,9 @@ class Evaluator {
   static SymbolSet used_undefined_vars_;
 
   bool is_evaluating_command_ = false;
+  uint64_t recipe_snapshot_epoch_ = 0;
+  std::unordered_set<Symbol>* recipe_reads_ = nullptr;
+  bool runtime_recipe_exports_ = false;
 };
 
 #endif  // EVAL_H_

@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Return dependency storage to the graph's caller for bounded lifetimes.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -25,6 +26,7 @@
 #define DEP_H_
 
 #include <atomic>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -44,6 +46,7 @@ typedef std::pair<Symbol, struct DepNode*> NamedDepNode;
 
 struct DepNode {
   DepNode(Symbol output, bool is_phony, bool is_restat);
+  ~DepNode();
   std::string DebugString();
 
   Symbol output;
@@ -103,6 +106,7 @@ void MakeDep(Evaluator* ev,
              const std::unordered_map<Symbol, Vars*>& rule_vars,
              const std::vector<Symbol>& targets,
              std::vector<NamedDepNode>* nodes,
+             std::vector<std::unique_ptr<DepNode>>* storage,
              bool add_parent_directory_edges = true);
 
 bool IsSpecialTarget(Symbol output);

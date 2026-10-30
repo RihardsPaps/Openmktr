@@ -1,0 +1,239 @@
+{
+  "status": "nested-generated-reads-fixed-and-bounded-validation-complete",
+  "full_benchmark_run": false,
+  "execution_cap_seconds": 300,
+  "binary_sha256": "1874ffd70f7cfe228d64bbcfed5ead1644225811c582570cff142671871f328a",
+  "source_sha256": {
+    "src/command.cc": "6778d35609953f939510dd5c24ccca483b6f00f03cf42d92144c43059b60c223",
+    "src/command.h": "3c5d5aac3a450670bdf604771199138128570f1e5e95c759ce105d40fccc7608",
+    "src/dep.cc": "782558bb0cb0c68729355fedd9d0d54dddd3d008b7931dbb312ecfd2c17da6a3",
+    "src/eval.cc": "6c09654098fa4893b39c2346a3553f8deb36e6dad620d7be5b9555955a1bbc3b",
+    "src/eval.h": "e2debd7bb0500b7f63910bc0cbadbf57dc88284036a95f567a4f53936f7615f0",
+    "src/exec.cc": "bc02c252dba18bffe8574ec7f0f0f7097102ac452aca9ac59d3612b2b582bed6",
+    "src/expr.cc": "545367dc8d241d3c560339af5ce4c16cc65c80d823ee1b5f1a058ba87114d923",
+    "src/expr.h": "f1a4a2539e54ab16d4ec1498a7bf1668ed120975501e44a4d2a85a1173fa0abb",
+    "src/func.cc": "2c6fe8d579c8b734152e770d691d5e3a89a85fcdd6606be47fe144a3a6aaf637",
+    "src/main.cc": "de600176b38f5e945f8f60e62367bb459873737a4b8f1a0488c50eac40a96b24",
+    "src/ninja.cc": "3af6ac48ac7b0a5ee074c295a601c2fe61fbcc2c5dc373e836bf6c42e4c6557b",
+    "src/var.cc": "7d6582703ef89efbb6b9140619980ae59ecced8f7a9df48e958bd328334ced5a",
+    "src/var.h": "47a9a67da3af8173586863fe5351dc1cb4616b6e17a517abf4e5083a5f571418",
+    "tests/correctness.py": "4c2df01da9f9360cc6215c6bd9c834c4cce8b1e9b4705fb2af7f921fd23b80c3",
+    "tests/graph_optimizations.py": "1210a428c27cd1bf281d3d2838acae5055766df76dc30b1f5bcbabfe62a96f51",
+    "tests/generated_recipe_reads.py": "57415dba16650081e906c1945e94894454eb7b44aa6d2e6cd83cfdd04072e657"
+  },
+  "patch_sha256": "09cf9897cfd185ab2a00252800e25bd77cbb63e363e5df0d966d6b12f20269bd",
+  "baseline": "Recreated previous candidate from retained patch on recorded base; focused suite fails 24 Ninja subcases.",
+  "normal_gate": "180 correctness, 8 focused tests, 53 graph tests, 30 workspace, 7 jobserver, 6 compatibility, 858 snapshots, C++ units, version and include dump passed",
+  "sanitizers": "All CI suites and focused tests passed; one optional Portage skip. Workspace GC failed once, then focused and full workspace retries passed.",
+  "docker": "Docker Desktop Linux engine unavailable; local pinned Chimera chroot used.",
+  "graph": {
+    "generate": {
+      "command": [
+        "/root/omktr-lo-fix-20261029/omktr",
+        "--ninja",
+        "--regen",
+        "--ninja_dir=.openmktr-nested-complete-graph",
+        "--graph_optimizations=aggressive",
+        "-j32",
+        "-rs",
+        "-f",
+        "/root/omktr-lo-fix-20261029/libreoffice/libreoffice-25.2.7.2/Makefile.gbuild",
+        "MAKE=/root/omktr-lo-fix-20261029/omktr",
+        "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+        "build"
+      ],
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 38.49088068899982,
+      "artifacts": {}
+    }
+  },
+  "missing_generated_file_probes": 0,
+  "selected": {
+    "generate": {
+      "command": [
+        "/root/omktr-lo-fix-20261029/omktr",
+        "--ninja",
+        "--regen",
+        "--ninja_dir=.openmktr-nested-stable-output",
+        "--graph_optimizations=aggressive",
+        "-j32",
+        "-rs",
+        "-f",
+        "/root/omktr-lo-fix-20261029/libreoffice/libreoffice-25.2.7.2/Makefile.gbuild",
+        "MAKE=/root/omktr-lo-fix-20261029/omktr",
+        "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+        "/root/omktr-lo-fix-20261029/libreoffice/build/workdir/ComponentTarget/comphelper/util/comphelp.component",
+        "/root/omktr-lo-fix-20261029/libreoffice/build/workdir/InstallScriptTarget/setup_osl.ins"
+      ],
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 50.36710496600017,
+      "artifacts": {}
+    },
+    "execute": {
+      "command": [
+        "sh",
+        ".openmktr-nested-stable-output/ninja.sh",
+        "-j32"
+      ],
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 1.7231989590000012,
+      "artifacts": {
+        "/root/omktr-lo-fix-20261029/libreoffice/build/workdir/ComponentTarget/comphelper/util/comphelp.component": {
+          "sha256": "a08a119dc8089b28207be8fb99413c38dbe38638a9ed23c24297d25990ff6309",
+          "mtime_ns": 1793303766315653373
+        },
+        "/root/omktr-lo-fix-20261029/libreoffice/build/workdir/InstallScriptTarget/setup_osl.ins": {
+          "sha256": "07aa13b754719b9b5bf899697a62c589cd23de7f750f89837594ac525aa86058",
+          "mtime_ns": 1793303767319980658
+        }
+      }
+    },
+    "repeat": {
+      "command": [
+        "sh",
+        ".openmktr-nested-stable-output/ninja.sh",
+        "-j32"
+      ],
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 1.6708308479999232,
+      "artifacts": {
+        "/root/omktr-lo-fix-20261029/libreoffice/build/workdir/ComponentTarget/comphelper/util/comphelp.component": {
+          "sha256": "a08a119dc8089b28207be8fb99413c38dbe38638a9ed23c24297d25990ff6309",
+          "mtime_ns": 1793303767961107737
+        },
+        "/root/omktr-lo-fix-20261029/libreoffice/build/workdir/InstallScriptTarget/setup_osl.ins": {
+          "sha256": "e3ba8ae6d6c9f53b8a4cb3cdab08e21f6a22194d748ef4d416b0160a57a671f5",
+          "mtime_ns": 1793303768971250065
+        }
+      }
+    }
+  },
+  "comparison": {
+    "runs": {
+      "gnu-selected": {
+        "exit_code": 0,
+        "timeout": false,
+        "seconds": 20.856656857000075,
+        "command": [
+          "/usr/bin/make",
+          "-j32",
+          "-rs",
+          "-f",
+          "/root/omktr-lo-fix-20261029/libreoffice/libreoffice-25.2.7.2/Makefile.gbuild",
+          "MAKE=/usr/bin/make",
+          "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+          "/root/omktr-lo-fix-20261029/libreoffice/gnu-small/workdir/ComponentTarget/comphelper/util/comphelp.component",
+          "/root/omktr-lo-fix-20261029/libreoffice/gnu-small/workdir/InstallScriptTarget/setup_osl.ins"
+        ],
+        "unchanged": false
+      },
+      "gnu-repeat": {
+        "exit_code": 0,
+        "timeout": false,
+        "seconds": 6.04111350200003,
+        "command": [
+          "/usr/bin/make",
+          "-j32",
+          "-rs",
+          "-f",
+          "/root/omktr-lo-fix-20261029/libreoffice/libreoffice-25.2.7.2/Makefile.gbuild",
+          "MAKE=/usr/bin/make",
+          "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+          "/root/omktr-lo-fix-20261029/libreoffice/gnu-small/workdir/ComponentTarget/comphelper/util/comphelp.component",
+          "/root/omktr-lo-fix-20261029/libreoffice/gnu-small/workdir/InstallScriptTarget/setup_osl.ins"
+        ],
+        "unchanged": true
+      },
+      "direct-selected": {
+        "exit_code": 0,
+        "timeout": false,
+        "seconds": 27.94282052299991,
+        "command": [
+          "/root/omktr-lo-fix-20261029/omktr",
+          "-j32",
+          "-rs",
+          "-f",
+          "/root/omktr-lo-fix-20261029/libreoffice/libreoffice-25.2.7.2/Makefile.gbuild",
+          "MAKE=/root/omktr-lo-fix-20261029/omktr",
+          "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+          "/root/omktr-lo-fix-20261029/libreoffice/direct-small/workdir/ComponentTarget/comphelper/util/comphelp.component",
+          "/root/omktr-lo-fix-20261029/libreoffice/direct-small/workdir/InstallScriptTarget/setup_osl.ins"
+        ],
+        "unchanged": false
+      },
+      "direct-repeat": {
+        "exit_code": 0,
+        "timeout": false,
+        "seconds": 11.05417641400004,
+        "command": [
+          "/root/omktr-lo-fix-20261029/omktr",
+          "-j32",
+          "-rs",
+          "-f",
+          "/root/omktr-lo-fix-20261029/libreoffice/libreoffice-25.2.7.2/Makefile.gbuild",
+          "MAKE=/root/omktr-lo-fix-20261029/omktr",
+          "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+          "/root/omktr-lo-fix-20261029/libreoffice/direct-small/workdir/ComponentTarget/comphelper/util/comphelp.component",
+          "/root/omktr-lo-fix-20261029/libreoffice/direct-small/workdir/InstallScriptTarget/setup_osl.ins"
+        ],
+        "unchanged": false
+      }
+    },
+    "outputs": {
+      "ninja": {
+        "workdir/ComponentTarget/comphelper/util/comphelp.component": {
+          "sha256": "a08a119dc8089b28207be8fb99413c38dbe38638a9ed23c24297d25990ff6309"
+        },
+        "workdir/InstallScriptTarget/setup_osl.ins": {
+          "sha256": "e3ba8ae6d6c9f53b8a4cb3cdab08e21f6a22194d748ef4d416b0160a57a671f5",
+          "canonical_sha256": "25b1c0cdaae66896b380f1fa20d57e59fcb1eed1112b00e256209a9ecf0e9e67"
+        },
+        "instdir/program/libuno_sal.so.3": {
+          "sha256": "46057d6f9470dbb44681079a60d55ce1c7193cff4f04a9e06a09697e2e9689ae"
+        }
+      },
+      "gnu": {
+        "workdir/ComponentTarget/comphelper/util/comphelp.component": {
+          "sha256": "a08a119dc8089b28207be8fb99413c38dbe38638a9ed23c24297d25990ff6309"
+        },
+        "workdir/InstallScriptTarget/setup_osl.ins": {
+          "sha256": "bac1a6d1cf5dc7939750b7eb19943568399d00638ca990ddda7a0fc92066c3d0",
+          "canonical_sha256": "25b1c0cdaae66896b380f1fa20d57e59fcb1eed1112b00e256209a9ecf0e9e67"
+        },
+        "instdir/program/libuno_sal.so.3": {
+          "sha256": "46057d6f9470dbb44681079a60d55ce1c7193cff4f04a9e06a09697e2e9689ae"
+        }
+      },
+      "direct": {
+        "workdir/ComponentTarget/comphelper/util/comphelp.component": {
+          "sha256": "a08a119dc8089b28207be8fb99413c38dbe38638a9ed23c24297d25990ff6309"
+        },
+        "workdir/InstallScriptTarget/setup_osl.ins": {
+          "sha256": "5f5c3453e462557655fbe71d9c10b64ec320c9b5bd59d9c18212e50b38fc3f35",
+          "canonical_sha256": "25b1c0cdaae66896b380f1fa20d57e59fcb1eed1112b00e256209a9ecf0e9e67"
+        },
+        "instdir/program/libuno_sal.so.3": {
+          "sha256": "46057d6f9470dbb44681079a60d55ce1c7193cff4f04a9e06a09697e2e9689ae"
+        }
+      }
+    }
+  },
+  "source_integrity": "147364 original files/symlinks checked; 0 differ",
+  "limits": [
+    "No full LibreOffice build or speed ratio.",
+    "Two early graph attempts reached 300 seconds and were killed; initial large per-recipe snapshots were replaced with shared global contexts.",
+    "One graph retry recorded a deleted executable path because the validation driver replaced its running binary; stable-binary replay passed.",
+    "Real selected-target repeats can rebuild intermediates; direct repeat also changed timestamps. Focused stable-output repeats remain unchanged.",
+    "Multiple double-colon recipe groups and recipe-time assignments to another target are explicitly rejected on the deferred path.",
+    "A pre-existing direct-mode target-export limitation for shell-function expansion was observed; recipe-process exports are covered."
+  ],
+  "evidence": {
+    "path": "validation/evidence/libreoffice-nested-recipes-2026-10-29.zip",
+    "sha256": "f12633bcd3d025fec69091d38e1d04324662dddc1190c08a6623d533fe01e172",
+    "entries": 113
+  }
+}

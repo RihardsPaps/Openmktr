@@ -1,5 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
 // Validate without interning and record ordered symbol observations for replay.
+// Snapshot symbol enumeration before lazy expression decoding can intern names.
+// Defer global variable materialization while preserving assignment precedence.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -44,6 +46,7 @@ struct SymbolData {
   SymbolData() : gv(Var::Undefined()) {}
 
   Var* gv;
+  std::unique_ptr<std::function<Var*()>> restore;
 };
 
 std::vector<std::string*>* g_symbols;
@@ -63,6 +66,13 @@ Var* Symbol::PeekGlobalVar() const {
   if (static_cast<size_t>(v_) >= g_symbol_data.size()) {
     return Var::Undefined();
   }
+  if (g_symbol_data[v_].restore) {
+    // Restoring a value may intern strings and grow the symbol-data vector.
+    auto restore = std::move(g_symbol_data[v_].restore);
+    Var* value = (*restore)();
+    CHECK(value != nullptr);
+    g_symbol_data[v_].gv = value;
+  }
   return g_symbol_data[v_].gv;
 }
 
@@ -70,7 +80,7 @@ Var* Symbol::GetGlobalVar() const {
   if (static_cast<size_t>(v_) >= g_symbol_data.size()) {
     g_symbol_data.resize(v_ + 1);
   }
-  Var* v = g_symbol_data[v_].gv;
+  Var* v = PeekGlobalVar();
   if (v->Origin() == VarOrigin::ENVIRONMENT ||
       v->Origin() == VarOrigin::ENVIRONMENT_OVERRIDE) {
     Vars::add_used_env_vars(*this);
@@ -82,7 +92,7 @@ void Symbol::SetGlobalVar(Var* v, bool is_override, bool* readonly) const {
   if (static_cast<size_t>(v_) >= g_symbol_data.size()) {
     g_symbol_data.resize(v_ + 1);
   }
-  Var* orig = g_symbol_data[v_].gv;
+  Var* orig = PeekGlobalVar();
   if (orig->ReadOnly()) {
     if (readonly != nullptr)
       *readonly = true;
@@ -110,6 +120,26 @@ void Symbol::SetGlobalVar(Var* v, bool is_override, bool* readonly) const {
   if (orig->IsDefined())
     delete orig;
   g_symbol_data[v_].gv = v;
+}
+
+void Symbol::SetLazyGlobalVar(VarOrigin origin,
+                              std::function<Var*()> restore) const {
+  if (static_cast<size_t>(v_) >= g_symbol_data.size())
+    g_symbol_data.resize(v_ + 1);
+  // Context restoration uses override assignment, just like SetGlobalVar.
+  // Existing command-line and automatic definitions still retain precedence.
+  Var* previous = PeekGlobalVar();
+  if (previous->ReadOnly())
+    ERROR("*** cannot assign to readonly variable: %s", c_str());
+  if ((previous->Origin() == VarOrigin::COMMAND_LINE &&
+       origin == VarOrigin::FILE) ||
+      previous->Origin() == VarOrigin::AUTOMATIC)
+    return;
+  if (previous->IsDefined())
+    delete previous;
+  g_symbol_data[v_].gv = Var::Undefined();
+  g_symbol_data[v_].restore =
+      std::make_unique<std::function<Var*()>>(std::move(restore));
 }
 
 ScopedGlobalVar::ScopedGlobalVar(Symbol name, Var* var)
@@ -190,7 +220,11 @@ class Symtab {
   std::vector<std::string_view> GetSymbolNames(
       std::function<bool(Var*)> const& filter) {
     std::vector<std::string_view> result;
-    for (auto entry : symtab_) {
+    // Filters may decode a lazy runtime expression and intern more strings.
+    // Take a snapshot so that rehashing cannot invalidate this traversal.
+    std::vector<std::pair<std::string_view, Symbol>> entries(symtab_.begin(),
+                                                             symtab_.end());
+    for (auto entry : entries) {
       Var* var = entry.second.PeekGlobalVar();
       // The symbol table contains all interned strings, not just variables
       // which have been defined.

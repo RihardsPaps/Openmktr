@@ -1,4 +1,10 @@
 // FORK MODIFICATION NOTICE (2026)
+// Prepare immutable runtime contexts once per known Ninja invocation.
+// Prune missing intermediates only for current consumers and known Ninja goals.
+// Normalize MFLAGS definitions across generated-include restarts.
+// Publish observed recipe inputs only after successful supervised execution.
+// Scope dependency graphs and load checked large recipe scripts natively.
+// Dispatch private runtime evaluation of serialized Ninja recipes.
 // Compare generated freshness guards with native nanosecond timestamps.
 // Let managed Ninja builds inherit a valid FIFO unless -j was explicit.
 // Add configurable Ninja graph optimizations and content-preserving output
@@ -52,7 +58,9 @@
 #include <algorithm>
 #include <cmath>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
+#include "command.h"
 
 #include "eval.h"
 #include "exec.h"
@@ -316,6 +324,149 @@ int HandleLowResolutionUpToDate(int argc, char** argv) {
     const bool low_resolution =
         low_resolution_inputs.find(argv[i]) != low_resolution_inputs.end();
     if (IsNewer(input_stat, output_stat, low_resolution))
+      return 1;
+  }
+  return 0;
+}
+
+int HandleIntermediateCurrent(const char* output,
+                              const char* path,
+                              bool consumer = false) {
+  const char* goal_environment = getenv("KATI_NINJA_GOALS");
+  struct stat ignored;
+  if (!goal_environment || StatPath(output, &ignored) != consumer)
+    return 1;
+  std::unordered_set<std::string> goals;
+  std::string_view encoded(goal_environment);
+  while (!encoded.empty()) {
+    const size_t colon = encoded.find(':');
+    if (colon == std::string_view::npos || colon == 0 || colon > 9)
+      return 1;
+    size_t length = 0;
+    for (size_t i = 0; i < colon; ++i) {
+      if (encoded[i] < '0' || encoded[i] > '9')
+        return 1;
+      length = length * 10 + encoded[i] - '0';
+    }
+    encoded.remove_prefix(colon + 1);
+    if (length > encoded.size())
+      return 1;
+    std::string goal(encoded.substr(0, length));
+    NormalizePath(&goal);
+    goals.insert(goal);
+    encoded.remove_prefix(length);
+  }
+  if (goals.empty())
+    return 1;
+  std::string payload, version, roots, records, state_index;
+  if (!ReadGraphCache(path, &payload))
+    return 1;
+  std::string_view data(payload);
+  if (!ConsumeGraphString(&data, &version) ||
+      version != "intermediate-proof-v2" ||
+      !ConsumeGraphString(&data, &roots) ||
+      !ConsumeGraphString(&data, &records) ||
+      !ConsumeGraphString(&data, &state_index) || !data.empty())
+    return 1;
+  std::string state_records;
+  if (!ReadGraphCache(state_index, &state_records))
+    return 1;
+  std::unordered_map<std::string, std::string> states;
+  data = state_records;
+  if (!ConsumeGraphString(&data, &version) ||
+      version != "intermediate-states-v1")
+    return 1;
+  while (!data.empty()) {
+    std::string name, state;
+    if (!ConsumeGraphString(&data, &name) ||
+        !ConsumeGraphString(&data, &state) ||
+        !states.emplace(name, state).second)
+      return 1;
+  }
+  struct Node {
+    bool intermediate;
+    bool always;
+    std::vector<std::string> deps, order_only;
+  };
+  std::unordered_map<std::string, Node> nodes;
+  data = records;
+  while (!data.empty()) {
+    std::string record, name, flags, deps, order_only;
+    if (!ConsumeGraphString(&data, &record))
+      return 1;
+    std::string_view fields(record);
+    if (!ConsumeGraphString(&fields, &name) ||
+        !ConsumeGraphString(&fields, &flags) || flags.size() != 2 ||
+        flags.find_first_not_of("01") != std::string::npos ||
+        !ConsumeGraphString(&fields, &deps) ||
+        !ConsumeGraphString(&fields, &order_only) || !fields.empty())
+      return 1;
+    Node node{flags[0] == '1', flags[1] == '1', {}, {}};
+    std::string normalized = name;
+    NormalizePath(&normalized);
+    if (node.intermediate && goals.count(normalized))
+      return 1;
+    for (auto pair : {std::make_pair(&deps, &node.deps),
+                      std::make_pair(&order_only, &node.order_only)}) {
+      std::string_view inputs(*pair.first);
+      while (!inputs.empty()) {
+        std::string input;
+        if (!ConsumeGraphString(&inputs, &input))
+          return 1;
+        pair.second->push_back(std::move(input));
+      }
+    }
+    if (!nodes.emplace(name, std::move(node)).second)
+      return 1;
+  }
+  std::unordered_set<std::string> visiting;
+  auto current = [&](auto&& self, const std::string& name,
+                     const struct stat& timestamp) -> bool {
+    auto found = nodes.find(name);
+    if (found == nodes.end() || found->second.always ||
+        !visiting.insert(name).second)
+      return false;
+    auto state = states.find(name);
+    if (state != states.end()) {
+      std::string expected, successful;
+      if (!ReadNinjaRecipeState(state->second, &expected) ||
+          !ReadNinjaRecipeState(state->second + ".success", &successful) ||
+          expected != successful)
+        return false;
+    }
+    for (const std::string& input : found->second.deps) {
+      auto child = nodes.find(input);
+      if (child == nodes.end() || child->second.always)
+        return false;
+      struct stat input_timestamp;
+      if (!StatPath(input.c_str(), &input_timestamp)) {
+        if (!child->second.intermediate ||
+            (child->second.deps.empty() && !states.count(input)) ||
+            !self(self, input, timestamp))
+          return false;
+      } else if (IsNewer(input_timestamp, timestamp, false) ||
+                 !self(self, input, input_timestamp)) {
+        return false;
+      }
+    }
+    for (const std::string& input : found->second.order_only) {
+      struct stat input_timestamp;
+      if (!StatPath(input.c_str(), &input_timestamp) ||
+          !self(self, input, input_timestamp))
+        return false;
+    }
+    visiting.erase(name);
+    return true;
+  };
+  data = roots;
+  if (data.empty())
+    return 1;
+  while (!data.empty()) {
+    std::string root;
+    struct stat timestamp;
+    if (!ConsumeGraphString(&data, &root) ||
+        !StatPath(root.c_str(), &timestamp) ||
+        !current(current, root, timestamp))
       return 1;
   }
   return 0;
@@ -750,6 +901,12 @@ static void UpdateMakeFlags(Evaluator* ev) {
           ? makeflags_value
           : makeflags_value.substr(0, overrides_separator);
   setenv("MFLAGS", mflags_value.c_str(), 1);
+  Var* mflags = Intern("MFLAGS").PeekGlobalVar();
+  if (!mflags->IsDefined() || mflags->Origin() == VarOrigin::DEFAULT ||
+      mflags->Origin() == VarOrigin::ENVIRONMENT) {
+    SetVar("MFLAGS=" + mflags_value, VarOrigin::ENVIRONMENT, nullptr,
+           Loc("*bootstrap*", 0));
+  }
   SetVar("MAKEFLAGS=" + makeflags_value, VarOrigin::COMMAND_LINE, nullptr,
          Loc("*bootstrap*", 0));
   setenv("MAKEFLAGS", makeflags_value.c_str(), 1);
@@ -916,7 +1073,8 @@ static int Run(const std::vector<Symbol>& targets,
       const std::string_view entry(*p);
       const size_t equal_pos = entry.find('=');
       const std::string_view name = entry.substr(0, equal_pos);
-      if (name == "KATI_GRAPH_SETTINGS")
+      if (name == "KATI_GRAPH_SETTINGS" || name == "KATI_RUNTIME_CONTEXT_FD" ||
+          name == "KATI_NINJA_GOALS" || name == "KATI_NINJA_DEFAULT_GOALS")
         continue;
       const bool internal_make_variable =
           name == "MAKEFLAGS" || name == "MAKEOVERRIDES" ||
@@ -1082,6 +1240,7 @@ static int Run(const std::vector<Symbol>& targets,
       if (include_targets.empty())
         goto includes_done;
 
+      std::vector<std::unique_ptr<DepNode>> include_storage;
       std::vector<NamedDepNode> include_nodes;
       std::unordered_map<std::string, std::string> include_observations;
       bool include_observations_valid = false;
@@ -1099,7 +1258,7 @@ static int Run(const std::vector<Symbol>& targets,
         ScopedFileObservations observations(
             g_flags.GraphOptimizationEnabled("includes"));
         MakeDep(&ev, ev.rules(), ev.rule_vars(), include_targets,
-                &include_nodes, false);
+                &include_nodes, &include_storage, false);
         include_observations_valid = observations.valid();
         include_observations = observations.Identities();
       }
@@ -1186,7 +1345,8 @@ static int Run(const std::vector<Symbol>& targets,
           // restart this process forever, even when it is up to date.
           const bool touch_mode = g_flags.is_touch;
           g_flags.is_touch = false;
-          include_result = Exec(include_remake_nodes, &ev);
+          include_result =
+              Exec(include_remake_nodes, &ev, true, g_flags.generate_ninja);
           if (include_result.needs_build)
             InvalidateEvaluationFilesystemQueries();
           if (g_flags.explain && include_result.needs_build)
@@ -1337,6 +1497,7 @@ static int Run(const std::vector<Symbol>& targets,
     if (g_flags.dump_include_graph != nullptr)
       ev.DumpIncludeJSON(std::string(g_flags.dump_include_graph));
 
+    std::vector<std::unique_ptr<DepNode>> node_storage;
     std::vector<NamedDepNode> nodes;
 
     {
@@ -1348,7 +1509,7 @@ static int Run(const std::vector<Symbol>& targets,
           g_flags.GraphOptimizationEnabled("evaluation"));
 
       ev.RefreshVpath();
-      MakeDep(&ev, ev.rules(), ev.rule_vars(), targets, &nodes);
+      MakeDep(&ev, ev.rules(), ev.rule_vars(), targets, &nodes, &node_storage);
     }
 
     if (g_flags.is_syntax_check_only) {
@@ -1477,19 +1638,29 @@ static int HandleRunNinja(int argc, char** argv) {
   bool load_set = *argv[2];
   std::vector<std::string> arguments;
   bool options = true;
+  bool known_goals = true;
+  std::string ninja_file = "build.ninja";
+  std::string goals;
   size_t option_end = static_cast<size_t>(-1);
   for (int i = 4; i < argc; ++i) {
     const std::string_view arg(argv[i]);
+    const bool separator = options && arg == "--";
     if (options && (arg == "--" || HasPrefix(arg, "-t"))) {
+      if (HasPrefix(arg, "-t"))
+        known_goals = false;
       option_end = arguments.size();
       options = false;
     }
     if (options && (arg == "-f" || arg == "-C" || arg == "-j" || arg == "-k" ||
                     arg == "-d" || arg == "-w")) {
+      if (arg == "-C")
+        known_goals = false;
       arguments.emplace_back(arg);
       if (++i == argc)
         ERROR("Missing Ninja option operand: %s", arguments.back().c_str());
       arguments.emplace_back(argv[i]);
+      if (arg == "-f")
+        ninja_file = argv[i];
       continue;
     }
     if (options &&
@@ -1509,8 +1680,23 @@ static int HandleRunNinja(int argc, char** argv) {
       load_set = true;
       continue;
     }
+    if (!separator && (!options || arg.empty() || arg.front() != '-'))
+      goals += std::to_string(arg.size()) + ":" + std::string(arg);
+    if (options && HasPrefix(arg, "-C"))
+      known_goals = false;
+    if (options && HasPrefix(arg, "-f") && arg.size() > 2)
+      ninja_file = std::string(arg.substr(2));
     arguments.emplace_back(arg);
   }
+  const char* defaults = getenv("KATI_NINJA_DEFAULT_GOALS");
+  if (goals.empty()) {
+    if (defaults)
+      goals = defaults;
+  }
+  if (defaults && *defaults && known_goals && !goals.empty())
+    setenv("KATI_NINJA_GOALS", goals.c_str(), 1);
+  else
+    unsetenv("KATI_NINJA_GOALS");
   if (option_end == static_cast<size_t>(-1))
     option_end = arguments.size();
   const std::string value = limit < 0 ? "" : StringPrintf("%.17g", limit);
@@ -1548,6 +1734,10 @@ static int HandleRunNinja(int argc, char** argv) {
     if (!strcmp(reserved, "1"))
       arguments.insert(arguments.begin() + option_end, "-j1");
   }
+  if (known_goals)
+    PrepareRuntimeContexts(RuntimeContextManifestPath(ninja_file));
+  else
+    unsetenv("KATI_RUNTIME_CONTEXT_FD");
   if (state.empty()) {
     // The ordinary path needs no additional supervisor or process boundary.
     std::vector<char*> child = {argv[3]};
@@ -1637,12 +1827,15 @@ static bool IsWorkspaceAction(const char* argument) {
 }
 
 int main(int argc, char* argv[]) {
+  if (argc == 3 && !strcmp(argv[1], "--internal-evaluate-recipe"))
+    return RunRuntimeRecipe(argv[2]);
   if (argc == 4 && strcmp(argv[1], "--internal-native-find") == 0 &&
       (strcmp(argv[3], "0") == 0 || strcmp(argv[3], "1") == 0))
     return NativeFindWorker(argv[2], strcmp(argv[3], "1") == 0);
   g_argv = argv;
   // This is live per-recipe supervision state, never a recursive make input.
   unsetenv("KATI_RECIPE_CHANGED");
+  unsetenv("KATI_RECIPE_STATE_PATH");
   // Recursive invocations isolate omktr from a target project's runtime
   // libraries while it is being loaded. Restore that runtime environment
   // after the loader has started this process; recipes executed by this child
@@ -1684,8 +1877,17 @@ int main(int argc, char* argv[]) {
     } else if (!strcmp(argv[1], "--internal-run-ninja") && argc >= 4) {
       return HandleRunNinja(argc, argv);
     } else if ((!strcmp(argv[1], "--internal-run-recipe") ||
-                !strcmp(argv[1], "--internal-run-recursive-recipe")) &&
+                !strcmp(argv[1], "--internal-run-recursive-recipe") ||
+                !strcmp(argv[1], "--internal-run-recipe-file") ||
+                !strcmp(argv[1], "--internal-run-recursive-recipe-file")) &&
                (argc == 5 || argc == 6 || argc == 7)) {
+      std::string script;
+      if (!strcmp(argv[1], "--internal-run-recipe-file") ||
+          !strcmp(argv[1], "--internal-run-recursive-recipe-file")) {
+        if (!ReadGraphCache(argv[4], &script))
+          ERROR("missing or corrupt recipe script; regenerate the Ninja graph");
+        argv[4] = script.data();
+      }
       ScopedBuildSignals signals;
       const int load_slot = AcquireNinjaLoadSlot();
       std::string recipe_state;
@@ -1703,10 +1905,15 @@ int main(int argc, char* argv[]) {
               "workspace");
         setenv("KATI_RECIPE_CHANGED",
                recorded && previous != recipe_state ? "1" : "0", 1);
+        setenv("KATI_RECIPE_STATE_PATH", argv[6], 1);
+        unlink((std::string(argv[6]) + ".reads-pending").c_str());
+      } else {
+        unsetenv("KATI_RECIPE_STATE_PATH");
       }
       const int status = RunCommand(
           argv[2], argv[3], argv[4], RedirectStderr::NONE, nullptr,
-          !strcmp(argv[1], "--internal-run-recipe"),
+          (!strcmp(argv[1], "--internal-run-recipe") ||
+           !strcmp(argv[1], "--internal-run-recipe-file")),
           [](std::string_view output) {
             fwrite(output.data(), 1, output.size(), stdout);
             fflush(stdout);
@@ -1716,8 +1923,10 @@ int main(int argc, char* argv[]) {
         close(load_slot);
       if (GetBuildSignal() != 0)
         return 128 + GetBuildSignal();
-      if (argc == 7 && WIFEXITED(status) && WEXITSTATUS(status) == 0)
+      if (argc == 7 && WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+        CommitRuntimeRecipeReads(argv[6], recipe_state);
         WriteNinjaRecipeState(std::string(argv[6]) + ".success", recipe_state);
+      }
       return WIFEXITED(status)     ? WEXITSTATUS(status)
              : WIFSIGNALED(status) ? 128 + WTERMSIG(status)
                                    : 1;
@@ -1735,6 +1944,12 @@ int main(int argc, char* argv[]) {
       return 0;
     } else if (!strcmp(argv[1], "--internal-low-resolution-up-to-date")) {
       return HandleLowResolutionUpToDate(argc, argv);
+    } else if (!strcmp(argv[1], "--internal-intermediate-current") &&
+               argc == 4) {
+      return HandleIntermediateCurrent(argv[2], argv[3]);
+    } else if (!strcmp(argv[1], "--internal-intermediate-consumer-current") &&
+               argc == 4) {
+      return HandleIntermediateCurrent(argv[2], argv[3], true);
     } else if (!strcmp(argv[1], "--file-read")) {
       return HandleFileRead(argc - 2, argv + 2);
     } else if (!strcmp(argv[1], "build")) {

@@ -17,6 +17,7 @@ bool ReadGraphCache(const std::string& path, std::string* payload);
 bool WriteGraphCache(const std::string& path, std::string_view payload);
 void AppendGraphString(std::string_view value, std::string* data);
 bool ConsumeGraphString(std::string_view* data, std::string* value);
+bool ConsumeGraphStringView(std::string_view* data, std::string_view* value);
 std::string GraphDigest(std::string_view value);
 // The first double is the mutable validation checkpoint. All structural stamp
 // bytes are sealed; refreshes may update only that checkpoint.

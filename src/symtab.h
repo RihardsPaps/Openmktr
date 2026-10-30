@@ -1,5 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
 // Add non-mutating symbol lookup for incremental dependency validation.
+// Materialize validated runtime variable definitions only when looked up.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -34,6 +35,7 @@ extern std::vector<std::string*>* g_symbols;
 
 class Symtab;
 class Var;
+enum struct VarOrigin : char;
 
 class Symbol {
  public:
@@ -61,6 +63,7 @@ class Symbol {
   void SetGlobalVar(Var* v,
                     bool is_override = false,
                     bool* readonly = nullptr) const;
+  void SetLazyGlobalVar(VarOrigin origin, std::function<Var*()> restore) const;
 
  private:
   explicit Symbol(int v);

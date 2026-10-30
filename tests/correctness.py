@@ -17,6 +17,69 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_one_job_preserves_prerequisite_and_goal_order(self):
+        self.makefile(
+            ".PHONY: all first second third\nall: first second third\n"
+            "first second third:\n\t@printf '%s\\n' '$@' >> result\n" +
+            "first: " + " ".join(f"empty{i}" for i in range(512)) + "\n" +
+            "".join(f"empty{i}:\n" for i in range(512)))
+        for goals in (("all",), ("first", "second", "third")):
+            for iteration in range(24):
+                with self.subTest(goals=goals, iteration=iteration):
+                    (self.directory / "result").unlink(missing_ok=True)
+                    self.direct("-j1", *goals)
+                    self.assertEqual((self.directory / "result").read_text(),
+                                     "first\nsecond\nthird\n")
+
+    def test_recipe_file_write_returns_empty_inside_response_filename(self):
+        for mode in ("direct", "ninja"):
+            with self.subTest(mode=mode):
+                (self.directory / "result").unlink(missing_ok=True)
+                self.makefile(
+                    "response = $(file >response.txt,content)response.txt\n"
+                    "all: result\nresult:\n"
+                    "\t@RESPONSE=$(response); cat $$RESPONSE > $@; rm $$RESPONSE\n")
+                self.direct(*(["build"] if mode == "ninja" else []), "all")
+                self.assertEqual((self.directory / "result").read_text(), "content\n")
+
+    def test_synthetic_parent_directory_does_not_invent_cycle(self):
+        self.makefile(
+            "all: headers/item\nheaders/: headers/item\n\t@mkdir -p $@\n"
+            "headers/item:\n\t@mkdir -p headers; printf ready > $@\n")
+        _, output = self.direct("-j4", "all")
+        self.assertNotIn("Circular", output)
+        self.assertEqual((self.directory / "headers/item").read_text(), "ready")
+
+    def test_recipe_assignment_updates_later_target(self):
+        for mode in ("direct", "ninja"):
+            with self.subTest(mode=mode):
+                (self.directory / "result").unlink(missing_ok=True)
+                self.makefile(
+                    "all: result\nresult: COMMAND := printf old > result\n"
+                    "result: prepare\n\t$(COMMAND)\n"
+                    ".PHONY: prepare\nprepare:\n"
+                    "\t$(eval result: COMMAND := printf new > result)\n")
+                self.direct(*(["build"] if mode == "ninja" else []), "all")
+                self.assertEqual((self.directory / "result").read_text(), "new")
+
+    def test_recipe_target_assignment_updates_active_binding(self):
+        for profile in ("off", "safe", "aggressive"):
+            for mode in ("direct", "ninja"):
+                with self.subTest(profile=profile, mode=mode):
+                    (self.directory / "result").unlink(missing_ok=True)
+                    self.makefile(
+                        "all: result\n"
+                        "result: COMMAND := printf old > result\n"
+                        "result:\n"
+                        "\t$(eval result: COMMAND := printf middle > result)\n"
+                        "\t$(eval result: COMMAND := printf new > result)\n"
+                        "\t$(COMMAND)\n")
+                    args = ["--graph_optimizations=" + profile, "all"]
+                    if mode == "ninja":
+                        args.insert(0, "build")
+                    self.direct(*args)
+                    self.assertEqual((self.directory / "result").read_text(), "new")
+
     def test_direct_execution_does_not_require_ninja_on_path(self):
         self.makefile("all:\n\t@printf direct > result\n")
         empty_path = self.directory / "empty-path"
@@ -1504,7 +1567,9 @@ class BuildCorrectness(unittest.TestCase):
                 self.assertNotEqual(status, 0, output)
                 self.assertFalse((self.directory / "odd $ name").exists())
                 if size > 100_000:
-                    self.assertIn(" rspfile =", (self.directory / "build.ninja").read_text())
+                    self.assertIn("--internal-run-recipe-file",
+                                  (self.directory / "build.ninja").read_text())
+                    self.assertTrue(list(self.directory.glob(".kati_script-*")))
 
     def test_ninja_cleanup_reports_interruption_when_recipe_traps_it(self):
         output = self.directory / "odd $ output"
