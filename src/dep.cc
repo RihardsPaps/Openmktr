@@ -1,4 +1,9 @@
 // FORK MODIFICATION NOTICE (2026)
+// Reuse immutable lexical prerequisite normalization during graph construction.
+// Retain pattern-variable indexing when evaluation memoization is disabled.
+// Reuse inherited borrowed scopes instead of abandoning a copy on every edge.
+// Scope dependency node storage to the consuming graph.
+// Avoid synthetic parent-directory edges that depend back on their output.
 // Share resolver-local filesystem observations with generated-include proofs.
 // Avoid redundant VPATH filesystem probes for already resolved graph edges.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
@@ -41,6 +46,7 @@
 #include "expr.h"
 #include "fileutil.h"
 #include "flags.h"
+#include "graph_optimization.h"
 #include "log.h"
 #include "rule.h"
 #include "stats.h"
@@ -58,6 +64,24 @@ namespace {
 // separator. Keep the inherited expression live until the consuming recipe.
 class TargetAppendValue : public Value {
  public:
+  bool AppendIncrementalIdentity(std::string* data) const override {
+    std::string prefix;
+    if (const auto* value = dynamic_cast<const Value*>(base_)) {
+      prefix = value->IncrementalIdentity();
+    } else if (const auto* var = dynamic_cast<const RecursiveVar*>(base_)) {
+      prefix = var->v_->IncrementalIdentity();
+    } else {
+      AppendGraphString("literal", &prefix);
+      const auto* simple = dynamic_cast<const Var*>(base_);
+      AppendGraphString(simple ? simple->String() : "", &prefix);
+    }
+    if (prefix.empty() || suffix_->IncrementalIdentity().empty())
+      return false;
+    AppendGraphString("target-append", data);
+    AppendGraphString(prefix, data);
+    AppendGraphString(suffix_->IncrementalIdentity(), data);
+    return true;
+  }
   TargetAppendValue(const Loc& loc, const Evaluable* base, Value* suffix)
       : Value(loc), base_(base), suffix_(suffix) {}
 
@@ -90,8 +114,6 @@ static constexpr const char* kDefaultSuffixes[] = {
     "f",    "F",      "m",   "r",   "y",   "l",    "ym",  "lm",  "s",
     "S",    "mod",    "sym", "def", "h",   "info", "dvi", "tex", "texinfo",
     "texi", "txinfo", "w",   "ch",  "web", "sh",   "elc", "el"};
-
-static std::vector<std::unique_ptr<DepNode>> g_dep_node_pool;
 
 static Symbol ReplaceSuffix(Symbol s, Symbol newsuf) {
   std::string r{StripExt(s.str())};
@@ -651,13 +673,24 @@ DepNode::DepNode(Symbol o, bool p, bool r)
       ninja_pool_var(NULL),
       tags_var(NULL) {}
 
+DepNode::~DepNode() {
+  if (rule_vars != nullptr) {
+    // These graph-local maps borrow values from the evaluator's scopes.
+    // Vars normally owns values, so detach them before freeing the container.
+    rule_vars->clear();
+    delete rule_vars;
+  }
+}
+
 class DepBuilder {
  public:
   DepBuilder(Evaluator* ev,
              const std::vector<const Rule*>& rules,
              const std::unordered_map<Symbol, Vars*>& rule_vars,
-             bool add_parent_directory_edges)
-      : ev_(ev),
+             bool add_parent_directory_edges,
+             std::vector<std::unique_ptr<DepNode>>* storage)
+      : storage_(storage),
+        ev_(ev),
         rule_vars_(rule_vars),
         add_parent_directory_edges_(add_parent_directory_edges),
         implicit_rules_(new RuleTrie()),
@@ -1512,7 +1545,7 @@ class DepBuilder {
     if (HasPrefix(target, "./"))
       target.remove_prefix(2);
     std::vector<std::pair<Symbol, Vars*>> patterns;
-    const bool indexed = g_flags.GraphOptimizationEnabled("evaluation");
+    const bool indexed = g_flags.GraphOptimizationEnabled("pattern_index");
     if (indexed && (indexed_rule_vars_ != rule_vars_.size() ||
                     indexed_rule_order_ != ev_->rule_vars_order().size())) {
       pattern_vars_.clear();
@@ -1848,7 +1881,7 @@ class DepBuilder {
       return found->second;
     }
 
-    DepNode* n = g_dep_node_pool
+    DepNode* n = (*storage_)
                      .emplace_back(std::make_unique<DepNode>(
                          output, phony_.exists(output), restat_.exists(output)))
                      .get();
@@ -1903,6 +1936,10 @@ class DepBuilder {
           }
           for (const auto& var : *inherited_vars)
             (*merged)[var.first] = var.second;
+          if (canonical_node->rule_vars != nullptr) {
+            canonical_node->rule_vars->clear();
+            delete canonical_node->rule_vars;
+          }
           canonical_node->rule_vars = merged;
         }
 
@@ -2343,18 +2380,14 @@ class DepBuilder {
     auto inherit_rule_vars = [](DepNode* child, const DepNode* parent) {
       if (parent->rule_vars == nullptr || parent->rule_vars->empty())
         return;
-      Vars* merged = new Vars;
-      if (child->rule_vars != nullptr) {
-        *merged = *child->rule_vars;
-        for (const auto& var : *child->rule_vars)
-          merged->insert(var);
-      }
+      if (child->rule_vars == nullptr)
+        child->rule_vars = new Vars;
+      Vars* merged = child->rule_vars;
       for (const auto& var : *parent->rule_vars) {
         if (merged->find(var.first) == merged->end())
           (*merged)[var.first] = var.second;
       }
       merged->MergeExportStateFrom(*parent->rule_vars);
-      child->rule_vars = merged;
     };
 
     // Preserve the makefile spelling while resolving prerequisites.  GNU make
@@ -2363,12 +2396,17 @@ class DepBuilder {
     // match arch/x86/kvm/%.o even though its canonical graph path is
     // virt/kvm/kvm_main.o.  BuildPlan therefore receives the lexical symbol,
     // while the dependency edge uses the canonical symbol consumed by Ninja.
-    auto canonical_symbol = [](Symbol input) {
+    auto canonical_symbol = [this](Symbol input) {
+      auto found = canonical_prerequisites_.find(input);
+      if (found != canonical_prerequisites_.end())
+        return found->second;
       std::string path(input.str());
       NormalizeMakePath(&path);
       if (path.empty())
         path = ".";
-      return Intern(path);
+      Symbol result = Intern(path);
+      canonical_prerequisites_.emplace(input, result);
+      return result;
     };
 
     auto build_prerequisite = [&](Symbol input) {
@@ -2505,7 +2543,7 @@ class DepBuilder {
           encoded += 2;
         }
         name += "_" + std::to_string(number);
-        DepNode* stamp = g_dep_node_pool
+        DepNode* stamp = (*storage_)
                              .emplace_back(std::make_unique<DepNode>(
                                  Intern(name), false, false))
                              .get();
@@ -2584,7 +2622,26 @@ class DepBuilder {
             // example Automake's .deps/.dirstamp recipe); inventing a hard
             // dependency on an unruled directory makes Kati reject a build
             // that make accepts.
-            if (parent->has_rule || parent->is_phony)
+            bool reaches_output = false;
+            std::vector<const DepNode*> pending{parent};
+            std::unordered_set<const DepNode*> visited;
+            while (!pending.empty() && !reaches_output) {
+              const DepNode* dependency = pending.back();
+              pending.pop_back();
+              if (!visited.insert(dependency).second)
+                continue;
+              if (dependency->output == n->output) {
+                reaches_output = true;
+                break;
+              }
+              for (const auto& edge : dependency->deps)
+                pending.push_back(edge.second);
+              for (const auto& edge : dependency->order_onlys)
+                pending.push_back(edge.second);
+              for (const auto& edge : dependency->validations)
+                pending.push_back(edge.second);
+            }
+            if (!reaches_output && (parent->has_rule || parent->is_phony))
               n->order_onlys.push_back({parent_symbol, parent});
           }
         }
@@ -2643,6 +2700,7 @@ class DepBuilder {
     return n;
   }
 
+  std::vector<std::unique_ptr<DepNode>>* storage_;
   Evaluator* ev_;
   struct TargetComp {
     bool operator()(const Symbol& lhs, const Symbol& rhs) const {
@@ -2651,6 +2709,7 @@ class DepBuilder {
   };
   std::map<Symbol, RuleMerger, TargetComp> rules_;
   const std::unordered_map<Symbol, Vars*>& rule_vars_;
+  std::unordered_map<Symbol, Symbol> canonical_prerequisites_;
   bool add_parent_directory_edges_;
   std::unique_ptr<Vars> cur_rule_vars_;
 
@@ -2706,10 +2765,25 @@ void MakeDep(Evaluator* ev,
              const std::unordered_map<Symbol, Vars*>& rule_vars,
              const std::vector<Symbol>& targets,
              std::vector<NamedDepNode>* nodes,
+             std::vector<std::unique_ptr<DepNode>>* storage,
              bool add_parent_directory_edges) {
-  DepBuilder db(ev, rules, rule_vars, add_parent_directory_edges);
+  DepBuilder db(ev, rules, rule_vars, add_parent_directory_edges, storage);
   ScopedTimeReporter tr("make dep (build)");
   db.Build(targets, nodes);
+  if (!g_flags.generate_ninja)
+    return;
+  // Scheduling needs each edge once; actual_inputs retains Make's ordered
+  // repetitions for automatic variables such as $+.
+  for (const auto& node : *storage) {
+    for (auto* edges : {&node->deps, &node->order_onlys, &node->validations}) {
+      std::unordered_set<Symbol> seen;
+      edges->erase(std::remove_if(edges->begin(), edges->end(),
+                                  [&](const NamedDepNode& edge) {
+                                    return !seen.insert(edge.first).second;
+                                  }),
+                   edges->end());
+    }
+  }
 }
 
 bool IsSpecialTarget(Symbol output) {

@@ -23,7 +23,7 @@ class IncrementalEvaluator {
   explicit IncrementalEvaluator(Evaluator* evaluator);
   ~IncrementalEvaluator();
   bool enabled() const { return enabled_; }
-  bool ShouldTrace(const Value* expression) const;
+  bool ShouldTrace(const Value* expression);
   bool Begin(const Value* expression, std::string* output);
   void End(std::string* output);
   void Read(const std::string& name, Var* value);
@@ -42,7 +42,7 @@ class IncrementalEvaluator {
   }
   void Interned(std::string_view name);
   bool Observing() const {
-    return enabled_ &&
+    return enabled_ && !admission_disabled_ &&
            (!regions_.empty() || (!states_.empty() && states_.back().reusable &&
                                   states_.back().depth));
   }
@@ -114,6 +114,12 @@ class IncrementalEvaluator {
   bool BeginRegion(std::string key, std::string* output, bool reusable);
   Evaluator* evaluator_;
   bool enabled_;
+  bool admission_disabled_ = false;
+  bool AdmitRecording();
+  void AccountRecording(size_t bytes);
+  size_t recording_bytes_ = 0;
+  size_t window_hits_ = 0;
+  size_t window_misses_ = 0;
   std::string path_;
   std::string identity_;
   std::vector<Region> regions_;

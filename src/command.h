@@ -1,4 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
+// Capture actual direct bootstrap reads for later deferred recipe identities.
+// Expose private recipe snapshot and runtime evaluation helpers.
+// Prepare sealed, build-owned runtime contexts for inherited recipe helpers.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -23,6 +26,7 @@
 #ifndef COMMAND_H_
 #define COMMAND_H_
 
+#include <memory>
 #include <vector>
 
 #include "fileutil.h"
@@ -30,6 +34,28 @@
 
 struct DepNode;
 class Evaluator;
+struct Command;
+
+class RuntimeRecipeReadCapture {
+ public:
+  RuntimeRecipeReadCapture(const Command& command, Evaluator* evaluator);
+  ~RuntimeRecipeReadCapture();
+  void Finish(const std::string& owner);
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
+};
+
+bool MakeRuntimeRecipe(const DepNode& node,
+                       Evaluator* evaluator,
+                       const std::string& directory,
+                       std::vector<Command>* commands);
+int RunRuntimeRecipe(const char* path);
+std::string RuntimeContextManifestPath(const std::string& graph);
+void PrepareRuntimeContexts(const std::string& manifest);
+void CommitRuntimeRecipeReads(const std::string& state_path,
+                              const std::string& state);
 
 struct Command {
   explicit Command(Symbol o)
@@ -37,6 +63,9 @@ struct Command {
   Symbol output;
   std::string cmd;
   std::string display_cmd;
+  std::string runtime_sidecar;
+  std::string runtime_context;
+  std::string runtime_identity;
   std::string shell;
   std::string shellflag;
   std::vector<std::string> environment;

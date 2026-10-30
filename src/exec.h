@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Certify successful computed include-remake recipes for subsequent Ninja use.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -44,6 +45,7 @@ struct ExecResult {
 
 ExecResult Exec(const std::vector<NamedDepNode>& roots,
                 Evaluator* ev,
-                bool parallel = true);
+                bool parallel = true,
+                bool runtime_bootstrap = false);
 
 #endif  // EXEC_H_

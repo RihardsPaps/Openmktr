@@ -1,4 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
+// Emit deferred diagnostics with a fixed POSIX printf format.
+// Queue recipe file writes as effects while preserving their empty Make value.
 // Track file identities and derived call/foreach bindings for state replay.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
@@ -1017,12 +1019,18 @@ void FlavorFunc(const std::vector<Value*>& args,
   *s += var->Flavor();
 }
 
+static std::string QuoteDiagnostic(std::string_view value) {
+  std::string quoted = "'";
+  for (char c : value)
+    quoted += c == '\n' ? "' '" : c == '\'' ? "'\\''" : std::string(1, c);
+  return quoted + "'";
+}
+
 void InfoFunc(const std::vector<Value*>& args, Evaluator* ev, std::string*) {
   MakefileCacheManager::Get().RequireEvaluation();
   const std::string&& a = args[0]->Eval(ev);
   if (ev->avoid_io()) {
-    ev->add_delayed_output_command(
-        StringPrintf("echo -e \"%s\"", EchoEscape(a).c_str()));
+    ev->add_delayed_output_command("printf '%s\\n' " + QuoteDiagnostic(a));
     return;
   }
   printf("%s\n", a.c_str());
@@ -1033,8 +1041,10 @@ void WarningFunc(const std::vector<Value*>& args, Evaluator* ev, std::string*) {
   MakefileCacheManager::Get().RequireEvaluation();
   const std::string&& a = args[0]->Eval(ev);
   if (ev->avoid_io()) {
-    ev->add_delayed_output_command(StringPrintf(
-        "echo -e \"%s:%d: %s\" 2>&1", LOCF(ev->loc()), EchoEscape(a).c_str()));
+    ev->add_delayed_output_command(
+        "printf '%s\\n' " +
+        QuoteDiagnostic(StringPrintf("%s:%d: %s", LOCF(ev->loc()), a.c_str())) +
+        " >&2");
     return;
   }
   WARN_LOC(ev->loc(), "%s", a.c_str());
@@ -1044,8 +1054,10 @@ void ErrorFunc(const std::vector<Value*>& args, Evaluator* ev, std::string*) {
   const std::string&& a = args[0]->Eval(ev);
   if (ev->avoid_io()) {
     ev->add_delayed_output_command(
-        StringPrintf("echo -e \"%s:%d: *** %s.\" 2>&1 && false",
-                     LOCF(ev->loc()), EchoEscape(a).c_str()));
+        "printf '%s\\n' " +
+        QuoteDiagnostic(
+            StringPrintf("%s:%d: *** %s.", LOCF(ev->loc()), a.c_str())) +
+        " >&2; false");
     return;
   }
   ev->Error(StringPrintf("*** %s.", a.c_str()));
@@ -1243,12 +1255,10 @@ void FileFunc_(const std::vector<Value*>& args,
       }
       EscapeShell(&escaped_filename);
       EscapeShell(&escaped_text);
-      *s += "printf '%b' \"";
-      *s += escaped_text;
-      *s += "\" ";
-      *s += append ? ">> \"" : "> \"";
-      *s += escaped_filename;
-      *s += "\"";
+      std::string command = "printf '%b' \"" + escaped_text + "\" ";
+      command += append ? ">> \"" : "> \"";
+      command += escaped_filename + "\"";
+      ev->add_delayed_output_command(command);
       return;
     }
 

@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Retain replaced recipe bindings through evaluator-owned storage.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Replay simple-variable append operands through the normalized state program.
@@ -385,7 +386,10 @@ Var* Vars::Peek(Symbol name) const {
   return found == end() ? Var::Undefined() : found->second;
 }
 
-void Vars::Assign(Symbol name, Var* v, bool* readonly) {
+void Vars::Assign(Symbol name,
+                  Var* v,
+                  bool* readonly,
+                  std::vector<std::unique_ptr<Var>>* retired) {
   *readonly = false;
   auto p = emplace(name, v);
   if (!p.second) {
@@ -414,8 +418,12 @@ void Vars::Assign(Symbol name, Var* v, bool* readonly) {
       delete v;
       return;
     }
-    if (orig->IsDefined())
-      delete p.first->second;
+    if (orig->IsDefined()) {
+      if (retired)
+        retired->emplace_back(orig);
+      else
+        delete orig;
+    }
     p.first->second = v;
   }
 }

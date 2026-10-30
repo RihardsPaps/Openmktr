@@ -7,6 +7,7 @@
 # Exercise graph optimization behavior with sanitized executors.
 # Run real manager widget checks under a private Chimera display.
 # Pin current stable Actions and gate FIFO jobserver recovery in both builds.
+# Exercise runtime recipe producer/consumer behavior under sanitizers.
 # Upstream material retains its Apache-2.0 terms. Fork modifications are
 # covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 # at the repository root. Original notices below remain applicable.
@@ -82,6 +83,7 @@ jobs:
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/portage.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/load_limits.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/correctness.py &&
+            OMKTR_BINARY=/workspace/omktr-sanitized python tests/generated_recipe_reads.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/graph_optimizations.py &&
             OMKTR_TEST_GRAPH_PROFILE=aggressive OMKTR_BINARY=/workspace/omktr-sanitized python tests/correctness.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/workspace.py &&

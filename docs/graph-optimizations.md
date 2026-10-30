@@ -6,7 +6,14 @@ considers recursive graph import, general statement replay, and an
 already-running filesystem monitor. All profiles retain dependency validation.
 
 Use repeatable `--disable_graph_optimization=FEATURE` options for comparisons.
-Features are `evaluation`, `includes`, `recursive`, `compact`, and `monitor`.
+Features are `evaluation`, `pattern_index`, `includes`, `recursive`, `compact`,
+and `monitor`.
+Pattern-variable indexing remains enabled when evaluation memoization is disabled.
+Evaluation recording checks admission at expression and statement boundaries.
+It stops when a 65,536-lookup window has fewer than approximately five percent
+hits relative to misses, or recorded identity/fingerprint work reaches 128 MiB.
+Ordinary evaluation continues. Enclosing certificates are invalidated and already
+active observation scopes finish normally, including inside one large expansion.
 Disabling a feature takes precedence over the selected profile. Generation
 arguments and the executable identity invalidate graph reuse when settings change.
 Profiles and explicit feature exclusions also reach opaque recursive Openmktr
@@ -213,3 +220,30 @@ Pass `--candidate-option=--graph_optimizations=aggressive` to
 `validation/benchmark_ninja.py` when selecting that candidate profile.
 Record the baseline profile and both binary identities as well as the toolchain;
 a comparison between revisions does not isolate the effect of a profile.
+
+Runtime recipe contexts retain their checksums and structural validation. Recursive
+variable expressions and variable objects are materialized only when inspected or
+evaluated; definitions, origins and flavors remain observable immediately. Context
+loading indexes views into an owned immutable buffer. Assignment precedence,
+target-local overrides, exports and per-recipe mutations retain ordinary behavior.
+
+On Linux, the generated launcher can validate large contexts once and pass an
+invocation-local sealed memory descriptor to its workers. Workers map those bytes
+read-only and check the executable and context file identities before reuse.
+The private `KATI_RUNTIME_CONTEXT_FD` transport is protected from Make exports.
+Changed contexts, unsupported descriptors and standalone Ninja invocations use
+the normal checksum/validation path. Unused malformed expressions still fail.
+The `.kati_contexts-*` manifest belongs to the generated graph's internal files;
+no persistent evaluator or daemon is introduced.
+
+Dependency resolution reuses lexical prerequisite normalization. Ninja generation
+caches escaped target names and shares emitted normal-prerequisite fragments only
+after exact sequence comparison. Cyclic graphs retain output-specific filtering,
+and directory-alias sequences retain live filesystem checks across effects.
+Order-only edges, target scopes and automatic variables retain their semantics.
+
+The `compact` feature also factors long absolute build paths through Ninja
+variables. It uses the parent of the build working directory only when that prefix
+contains plain path characters; other paths keep their ordinary escaping. This
+reduces repeated path text in the graph. Memory and loading-time effects depend
+on the graph; measure them separately. Imported graphs use prefix-derived names.

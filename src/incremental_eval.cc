@@ -63,7 +63,7 @@ void RecordEvaluationIntern(std::string_view name) {
 
 uint64_t IncrementalEvaluator::BeginLocal(std::string_view name,
                                           const Var* binding) {
-  if (!enabled_)
+  if (!enabled_ || admission_disabled_)
     return 0;
   const uint64_t token = ++local_token_;
   locals_.push_back(
@@ -92,7 +92,7 @@ EvaluationLocalBinding::~EvaluationLocalBinding() {
 }
 
 void IncrementalEvaluator::Interned(std::string_view name) {
-  if (checking_state_ ||
+  if (admission_disabled_ || checking_state_ ||
       (regions_.empty() && (states_.empty() || !states_.back().reusable ||
                             states_.back().replay || !states_.back().depth)))
     return;
@@ -368,8 +368,43 @@ bool IncrementalEvaluator::DecodeOperands(const std::string& bytes,
   return view.empty();
 }
 
+bool IncrementalEvaluator::AdmitRecording() {
+  if (!enabled_ || admission_disabled_)
+    return false;
+  const size_t hits = hits_ - window_hits_;
+  const size_t misses = misses_ - window_misses_;
+  // Test at expression boundaries as well as statements: one foreach can
+  // contain millions of cold expansions without entering another statement.
+  // The byte budget also bounds expensive fingerprinting with a good hit rate.
+  const bool sample = hits + misses >= 65536;
+  if ((sample && hits < misses / 20) || recording_bytes_ >= 128 * 1024 * 1024) {
+    admission_disabled_ = true;
+    for (auto& state : states_)
+      state.reusable = false;
+    for (auto& region : regions_)
+      region.reusable = false;
+    LOG_STAT("evaluation recording disabled after %zu hits and %zu misses",
+             hits_, misses_);
+    LOG_STAT("evaluation recording work: %zu bytes", recording_bytes_);
+    return false;
+  }
+  if (sample) {
+    window_hits_ = hits_;
+    window_misses_ = misses_;
+  }
+  return true;
+}
+
+void IncrementalEvaluator::AccountRecording(size_t bytes) {
+  if (admission_disabled_)
+    return;
+  // Saturate; source-controlled expansion sizes must not wrap the budget.
+  recording_bytes_ += std::min(bytes, size_t(128 * 1024 * 1024));
+  AdmitRecording();
+}
+
 bool IncrementalEvaluator::BeginStatement(const Stmt* statement) {
-  if (!enabled_ ||
+  if (!AdmitRecording() ||
       g_flags.graph_optimizations != Flags::GraphOptimizations::kAggressive)
     return false;
   // Nested eval creates mutations inside an expansion. That expansion must
@@ -380,6 +415,9 @@ bool IncrementalEvaluator::BeginStatement(const Stmt* statement) {
     expression.reusable = false;
   StateRegion state;
   state.entry.key = StatementIdentity(statement);
+  AccountRecording(state.entry.key.size());
+  if (admission_disabled_)
+    return false;
   state.assignment = dynamic_cast<const AssignStmt*>(statement) != nullptr;
   state.source =
       std::string(statement->loc().filename ? statement->loc().filename : "") +
@@ -422,6 +460,8 @@ bool IncrementalEvaluator::BeginStatement(const Stmt* statement) {
       state.expected_writes.clear();
     }
   }
+  state.reusable = state.reusable && !admission_disabled_;
+  state.replay = state.replay && state.reusable;
   states_.push_back(std::move(state));
   return true;
 }
@@ -440,6 +480,7 @@ void IncrementalEvaluator::StateWrite(std::string_view operation,
   std::string record;
   for (std::string_view field : {operation, scope, name, value})
     AppendGraphString(field, &record);
+  AccountRecording(record.size());
   state.write_bytes += record.size();
   if (state.write_bytes > 1024 * 1024) {
     state.reusable = false;
@@ -775,11 +816,12 @@ std::string IncrementalEvaluator::Fingerprint(const Var* value) {
   result += static_cast<char>(value->op());
   if (value->TargetAppend())
     AppendGraphString(value->TargetAppend()->IncrementalIdentity(), &result);
+  AccountRecording(result.size());
   return result;
 }
 
-bool IncrementalEvaluator::ShouldTrace(const Value* expression) const {
-  return enabled_ && regions_.size() < 128 &&
+bool IncrementalEvaluator::ShouldTrace(const Value* expression) {
+  return AdmitRecording() && regions_.size() < 128 &&
          expression->IsIncrementalCandidate(
              g_flags.graph_optimizations ==
              Flags::GraphOptimizations::kAggressive);
@@ -807,6 +849,8 @@ bool IncrementalEvaluator::Begin(const Value* expression, std::string* output) {
 bool IncrementalEvaluator::BeginRegion(std::string key,
                                        std::string* output,
                                        bool reusable) {
+  AccountRecording(key.size());
+  reusable = reusable && !admission_disabled_;
   reusable = reusable && !key.empty() && key.size() <= 1024 * 1024;
   auto found = reusable ? entries_.find(key) : entries_.end();
   if (found != entries_.end()) {
@@ -863,13 +907,15 @@ bool IncrementalEvaluator::BeginRegion(std::string key,
   ++misses_;
   Region region;
   region.entry.key = std::move(key);
-  region.reusable = reusable;
+  region.reusable = reusable && !admission_disabled_;
   region.start = output->size();
   regions_.push_back(std::move(region));
   return false;
 }
 
 void IncrementalEvaluator::Read(const std::string& name, Var* value) {
+  if (admission_disabled_)
+    return;
   StateRead(name, value, 'v', true);
   if (!enabled_ || regions_.empty())
     return;
@@ -921,7 +967,7 @@ void IncrementalEvaluator::Read(const std::string& name, Var* value) {
 
 void IncrementalEvaluator::Effect() {
   InvalidateFileObservations();
-  if (!enabled_)
+  if (!enabled_ || admission_disabled_)
     return;
   ++effects_;
   if (!states_.empty())

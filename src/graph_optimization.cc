@@ -99,6 +99,14 @@ void AppendGraphString(std::string_view value, std::string* data) {
 }
 
 bool ConsumeGraphString(std::string_view* data, std::string* value) {
+  std::string_view view;
+  if (!ConsumeGraphStringView(data, &view))
+    return false;
+  value->assign(view);
+  return true;
+}
+
+bool ConsumeGraphStringView(std::string_view* data, std::string_view* value) {
   if (data->size() < 8)
     return false;
   uint64_t length = 0;
@@ -108,7 +116,7 @@ bool ConsumeGraphString(std::string_view* data, std::string* value) {
   data->remove_prefix(8);
   if (length > data->size() || length > kMaxCacheSize)
     return false;
-  value->assign(data->substr(0, length));
+  *value = data->substr(0, length);
   data->remove_prefix(length);
   return true;
 }
@@ -120,26 +128,38 @@ bool ReadGraphCache(const std::string& path, std::string* payload) {
   struct stat st;
   bool valid = fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && st.st_size >= 0 &&
                static_cast<uint64_t>(st.st_size) <= kMaxCacheSize;
-  std::string bytes;
-  if (valid) {
-    bytes.resize(st.st_size);
-    size_t offset = 0;
-    while (offset < bytes.size()) {
-      ssize_t n = HANDLE_EINTR(read(fd, &bytes[offset], bytes.size() - offset));
-      if (n <= 0) {
-        valid = false;
-        break;
-      }
-      offset += n;
+  size_t remaining = valid ? static_cast<size_t>(st.st_size) : 0;
+  auto read_all = [&](char* data, size_t length) {
+    if (length > remaining)
+      return false;
+    remaining -= length;
+    while (length) {
+      ssize_t n = HANDLE_EINTR(read(fd, data, length));
+      if (n <= 0)
+        return false;
+      data += n;
+      length -= n;
     }
-  }
-  close(fd);
-  std::string_view view(bytes);
+    return true;
+  };
+  auto read_string = [&](std::string* value, size_t limit) {
+    unsigned char header[8];
+    if (!read_all(reinterpret_cast<char*>(header), sizeof(header)))
+      return false;
+    uint64_t length = 0;
+    for (size_t i = 0; i < sizeof(header); ++i)
+      length |= static_cast<uint64_t>(header[i]) << (8 * i);
+    if (length > remaining || length > limit)
+      return false;
+    value->resize(length);
+    return read_all(value->data(), value->size());
+  };
   std::string magic, checksum;
-  return valid && ConsumeGraphString(&view, &magic) &&
-         magic == "OMKTR_GRAPH1" && ConsumeGraphString(&view, &checksum) &&
-         ConsumeGraphString(&view, payload) && view.empty() &&
-         checksum == GraphDigest(*payload);
+  valid = valid && read_string(&magic, 12) && magic == "OMKTR_GRAPH1" &&
+          read_string(&checksum, 64) && read_string(payload, kMaxCacheSize) &&
+          remaining == 0 && checksum == GraphDigest(*payload);
+  close(fd);
+  return valid;
 }
 
 bool SealGraphStamp(FILE* stream) {

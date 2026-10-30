@@ -1,4 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
+// Observe runtime recipe variable lookups without evaluating extra expressions.
+// Preserve recipe snapshots and expose recipe-time target assignments.
 // Track and validate incremental evaluation, include proofs and imported Ninja
 // graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
 // Paps. Changed build execution, evaluation, or portability for this fork.
@@ -445,6 +447,7 @@ void Evaluator::EvalUndefine(const UndefineStmt* stmt) {
 }
 
 void Evaluator::EvalAssign(const AssignStmt* stmt) {
+  ++recipe_snapshot_epoch_;
   loc_ = stmt->loc();
   last_rule_ = NULL;
   Symbol lhs = stmt->GetLhsSymbol(this);
@@ -618,6 +621,8 @@ void Evaluator::EvalRuleSpecificAssign(const std::vector<Symbol>& targets,
 
     Vars* target_scope = p.first->second;
     Vars* enclosing_scope = current_scope_;
+    const bool active_target =
+        IsEvaluatingCommand() && target.str() == EvalVar(Intern("@"));
     // Target-specific assignments are evaluated with the target scope
     // active.  Vars lookup falls back to the global scope, while the target
     // scope also retains preceding target-specific assignments.  This is
@@ -685,7 +690,9 @@ void Evaluator::EvalRuleSpecificAssign(const std::vector<Symbol>& targets,
         if (assign_op == AssignOp::PLUS_EQ)
           rhs_var->SetTargetAppend(
               Value::NewExpr(loc_, Value::NewLiteral(" "), rhs));
-        target_scope->Assign(var_sym, rhs_var, &readonly);
+        target_scope->Assign(
+            var_sym, rhs_var, &readonly,
+            IsEvaluatingCommand() ? &retired_recipe_variables_ : nullptr);
         if (readonly) {
           Error(StringPrintf("*** cannot assign to readonly variable: %s",
                              var_name));
@@ -702,6 +709,14 @@ void Evaluator::EvalRuleSpecificAssign(const std::vector<Symbol>& targets,
     if (is_export || is_unexport)
       incremental_->StateWrite("export", target.str(), var_sym.str(),
                                is_export && !is_unexport ? "1" : "0");
+    if (IsEvaluatingCommand())
+      recipe_target_updates_[target][var_sym] = target_scope->Peek(var_sym);
+    if (active_target) {
+      if (!enclosing_scope)
+        enclosing_scope = target_scope;
+      else
+        (*enclosing_scope)[var_sym] = target_scope->Peek(var_sym);
+    }
     current_scope_ = enclosing_scope;
   }
 }
@@ -1239,6 +1254,8 @@ void Evaluator::TraceVariableAssign(Symbol& name, Var* var) {
 }
 
 Var* Evaluator::LookupVarForEval(Symbol name) {
+  if (recipe_reads_)
+    recipe_reads_->insert(name);
   Var* var = LookupVar(name);
   if (var != nullptr) {
     if (symbols_for_eval_.find(name) != symbols_for_eval_.end()) {
@@ -1253,7 +1270,19 @@ void Evaluator::VarEvalComplete(Symbol name) {
   symbols_for_eval_.erase(name);
 }
 
+void Evaluator::ApplyRecipeTargetUpdates(Symbol target) {
+  auto updates = recipe_target_updates_.find(target);
+  if (updates == recipe_target_updates_.end())
+    return;
+  if (!current_scope_)
+    current_scope_ = rule_vars_.at(target);
+  for (const auto& update : updates->second)
+    (*current_scope_)[update.first] = update.second;
+}
+
 Var* Evaluator::LookupVar(Symbol name) {
+  if (recipe_reads_)
+    recipe_reads_->insert(name);
   Var* result = nullptr;
   if (current_scope_) {
     result = current_scope_->Lookup(name);
@@ -1269,6 +1298,8 @@ Var* Evaluator::LookupVar(Symbol name) {
 }
 
 Var* Evaluator::PeekVar(Symbol name) {
+  if (recipe_reads_)
+    recipe_reads_->insert(name);
   Var* result = nullptr;
 
   if (current_scope_) {
@@ -1284,6 +1315,8 @@ Var* Evaluator::PeekVar(Symbol name) {
 }
 
 Var* Evaluator::LookupVarInCurrentScope(Symbol name) {
+  if (recipe_reads_)
+    recipe_reads_->insert(name);
   Var* result;
   if (current_scope_) {
     result = current_scope_->Lookup(name);
@@ -1297,6 +1330,8 @@ Var* Evaluator::LookupVarInCurrentScope(Symbol name) {
 }
 
 Var* Evaluator::PeekVarInCurrentScope(Symbol name) {
+  if (recipe_reads_)
+    recipe_reads_->insert(name);
   Var* result;
   if (current_scope_) {
     result = current_scope_->Peek(name);

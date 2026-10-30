@@ -1,4 +1,8 @@
 // FORK MODIFICATION NOTICE (2026)
+// Validate serialized runtime expressions before lazily restoring their ASTs.
+// Keep validated runtime expressions as views of shared immutable storage.
+// Retain caller locations when restoring runtime command expressions.
+// Restore unevaluated expressions from checked runtime recipe records.
 // Track and validate incremental evaluation, include proofs and imported Ninja
 // graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
 // Paps. Changed build execution, evaluation, or portability for this fork.
@@ -23,6 +27,7 @@
 #ifndef EXPR_H_
 #define EXPR_H_
 
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -59,6 +64,16 @@ class Evaluable {
 class Value : public Evaluable {
  public:
   std::string_view IncrementalIdentity() const;
+  // Restore a bounded structural expression record without evaluating it.
+  static Value* RestoreRecipeExpression(std::string_view record,
+                                        unsigned depth = 0,
+                                        const Loc& loc = Loc());
+  static Value* RestoreLazyRecipeExpression(std::string_view record);
+  static bool ValidateRecipeExpression(std::string_view record);
+  // The caller must have validated the record and keep its storage immutable.
+  static Value* RestoreValidatedLazyRecipeExpression(
+      std::string_view record,
+      std::shared_ptr<const void> storage);
   virtual bool IsIncrementalCandidate(bool) const { return false; }
   // All NewExpr calls take ownership of the Value instances.
   static Value* NewExpr(const Loc& loc, Value* v1, Value* v2);

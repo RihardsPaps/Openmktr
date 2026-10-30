@@ -1,19 +1,27 @@
 // FORK MODIFICATION NOTICE (2026)
-// Keep freshness guards precise on shells with second-only test -nt.
-// Require Ninja 1.13.2 for stable FIFO jobserver and interruption behavior.
-// Track and validate incremental evaluation, include proofs and imported Ninja
-// graphs. Seal structural stamp bytes and bind generated artifacts to
-// acceptance. Carry generation/runtime load limits into Ninja and recursive
-// recipes. Preserve selected graph controls at deferred recursive boundaries.
-// Bound FIFO setup retries and report failures without removing existing paths.
-// Use native load admission for every recipe, with configurable Ninja
-// selection. Quote generated launcher paths for build directories containing
-// shell syntax. Changed by the Openmktr fork, maintained by Rihards Paps and
-// Haralds Paps.
-// Changed build execution, evaluation, or portability for this fork.
-// Validate recursive reuse, regeneration inputs, and shared recipe budgets.
-// Low-resolution timestamp guards use Openmktr's internal stat helper.
-// Reuse Ninja's default POSIX shell instead of spawning a second shell.
+// Publish runtime context manifests for immutable per-build sharing.
+// Reuse escaped paths and identical immutable prerequisite fragments.
+// Factor long absolute build paths through graph-local Ninja variables.
+// Recheck missing intermediate chains against bounded, shared consumer proofs.
+// Bind every guarded file recipe to its last successful command identity.
+// Factor source dependencies by shared consumers and settle checked script
+// guards. Record unchanged guard success and preserve relevant runtime command
+// changes. Defer generated-content recipes and track their serialized contexts.
+// Expand dependent recipes after their prerequisites without retaining vector
+// references. Keep freshness guards precise on shells with second-only test
+// -nt. Require Ninja 1.13.2 for stable FIFO jobserver and interruption
+// behavior. Track and validate incremental evaluation, include proofs and
+// imported Ninja graphs. Seal structural stamp bytes and bind generated
+// artifacts to acceptance. Carry generation/runtime load limits into Ninja and
+// recursive recipes. Preserve selected graph controls at deferred recursive
+// boundaries. Bound FIFO setup retries and report failures without removing
+// existing paths. Use native load admission for every recipe, with configurable
+// Ninja selection. Quote generated launcher paths for build directories
+// containing shell syntax. Changed by the Openmktr fork, maintained by Rihards
+// Paps and Haralds Paps. Changed build execution, evaluation, or portability
+// for this fork. Validate recursive reuse, regeneration inputs, and shared
+// recipe budgets. Low-resolution timestamp guards use Openmktr's internal stat
+// helper. Reuse Ninja's default POSIX shell instead of spawning a second shell.
 // Preserve runtime reservation ownership across generated environment files.
 // Clean changed non-precious outputs before interrupted timestamp guards recur.
 // Capture interruption cleanup state in the existing recipe supervisor.
@@ -276,6 +284,18 @@ class NinjaGenerator {
       working_dir_ = cwd;
     else
       PERROR("getcwd failed while generating Ninja graph");
+    if (g_flags.GraphOptimizationEnabled("compact")) {
+      const size_t slash = working_dir_.rfind('/');
+      const std::string prefix = working_dir_.substr(0, slash + 1);
+      // Conservative plain values avoid Ninja whitespace/escape ambiguities.
+      if (prefix.size() > 32 &&
+          prefix.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ"
+                                   "RSTUVWXYZ0123456789/_.-") ==
+              std::string::npos) {
+        path_prefix_ = prefix;
+        path_variable_ = "omktr_path_" + GraphDigest(prefix);
+      }
+    }
     ev_->set_avoid_io(true);
   }
 
@@ -314,6 +334,31 @@ class NinjaGenerator {
     if (managed_workspace)
       GenerateShell();
     GenerateNinja();
+    std::unordered_set<std::string> runtime_contexts;
+    for (const auto& node : nodes_)
+      for (const auto& command : node.commands)
+        if (!command.runtime_context.empty()) {
+          std::string absolute;
+          AbsPath(command.runtime_context, &absolute);
+          runtime_contexts.insert(std::move(absolute));
+        }
+    std::vector<std::string> ordered_contexts(runtime_contexts.begin(),
+                                              runtime_contexts.end());
+    std::sort(ordered_contexts.begin(), ordered_contexts.end());
+    std::string context_manifest, previous_context_manifest;
+    AppendGraphString("runtime-context-manifest-v1", &context_manifest);
+    for (const std::string& context : ordered_contexts)
+      AppendGraphString(context, &context_manifest);
+    const std::string context_manifest_path =
+        RuntimeContextManifestPath(GetNinjaFilename());
+    if (!ordered_contexts.empty() ||
+        access(context_manifest_path.c_str(), F_OK) == 0) {
+      if ((!ReadGraphCache(context_manifest_path, &previous_context_manifest) ||
+           previous_context_manifest != context_manifest) &&
+          !WriteGraphCache(context_manifest_path, context_manifest))
+        ERROR("cannot publish runtime context manifest");
+      MakefileCacheManager::Get().AddGeneratedGraphDep(context_manifest_path);
+    }
     if (!managed_workspace)
       GenerateShell();
     GenerateStamp(orig_args);
@@ -360,6 +405,152 @@ class NinjaGenerator {
     for (auto const& [symbol, depnode] : nodes) {
       PopulateNinjaNode(*depnode);
     }
+    for (NinjaNode& nn : nodes_)
+      nn.rule_id = nn.commands.empty() ? -1 : rule_id_++;
+    for (const NinjaNode& nn : nodes_) {
+      for (const auto& edge : nn.node->deps)
+        if (edge.second->intermediate)
+          intermediate_parents_[edge.second].push_back(nn.node);
+      for (const auto* edges : {&nn.node->order_onlys, &nn.node->validations})
+        for (const auto& edge : *edges)
+          if (edge.second->intermediate)
+            intermediate_required_.insert(edge.second);
+    }
+    for (const NinjaNode& nn : nodes_)
+      if (nn.node->intermediate)
+        intermediate_proofs_[nn.node] = IntermediateProof(nn.node);
+  }
+
+  std::string IntermediateProof(const DepNode* node) {
+    auto consumer_proof = [&](const DepNode* root, const std::string& path,
+                              size_t size) {
+      auto previous = intermediate_consumer_sizes_.find(root);
+      if (previous == intermediate_consumer_sizes_.end() ||
+          size < previous->second) {
+        intermediate_consumer_sizes_[root] = size;
+        intermediate_consumer_proofs_[root] = path;
+      }
+    };
+    if (!node->intermediate || intermediate_required_.count(node) ||
+        !g_flags.what_if_files.empty())
+      return "";
+    std::vector<const DepNode*> pending{node}, roots;
+    std::unordered_set<const DepNode*> seen;
+    while (!pending.empty()) {
+      const DepNode* child = pending.back();
+      pending.pop_back();
+      if (!seen.insert(child).second)
+        continue;
+      auto parents = intermediate_parents_.find(child);
+      if (intermediate_required_.count(child) ||
+          parents == intermediate_parents_.end())
+        return "";
+      for (const DepNode* parent : parents->second) {
+        if (parent->intermediate)
+          pending.push_back(parent);
+        else
+          roots.push_back(parent);
+      }
+    }
+    if (roots.empty())
+      return "";
+    std::sort(roots.begin(), roots.end(),
+              [](const DepNode* a, const DepNode* b) {
+                return a->output.str() < b->output.str();
+              });
+    roots.erase(std::unique(roots.begin(), roots.end()), roots.end());
+    std::string root_names, records;
+    for (const DepNode* root : roots)
+      AppendGraphString(root->output.str(), &root_names);
+    auto cached = intermediate_root_proofs_.find(root_names);
+    if (cached != intermediate_root_proofs_.end())
+      return cached->second;
+    for (const auto& cached : intermediate_closures_) {
+      if (std::all_of(
+              roots.begin(), roots.end(),
+              [&](const DepNode* root) { return cached.nodes.count(root); }) &&
+          std::all_of(cached.roots.begin(), cached.roots.end(),
+                      [&](const DepNode* root) {
+                        return std::find(roots.begin(), roots.end(), root) !=
+                               roots.end();
+                      })) {
+        intermediate_root_proofs_[root_names] = cached.path;
+        for (const DepNode* root : roots)
+          consumer_proof(root, cached.path, cached.nodes.size());
+        return cached.path;
+      }
+    }
+    const std::unordered_set<const DepNode*> root_nodes(roots.begin(),
+                                                        roots.end());
+    std::unordered_set<const DepNode*> redundant_roots;
+    pending = roots;
+    seen.clear();
+    while (!pending.empty()) {
+      const DepNode* entry = pending.back();
+      pending.pop_back();
+      if (!seen.insert(entry).second)
+        continue;
+      // Optional pruning must not duplicate a large compiler dependency graph.
+      if (seen.size() > 131072 || records.size() > 64 * 1024 * 1024)
+        return "";
+      std::string record, flags, inputs, order_only;
+      AppendGraphString(entry->output.str(), &record);
+      flags += entry->intermediate ? '1' : '0';
+      flags +=
+          entry->is_phony || !entry->validations.empty() ||
+                  std::find(entry->double_colon_group_has_prerequisites.begin(),
+                            entry->double_colon_group_has_prerequisites.end(),
+                            false) !=
+                      entry->double_colon_group_has_prerequisites.end()
+              ? '1'
+              : '0';
+      AppendGraphString(flags, &record);
+      for (const auto& edge : entry->deps) {
+        AppendGraphString(edge.first.str(), &inputs);
+        pending.push_back(edge.second);
+        if (root_nodes.count(edge.second))
+          redundant_roots.insert(edge.second);
+      }
+      // Order-only inputs retain their original Ninja scheduling edges, but
+      // cannot make this consumer stale. Traversing their library subgraphs
+      // here would defeat bounded pruning of small missing intermediates.
+      AppendGraphString(inputs, &record);
+      AppendGraphString(order_only, &record);
+      AppendGraphString(record, &records);
+    }
+    // A root already reached below another root adds no freshness condition.
+    // Canonicalize it away so large shared image/header closures have one
+    // immutable proof instead of a separate copy per intermediate consumer.
+    const std::vector<const DepNode*> consumers = roots;
+    roots.erase(std::remove_if(roots.begin(), roots.end(),
+                               [&](const DepNode* root) {
+                                 return redundant_roots.count(root);
+                               }),
+                roots.end());
+    if (roots.empty())
+      return "";
+    std::string canonical_roots;
+    for (const DepNode* root : roots)
+      AppendGraphString(root->output.str(), &canonical_roots);
+    std::string proof;
+    AppendGraphString("intermediate-proof-v2", &proof);
+    AppendGraphString(canonical_roots, &proof);
+    AppendGraphString(records, &proof);
+    AppendGraphString(GetFilename(".kati_intermediate_states%s"), &proof);
+    const std::string path =
+        GetFilename(".kati_intermediates-") + GraphDigest(proof);
+    std::string previous;
+    if ((!ReadGraphCache(path, &previous) || previous != proof) &&
+        !WriteGraphCache(path, proof))
+      ERROR("cannot write intermediate freshness proof");
+    MakefileCacheManager::Get().AddGeneratedGraphDep(path);
+    intermediate_proof_nodes_.insert(seen.begin(), seen.end());
+    intermediate_root_proofs_[root_names] = path;
+    intermediate_root_proofs_[canonical_roots] = path;
+    for (const DepNode* root : consumers)
+      consumer_proof(root, path, seen.size());
+    intermediate_closures_.push_back({roots, std::move(seen), path});
+    return path;
   }
 
   void PopulateNinjaNode(const DepNode& node) {
@@ -389,10 +580,8 @@ class NinjaGenerator {
       return;
     }
 
-    NinjaNode& nn = nodes_.emplace_back();
-    nn.node = &node;
-    nn.commands = ce_.Eval(node);
-    nn.rule_id = nn.commands.empty() ? -1 : rule_id_++;
+    const size_t node_index = nodes_.size();
+    nodes_.emplace_back().node = &node;
 
     for (auto const& [symbol, depnode] : node.deps) {
       MarkCycleEdge(node.output, symbol);
@@ -405,6 +594,18 @@ class NinjaGenerator {
     for (auto const& [symbol, depnode] : node.validations) {
       MarkCycleEdge(node.output, symbol);
       PopulateNinjaNode(*depnode);
+    }
+    if (!MakeRuntimeRecipe(node, ce_.evaluator(),
+                           g_flags.ninja_dir ? g_flags.ninja_dir : ".",
+                           &nodes_[node_index].commands))
+      nodes_[node_index].commands = ce_.Eval(node);
+    for (const Command& command : nodes_[node_index].commands) {
+      if (!command.runtime_sidecar.empty())
+        MakefileCacheManager::Get().AddGeneratedGraphDep(
+            command.runtime_sidecar);
+      if (!command.runtime_context.empty())
+        MakefileCacheManager::Get().AddGeneratedGraphDep(
+            command.runtime_context);
     }
     active_nodes_.erase(node.output.str());
   }
@@ -692,7 +893,15 @@ class NinjaGenerator {
     }
     if (TryImport(nn, out))
       return;
-    std::string edge_command, edge_depfile;
+    std::string edge_command, edge_depfile, script_path;
+    auto proof = intermediate_proofs_.find(node);
+    const std::string intermediate_proof =
+        proof == intermediate_proofs_.end() ? "" : proof->second;
+    const auto consumer = intermediate_consumer_proofs_.find(node);
+    const std::string consumer_proof =
+        consumer == intermediate_consumer_proofs_.end() ? "" : consumer->second;
+    const std::string proof_dependency =
+        intermediate_proof.empty() ? consumer_proof : intermediate_proof;
     // Ninja needs a concrete local output for a rule-bearing VPATH target.
     // Materialize a local link to the source only while its ordinary
     // prerequisites are older. This keeps the rule's edges reachable and
@@ -785,10 +994,13 @@ class NinjaGenerator {
       // target-specific export prefixes already present in cmd_buf.
       if (managed_workspace)
         cmd_buf = EscapeNinja(workspace_environment_) + cmd_buf;
+      if (!intermediate_proof_nodes_.empty())
+        cmd_buf = "unset KATI_NINJA_GOALS KATI_NINJA_DEFAULT_GOALS; " + cmd_buf;
       std::string recipe_state;
-      if (managed_workspace && !node->is_phony) {
+      if (!node->is_phony) {
         if (workspace_recipe_dir_.empty()) {
-          workspace_recipe_dir_ = GetFilename(".recipes%s");
+          workspace_recipe_dir_ =
+              GetFilename(managed_workspace ? ".recipes%s" : ".kati_recipes%s");
           if (!EnsureDirectory(workspace_recipe_dir_))
             ERROR("cannot create workspace recipe directory: %s",
                   workspace_recipe_dir_.c_str());
@@ -810,12 +1022,23 @@ class NinjaGenerator {
         // Filename hashes only select storage; collisions can cause extra
         // rebuilds across graph reordering, never identity equality.
         std::string identity = "OMKTR_RECIPE1\n" + node->output.str();
-        for (const std::string& part : {command_shell, command_shellflag,
-                                        has_depfile ? depfile : "", cmd_buf}) {
+        std::string command_identity = cmd_buf;
+        if (!commands.front().runtime_sidecar.empty()) {
+          command_identity = GetExecutablePath();
+          AppendGraphString(commands.front().runtime_identity,
+                            &command_identity);
+          if (managed_workspace)
+            AppendGraphString(workspace_environment_, &command_identity);
+        }
+        for (const std::string& part :
+             {command_shell, command_shellflag, has_depfile ? depfile : "",
+              command_identity}) {
           identity += '\0';
           identity += part;
         }
         WriteNinjaRecipeState(recipe_state, identity);
+        if (intermediate_proof_nodes_.count(node))
+          intermediate_recipe_states_[node->output.str()] = recipe_state;
         if (elided_source_recipe) {
           // The existing file satisfies this no-op rule without execution.
           // Retain that baseline so replacing ':' with a real recipe can
@@ -841,11 +1064,21 @@ class NinjaGenerator {
                                 std::to_string(node->deps.size()) + " 0";
         for (const NamedDepNode& dep : node->deps)
           condition += " " + ShellQuote(dep.first.str());
+        // A changed context sidecar can schedule a current consumer even when
+        // Ninja restats its deliberately absent intermediate inputs. Reuse
+        // the same complete freshness proof rather than recreating them.
+        if (!consumer_proof.empty())
+          condition = "{ " + condition + " || " +
+                      ShellQuote(GetExecutablePath()) +
+                      " --internal-intermediate-consumer-current " +
+                      ShellQuote(output.str()) + " " +
+                      ShellQuote(consumer_proof) + "; }";
         return condition;
       };
       // Internal cleanup helpers are ordinary commands, not recursive makes.
       // Classify the actual recipe before adding those executable references.
-      use_local_pool = IsRecursiveKatiCommand(cmd_buf);
+      use_local_pool = commands.front().runtime_sidecar.empty() &&
+                       IsRecursiveKatiCommand(cmd_buf);
       // The helper already supervises the recipe process. Record the output
       // there after admission instead of launching another copy of the tool
       // and a shell subshell/trap wrapper for every file recipe. An absolute
@@ -900,6 +1133,13 @@ class NinjaGenerator {
       const bool has_phony_input = std::any_of(
           node->deps.begin(), node->deps.end(),
           [](const NamedDepNode& dep) { return dep.second->is_phony; });
+      if (!intermediate_proof.empty()) {
+        cmd_buf = "if " + recipe_unchanged + ShellQuote(GetExecutablePath()) +
+                  " --internal-intermediate-current " +
+                  ShellQuote(node->output.str()) + " " +
+                  ShellQuote(intermediate_proof) + "; then exit 0; fi; " +
+                  cmd_buf;
+      }
       // Order-only prerequisites may run, but they do not make an existing
       // output stale. Ninja has no prior build-log entry for such an output.
       if (make_freshness_guard && !vpath_output && !node->is_phony &&
@@ -909,7 +1149,7 @@ class NinjaGenerator {
                   cmd_buf + "; fi";
       } else if (make_freshness_guard && !vpath_output && !node->is_phony &&
                  !node->deps.empty() && !has_phony_input &&
-                 node->validations.empty() && Exists(node->output.str())) {
+                 node->validations.empty()) {
         const std::string current =
             "if " + recipe_unchanged + inputs_current(node->output);
         cmd_buf = current + "; then :; else " + cmd_buf + "; fi";
@@ -986,8 +1226,33 @@ class NinjaGenerator {
               ? (cleanup_output.empty() ? "" : " " + ShellQuote(cleanup_output))
               : " " + ShellQuote(cleanup_output) + " " +
                     ShellQuote(recipe_state);
+      if (cmd_buf.size() > 4096 && helper_recipe) {
+        // Store the unexpanded script once, outside Ninja's in-memory graph.
+        // cmd_buf contains Ninja escaping; the interpreter consumes shell
+        // bytes.
+        std::string script;
+        for (size_t i = 0; i < cmd_buf.size(); ++i) {
+          if (cmd_buf[i] == '$' && i + 1 < cmd_buf.size() &&
+              cmd_buf[i + 1] == '$')
+            ++i;
+          script += cmd_buf[i];
+        }
+        script_path = GetFilename(".kati_script-") + GraphDigest(script);
+        std::string previous;
+        if ((!ReadGraphCache(script_path, &previous) || previous != script) &&
+            !WriteGraphCache(script_path, script))
+          ERROR("cannot write recipe script sidecar");
+        MakefileCacheManager::Get().AddGeneratedGraphDep(script_path);
+        cmd_buf = EscapeNinja(ShellQuote(GetExecutablePath())) +
+                  (token_recipe ? " --internal-run-recipe-file "
+                                : " --internal-run-recursive-recipe-file ") +
+                  ShellQuote(command_shell) + " " +
+                  ShellQuote(command_shellflag) + " " +
+                  EscapeNinja(ShellQuote(script_path)) +
+                  EscapeNinja(cleanup_arg);
+      }
       std::string helper_prefix;
-      if (helper_recipe && !recipe_in_rsp) {
+      if (helper_recipe && !recipe_in_rsp && script_path.empty()) {
         helper_prefix = "cd " + ShellQuote(working_dir_) + " && " +
                         EscapeNinja(ShellQuote(GetExecutablePath())) +
                         recipe_helper + ShellQuote(command_shell) + " " +
@@ -1032,7 +1297,12 @@ class NinjaGenerator {
       rule_key += '\0';
       rule_key += has_depfile ? depfile : "";
       rule_key += '\0';
-      rule_key += node->is_restat ? '1' : '0';
+      const bool effective_restat =
+          node->is_restat ||
+          ((!commands.front().runtime_sidecar.empty() || !script_path.empty() ||
+            !proof_dependency.empty()) &&
+           !node->is_phony && !has_phony_input && make_freshness_guard);
+      rule_key += effective_restat ? '1' : '0';
       rule_key += node->delete_on_error ? '1' : '0';
       rule_key += node->precious ? '1' : '0';
       rule_key += g_flags.emit_sandbox_disabled ? '1' : '0';
@@ -1056,7 +1326,8 @@ class NinjaGenerator {
 
         // It seems Linux is OK with ~130kB and Mac's limit is ~250kB.
         // TODO: Find this number automatically.
-        if (recipe_in_rsp || cmd_buf.size() > 100 * 1000) {
+        if (script_path.empty() &&
+            (recipe_in_rsp || cmd_buf.size() > 100 * 1000)) {
           out << " rspfile = $out.rsp\n";
           out << " rspfile_content = " << cmd_buf << "\n";
           std::string rspfile = node->output.str() + ".rsp";
@@ -1095,7 +1366,7 @@ class NinjaGenerator {
           out << " command = " << command_shell << ' ' << command_shellflag
               << ' ' << ShellQuote(cmd_buf) << "\n";
         }
-        if (node->is_restat)
+        if (effective_restat)
           out << " restat = 1\n";
         if (g_flags.emit_sandbox_disabled)
           out << " sandbox_disabled = true\n";
@@ -1103,12 +1374,12 @@ class NinjaGenerator {
     }
 
     EmitBuild(nn, rule_name, use_local_pool || node->is_notparallel, out,
-              edge_command, edge_depfile);
+              edge_command, edge_depfile, script_path, proof_dependency);
   }
 
-  std::string EscapeNinja(const std::string& s) const {
+  std::string EscapeNinja(std::string_view s) const {
     if (s.find_first_of("$: ") == std::string::npos)
-      return s;
+      return std::string(s);
     std::string r;
     for (char c : s) {
       switch (c) {
@@ -1124,13 +1395,22 @@ class NinjaGenerator {
     return r;
   }
 
-  std::string EscapeBuildTarget(Symbol s) const {
+  const std::string& EscapeBuildTarget(Symbol s) const {
+    auto cached = escaped_targets_.find(s);
+    if (cached != escaped_targets_.end())
+      return cached->second;
+    std::string absolute;
+    std::string_view path = s.str();
     if (g_flags.import_root) {
-      std::string absolute;
-      AbsPath(s.str(), &absolute);
-      return EscapeNinja(absolute);
+      AbsPath(path, &absolute);
+      path = absolute;
     }
-    return EscapeNinja(s.str());
+    std::string escaped =
+        !path_prefix_.empty() && HasPrefix(path, path_prefix_)
+            ? "${" + path_variable_ + "}" +
+                  EscapeNinja(path.substr(path_prefix_.size()))
+            : EscapeNinja(path);
+    return escaped_targets_.emplace(s, std::move(escaped)).first->second;
   }
 
   bool TryImport(const NinjaNode& nn, std::ostream& out) {
@@ -1327,7 +1607,9 @@ class NinjaGenerator {
                  bool use_local_pool,
                  std::ostream& out,
                  const std::string& edge_command,
-                 const std::string& edge_depfile) {
+                 const std::string& edge_depfile,
+                 const std::string& script_path,
+                 const std::string& intermediate_proof) {
     const DepNode* node = nn.node;
     struct stat output_stat;
     const bool directory_output =
@@ -1367,15 +1649,29 @@ class NinjaGenerator {
     if (node->is_phony && !g_flags.use_ninja_phony_output) {
       out << ' ' << EscapeBuildTarget(Intern("_kati_always_build_"));
     }
-    for (auto const& d : node->deps) {
-      if (IsCycleEdge(node->output, d.first) ||
-          IsExistingDirectoryAlias(d.first))
-        continue;
-      out << " " << EscapeBuildTarget(d.first).c_str();
-    }
+    out << NormalDependencyFragment(node);
     if (node->vpath_provider.IsValid() && !node->is_phony)
       out << " " << EscapeBuildTarget(node->vpath_provider);
     bool has_order_only = false;
+    bool has_implicit_inputs = false;
+    auto implicit_input = [&](const std::string& path) {
+      if (!has_implicit_inputs)
+        out << " |";
+      has_implicit_inputs = true;
+      out << " " << EscapeBuildTarget(Intern(path));
+    };
+    for (const Command& command : nn.commands) {
+      if (!command.runtime_sidecar.empty()) {
+        implicit_input(command.runtime_sidecar);
+        implicit_input(command.runtime_context);
+      }
+    }
+    if (!script_path.empty())
+      implicit_input(script_path);
+    if (!intermediate_proof.empty())
+      implicit_input(intermediate_proof);
+    if (!intermediate_proof.empty())
+      implicit_input(GetFilename(".kati_intermediate_states%s"));
     for (auto const& d : node->order_onlys) {
       if (IsCycleEdge(node->output, d.first) ||
           IsExistingDirectoryAlias(d.first))
@@ -1443,6 +1739,51 @@ class NinjaGenerator {
       if (!edge_depfile.empty())
         out << " omktr_depfile = " << EscapeNinja(edge_depfile) << "\n";
     }
+  }
+
+  const std::string& NormalDependencyFragment(const DepNode* node) {
+    size_t hash = node->deps.size();
+    bool cacheable = cycle_edges_.empty();
+    for (const auto& edge : node->deps) {
+      hash ^= std::hash<Symbol>()(edge.first) + size_t(0x9e3779b9) +
+              (hash << 6) + (hash >> 2);
+      const std::string_view path = edge.first.str();
+      // Directory-alias filtering observes the live filesystem. A nested
+      // shell in a tag expression can change it between emitted edges.
+      if (!path.empty() && path.back() == '/')
+        cacheable = false;
+    }
+    // Cycle filtering is output-specific. Ordinary immutable sequences can
+    // share their emitted text after an exact comparison, never on hash alone.
+    if (cacheable) {
+      auto found = dependency_fragments_.find(hash);
+      if (found != dependency_fragments_.end())
+        for (const auto& entry : found->second)
+          if (*entry.first == node->deps)
+            return entry.second;
+    }
+    std::string text;
+    std::unordered_set<Symbol> emitted;
+    for (const auto& edge : node->deps) {
+      if (IsCycleEdge(node->output, edge.first) ||
+          IsExistingDirectoryAlias(edge.first))
+        continue;
+      auto group = source_dependency_groups_.find(edge.first);
+      const Symbol name =
+          group == source_dependency_groups_.end() ? edge.first : group->second;
+      if (emitted.insert(name).second) {
+        text += ' ';
+        text += EscapeBuildTarget(name);
+      }
+    }
+    if (cacheable && fragment_bytes_ + text.size() <= 32 * 1024 * 1024) {
+      fragment_bytes_ += text.size();
+      auto& entries = dependency_fragments_[hash];
+      entries.emplace_back(&node->deps, std::move(text));
+      return entries.back().second;
+    }
+    uncached_fragment_ = std::move(text);
+    return uncached_fragment_;
   }
 
   static std::string GetEnvScriptFilename() { return GetFilename("env%s.sh"); }
@@ -1519,6 +1860,53 @@ class NinjaGenerator {
     }
   }
 
+  void EmitSourceDependencyGroups(std::ostream& out) {
+    // Factor headers with exactly the same consumers. This preserves every
+    // dependency without relying on textual order in compiler depfiles.
+    std::unordered_map<Symbol, std::vector<size_t>> consumers;
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+      const DepNode* node = nodes_[i].node;
+      for (const auto& edge : node->deps) {
+        const DepNode* input = edge.second;
+        if (input->is_phony || !input->cmds.empty() || !input->deps.empty() ||
+            !input->order_onlys.empty() || !input->validations.empty() ||
+            IsCycleEdge(node->output, edge.first) ||
+            IsExistingDirectoryAlias(edge.first))
+          continue;
+        auto& parents = consumers[edge.first];
+        if (parents.empty() || parents.back() != i)
+          parents.push_back(i);
+      }
+    }
+    std::map<std::vector<size_t>, std::vector<Symbol>> groups;
+    for (auto& entry : consumers)
+      if (entry.second.size() > 1)
+        groups[std::move(entry.second)].push_back(entry.first);
+    std::unordered_set<Symbol> group_names;
+    for (auto& group : groups) {
+      auto& inputs = group.second;
+      if (inputs.size() < 2)
+        continue;
+      std::sort(inputs.begin(), inputs.end(),
+                [](Symbol a, Symbol b) { return a.str() < b.str(); });
+      std::string key;
+      for (Symbol input : inputs)
+        key += " " + EscapeBuildTarget(input);
+      std::string name = GetFilename(".kati_deps-") + GraphDigest(key);
+      while (done_.exists(Intern(name)) || group_names.count(Intern(name)))
+        name += "_";
+      const size_t users = group.first.size();
+      if (key.size() * users <=
+          key.size() + (users + 1) * (name.size() + 1) + 20)
+        continue;
+      Symbol symbol = Intern(name);
+      group_names.insert(symbol);
+      out << "build " << EscapeBuildTarget(symbol) << ": phony" << key << "\n";
+      for (Symbol input : inputs)
+        source_dependency_groups_.emplace(input, symbol);
+    }
+  }
+
   void GenerateNinja() {
     ScopedTimeReporter tr("ninja gen (emit)");
     const std::string filename = GetNinjaFilename();
@@ -1529,6 +1917,9 @@ class NinjaGenerator {
 
     out << "# Generated by kati " << kGitVersion << "\n\n"
         << "ninja_required_version = 1.13.2\n\n";
+
+    if (!path_prefix_.empty())
+      out << path_variable_ << " = " << path_prefix_ << "\n\n";
 
     // Recursive make boundaries are intentionally serialized.  Their
     // internal dependency graphs are opaque to this Ninja graph, so Ninja
@@ -1575,8 +1966,22 @@ class NinjaGenerator {
         // lets the output's runtime guard handle disappearance safely.
         out << "build " << EscapeBuildTarget(provider) << ": phony\n\n";
       }
+      EmitSourceDependencyGroups(out);
       for (const auto& node : nodes_) {
         EmitNode(node, out);
+      }
+      if (!intermediate_proof_nodes_.empty()) {
+        std::string states, previous;
+        AppendGraphString("intermediate-states-v1", &states);
+        for (const auto& state : intermediate_recipe_states_) {
+          AppendGraphString(state.first, &states);
+          AppendGraphString(state.second, &states);
+        }
+        const std::string path = GetFilename(".kati_intermediate_states%s");
+        if ((!ReadGraphCache(path, &previous) || previous != states) &&
+            !WriteGraphCache(path, states))
+          ERROR("cannot write intermediate recipe states");
+        MakefileCacheManager::Get().AddGeneratedGraphDep(path);
       }
 
       std::string default_targets;
@@ -1625,6 +2030,10 @@ class NinjaGenerator {
     // PATH changes $(shell).
     used_env_vars.insert(Intern("PATH"));
     for (Symbol e : used_env_vars) {
+      // MFLAGS is regenerated from this invocation's options, not inherited
+      // input. Comparing it with the caller's environment forces false regen.
+      if (e.str() == "MFLAGS")
+        continue;
       std::string_view val(getenv(e.c_str()));
       used_envs_.emplace(e.str(), std::string(val));
     }
@@ -1656,8 +2065,11 @@ class NinjaGenerator {
       if (symbol.str() == "MAKELEVEL" ||
           symbol.str() == "KATI_GRAPH_SETTINGS" ||
           symbol.str() == "KATI_JOBSERVER_RESERVED" ||
+          symbol.str() == "KATI_RUNTIME_CONTEXT_FD" ||
           symbol.str() == "KATI_NINJA_LOAD_LIMIT" ||
           symbol.str() == "KATI_RECIPE_CHANGED" ||
+          symbol.str() == "KATI_NINJA_GOALS" ||
+          symbol.str() == "KATI_NINJA_DEFAULT_GOALS" ||
           symbol.str() == "KATI_NINJA_LOAD_STATE")
         continue;
       if (!IsShellIdentifier(symbol.str())) {
@@ -1825,6 +2237,22 @@ class NinjaGenerator {
     // processes cannot share the executor's atomic reservation owner, so
     // serialize this child Ninja while borrowing that single slot. Other
     // recursive executors may still use free FIFO tokens normally.
+    std::string default_goals;
+    auto append_goal = [&](Symbol goal) {
+      default_goals += std::to_string(goal.str().size()) + ":" + goal.str();
+    };
+    if (g_flags.targets.empty() || g_flags.gen_all_targets) {
+      if (default_target_)
+        append_goal(default_target_->output);
+    } else {
+      for (Symbol goal : g_flags.targets)
+        append_goal(goal);
+    }
+    if (!intermediate_proof_nodes_.empty())
+      fprintf(fp, "export KATI_NINJA_DEFAULT_GOALS=%s\n",
+              ShellQuote(default_goals).c_str());
+    else
+      fprintf(fp, "unset KATI_NINJA_DEFAULT_GOALS\n");
     fprintf(
         fp, "%s --internal-run-ninja %s %s -f %s ",
         ShellQuote(GetExecutablePath()).c_str(),
@@ -2022,7 +2450,32 @@ class NinjaGenerator {
   std::map<std::string, std::string> used_envs_;
   const std::string kati_binary_;
   std::string working_dir_;
+  std::string path_prefix_;
+  std::string path_variable_;
+  mutable std::unordered_map<Symbol, std::string> escaped_targets_;
+  std::unordered_map<
+      size_t,
+      std::vector<std::pair<const std::vector<NamedDepNode>*, std::string>>>
+      dependency_fragments_;
+  size_t fragment_bytes_ = 0;
+  std::string uncached_fragment_;
   const double start_time_;
+  std::unordered_map<Symbol, Symbol> source_dependency_groups_;
+  std::unordered_map<const DepNode*, std::vector<const DepNode*>>
+      intermediate_parents_;
+  std::unordered_set<const DepNode*> intermediate_required_;
+  std::unordered_map<const DepNode*, std::string> intermediate_proofs_;
+  std::unordered_map<std::string, std::string> intermediate_root_proofs_;
+  struct IntermediateClosure {
+    std::vector<const DepNode*> roots;
+    std::unordered_set<const DepNode*> nodes;
+    std::string path;
+  };
+  std::vector<IntermediateClosure> intermediate_closures_;
+  std::unordered_map<const DepNode*, std::string> intermediate_consumer_proofs_;
+  std::unordered_map<const DepNode*, size_t> intermediate_consumer_sizes_;
+  std::unordered_set<const DepNode*> intermediate_proof_nodes_;
+  std::map<std::string, std::string> intermediate_recipe_states_;
   std::vector<NinjaNode> nodes_;
 
   std::mutex mu_;

@@ -4,10 +4,53 @@ Openmktr has measured improvements in incremental build overhead. Safe remains
 the default graph profile: the completed comparisons do not establish a general
 Aggressive-mode speedup or satisfy the full profile-promotion gate.
 
-These are recorded measurements from 27–28 October 2026, not new tests of every
-subsequent commit. Configuration, artifact and source-integrity checks establish
-the scope of each result. Percentages are medians of paired improvements,
+The repeated Linux and FFmpeg comparisons below were recorded on 27–28 October
+2026, not new tests of every subsequent commit. Configuration, artifact and
+source-integrity checks establish the scope of each result. Percentages are
+medians of paired improvements for those repeated comparisons,
 `100 * (1 - candidate / baseline)`; intervals are paired bootstrap 95% intervals.
+
+## LibreOffice 25.2.7.2 on the local PC
+
+The [second implementation round](openmktr-performance-round2-2026-10-30.md) measures mean clean times of
+**826.730 s GNU** and **862.682 s Openmktr** in two fresh alternating pairs at
+32 jobs and 30 GiB RAM. The **4.35% gap** closes **52.4% of the
+previously remaining 9.14% gap**, with full correctness and artifact controls.
+
+The [implemented-performance follow-up](openmktr-performance-2026-10-30.md) runs two fresh pairs in
+opposite orders at 32 jobs and 30 GiB RAM. Mean clean times are **845.172 s GNU**
+and **922.413 s Openmktr**, a **9.14% gap**, closing **39.6%** of the
+historical percentage gap. Both pairs pass full output controls, repeat checks,
+application smoke tests and source audits. The following single pair is historical.
+
+The [30 October verified follow-up](libreoffice-improvements-2026-10-30.md)
+implements the reported correctness and memory changes. A fresh 32-job pair
+completed in **834.112 seconds for GNU Make** and **960.223 seconds for
+Openmktr Aggressive** (+15.12% elapsed time). Three repeats per tool passed
+strict output audits; Openmktr took 148.256, 110.122 and 109.958 seconds.
+Installed payloads and all 9,507 compiler objects agree after the documented
+ZIP/prefix comparisons and isolated same-path GNU rebuild control.
+
+The graph is 438.7 MB and repeat individual peak RSS is 12.783 GiB. The
+below-200-MB, below-8-GiB and faster-than-GNU objectives all remain unmet.
+This is one observed pair, with uncontrolled filesystem caches. Backward WSL
+clock jumps were measured separately; the selected pair temporarily stopped
+guest NTP and used raw elapsed time checked against Windows Stopwatch.
+Original settings were restored. Local Chimera and sanitizer suites passed;
+Docker's unavailable Linux engine leaves the container gate unrun.
+[Results](../validation/libreoffice-improvements-results.json) and the
+[evidence index](../validation/evidence/README.md) retain the full measurements,
+synthetic comparisons, prior failures and qualification limits.
+
+The [29 October investigation](libreoffice-benchmark-2026-10-29.md) used 32 jobs,
+28 GiB WSL RAM and Clang 18 on the local i9-14900KF PC. GNU Make completed a
+clean build in 828.23 seconds, averaging 30.66 CPU cores, and passed repeat,
+PDF-conversion and original-source checks. Aggressive Ninja generation crashed
+twice in fresh trees, including with an unlimited stack. A direct Aggressive
+attempt averaged 1.27 cores before cancellation at the user's request. No
+completed Openmktr build time or speed ratio was available in that initial
+investigation. The detailed report
+records generated-file probes, cycle warnings, debugger limits and raw evidence.
 
 ## Linux 7.3: Aggressive candidate versus historical binary
 

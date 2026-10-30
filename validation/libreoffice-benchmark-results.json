@@ -1,0 +1,839 @@
+{
+  "status": "stopped-at-user-request-with-documented-issues",
+  "revision": "38ddf6d0e4c8bee9e5449992ed1c412205d6e56c",
+  "jobs": 32,
+  "wsl_memory_limit_gib": 28,
+  "wsl_swap_limit_gib": 16,
+  "compiler_cache": "disabled",
+  "filesystem_caches": "warm/uncontrolled; no cache dropping",
+  "order": [
+    "aggressive",
+    "gnu"
+  ],
+  "configure_options": [
+    "--with-system-libs",
+    "--without-system-libcmis",
+    "--without-system-orcus",
+    "--without-system-mdds",
+    "--without-system-dragonbox",
+    "--without-system-frozen",
+    "--without-system-libfixmath",
+    "--without-system-lpsolve",
+    "--disable-skia",
+    "--without-java",
+    "--without-help",
+    "--without-myspell-dicts",
+    "--disable-ccache",
+    "--disable-compiler-plugins",
+    "--with-parallelism=32",
+    "--with-external-tar=/root/universal-tool-campaign-20260927/lo-downloads",
+    "--with-vendor=OpenmktrBenchmark"
+  ],
+  "runs": {
+    "gnu-configure": {
+      "command": [
+        "/root/openmktr-libreoffice-fullblast-20261029/gnu/libreoffice-25.2.7.2/configure",
+        "--with-system-libs",
+        "--without-system-libcmis",
+        "--without-system-orcus",
+        "--without-system-mdds",
+        "--without-system-dragonbox",
+        "--without-system-frozen",
+        "--without-system-libfixmath",
+        "--without-system-lpsolve",
+        "--disable-skia",
+        "--without-java",
+        "--without-help",
+        "--without-myspell-dicts",
+        "--disable-ccache",
+        "--disable-compiler-plugins",
+        "--with-parallelism=32",
+        "--with-external-tar=/root/universal-tool-campaign-20260927/lo-downloads",
+        "--with-vendor=OpenmktrBenchmark"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/gnu/build",
+      "exit_code": 0,
+      "wall_seconds": 9.535058448000086,
+      "user_seconds": 6.389583,
+      "system_seconds": 1.9392719999999999,
+      "average_cpu_cores": 0.8734980540939339,
+      "peak_single_process_rss_kib": 172800,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27625188,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27117872,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 27104976,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/gnu-configure.log"
+    },
+    "gnu-bootstrap": {
+      "command": [
+        "/usr/bin/make",
+        "-j32",
+        "MAKE=/usr/bin/make",
+        "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+        "bootstrap",
+        "fetch",
+        "install-gdb-printers"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/gnu/build",
+      "exit_code": 0,
+      "wall_seconds": 0.047053915999981655,
+      "user_seconds": 0.029779999999999997,
+      "system_seconds": 0.003139,
+      "average_cpu_cores": 0.6996017079643877,
+      "peak_single_process_rss_kib": 138104,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27118124,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27118236,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 27118124,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/gnu-bootstrap.log"
+    },
+    "gnu-build": {
+      "command": [
+        "/usr/bin/make",
+        "-j32",
+        "-rs",
+        "-f",
+        "/root/openmktr-libreoffice-fullblast-20261029/gnu/libreoffice-25.2.7.2/Makefile.gbuild",
+        "MAKE=/usr/bin/make",
+        "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+        "build"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/gnu/build",
+      "exit_code": 0,
+      "wall_seconds": 828.2327832110001,
+      "user_seconds": 24157.30216,
+      "system_seconds": 1232.343846,
+      "average_cpu_cores": 30.655205300575197,
+      "peak_single_process_rss_kib": 762272,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27118904,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 26106048,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 18126496,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/gnu-build.log"
+    },
+    "gnu-noop": {
+      "command": [
+        "/usr/bin/make",
+        "-j32",
+        "-rs",
+        "-f",
+        "/root/openmktr-libreoffice-fullblast-20261029/gnu/libreoffice-25.2.7.2/Makefile.gbuild",
+        "MAKE=/usr/bin/make",
+        "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+        "build"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/gnu/build",
+      "exit_code": 0,
+      "wall_seconds": 5.459097448999955,
+      "user_seconds": 5.061701,
+      "system_seconds": 0.27816199999999996,
+      "average_cpu_cores": 0.9781585783888511,
+      "peak_single_process_rss_kib": 228216,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 26108672,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 26736988,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 26108672,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/gnu-noop.log"
+    },
+    "gnu-smoke": {
+      "command": [
+        "timeout",
+        "120",
+        "/root/openmktr-libreoffice-fullblast-20261029/gnu/build/instdir/program/soffice",
+        "-env:UserInstallation=file:///root/openmktr-libreoffice-fullblast-20261029/gnu/smoke/profile",
+        "--headless",
+        "--convert-to",
+        "pdf",
+        "--outdir",
+        "/root/openmktr-libreoffice-fullblast-20261029/gnu/smoke",
+        "/root/openmktr-libreoffice-fullblast-20261029/gnu/smoke/input.txt"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/gnu/build",
+      "exit_code": 0,
+      "wall_seconds": 0.6075904280000941,
+      "user_seconds": 0.303104,
+      "system_seconds": 0.262218,
+      "average_cpu_cores": 0.9304326960198794,
+      "peak_single_process_rss_kib": 219268,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 26736988,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 26662112,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 26736988,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/gnu-smoke.log"
+    },
+    "gnu-source-integrity": {
+      "command": [
+        "python3",
+        "/mnt/c/Users/Harry/Documents/ChatGPT/Universal Tool/validation/verify_archive.py",
+        "/root/universal-tool-campaign-20260927/sources/libreoffice-25.2.7.2.tar.xz",
+        "/root/openmktr-libreoffice-fullblast-20261029/gnu/libreoffice-25.2.7.2"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/gnu/build",
+      "exit_code": 0,
+      "wall_seconds": 15.825641399999995,
+      "user_seconds": 14.808140999999999,
+      "system_seconds": 0.661882,
+      "average_cpu_cores": 0.9775289739599435,
+      "peak_single_process_rss_kib": 143416,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 26681792,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27247844,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 26686588,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/gnu-source-integrity.log"
+    },
+    "initial-failed-aggressive-configure": {
+      "command": [
+        "/root/openmktr-libreoffice-fullblast-20261029/aggressive/libreoffice-25.2.7.2/configure",
+        "--with-system-libs",
+        "--without-system-libcmis",
+        "--without-system-orcus",
+        "--without-system-mdds",
+        "--without-system-dragonbox",
+        "--without-system-frozen",
+        "--without-system-libfixmath",
+        "--without-system-lpsolve",
+        "--disable-skia",
+        "--without-java",
+        "--without-help",
+        "--without-myspell-dicts",
+        "--disable-ccache",
+        "--disable-compiler-plugins",
+        "--with-parallelism=32",
+        "--with-external-tar=/root/universal-tool-campaign-20260927/lo-downloads",
+        "--with-vendor=OpenmktrBenchmark"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/aggressive/build",
+      "exit_code": 0,
+      "wall_seconds": 9.543712494000033,
+      "user_seconds": 6.382292,
+      "system_seconds": 1.882833,
+      "average_cpu_cores": 0.8660282888023021,
+      "peak_single_process_rss_kib": 172896,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27687872,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27116756,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 27163304,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/initial-failed-aggressive-configure.log"
+    },
+    "initial-failed-aggressive-bootstrap": {
+      "command": [
+        "/root/openmktr-libreoffice-fullblast-20261029/omktr",
+        "-j32",
+        "MAKE=/root/openmktr-libreoffice-fullblast-20261029/omktr",
+        "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+        "bootstrap",
+        "fetch",
+        "install-gdb-printers"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/aggressive/build",
+      "exit_code": 0,
+      "wall_seconds": 0.061182052999981806,
+      "user_seconds": 0.038729,
+      "system_seconds": 0.011517,
+      "average_cpu_cores": 0.8212539059455056,
+      "peak_single_process_rss_kib": 137856,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27117192,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27093108,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 27117192,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/initial-failed-aggressive-bootstrap.log"
+    },
+    "initial-failed-aggressive-build": {
+      "command": [
+        "/root/openmktr-libreoffice-fullblast-20261029/omktr",
+        "build",
+        "--graph_optimizations=aggressive",
+        "-j32",
+        "-rs",
+        "-f",
+        "/root/openmktr-libreoffice-fullblast-20261029/aggressive/libreoffice-25.2.7.2/Makefile.gbuild",
+        "MAKE=/root/openmktr-libreoffice-fullblast-20261029/omktr",
+        "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+        "build"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/aggressive/build",
+      "exit_code": 139,
+      "wall_seconds": 76.51985095999999,
+      "user_seconds": 63.536088,
+      "system_seconds": 5.573028,
+      "average_cpu_cores": 0.9031527784355738,
+      "peak_single_process_rss_kib": 6905576,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27092644,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27625540,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 20760376,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/initial-failed-aggressive-build.log"
+    },
+    "initial-failed-aggressive-source-integrity": {
+      "command": [
+        "python3",
+        "/mnt/c/Users/Harry/Documents/ChatGPT/Universal Tool/validation/verify_archive.py",
+        "/root/universal-tool-campaign-20260927/sources/libreoffice-25.2.7.2.tar.xz",
+        "/root/openmktr-libreoffice-fullblast-20261029/aggressive/libreoffice-25.2.7.2"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/aggressive/build",
+      "exit_code": 0,
+      "wall_seconds": 17.244403468999963,
+      "user_seconds": 15.766627,
+      "system_seconds": 1.183384,
+      "average_cpu_cores": 0.9829282312067688,
+      "peak_single_process_rss_kib": 142608,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27625540,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27610976,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 27497836,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/initial-failed-aggressive-source-integrity.log"
+    },
+    "aggressive-configure": {
+      "command": [
+        "/root/openmktr-libreoffice-fullblast-20261029/aggressive/libreoffice-25.2.7.2/configure",
+        "--with-system-libs",
+        "--without-system-libcmis",
+        "--without-system-orcus",
+        "--without-system-mdds",
+        "--without-system-dragonbox",
+        "--without-system-frozen",
+        "--without-system-libfixmath",
+        "--without-system-lpsolve",
+        "--disable-skia",
+        "--without-java",
+        "--without-help",
+        "--without-myspell-dicts",
+        "--disable-ccache",
+        "--disable-compiler-plugins",
+        "--with-parallelism=32",
+        "--with-external-tar=/root/universal-tool-campaign-20260927/lo-downloads",
+        "--with-vendor=OpenmktrBenchmark"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/aggressive/build",
+      "exit_code": 0,
+      "wall_seconds": 10.368412675999934,
+      "user_seconds": 6.379606,
+      "system_seconds": 2.240784,
+      "average_cpu_cores": 0.831408844282777,
+      "peak_single_process_rss_kib": 172864,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27631584,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27214696,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 27111768,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/aggressive-configure.log"
+    },
+    "aggressive-bootstrap": {
+      "command": [
+        "/root/openmktr-libreoffice-fullblast-20261029/omktr",
+        "-j32",
+        "MAKE=/root/openmktr-libreoffice-fullblast-20261029/omktr",
+        "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+        "bootstrap",
+        "fetch",
+        "install-gdb-printers"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/aggressive/build",
+      "exit_code": 0,
+      "wall_seconds": 0.0706235130001005,
+      "user_seconds": 0.03304,
+      "system_seconds": 0.023822,
+      "average_cpu_cores": 0.8051426158865685,
+      "peak_single_process_rss_kib": 137820,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27218308,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27198116,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 27217424,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/aggressive-bootstrap.log"
+    },
+    "aggressive-build": {
+      "command": [
+        "/root/openmktr-libreoffice-fullblast-20261029/omktr",
+        "build",
+        "--graph_optimizations=aggressive",
+        "-j32",
+        "-rs",
+        "-f",
+        "/root/openmktr-libreoffice-fullblast-20261029/aggressive/libreoffice-25.2.7.2/Makefile.gbuild",
+        "MAKE=/root/openmktr-libreoffice-fullblast-20261029/omktr",
+        "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+        "build"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/aggressive/build",
+      "exit_code": 139,
+      "wall_seconds": 104.07548192099989,
+      "user_seconds": 90.193108,
+      "system_seconds": 6.326559,
+      "average_cpu_cores": 0.9274006251853318,
+      "peak_single_process_rss_kib": 6919596,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27198552,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27641276,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 20777016,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/aggressive-build.log"
+    },
+    "aggressive-source-integrity": {
+      "command": [
+        "python3",
+        "/mnt/c/Users/Harry/Documents/ChatGPT/Universal Tool/validation/verify_archive.py",
+        "/root/universal-tool-campaign-20260927/sources/libreoffice-25.2.7.2.tar.xz",
+        "/root/openmktr-libreoffice-fullblast-20261029/aggressive/libreoffice-25.2.7.2"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/aggressive/build",
+      "exit_code": 0,
+      "wall_seconds": 16.443041427000026,
+      "user_seconds": 15.352365,
+      "system_seconds": 0.720989,
+      "average_cpu_cores": 0.9775170896064894,
+      "peak_single_process_rss_kib": 142480,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27641276,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27675112,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 27554840,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/aggressive-source-integrity.log"
+    },
+    "aggressive-direct-configure": {
+      "command": [
+        "/root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/libreoffice-25.2.7.2/configure",
+        "--with-system-libs",
+        "--without-system-libcmis",
+        "--without-system-orcus",
+        "--without-system-mdds",
+        "--without-system-dragonbox",
+        "--without-system-frozen",
+        "--without-system-libfixmath",
+        "--without-system-lpsolve",
+        "--disable-skia",
+        "--without-java",
+        "--without-help",
+        "--without-myspell-dicts",
+        "--disable-ccache",
+        "--disable-compiler-plugins",
+        "--with-parallelism=32",
+        "--with-external-tar=/root/universal-tool-campaign-20260927/lo-downloads",
+        "--with-vendor=OpenmktrBenchmark"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build",
+      "exit_code": 0,
+      "wall_seconds": 9.985782384999993,
+      "user_seconds": 6.311555,
+      "system_seconds": 1.97311,
+      "average_cpu_cores": 0.8296460588250648,
+      "peak_single_process_rss_kib": 172932,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27603172,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27054588,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 27045060,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/aggressive-direct-configure.log"
+    },
+    "aggressive-direct-bootstrap": {
+      "command": [
+        "/root/openmktr-libreoffice-fullblast-20261029/omktr",
+        "-j32",
+        "MAKE=/root/openmktr-libreoffice-fullblast-20261029/omktr",
+        "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+        "bootstrap",
+        "fetch",
+        "install-gdb-printers"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build",
+      "exit_code": 0,
+      "wall_seconds": 0.06373312999994596,
+      "user_seconds": 0.036097,
+      "system_seconds": 0.01154,
+      "average_cpu_cores": 0.7474448532504271,
+      "peak_single_process_rss_kib": 138188,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27055012,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27071160,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 27055012,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/aggressive-direct-bootstrap.log"
+    },
+    "aggressive-direct-build": {
+      "command": [
+        "/root/openmktr-libreoffice-fullblast-20261029/omktr",
+        "--graph_optimizations=aggressive",
+        "-j32",
+        "-rs",
+        "-f",
+        "/root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/libreoffice-25.2.7.2/Makefile.gbuild",
+        "MAKE=/root/openmktr-libreoffice-fullblast-20261029/omktr",
+        "ALL_LANGS=en-US ab af am ar as ast be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da de dgo dsb dz el en-GB en-ZA eo es et eu fa fi fr fur fy ga gd gl gu gug he hi hr hsb hu hy id is it ja ka kab kk km kmr-Latn kn ko kok ks lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sat sat-Olck sd si sid sk sl sq sr sr-Latn ss st sun sv sw-TZ szl ta te tg th tl tn tr ts tt ug uk uz ve vec vi xh zh-CN zh-TW zu qtz",
+        "build"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build",
+      "exit_code": 1,
+      "wall_seconds": 445.70582188599997,
+      "user_seconds": 532.852519,
+      "system_seconds": 34.676776,
+      "average_cpu_cores": 1.273327085113013,
+      "peak_single_process_rss_kib": 6847532,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27072596,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27358108,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 19658908,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/aggressive-direct-build.log",
+      "outcome": "cancelled-at-user-request",
+      "cancellation": "SIGTERM sent to the benchmark process group after a short GDB attachment; recipe Error 143 and supervisor exit 1 are expected cancellation effects."
+    },
+    "aggressive-direct-source-integrity": {
+      "command": [
+        "python3",
+        "/mnt/c/Users/Harry/Documents/ChatGPT/Universal Tool/validation/verify_archive.py",
+        "/root/universal-tool-campaign-20260927/sources/libreoffice-25.2.7.2.tar.xz",
+        "/root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/libreoffice-25.2.7.2"
+      ],
+      "cwd": "/root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build",
+      "exit_code": 0,
+      "wall_seconds": 17.055164959000194,
+      "user_seconds": 15.978826,
+      "system_seconds": 0.673782,
+      "average_cpu_cores": 0.9763967713025397,
+      "peak_single_process_rss_kib": 143112,
+      "memory_before_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27358108,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "memory_after_kib": {
+        "MemTotal": 28734664,
+        "MemAvailable": 27567536,
+        "SwapTotal": 16777216,
+        "SwapFree": 16777216
+      },
+      "minimum_mem_available_kib": 27317868,
+      "maximum_swap_used_kib": 0,
+      "log": "/root/openmktr-libreoffice-fullblast-20261029/aggressive-direct-source-integrity.log"
+    }
+  },
+  "limits": [
+    "One clean build per tool; no confidence interval.",
+    "Both use Clang 18; GNU means GNU Make, not a compiler change.",
+    "Selected desktop configuration excludes Java, Skia, help and bundled dictionaries.",
+    "Build timer includes Openmktr graph generation and recursive build work; configure and verification measured separately.",
+    "Neither failed-generation durations nor the cancelled direct duration are full build performance samples.",
+    "Single successful GNU clean build; no paired samples or confidence interval.",
+    "Direct diagnostic includes a brief debugger attachment immediately before cancellation.",
+    "No Safe/off profile control, sanitizer replay, or reduced crash reproducer was run.",
+    "Bootstrap and generated-include/helper work can compile before Ninja starts; one concat-deps object was present after each failed generation."
+  ],
+  "archive_sha256": "21b38b7f429d305b229fb70f3294dd6ccd803f52dad0463d0923cdf143e9c8bd",
+  "binary_sha256": "4b253967d49bd488a4d8cd31e79a243530b656d0e93819fd4e01277456ae9dad",
+  "versions": {
+    "omktr": "GNU Make 4.2.1\nomktr 38ddf6d0e4c8bee9e5449992ed1c412205d6e56c\n",
+    "make": "GNU Make 4.3\nBuilt for x86_64-pc-linux-gnu\nCopyright (C) 1988-2020 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n",
+    "clang": "Ubuntu clang version 18.1.3 (1ubuntu1)\nTarget: x86_64-pc-linux-gnu\nThread model: posix\nInstalledDir: /usr/bin\n",
+    "ninja": "1.13.2\n",
+    "kernel": "Linux HarryPC 6.18.54.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Tue Oct  6 19:13:07 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux\n",
+    "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           39 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  32\nOn-line CPU(s) list:                     0-31\nVendor ID:                               GenuineIntel\nModel name:                              Intel(R) Core(TM) i9-14900KF\nCPU family:                              6\nModel:                                   183\nThread(s) per core:                      2\nCore(s) per socket:                      16\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                6374.39\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid tsc_known_freq pni pclmulqdq vmx ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves avx_vnni vnmi umip waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize ibt flush_l1d arch_capabilities\nVirtualization:                          VT-x\nHypervisor vendor:                       Microsoft\nVirtualization type:                     full\nL1d cache:                               768 KiB (16 instances)\nL1i cache:                               512 KiB (16 instances)\nL2 cache:                                32 MiB (16 instances)\nL3 cache:                                36 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-31\nVulnerability Gather data sampling:      Not affected\nVulnerability Ghostwrite:                Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Old microcode:             Not affected\nVulnerability Reg file data sampling:    Mitigation; Clear Register File\nVulnerability Retbleed:                  Mitigation; Enhanced IBRS\nVulnerability Spec rstack overflow:      Not affected\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS SW sequence; BHI BHI_DIS_S\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n"
+  },
+  "initial_memory_kib": {
+    "MemTotal": 28734664,
+    "MemAvailable": 27724576,
+    "SwapTotal": 16777216,
+    "SwapFree": 16777216
+  },
+  "aggressive_config_sha256": "f06e2ef88345904ae395afce2042cfdea81c498d32b4e8000d54f705c1a188b6",
+  "gnu_config_sha256": "aa69192ff5340bf656cf9df188fd28b0e432a3910ee53e3934a82373c742fd4e",
+  "gnu_pdf_valid": true,
+  "gnu_artifacts": {
+    "instdir/program/soffice.bin": {
+      "bytes": 16136,
+      "sha256": "b1c6f662ee5322ef9a83df2e84118b73fd6db56709f45397bda4455a595376bf"
+    },
+    "instdir/program/libswlo.so": {
+      "bytes": 24378192,
+      "sha256": "2bf0efdd392e0064e64db99960ca460a1ef493c7041baeaa095cc60f6a71ea87"
+    },
+    "instdir/program/libsclo.so": {
+      "bytes": 24111088,
+      "sha256": "f2432d39d97b139387736dfe1fbbc952e3ed90916437f2b0ab905b13bb4cae09"
+    },
+    "instdir/program/libsdlo.so": {
+      "bytes": 10878792,
+      "sha256": "5770304f5505abea2f98b56a0137dd2208b5591f38c43b324dde867e2657ad4e"
+    },
+    "instdir/program/libvcllo.so": {
+      "bytes": 17494504,
+      "sha256": "72b5710cf015143d4dd4e5383b897c25e533f2b3f4d22e95cf3589ba0cbf5c8c"
+    }
+  },
+  "stack_retry": "Fresh Aggressive tree with unlimited stack; original default-stack failure retained.",
+  "actual_execution_order": [
+    "top-level-aborted-diagnostic",
+    "aggressive-default-stack-failed",
+    "gnu",
+    "aggressive-unlimited-stack-retry",
+    "aggressive-direct"
+  ],
+  "direct_attempt": "Fresh tree; direct executor with --graph_optimizations=aggressive -j32 and unlimited stack. Ninja failures retained separately.",
+  "aggressive-direct_config_sha256": "adb371ae03e45dd0b42031960c59747a78e1de726712ce427ce125fae4f4c604",
+  "date": "2026-10-29",
+  "speed_comparison_available": false,
+  "speed_comparison_reason": "GNU completed; Aggressive Ninja generation crashed; direct Aggressive was intentionally cancelled before completion.",
+  "gnu_soffice_version": "LibreOfficeDev 25.2.7.2",
+  "gnu_configuration_bootstrap_build_seconds": 837.8148955750002,
+  "host": {
+    "physical_ram_bytes": 34130411520,
+    "windows_logical_processors": 32,
+    "cpu": "Intel Core i9-14900KF",
+    "linux_native_storage_initial_available_gib_approx": 690,
+    "nas_accessed": false
+  },
+  "resource_cleanup": {
+    "benchmark_processes_remaining": [],
+    "wslconfig_restored": "memory=24GB, swap=16GB, processors=32",
+    "wslconfig_backup": "C:/Users/Harry/.wslconfig.libreoffice-20261029.bak",
+    "note": "The restored configuration takes effect on the next WSL restart; no system restart was forced during finalization."
+  },
+  "tool_build": {
+    "compiler": "Chimera Clang 22.1.8",
+    "runtime": "musl and LLVM libc++ libc++abi libunwind",
+    "optimization": "checked-in C++17 O2 ThinLTO graph",
+    "linking": "dynamic; absolute private musl interpreter and RUNPATH added to disposable build graph for WSL execution",
+    "source_edits": false,
+    "initial_static_link_attempt": "failed because static C/C++ runtime archives were unavailable; resolved with dynamic musl linking",
+    "binary_path": "/root/openmktr-libreoffice-fullblast-20261029/omktr",
+    "runtime_sha256": {
+      "libc++abi.so.1": "bd542c03295729819de13a7e62bbd93916500a08d13751f8cdbeeb3f8d8714e0",
+      "ld-musl-x86_64.so.1": "695052b2855f520da9971ba92be09d47a4fcbcfb457a58dfd45db16c73ee20d1",
+      "libunwind.so.1": "ba0b72949de5f88effa257f017f9f06ebe2e3c7c8118455ea24a2844a02c21ef",
+      "libc.so": "695052b2855f520da9971ba92be09d47a4fcbcfb457a58dfd45db16c73ee20d1",
+      "libc++.so.1": "f0eb1ca4cabeaabf291f9258e9a31fc8cc4f80253457f3be4c5f5a99cd59b7b2"
+    }
+  },
+  "observations": {
+    "gnu": {
+      "cxx_build_messages": 9341,
+      "circular_dependency_messages": 0,
+      "missing_file_messages": 0,
+      "git_metadata_messages": 4,
+      "warning_messages": 15,
+      "retained_object_files": 9507
+    },
+    "initial-failed-aggressive": {
+      "cxx_build_messages": 0,
+      "circular_dependency_messages": 0,
+      "missing_file_messages": 208,
+      "git_metadata_messages": 4,
+      "warning_messages": 0,
+      "retained_object_files": 1,
+      "objects_created_during_generation": [
+        "workdir/CObject/solenv/bin/concat-deps.o"
+      ]
+    },
+    "aggressive": {
+      "cxx_build_messages": 0,
+      "circular_dependency_messages": 0,
+      "missing_file_messages": 208,
+      "git_metadata_messages": 5,
+      "warning_messages": 0,
+      "retained_object_files": 1,
+      "objects_created_during_generation": [
+        "workdir/CObject/solenv/bin/concat-deps.o"
+      ]
+    },
+    "aggressive-direct": {
+      "cxx_build_messages": 781,
+      "circular_dependency_messages": 8,
+      "missing_file_messages": 0,
+      "git_metadata_messages": 2,
+      "warning_messages": 7,
+      "retained_object_files": 784,
+      "circular_dependency_lines": [
+        "Circular /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/libsal_textenclo.so <- /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/.dir dependency dropped.",
+        "Circular /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/libsal_textenclo.so <- /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/ dependency dropped.",
+        "Circular /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/libuno_sal.so.3 <- /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/.dir dependency dropped.",
+        "Circular /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/libuno_sal.so.3 <- /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/ dependency dropped.",
+        "Circular /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/libunoidllo.so <- /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/.dir dependency dropped.",
+        "Circular /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/libreglo.so <- /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/.dir dependency dropped.",
+        "Circular /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/libstorelo.so <- /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/.dir dependency dropped.",
+        "Circular /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/libuno_salhelpergcc3.so.3 <- /root/openmktr-libreoffice-fullblast-20261029/aggressive-direct/build/workdir/Headers/Library/.dir dependency dropped."
+      ],
+      "gdb_attachment_invalidates_clean_benchmark_interpretation": true
+    }
+  },
+  "normalized_config_host_sha256": {
+    "gnu": "9ae2b364bf43b50f6b7fc7211627fc451805958454ffd1be6f1e66d366d0be1a",
+    "aggressive": "9ae2b364bf43b50f6b7fc7211627fc451805958454ffd1be6f1e66d366d0be1a",
+    "aggressive-direct": "9ae2b364bf43b50f6b7fc7211627fc451805958454ffd1be6f1e66d366d0be1a"
+  },
+  "normalized_config_host_equal": true,
+  "direct_stop_wait_channels": {
+    "futex_do_wait": 32,
+    "poll_schedule_timeout.constprop.0": 1
+  },
+  "direct_stack_limitations": "Host GDB attachment did not unwind musl worker stacks into scheduler functions. Wait-channel counts establish futex/poll waits but do not identify the exact lock or dependency.",
+  "evidence_archive": {
+    "path": "validation/evidence/libreoffice-benchmark-2026-10-29.zip",
+    "sha256": "69a1003100a26b1f6928518a95bec403d8ddc08ea55ac25e60f3fef65a4029fd",
+    "entries": 49,
+    "note": "Archive report is the final measurement record before this outer archive descriptor was added. No binaries or release trees are included."
+  }
+}
