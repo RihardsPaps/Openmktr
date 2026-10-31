@@ -1082,7 +1082,7 @@ class Executor {
     const ReadyQueueStats stats = RunReadyQueue(
         // One preparation slot overlaps recipe expansion/output bookkeeping
         // with the admitted recipes. AcquireJob remains the authority for the
-        // -j limit; no extra shell or recursive reservation is admitted.
+        // local recipe limit; preparation does not increase that limit.
         tasks, static_cast<size_t>(job_limit_) + 1,
         [&](size_t id) {
           ExecNode(*nodes[id], needed_by[id], nullptr, nullptr, &timestamps[id],

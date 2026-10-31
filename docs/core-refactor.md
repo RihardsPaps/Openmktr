@@ -39,7 +39,9 @@ variables remain unchanged even when task dependencies are deduplicated.
 
 A single preparation worker can overlap expansion and completion bookkeeping
 with admitted recipes. The local recipe admission limit and inherited shared
-jobserver remain authoritative; the extra worker does not admit another shell.
+jobserver remain authoritative; the extra worker does not increase the local
+recipe limit. Evaluation-time shell functions retain their existing admission
+behavior.
 Evaluator mutation remains serialized. This stage does not make the evaluator
 reentrant or introduce a persistent shared mutable evaluator.
 
@@ -104,6 +106,32 @@ environment or Openmktr identity differs. The LibreOffice harness still reports
 its existing clean/repeat/application checks; its full paired incremental
 parity matrix remains outstanding.
 
+## Validation of this delivery
+
+The [machine-readable report](../validation/evidence/core-runtime-refactor-2026-10-31.json)
+and [evidence archive](../validation/evidence/core-runtime-refactor-2026-10-31.zip)
+retain tool and binary identities, paired samples, failed baseline tests, local
+normal/sanitizer logs and the external GNU incremental comparison. The measured
+runtime revision is `e21e75c2c23422f94b313708e7c98627586677db`.
+
+The local sanitizer gate passes, including 187 correctness tests in both
+profiles, 45 runtime recipe tests, 58 graph tests, 30 workspace tests and 12
+jobserver tests. The external incremental campaign reports no correctness
+blocker, unnecessary-rebuild defect or harness error. Local snapshots match
+856/858 cases in both profiles; the two filesystem enumeration-order differences
+are byte-identical with the baseline. GitHub's portable and graphical gates
+also passed for this runtime revision; workflow links are in the report.
+
+The synthetic performance gate is **not passed**. At four jobs, the final
+seven-pair run improves direct no-op time by 14.2% and missing-output rebuilds
+by 6.2%, but clean direct builds regress 5.6%. Other cells remain uncertain;
+Ninja missing-output regressions also appear in the preceding paired runs.
+The separate 21-pair, 2,000-phony-no-op test improves by 26.5% (95% bootstrap
+interval 23.5–29.0%) after fixing unnecessary worker dispatch. These are paired
+median gains, not whole-project speedups. The archive retains the earlier
+no-op regression and all subsequent measurements. Memory and real-project
+qualification on the user's PC remain outstanding.
+
 ## Remaining architectural work
 
 The accepted overhaul is larger than these runtime changes. The following
@@ -112,7 +140,8 @@ remain required before describing it as complete:
 1. Invocation-owned symbols, variables, parsed files, diagnostics and evaluator
    state, with multiple-session isolation tests and explicit arena ownership.
 2. A shared typed graph/freshness contract for direct execution, Ninja runtime
-   guards and explanations, including replacement of timestamp sentinels.
+   guards and explanations, including replacement of timestamp sentinels, and
+   unified admission of recipe and evaluation-time processes.
 3. Generation-wide atomic publication, reader pinning, recovery and automatic
    versioned-state migration. Individual generated files are still published
    by the existing writer.
