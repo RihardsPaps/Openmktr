@@ -124,6 +124,14 @@ def memory_summary(rows):
     return results
 
 
+def no_regression_passed(timing, memory, expected_cells, samples):
+    """Every requested cell must have complete timing and memory evidence."""
+    return expected_cells > 0 and samples >= 7 and all(
+        len(cells) == expected_cells and
+        all(cell["pairs"] == samples and cell["parity_passed"] for cell in cells)
+        for cells in (timing, memory))
+
+
 def run(command, cwd, log, env, journal):
     start = time.perf_counter()
     with log.open("wb") as output:
@@ -174,6 +182,8 @@ def main():
     parser.add_argument("--jobs", type=int, nargs="+", default=[8, 16])
     parser.add_argument("--samples", type=int, default=7)
     parser.add_argument("--warmups", type=int, default=2)
+    parser.add_argument("--require-no-regression", action="store_true",
+                        help="exit 3 unless every timing and memory cell passes against the supplied baseline")
     args = parser.parse_args()
     if (args.samples < 1 or args.warmups < 0 or min(args.jobs) < 1 or
             (args.llvm_version is not None and args.llvm_version < 1)):
@@ -436,25 +446,27 @@ def main():
         after_source = source_manifest(source) if source else {}
         changed = sorted(p for p in before_source.keys() | after_source.keys()
                          if before_source.get(p) != after_source.get(p))
+        timing = parity_summary(rows)
         report = dict(metadata=metadata, failure=failure or ("monitor cleanup failed" if cleanup_errors else None),
                       monitor_cleanup_errors=cleanup_errors, source_changes=changed,
                       summary=paired_summary(rows),
-                      parity=parity_summary(rows) if args.baseline_kind == "make" else None,
+                      parity=timing if args.baseline_kind == "make" else None,
                       memory=memory_summary(rows))
         expected_cells = len(args.jobs) * len(args.entrypoints) * (4 if args.retained else 5)
-        report["parity_passed"] = (args.baseline_kind == "make" and failure is None and
-                                   not cleanup_errors and not changed and
-                                   len(report["parity"]) == expected_cells and
-                                   all(cell["pairs"] == args.samples and cell["parity_passed"]
-                                       for cell in report["parity"]) and
-                                   len(report["memory"]) == expected_cells and
-                                   all(cell["pairs"] == args.samples and cell["parity_passed"]
-                                       for cell in report["memory"]))
+        report["no_regression"] = timing
+        report["no_regression_passed"] = (
+            failure is None and not cleanup_errors and not changed and
+            no_regression_passed(report["no_regression"], report["memory"],
+                                 expected_cells, args.samples))
+        report["parity_passed"] = (args.baseline_kind == "make" and
+                                   report["no_regression_passed"])
         (root / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         if changed:
             raise RuntimeError(f"Release source contents changed: {changed[:10]}")
         if cleanup_errors and failure is None:
             raise RuntimeError("Monitor cleanup failed; see retained report")
+    if args.require_no_regression and not report["no_regression_passed"]:
+        raise SystemExit(3)
 
 
 if __name__ == "__main__":

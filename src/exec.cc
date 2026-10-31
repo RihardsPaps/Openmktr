@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Keep observed timestamps in outcomes and only logical updates in graph nodes.
 // Own invocation state and publish coherent generations with typed freshness.
 // Schedule resolved dependencies with a bounded ready queue. Preserve serial
 // goal order and parent-specific intermediate decisions. Expand recipes under
@@ -303,12 +304,13 @@ class Executor {
         if (cancel_requested_.load(std::memory_order_relaxed)) {
           done_[n.output] =
               NodeState{NodeOutcome::Failed, kNotExist, std::thread::id()};
-          n.execution_stamp = done_[n.output].timestamp;
+          n.execution_updated =
+              done_[n.output].timestamp == FileStamp::Updated();
           return kNotExist;
         }
         done_[n.output] = NodeState{NodeOutcome::Running, kIgnoredEdge,
                                     std::this_thread::get_id()};
-        n.execution_stamp = done_[n.output].timestamp;
+        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
         break;
       }
     }
@@ -371,7 +373,7 @@ class Executor {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] =
             NodeState{NodeOutcome::Failed, kNotExist, std::thread::id()};
-        n.execution_stamp = done_[n.output].timestamp;
+        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
       }
       failed_.store(true, std::memory_order_relaxed);
       return kNotExist;
@@ -424,7 +426,7 @@ class Executor {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] =
             NodeState{NodeOutcome::Failed, output_ts, std::thread::id()};
-        n.execution_stamp = done_[n.output].timestamp;
+        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
       }
       failed_.store(true, std::memory_order_relaxed);
       return output_ts;
@@ -449,7 +451,7 @@ class Executor {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] =
             NodeState{NodeOutcome::Succeeded, output_ts, std::thread::id()};
-        n.execution_stamp = done_[n.output].timestamp;
+        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
       }
       return output_ts;
     }
@@ -462,7 +464,7 @@ class Executor {
         done_[n.output] = NodeState{
             dependency_failed ? NodeOutcome::Failed : NodeOutcome::Succeeded,
             output_ts, std::thread::id()};
-        n.execution_stamp = done_[n.output].timestamp;
+        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
       }
       return output_ts;
     }
@@ -474,7 +476,7 @@ class Executor {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] =
             NodeState{NodeOutcome::Succeeded, output_ts, std::thread::id()};
-        n.execution_stamp = done_[n.output].timestamp;
+        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
       }
       return output_ts;
     }
@@ -533,7 +535,7 @@ class Executor {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] =
             NodeState{NodeOutcome::Succeeded, touched_ts, std::thread::id()};
-        n.execution_stamp = done_[n.output].timestamp;
+        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
       }
       return touched_ts;
     }
@@ -600,7 +602,7 @@ class Executor {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] =
             NodeState{NodeOutcome::Succeeded, output_ts, std::thread::id()};
-        n.execution_stamp = done_[n.output].timestamp;
+        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
       }
       return output_ts;
     }
@@ -652,7 +654,7 @@ class Executor {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] =
             NodeState{NodeOutcome::Succeeded, logical_ts, std::thread::id()};
-        n.execution_stamp = done_[n.output].timestamp;
+        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
       }
       return logical_ts;
     }
@@ -796,7 +798,7 @@ class Executor {
       done_[n.output] =
           NodeState{node_failed ? NodeOutcome::Failed : NodeOutcome::Succeeded,
                     completed_ts, std::thread::id()};
-      n.execution_stamp = done_[n.output].timestamp;
+      n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
     }
     return completed_ts;
   }
@@ -1088,10 +1090,9 @@ class Executor {
     RecordStatCounter("scheduler_nodes", nodes.size());
     std::vector<std::unique_ptr<std::vector<Command>>> prepared(nodes.size());
     const ReadyQueueStats stats = RunReadyQueue(
-        // One preparation slot overlaps recipe expansion/output bookkeeping
-        // with the admitted recipes. ProcessLease remains the authority for the
-        // local recipe limit; preparation does not increase that limit.
-        tasks, static_cast<size_t>(job_limit_) + 1,
+        // The coordinator overlaps metadata preparation with these workers.
+        // ProcessLease also admits evaluation shells to the same job budget.
+        tasks, static_cast<size_t>(job_limit_),
         [&](size_t id) {
           ExecNode(*nodes[id], needed_by[id], nullptr, nullptr, &timestamps[id],
                    prepared[id] ? &*prepared[id] : nullptr);

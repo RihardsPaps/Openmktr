@@ -95,6 +95,14 @@ order alternates; each pair starts with fresh configured build directories.
 Build both tools with the same compiler, libraries, optimisation and link flags.
 Run performance workloads sequentially without simultaneous test/build jobs.
 
+Use `--require-no-regression` for an acceptance run against either an Openmktr
+revision or external GNU Make. It exits with status 3 unless every requested
+timing and peak-process-RSS cell has all samples, at least seven pairs, a median
+candidate/baseline ratio at most 1.00 and a bootstrap 95% upper bound at most 1.05.
+The upper bound describes uncertainty; it does not permit a median slowdown.
+Reports always include `no_regression` and `no_regression_passed`, including
+exploratory runs without the flag. Failed or incomplete evidence cannot pass.
+
 Each clean build is followed by no-op, touched-source, missing-object and
 Makefile timestamp-change invocations. Source timestamps are restored; release
 contents are never edited. Configuration and verification are outside the build

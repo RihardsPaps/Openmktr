@@ -5,6 +5,7 @@
 """Focused producer/consumer checks for runtime Ninja recipe expansion."""
 
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -661,8 +662,11 @@ else:
                 cwd=root, capture_output=True, text=True, timeout=20)
             self.assertEqual(generated.returncode, 0,
                              generated.stdout + generated.stderr)
-            states = {path.with_name(path.name.split(".version-", 1)[0])
-                      for path in (root / ".openmktr/.kati_recipes").iterdir()}
+            states = {
+                path.with_name(re.split(r"\.(?:version|packed)-", path.name, maxsplit=1)[0])
+                for path in (root / ".openmktr/.kati_recipes").iterdir()
+                if re.search(r"\.(?:version|packed)-", path.name)
+            }
             self.assertTrue(states)
             for path in states:
                 Path(str(path) + ".reads-pending").mkdir()

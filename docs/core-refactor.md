@@ -9,9 +9,14 @@ below. Historical project results do not qualify this revision.
 
 `BuildSession` owns symbols, global bindings, flags, parse/file caches, diagnostics,
 filesystem observation state, statistics, native-find state and runtime snapshots.
-A session allocation arena owns expressions, statements, rules and variables;
-objects can be freed early, and teardown destroys survivors before their backing
-text and services. Scoped worker bindings share the invocation without sharing
+A session allocation arena owns expressions, statements, rules and variables.
+Aligned 64 KiB chunks keep allocation ownership and live-object bitmaps out of
+individual objects; size-class free lists recycle early deletions. Oversized
+objects use separate blocks. Teardown destroys survivors before their backing
+text and services, and sanitizer builds poison unused and released slots.
+Thread-local service pointers are borrowed caches, invalidated whenever the
+binding changes; the session still owns and publishes each service exactly once.
+Scoped worker bindings share the invocation without sharing
 mutable state with another invocation. Evaluator mutation within one invocation
 remains serialized. Process-wide signal handlers still have one CLI owner.
 
@@ -65,7 +70,14 @@ full bytes are still checked. Sealing precedes recording regeneration identities
 These private cache files must remain immutable; regenerate after editing them.
 
 Generated launchers pin their selected bundle with a shared lease for the whole
-Ninja run. Collection checks exclusive leases, retains the current and preceding
+Ninja run. A native supervisor owns the lease, jobserver FIFO and load state,
+forwards cancellation, reaps Ninja and then removes its resources. FIFO creation
+and token seeding require no external shell utilities. A checksummed launch plan
+stores literal exports, unsets and Ninja options in the same published bundle;
+the supervisor validates it before applying the environment. `omktr build`
+launches this plan directly, while `ninja.sh` is a short native-launch entry point.
+Collection checks
+exclusive leases, retains the current and preceding
 bundles, and visits at most 256 candidates per publication. Interrupted staging
 directories are recovered by later maintenance. Legacy public files migrate
 automatically through a preserved legacy snapshot. Corrupt, obsolete or missing
@@ -76,7 +88,16 @@ generated graph, remain supported.
 Recipe expected states, scripts, variable contexts and environment snapshots
 are immutable objects. Filename hashes select storage; full bytes establish
 identity, and atomic no-replace publication resolves collisions. Mutable success
-history is separate from immutable expected state. Raw Ninja reads retain their
+history is separate from immutable expected state. Small expected-state records
+share bounded packs (at most 256 records and 1 MiB). Each record has a stable
+private symlink descriptor naming its pack and byte range; readers parse these
+bytes without following the descriptor as a path. Bounded regular-file reads
+check the record's digest, and publication compares the complete record bytes.
+Pack contents and descriptor directories join the publication durability barrier.
+Changing one record leaves neighboring command identities intact. Legacy regular
+state objects remain readable.
+
+Raw Ninja reads retain their
 open graph inode and refer to stable immutable recipe objects, including
 intermediate-state proofs; they do not depend on a collected bundle directory.
 Shared objects are retained for saved graphs and raw Ninja consumers. Remove them

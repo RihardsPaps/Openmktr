@@ -5,7 +5,6 @@
 #include <sys/stat.h>
 #include <cstdint>
 #include <string>
-#include <tuple>
 
 // A graph observation is distinct from a logical update and an ignored edge.
 // Never encode those states as special wall-clock times: pre-epoch files and
@@ -30,22 +29,28 @@ class FileStamp {
   Kind kind() const { return kind_; }
   FileStamp LowResolution() const { return FileStamp(kind_, seconds_, 0); }
   friend bool operator==(FileStamp a, FileStamp b) {
-    return a.Key() == b.Key();
+    return a.kind_ == b.kind_ && a.seconds_ == b.seconds_ &&
+           a.nanoseconds_ == b.nanoseconds_;
   }
   friend bool operator!=(FileStamp a, FileStamp b) { return !(a == b); }
-  friend bool operator<(FileStamp a, FileStamp b) { return a.Key() < b.Key(); }
+  friend bool operator<(FileStamp a, FileStamp b) {
+    if (a.kind_ != b.kind_)
+      return a.kind_ < b.kind_;
+    if (a.seconds_ != b.seconds_)
+      return a.seconds_ < b.seconds_;
+    return a.nanoseconds_ < b.nanoseconds_;
+  }
   friend bool operator>(FileStamp a, FileStamp b) { return b < a; }
   friend bool operator>=(FileStamp a, FileStamp b) { return !(a < b); }
 
  private:
   constexpr FileStamp(Kind kind, int64_t seconds, int32_t nanoseconds)
-      : kind_(kind), seconds_(seconds), nanoseconds_(nanoseconds) {}
-  std::tuple<Kind, int64_t, int32_t> Key() const {
-    return std::make_tuple(kind_, seconds_, nanoseconds_);
-  }
-  Kind kind_ = Kind::Missing;
+      : seconds_(seconds), nanoseconds_(nanoseconds), kind_(kind) {}
+  // Keep this value within two machine words. Apart from graph storage, this
+  // lets common ABIs pass freshness observations in registers.
   int64_t seconds_ = 0;
   int32_t nanoseconds_ = 0;
+  Kind kind_ = Kind::Missing;
 };
 
 enum class EdgeKind { Normal, OrderOnly, Validation };

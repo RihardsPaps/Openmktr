@@ -46,11 +46,6 @@ std::string ObjectParent(const std::string& path) {
   const auto slash = path.rfind('/');
   return slash == std::string::npos ? "." : path.substr(0, slash ? slash : 1);
 }
-bool ObjectSealed(const std::string& path) {
-  struct stat metadata;
-  return lstat(path.c_str(), &metadata) == 0 && S_ISREG(metadata.st_mode) &&
-         (metadata.st_mode & 07777) == 0400;
-}
 void SealObject(const std::string& path) {
   // Seal only after both bytes and the directory entry are durable. Losing
   // this permission update after a crash merely repeats the next barrier.
@@ -158,7 +153,11 @@ bool ConsumeGraphStringView(std::string_view* data, std::string_view* value) {
   return true;
 }
 
-bool ReadGraphCache(const std::string& path, std::string* payload) {
+bool ReadGraphCache(const std::string& path,
+                    std::string* payload,
+                    bool* sealed) {
+  if (sealed)
+    *sealed = false;
   int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
   if (fd < 0)
     return false;
@@ -196,6 +195,8 @@ bool ReadGraphCache(const std::string& path, std::string* payload) {
           read_string(&checksum, 64) && read_string(payload, kMaxCacheSize) &&
           remaining == 0 && checksum == GraphDigest(*payload);
   close(fd);
+  if (valid && sealed)
+    *sealed = (st.st_mode & 07777) == 0400;
   return valid;
 }
 
@@ -282,46 +283,62 @@ GraphObjectBatch::~GraphObjectBatch() {
   SessionService<ObjectPublication>().batch = previous_;
 }
 void GraphObjectBatch::Add(const std::string& path) {
-  if (ObjectSealed(path))
-    return;
   paths_.insert(path);
   if (paths_.size() >= 256)
     Flush();
 }
+void GraphObjectBatch::AddDirectory(const std::string& path) {
+  directories_.insert(path);
+  if (directories_.size() >= 256)
+    Flush();
+}
 void GraphObjectBatch::Flush() {
-  std::unordered_set<std::string> directories;
   // All writes precede all barriers, letting the filesystem coalesce them.
   // Unsealed existing objects are included: another writer may just have
   // linked one, or abandoned a batch before making its objects durable.
   for (const auto& path : paths_) {
     SyncObjectPath(path, false);
-    directories.insert(ObjectParent(path));
+    directories_.insert(ObjectParent(path));
   }
-  for (const auto& path : directories)
+  for (const auto& path : directories_)
     SyncObjectPath(path, true);
   for (const auto& path : paths_)
     SealObject(path);
   paths_.clear();
+  directories_.clear();
+}
+
+void SyncPublishedGraphObject(const std::string& path, bool sealed) {
+  if (sealed)
+    return;
+  if (auto* batch = SessionService<ObjectPublication>().batch) {
+    batch->Add(path);
+  } else {
+    SyncObjectPath(path, false);
+    SyncObjectPath(ObjectParent(path), true);
+    SealObject(path);
+  }
+}
+void SyncGraphObjectDirectory(const std::string& path) {
+  if (auto* batch = SessionService<ObjectPublication>().batch)
+    batch->AddDirectory(path);
+  else
+    SyncObjectPath(path, true);
 }
 
 std::string PublishGraphObject(const std::string& base,
                                std::string_view payload,
                                bool raw) {
   std::string temporary;
-  auto* batch = SessionService<ObjectPublication>().batch;
-  auto finish = [&](const std::string& path) {
-    if (batch) {
-      batch->Add(path);
-    } else if (!ObjectSealed(path)) {
-      SyncObjectPath(path, false);
-      SyncObjectPath(ObjectParent(path), true);
-      SealObject(path);
-    }
+  auto finish = [&](const std::string& path, bool sealed = false) {
+    SyncPublishedGraphObject(path, sealed);
     return path;
   };
+  bool sealed = false;
   auto read = [&](const std::string& path, std::string* bytes) {
+    sealed = false;
     if (!raw)
-      return ReadGraphCache(path, bytes);
+      return ReadGraphCache(path, bytes, &sealed);
     int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC);
     if (fd < 0)
       return false;
@@ -343,6 +360,8 @@ std::string PublishGraphObject(const std::string& base,
       }
     }
     close(fd);
+    if (ok)
+      sealed = (metadata.st_mode & 07777) == 0400;
     return ok;
   };
   if (payload.size() > kMaxCacheSize)
@@ -354,7 +373,7 @@ std::string PublishGraphObject(const std::string& base,
     if (read(path, &previous) && previous == payload) {
       if (!temporary.empty())
         unlink(temporary.c_str());
-      return finish(path);
+      return finish(path, sealed);
     }
     struct stat metadata;
     if (lstat(path.c_str(), &metadata) == 0)
@@ -381,7 +400,7 @@ std::string PublishGraphObject(const std::string& base,
     // A concurrent publisher may have installed these exact bytes.
     if (read(path, &previous) && previous == payload) {
       unlink(temporary.c_str());
-      return finish(path);
+      return finish(path, sealed);
     }
   }
   if (!temporary.empty())

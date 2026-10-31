@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import subprocess
 import tempfile
 import time
@@ -50,6 +51,37 @@ class Architecture(unittest.TestCase):
 
     def current(self):
         return (self.root / "build.ninja").resolve().parent
+
+    def test_launcher_needs_no_fifo_shell_utilities_and_cleans_after_failure(self):
+        # The launcher should require Ninja and the recipe shell, without
+        # external mkfifo/rm helpers. Keep a colliding name owned by the caller.
+        bindir = self.root / "bin"
+        bindir.mkdir()
+        (bindir / "ninja").symlink_to(shutil.which("ninja"))
+        temporary = self.root / "tmp"
+        temporary.mkdir()
+        environment = {k: v for k, v in os.environ.items()
+                       if not k.startswith(("KATI_", "MAKE", "MFLAGS"))}
+        environment.update(PATH=str(bindir), TMPDIR=str(temporary))
+        for status in (0, 7):
+            self.write(".PHONY: all\nall:\n"
+                       "\t@printf '%s' \"$$KATI_JOBSERVER_FIFO\" > fifo-path; "
+                       f"exit {status}\n")
+            subprocess.run([str(BINARY), "--ninja", "all"], cwd=self.root,
+                           env=environment, check=True, capture_output=True)
+
+            def occupy_name():
+                (temporary / f"kati-jobserver-{os.getpid()}").write_text("owned")
+
+            result = subprocess.run(["/bin/sh", "ninja.sh", "-j2"],
+                                    cwd=self.root, env=environment,
+                                    preexec_fn=occupy_name, capture_output=True,
+                                    timeout=10)
+            self.assertEqual(result.returncode == 0, status == 0, result.stderr)
+            self.assertFalse(Path((self.root / "fifo-path").read_text()).exists())
+        leftovers = list(temporary.iterdir())
+        self.assertEqual(len(leftovers), 2)
+        self.assertTrue(all(path.read_text() == "owned" for path in leftovers))
 
     def test_nanosecond_freshness_and_automatic_newer_inputs(self):
         self.write("all: output\noutput: input\n\t@printf '%s' '$?' > $@\n")
@@ -120,22 +152,44 @@ class Architecture(unittest.TestCase):
         self.assertNotEqual(self.current(), old)
 
     def test_reader_pins_bundle_across_multiple_publications(self):
-        self.write("export WORD = old\n.PHONY: all\nall:\n"
-                   "\t@touch running; while test ! -f release; do sleep .02; done; printf '%s' \"$$WORD\" > result\n")
-        self.run_tool("--ninja", "all")
-        old = self.current()
-        reader = self.start(["sh", "ninja.sh"])
-        self.wait_file("running", reader)
-        for value in ("new", "newest", "latest"):
-            self.write("export WORD = " + value + "\n.PHONY: all\nall:\n\t@printf '%s' \"$$WORD\" > result\n")
+        for command in (["sh", "ninja.sh"],
+                        [str(BINARY), "build", "--ninja_dir=.", "all"]):
+            with self.subTest(command=command):
+                for marker in ("running", "release"):
+                    (self.root / marker).unlink(missing_ok=True)
+                self.write("export WORD = old\n.PHONY: all\nall:\n"
+                           "\t@touch running; while test ! -f release; do sleep .02; done; printf '%s' \"$$WORD\" > result\n")
+                self.run_tool("--ninja", "all")
+                reader = self.start(command)
+                self.wait_file("running", reader)
+                old = self.current()
+                for value in ("new", "newest", "latest"):
+                    self.write("export WORD = " + value + "\n.PHONY: all\nall:\n\t@printf '%s' \"$$WORD\" > result\n")
+                    self.run_tool("--ninja", "all")
+                self.assertTrue(old.exists())
+                (self.root / "release").touch()
+                output = reader.communicate(timeout=10)[0]
+                self.assertEqual(reader.returncode, 0, output)
+                self.assertEqual((self.root / "result").read_text(), "old")
+                self.run_tool("--ninja", "all")
+                self.assertFalse(old.exists())
+
+    def test_native_launch_plan_damage_fails_closed_and_build_repairs_it(self):
+        self.write("all: output\noutput:\n\t@printf stable > $@\n")
+        for damage in (None, b"partial record"):
             self.run_tool("--ninja", "all")
-        self.assertTrue(old.exists())
-        (self.root / "release").touch()
-        output = reader.communicate(timeout=10)[0]
-        self.assertEqual(reader.returncode, 0, output)
-        self.assertEqual((self.root / "result").read_text(), "old")
-        self.run_tool("--ninja", "all")
-        self.assertFalse(old.exists())
+            plan = self.current() / "ninja.sh.launch"
+            if damage is None:
+                plan.unlink()
+            else:
+                plan.write_bytes(damage)
+            result = subprocess.run(["sh", "ninja.sh"], cwd=self.root,
+                                    capture_output=True, timeout=10)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse((self.root / "output").exists())
+            self.run_tool("build", "--ninja_dir=.", "all")
+            self.assertEqual((self.root / "output").read_text(), "stable")
+            (self.root / "output").unlink()
 
     def test_unknown_and_corrupt_generation_manifests_regenerate(self):
         self.write("all: output\noutput:\n\t@printf stable > output\n")
@@ -147,6 +201,49 @@ class Architecture(unittest.TestCase):
             self.run_tool("build", "all")
             self.assertNotEqual(graph.resolve().parent, before)
             self.assertEqual((self.root / "output").read_text(), "stable")
+
+    def test_packed_recipe_change_preserves_neighbor_commands_and_saved_graph(self):
+        self.write("all: first second\nfirst:\n\t@printf old > $@\n"
+                   "second:\n\t@printf unchanged > $@\n")
+        self.run_tool("--ninja", "all")
+        saved = self.root / "saved.ninja"
+        saved.write_bytes((self.root / "build.ninja").read_bytes())
+        subprocess.run(["sh", "ninja.sh"], cwd=self.root, check=True, capture_output=True)
+        before = (self.root / "second").stat().st_mtime_ns
+        self.assertTrue(list((self.root / ".kati_recipes").glob("*.packed-*")))
+        self.write("all: first second\nfirst:\n\t@printf changed > $@\n"
+                   "second:\n\t@printf unchanged > $@\n")
+        self.run_tool("--ninja", "all")
+        subprocess.run(["sh", "ninja.sh"], cwd=self.root, check=True, capture_output=True)
+        self.assertEqual((self.root / "first").read_text(), "changed")
+        self.assertEqual((self.root / "second").stat().st_mtime_ns, before)
+        for _ in range(3):
+            self.run_tool("--ninja", "all")
+        (self.root / "first").unlink()
+        subprocess.run(["ninja", "-f", "saved.ninja", "first"], cwd=self.root,
+                       check=True, capture_output=True)
+        self.assertEqual((self.root / "first").read_text(), "old")
+
+    def test_missing_or_corrupt_recipe_pack_fails_before_execution(self):
+        self.write("all: output\noutput:\n\t@printf stable > $@\n")
+        for corrupt in (False, True):
+            self.run_tool("--ninja", "all")
+            packs = list((self.root / ".kati_recipes").glob(".pack-*"))
+            self.assertTrue(packs)
+            for pack in packs:
+                if corrupt:
+                    pack.chmod(0o600)
+                    pack.write_bytes(b"corrupted")
+                else:
+                    pack.unlink()
+            result = subprocess.run(["sh", "ninja.sh"], cwd=self.root,
+                                    capture_output=True, timeout=10)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse((self.root / "output").exists())
+            self.run_tool("--ninja", "all")
+            subprocess.run(["sh", "ninja.sh"], cwd=self.root, check=True, capture_output=True)
+            self.assertEqual((self.root / "output").read_text(), "stable")
+            (self.root / "output").unlink()
 
     def test_raw_ninja_keeps_immutable_recipe_objects_after_collection(self):
         (self.root / "source").write_text("old")

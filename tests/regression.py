@@ -59,8 +59,8 @@ def normalize(value: str, directory: Path) -> str:
     value = value.replace(str(directory), "<TESTDIR>").replace(str(KATI), "<KATI>")
     # Storage identities are deliberately generation/content specific. Keep
     # command/error semantics visible while normalizing only those paths.
-    value = re.sub(r"<TESTDIR>/\.omktr-objects/env-\d+(?:\.\d+)?", "././env.sh", value)
-    value = re.sub(r"(\.kati_recipes/[0-9a-f]+)\.version-\d+(?:\.\d+)?", r"\1", value)
+    value = re.sub(r"(?:<TESTDIR>/)?\.omktr-objects/env-\d+(?:\.\d+)?", "././env.sh", value)
+    value = re.sub(r"(\.kati_recipes/[0-9a-f]+)\.(?:version|packed)-\d+(?:\.\d+)?", r"\1", value)
     value = re.sub(r"<TESTDIR>/\.omktr-generations/\d+/g-[A-Za-z0-9]+/(build[^/\s:]*\.ninja)", r"./\1", value)
     value = re.sub(r"/tmp-test-[^/\s]+", "<TESTDIR-SUBST>", value)
     value = re.sub(r"/tmp/tmp[^/\s]+", "<SCRIPT-TEMP>", value)

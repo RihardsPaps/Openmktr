@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #include "generation.h"
 #include <fcntl.h>
+#include <limits.h>
 #include <sys/file.h>
 #include <unistd.h>
 #include <algorithm>
@@ -45,7 +46,8 @@ std::vector<std::string> Artifacts() {
           ".kati_stamp" + suffix,
           ".kati_stamp" + suffix + ".includes",
           ".kati_intermediate_states" + suffix,
-          ".kati_contexts-build" + suffix + ".ninja"};
+          ".kati_contexts-build" + suffix + ".ninja",
+          "ninja" + suffix + ".sh.launch"};
 }
 int Lock(const std::string& path, int mode) {
   int fd = open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
@@ -72,6 +74,12 @@ std::string Resolve(const std::string& path) {
   std::error_code error;
   auto resolved = fs::canonical(path, error);
   return error ? std::string() : resolved.string();
+}
+bool PointsTo(const std::string& path, const std::string& target) {
+  char value[PATH_MAX];
+  const auto length = readlink(path.c_str(), value, sizeof(value));
+  return length >= 0 && static_cast<size_t>(length) == target.size() &&
+         std::string_view(value, length) == target;
 }
 void Point(const std::string& path, const std::string& destination) {
   const std::string temporary = path + ".link-" + std::to_string(getpid());
@@ -130,6 +138,9 @@ void Collect(const std::string& root, const std::string& current) {
   }
 }
 }  // namespace
+std::string CurrentGenerationPointer() {
+  return Root() + "/current";
+}
 std::string ResolveGenerationArtifact(const std::string& path) {
   std::error_code error;
   if (!fs::is_symlink(path, error))
@@ -163,11 +174,23 @@ GenerationReader::GenerationReader(const std::string& explicit_directory) {
   if (explicit_directory.empty()) {
     // A missing public artifact also requires repair; do not silently accept a
     // valid hidden bundle whose entry points have been removed.
+    const auto current =
+        fs::absolute(Root()).lexically_normal().string() + "/current";
+    const auto selected = std::string(Basename(directory_));
+    const bool direct_pointer = PointsTo(current, selected);
     for (const auto& name : Artifacts()) {
-      if (fs::exists(directory_ + "/" + name) &&
-          Resolve(OutputDirectory() + "/" + name) != directory_ + "/" + name)
+      if (!fs::exists(directory_ + "/" + name))
+        continue;
+      const auto public_path = OutputDirectory() + "/" + name;
+      // Our own aliases have an exact form. Validate their link bytes once;
+      // avoid resolving every ancestor repeatedly. Custom aliases still take
+      // the canonical path check, and a changed pointer rejects the fast path.
+      if (!(direct_pointer && PointsTo(public_path, current + "/" + name)) &&
+          Resolve(public_path) != directory_ + "/" + name)
         return;
     }
+    if (direct_pointer && !PointsTo(current, selected))
+      return;
   }
   state.directory = directory_;
   valid_ = true;

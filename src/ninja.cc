@@ -1,4 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
+// Cache command prefixes and source local environment objects after chdir.
+// Reuse output metadata within an emitted edge until an effect invalidates it.
+// Supervise generated launches and jobserver cleanup natively.
 // Own invocation state and publish coherent generations with typed freshness.
 // Publish runtime context manifests for immutable per-build sharing.
 // Reuse escaped paths and identical immutable prerequisite fragments.
@@ -91,6 +94,8 @@
 #include "func.h"
 #include "io.h"
 #include "log.h"
+#include "ninja_launcher.h"
+#include "recipe_state.h"
 #include "stats.h"
 #include "stringprintf.h"
 #include "strutil.h"
@@ -270,6 +275,30 @@ static bool IsShellIdentifier(std::string_view name) {
   return true;
 }
 
+class OutputMetadata {
+ public:
+  explicit OutputMetadata(Symbol output) : output_(output) {}
+  bool IsRegular() { return Read() && S_ISREG(metadata_.st_mode); }
+  bool IsDirectory() { return Read() && S_ISDIR(metadata_.st_mode); }
+
+ private:
+  bool Read() {
+    const auto epoch = FilesystemObservationEpoch();
+    if (!cached_ || epoch != epoch_ || FilesystemEffectsActive()) {
+      present_ = ObserveFile(output_.c_str(), &metadata_);
+      epoch_ = epoch;
+      cached_ =
+          epoch == FilesystemObservationEpoch() && !FilesystemEffectsActive();
+    }
+    return present_;
+  }
+  Symbol output_;
+  struct stat metadata_;
+  uint64_t epoch_ = 0;
+  bool cached_ = false;
+  bool present_ = false;
+};
+
 class NinjaGenerator {
  public:
   NinjaGenerator(Evaluator* ev, double start_time)
@@ -286,6 +315,9 @@ class NinjaGenerator {
       working_dir_ = cwd;
     else
       PERROR("getcwd failed while generating Ninja graph");
+    working_prefix_ = "cd " + ShellQuote(working_dir_) + " && ";
+    quoted_binary_ = ShellQuote(kati_binary_);
+    ninja_binary_ = EscapeNinja(quoted_binary_);
     if (g_flags.GraphOptimizationEnabled("compact")) {
       const size_t slash = working_dir_.rfind('/');
       const std::string prefix = working_dir_.substr(0, slash + 1);
@@ -342,7 +374,9 @@ class NinjaGenerator {
     // Command expansion is complete. Capture exports once before serializing
     // the graph so every recipe refers to this immutable environment snapshot.
     GenerateShell();
+    RecipeStateBatch recipe_states;
     GenerateNinja();
+    recipe_states.Flush();
     std::unordered_set<std::string> runtime_contexts;
     for (const auto& node : nodes_)
       for (const auto& command : node.commands)
@@ -894,6 +928,7 @@ class NinjaGenerator {
 
   void EmitNode(const NinjaNode& nn, std::ostream& out) {
     const DepNode* node = nn.node;
+    OutputMetadata output_metadata(node->output);
     if (node->is_default_target) {
       std::unique_lock<std::mutex> lock(mu_);
       default_target_ = node;
@@ -947,13 +982,11 @@ class NinjaGenerator {
     // An existing source file may match a silent dummy rule such as FFmpeg's
     // "%.h:; @:". It is an input, not a generated output: declaring it as an
     // output would make "ninja -t clean" delete the source file.
-    struct stat existing_output;
     const bool elided_source_recipe =
         !node->is_phony && node->deps.empty() && node->order_onlys.empty() &&
         node->validations.empty() && commands.size() == 1 &&
         !commands.front().echo && commands.front().cmd == ":" &&
-        stat(node->output.c_str(), &existing_output) == 0 &&
-        S_ISREG(existing_output.st_mode);
+        output_metadata.IsRegular();
     const char* workspace_build = getenv("OMKTR_WORKSPACE_BUILD");
     const bool managed_workspace = workspace_build && *workspace_build;
     if (elided_source_recipe && !managed_workspace)
@@ -1031,7 +1064,7 @@ class NinjaGenerator {
         std::string identity = "OMKTR_RECIPE1\n" + node->output.str();
         std::string command_identity = cmd_buf;
         if (!commands.front().runtime_sidecar.empty()) {
-          command_identity = GetExecutablePath();
+          command_identity = kati_binary_;
           AppendGraphString(commands.front().runtime_identity,
                             &command_identity);
           if (managed_workspace)
@@ -1066,7 +1099,7 @@ class NinjaGenerator {
       // BusyBox test -nt compares whole seconds. Use the native stat helper
       // once for the complete input set, preserving Ninja's subsecond changes.
       auto inputs_current = [&](Symbol output) {
-        std::string condition = ShellQuote(GetExecutablePath()) +
+        std::string condition = quoted_binary_ +
                                 " --internal-low-resolution-up-to-date " +
                                 ShellQuote(output.str()) + " " +
                                 std::to_string(node->deps.size()) + " 0";
@@ -1076,8 +1109,7 @@ class NinjaGenerator {
         // Ninja restats its deliberately absent intermediate inputs. Reuse
         // the same complete freshness proof rather than recreating them.
         if (!consumer_proof.empty())
-          condition = "{ " + condition + " || " +
-                      ShellQuote(GetExecutablePath()) +
+          condition = "{ " + condition + " || " + quoted_binary_ +
                       " --internal-intermediate-consumer-current " +
                       ShellQuote(output.str()) + " " +
                       ShellQuote(consumer_proof) + "; }";
@@ -1142,7 +1174,7 @@ class NinjaGenerator {
           node->deps.begin(), node->deps.end(),
           [](const NamedDepNode& dep) { return dep.second->is_phony; });
       if (!intermediate_proof.empty()) {
-        cmd_buf = "if " + recipe_unchanged + ShellQuote(GetExecutablePath()) +
+        cmd_buf = "if " + recipe_unchanged + quoted_binary_ +
                   " --internal-intermediate-current " +
                   ShellQuote(node->output.str()) + " " +
                   ShellQuote(intermediate_proof) + "; then exit 0; fi; " +
@@ -1169,20 +1201,13 @@ class NinjaGenerator {
       // that snapshot inside every recipe so exported make variables have the
       // same visibility in both entry paths.  The guard keeps graphs usable
       // with callers that intentionally provide their own environment.
-      // GetFilename() may return an absolute path when --ninja_dir is
-      // absolute.  Prefixing every result with "./" changes that path into
-      // a relative one and makes the generated environment silently vanish.
-      // Keep relative paths relative to the Ninja working directory, while
-      // preserving absolute paths verbatim.
-      const std::string quoted_env_script = ShellQuote(env_snapshot_);
-      cmd_buf = "if [ -r " + quoted_env_script + " ]; then . " +
-                quoted_env_script + "; fi; " + cmd_buf;
+      cmd_buf = environment_prefix_ + cmd_buf;
       // GNU make runs each recipe in the directory in which its makefile was
       // read. Ninja runs all recipes from the graph's invocation directory,
       // so recursive graphs otherwise resolve relative paths incorrectly.
       // Preserve make's directory semantics for every emitted recipe,
       // including the graph's environment snapshot.
-      cmd_buf = "cd " + ShellQuote(working_dir_) + " && " + cmd_buf;
+      cmd_buf = working_prefix_ + cmd_buf;
 
       // Ninja compares nanosecond timestamps, while GNU make treats
       // prerequisites named by .LOW_RESOLUTION_TIME as second-resolution
@@ -1192,11 +1217,11 @@ class NinjaGenerator {
       // a low-resolution prerequisite within the same second.
       const std::string output = ShellQuote(node->output.str());
       if (make_freshness_guard && !node->low_resolution_inputs.empty()) {
-        std::string guard =
-            "if " + recipe_unchanged + ShellQuote(GetExecutablePath()) +
-            " --internal-low-resolution-up-to-date " + output + " " +
-            std::to_string(node->actual_inputs.size()) + " " +
-            std::to_string(node->low_resolution_inputs.size());
+        std::string guard = "if " + recipe_unchanged + quoted_binary_ +
+                            " --internal-low-resolution-up-to-date " + output +
+                            " " + std::to_string(node->actual_inputs.size()) +
+                            " " +
+                            std::to_string(node->low_resolution_inputs.size());
         for (Symbol input : node->actual_inputs)
           guard += " " + ShellQuote(input.str());
         for (Symbol input : node->low_resolution_inputs)
@@ -1244,7 +1269,7 @@ class NinjaGenerator {
         script_path = PublishGraphObject(
             GetFilename(".kati_script-") + GraphDigest(script), script);
         MakefileCacheManager::Get().AddGeneratedGraphDep(script_path);
-        cmd_buf = EscapeNinja(ShellQuote(GetExecutablePath())) +
+        cmd_buf = ninja_binary_ +
                   (token_recipe ? " --internal-run-recipe-file "
                                 : " --internal-run-recursive-recipe-file ") +
                   ShellQuote(command_shell) + " " +
@@ -1254,18 +1279,15 @@ class NinjaGenerator {
       }
       std::string helper_prefix;
       if (helper_recipe && !recipe_in_rsp && script_path.empty()) {
-        helper_prefix = "cd " + ShellQuote(working_dir_) + " && " +
-                        EscapeNinja(ShellQuote(GetExecutablePath())) +
-                        recipe_helper + ShellQuote(command_shell) + " " +
+        helper_prefix = working_prefix_ + ninja_binary_ + recipe_helper +
+                        ShellQuote(command_shell) + " " +
                         ShellQuote(command_shellflag) + " ";
         cmd_buf =
             helper_prefix + ShellQuote(cmd_buf) + EscapeNinja(cleanup_arg);
       }
-      struct stat compact_output;
-      const bool special_output =
-          node->precious || node->output == Intern(".") ||
-          (stat(node->output.c_str(), &compact_output) == 0 &&
-           S_ISDIR(compact_output.st_mode));
+      const bool special_output = node->precious ||
+                                  node->output == Intern(".") ||
+                                  output_metadata.IsDirectory();
       const bool compact = !special_output &&
                            g_flags.GraphOptimizationEnabled("compact") &&
                            !recipe_in_rsp && cmd_buf.size() <= 100 * 1000;
@@ -1342,8 +1364,8 @@ class NinjaGenerator {
             rspfile = "./" + rspfile;
           const std::string source_rspfile = ". " + ShellQuote(rspfile);
           if (helper_recipe && recipe_in_rsp) {
-            out << " command = " << EscapeNinja(ShellQuote(GetExecutablePath()))
-                << recipe_helper << ShellQuote(command_shell) << ' '
+            out << " command = " << ninja_binary_ << recipe_helper
+                << ShellQuote(command_shell) << ' '
                 << ShellQuote(command_shellflag) << ' '
                 << ShellQuote(source_rspfile) << EscapeNinja(cleanup_arg)
                 << "\n";
@@ -1376,7 +1398,8 @@ class NinjaGenerator {
     }
 
     EmitBuild(nn, rule_name, use_local_pool || node->is_notparallel, out,
-              edge_command, edge_depfile, script_path, proof_dependency);
+              edge_command, edge_depfile, script_path, proof_dependency,
+              output_metadata);
   }
 
   std::string EscapeNinja(std::string_view s) const {
@@ -1611,13 +1634,11 @@ class NinjaGenerator {
                  const std::string& edge_command,
                  const std::string& edge_depfile,
                  const std::string& script_path,
-                 const std::string& intermediate_proof) {
+                 const std::string& intermediate_proof,
+                 OutputMetadata& output_metadata) {
     const DepNode* node = nn.node;
-    struct stat output_stat;
     const bool directory_output =
-        node->output == Intern(".") ||
-        (stat(node->output.str().c_str(), &output_stat) == 0 &&
-         S_ISDIR(output_stat.st_mode));
+        node->output == Intern(".") || output_metadata.IsDirectory();
     std::string directory_marker;
     if (directory_output) {
       directory_marker = "__kati_directory_";
@@ -2073,6 +2094,11 @@ class NinjaGenerator {
     fprintf(fp, "# Generated by kati %s\n", kGitVersion);
     fprintf(fp, "\n");
 
+    NinjaLaunchPlan launch;
+    launch.exports.emplace_back("MAKELEVEL",
+                                std::to_string(g_flags.make_level + 1));
+    launch.exports.emplace_back("KATI_GRAPH_SETTINGS",
+                                g_flags.GraphOptimizationTransport());
     std::unordered_set<std::string> emitted_exports;
     std::map<std::string, std::string> workspace_exports;
     emitted_exports.insert("MAKELEVEL");
@@ -2098,6 +2124,7 @@ class NinjaGenerator {
 
       if (is_exported) {
         std::string val = ev_->EvalVar(symbol);
+        launch.exports.emplace_back(symbol.str(), val);
         const std::string quoted_symbol = ShellQuote(symbol.str());
         const std::string quoted_val = ShellQuote(val);
         fprintf(fp, "export %s=%s\n", quoted_symbol.c_str(),
@@ -2107,6 +2134,7 @@ class NinjaGenerator {
           workspace_exports[symbol.str()] =
               "export " + quoted_symbol + "=" + quoted_val + "; ";
       } else {
+        launch.unsets.push_back(symbol.str());
         const std::string quoted_symbol = ShellQuote(symbol.str());
         fprintf(fp, "unset %s\n", quoted_symbol.c_str());
         if (symbol.str() != "MAKE" && symbol.str() != "MAKEFLAGS" &&
@@ -2141,6 +2169,7 @@ class NinjaGenerator {
         continue;
 
       const std::string val = ev_->EvalVar(symbol);
+      launch.exports.emplace_back(symbol.str(), val);
       const std::string quoted_symbol = ShellQuote(symbol.str());
       const std::string quoted_val = ShellQuote(val);
       fprintf(fp, "export %s=%s\n", quoted_symbol.c_str(), quoted_val.c_str());
@@ -2159,6 +2188,16 @@ class NinjaGenerator {
     const std::string snapshot = PublishGraphObject(
         object_directory + "/env-" + GraphDigest(env_bytes), env_bytes, true);
     AbsPath(snapshot, &env_snapshot_);
+    // Every recipe changes to working_dir_ before loading this object, even
+    // when a saved/raw graph is invoked from elsewhere. Keep absolute paths
+    // for objects outside that directory; local paths need no repeated prefix.
+    const std::string prefix = working_dir_ + "/";
+    const auto environment_path = HasPrefix(env_snapshot_, prefix)
+                                      ? env_snapshot_.substr(prefix.size())
+                                      : env_snapshot_;
+    const auto quoted_environment = ShellQuote(environment_path);
+    environment_prefix_ = "if [ -r " + quoted_environment + " ]; then . " +
+                          quoted_environment + "; fi; ";
     MakefileCacheManager::Get().AddGeneratedGraphDep(env_snapshot_);
 
     const std::string launcher_filename = GetNinjaShellScriptFilename();
@@ -2167,161 +2206,38 @@ class NinjaGenerator {
     if (fp == NULL)
       PERROR("fopen(ninja.sh) failed");
 
-    fprintf(fp, "#!/bin/sh\n");
     const std::string generation_directory =
         std::string(Dirname(launcher_filename));
-    fprintf(fp,
-            "if [ \"${OMKTR_PINNED_GENERATION:-}\" != %s ]; then\n"
-            "  exec %s --internal-pin-generation %s %s \"$@\"\nfi\n"
-            "unset OMKTR_PINNED_GENERATION\n",
-            ShellQuote(generation_directory).c_str(),
-            ShellQuote(GetExecutablePath()).c_str(),
-            ShellQuote(generation_directory).c_str(),
-            ShellQuote(std::string(Basename(launcher_filename))).c_str());
-
-    fprintf(fp, "# Generated by kati %s\n", kGitVersion);
-    fprintf(fp, "\n");
-
-    const std::string env_reference =
-        !env_filename.empty() && env_filename.front() == '/'
-            ? env_filename
-            : "./" + env_filename;
-    fprintf(fp, ". %s\n", ShellQuote(env_reference).c_str());
-
-    // Build-time parallelism belongs to Ninja, not graph generation.
-    // Propagate the runtime -j value to recursive Kati commands without
-    // requiring callers to know about Kati's internal scheduling metadata.
-    // Match Ninja's normal host-parallel default for recursive Kati work.
-    // An explicit runtime -j option still overrides this value below.
-    fprintf(fp, "kati_jobs=\"${KATI_JOBS:-}\"\n");
-    fprintf(fp, "kati_jobs_explicit=0\n");
-    fprintf(fp, "if [ -n \"$kati_jobs\" ]; then kati_jobs_explicit=1; fi\n");
-    fprintf(fp, "default_kati_jobs=%d\n",
-            g_flags.num_cpus > 0 ? g_flags.num_cpus : 1);
-    fprintf(fp, "ninja_jobs=\"\"\n");
-    fprintf(fp, "prev=\"\"\n");
-    fprintf(fp, "for arg in \"$@\"; do\n");
-    fprintf(fp, "  case \"$arg\" in\n");
-    fprintf(fp, "    --) break ;;\n");
-    fprintf(fp, "    -j[0-9]*) ninja_jobs=\"${arg#-j}\"; prev=\"\" ;;\n");
-    fprintf(fp, "    -j=*) ninja_jobs=\"${arg#-j=}\"; prev=\"\" ;;\n");
-    fprintf(fp, "    -j) prev=\"-j\" ;;\n");
-    fprintf(fp,
-            "    [0-9]*) if [ \"$prev\" = \"-j\" ]; then ninja_jobs=\"$arg\"; "
-            "fi; prev=\"\" ;;\n");
-    fprintf(fp, "    *) prev=\"\" ;;\n");
-    fprintf(fp, "  esac\n");
-    fprintf(fp, "done\n");
-    fprintf(fp, "if [ \"$kati_jobs_explicit\" -eq 0 ]; then\n");
-    fprintf(fp, "  kati_jobs=\"${ninja_jobs:-$default_kati_jobs}\"\n");
-    fprintf(fp, "fi\n");
-    fprintf(
-        fp,
-        "if [ -n \"$kati_jobs\" ]; then export KATI_JOBS=\"$kati_jobs\"; fi\n");
-
-    // Recursive Kati processes are invisible to Ninja's scheduler. Give them
-    // one shared byte-token FIFO so nested Kati executors consume the same
-    // runtime budget instead of multiplying it at every recursion level.
-    fprintf(fp, "kati_fifo=\"\"\n");
-    fprintf(fp, "if [ -z \"${KATI_JOBSERVER_FIFO:-}\" ]; then\n");
-    fprintf(fp,
-            "  case \"$kati_jobs\" in ''|0|*[!0-9]*) kati_jobs=1; export "
-            "KATI_JOBS=1 ;; esac\n");
-    fprintf(fp, "  kati_fifo_base=\"${TMPDIR:-/tmp}/kati-jobserver-$$\"\n");
-    fprintf(fp, "  kati_fifo=\"$kati_fifo_base\"\n");
-    fprintf(fp, "  kati_fifo_i=0\n");
-    fprintf(fp,
-            "  while ! kati_fifo_error=$(umask 077 && mkfifo \"$kati_fifo\" "
-            "2>&1); do\n");
-    fprintf(fp,
-            "    if { [ ! -e \"$kati_fifo\" ] && [ ! -L \"$kati_fifo\" ]; } || "
-            "[ \"$kati_fifo_i\" -ge 1023 ]; then\n"
-            "      printf 'omktr: cannot create jobserver FIFO %%s: %%s\\n' "
-            "\"$kati_fifo\" \"$kati_fifo_error\" >&2\n"
-            "      exit 1\n"
-            "    fi\n");
-    fprintf(fp, "    kati_fifo_i=$((kati_fifo_i + 1))\n");
-    fprintf(fp, "    kati_fifo=\"$kati_fifo_base-$kati_fifo_i\"\n");
-    fprintf(fp, "  done\n");
-    fprintf(fp, "  exec 9<>\"$kati_fifo\"\n");
-    fprintf(fp, "  kati_i=0\n");
-    fprintf(fp,
-            "  while [ \"$kati_i\" -lt \"$kati_jobs\" ]; do printf x >&9; "
-            "kati_i=$((kati_i + 1)); done\n");
-    fprintf(fp, "  export KATI_JOBSERVER_FIFO=\"$kati_fifo\"\n");
-    fprintf(fp,
-            "  trap 'if [ -n \"${kati_fifo:-}\" ]; then rm -f \"$kati_fifo\"; "
-            "fi' EXIT HUP INT TERM\n");
-    fprintf(fp, "fi\n");
-
-    // Keep Ninja as a child so the wrapper can cleanly terminate it before
-    // removing the shared FIFO.  An exec-only wrapper cannot reap or signal
-    // Ninja's recursive command tree when the wrapper receives an interrupt;
-    // that can leave recursive Kati processes alive and corrupt the next
-    // incremental attempt by racing the same output directory.
-    fprintf(fp, "kati_ninja_pid=\"\"\n");
-    fprintf(fp, "kati_cleanup() {\n");
-    fprintf(fp, "  trap '' HUP INT TERM\n");
-    fprintf(fp,
-            "  if [ -n \"$kati_ninja_pid\" ]; then kill -TERM "
-            "\"$kati_ninja_pid\" 2>/dev/null || :; fi\n");
-    fprintf(fp,
-            "  if [ -n \"$kati_ninja_pid\" ]; then wait "
-            "\"$kati_ninja_pid\" 2>/dev/null || :; fi\n");
-    fprintf(fp,
-            "  if [ -n \"${kati_fifo:-}\" ]; then rm -f \"$kati_fifo\"; fi\n");
-    fprintf(fp, "}\n");
-    fprintf(fp, "trap 'kati_cleanup; exit 129' HUP INT TERM\n");
-    // A reservation belongs to one parent recipe. Separate Ninja helper
-    // processes cannot share the executor's atomic reservation owner, so
-    // serialize this child Ninja while borrowing that single slot. Other
-    // recursive executors may still use free FIFO tokens normally.
-    std::string default_goals;
-    auto append_goal = [&](Symbol goal) {
-      default_goals += std::to_string(goal.str().size()) + ":" + goal.str();
-    };
-    if (g_flags.targets.empty() || g_flags.gen_all_targets) {
-      if (default_target_)
-        append_goal(default_target_->output);
-    } else {
-      for (Symbol goal : g_flags.targets)
-        append_goal(goal);
-    }
-    if (!intermediate_proof_nodes_.empty())
-      fprintf(fp, "export KATI_NINJA_DEFAULT_GOALS=%s\n",
-              ShellQuote(default_goals).c_str());
-    else
-      fprintf(fp, "unset KATI_NINJA_DEFAULT_GOALS\n");
-    // A caller may replace the public graph with a wrapper that declares
-    // pools and includes the generated graph under another name. Preserve
-    // that interface without following a concurrently switched public alias.
-    const std::string public_graph =
+    launch.load = g_flags.load_limit < 0 ? std::string()
+                                         : g_flags.LoadLimitOption().substr(2);
+    launch.ninja = OMKTR_NINJA_EXECUTABLE;
+    launch.graph = std::string(Basename(GetNinjaFilename()));
+    launch.public_graph =
         std::string(g_flags.ninja_dir ? g_flags.ninja_dir : ".") + "/build" +
         (g_flags.ninja_suffix ? g_flags.ninja_suffix : "") + ".ninja";
-    fprintf(
-        fp,
-        "kati_graph=%s\nif [ ! -L %s ] && [ -f %s ]; then kati_graph=%s; fi\n",
-        ShellQuote(GetNinjaFilename()).c_str(),
-        ShellQuote(public_graph).c_str(), ShellQuote(public_graph).c_str(),
-        ShellQuote(public_graph).c_str());
-    fprintf(
-        fp, "%s --internal-run-ninja %s %s -f \"$kati_graph\" ",
-        ShellQuote(GetExecutablePath()).c_str(),
-        ShellQuote(g_flags.load_limit < 0 ? std::string()
-                                          : g_flags.LoadLimitOption().substr(2))
-            .c_str(),
-        ShellQuote(OMKTR_NINJA_EXECUTABLE).c_str());
-    if (g_flags.remote_num_jobs > 0) {
-      fprintf(fp, "-j%d ", g_flags.remote_num_jobs);
+    launch.jobs = std::to_string(g_flags.num_cpus > 0 ? g_flags.num_cpus : 1);
+    if (g_flags.remote_num_jobs > 0)
+      launch.remote_jobs = "-j" + std::to_string(g_flags.remote_num_jobs);
+    if (!intermediate_proof_nodes_.empty()) {
+      auto append_goal = [&](Symbol goal) {
+        launch.goals += std::to_string(goal.str().size()) + ":" + goal.str();
+      };
+      if (g_flags.targets.empty() || g_flags.gen_all_targets) {
+        if (default_target_)
+          append_goal(default_target_->output);
+      } else {
+        for (Symbol goal : g_flags.targets)
+          append_goal(goal);
+      }
     }
-    fprintf(fp, "\"$@\" &\n");
-    fprintf(fp, "kati_ninja_pid=$!\n");
-    fprintf(fp, "wait \"$kati_ninja_pid\"\n");
-    fprintf(fp, "kati_status=$?\n");
-    fprintf(fp, "kati_ninja_pid=\"\"\n");
-    fprintf(fp, "trap - HUP INT TERM\n");
-    fprintf(fp, "if [ -n \"$kati_fifo\" ]; then rm -f \"$kati_fifo\"; fi\n");
-    fprintf(fp, "exit $kati_status\n");
+    if (!WriteGraphCache(launcher_filename + ".launch", launch.Encode()))
+      ERROR("cannot write generated Ninja launch plan");
+    fprintf(fp,
+            "#!/bin/sh\n# Generated by kati %s\n"
+            "exec %s --internal-launch-generation %s %s \"$@\"\n",
+            kGitVersion, quoted_binary_.c_str(),
+            ShellQuote(generation_directory).c_str(),
+            ShellQuote(std::string(Basename(launcher_filename))).c_str());
 
     if (fclose(fp) != 0)
       PERROR("fclose(ninja.sh) failed");
@@ -2502,6 +2418,8 @@ class NinjaGenerator {
   std::map<std::string, std::string> used_envs_;
   const std::string kati_binary_;
   std::string working_dir_;
+  std::string working_prefix_, environment_prefix_, quoted_binary_,
+      ninja_binary_;
   std::string path_prefix_;
   std::string path_variable_;
   mutable std::unordered_map<Symbol, std::string> escaped_targets_;

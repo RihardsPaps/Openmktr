@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Give the invocation's undefined binding a fixed hot service slot.
 // Own invocation state and publish coherent generations with typed freshness.
 // Retain replaced recipe bindings through evaluator-owned storage.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
@@ -156,11 +157,11 @@ const std::string& Var::DeprecatedMessage() const {
   return SessionService<VariableDiagnostics>().messages[this];
 }
 
+struct UndefinedVariableState {
+  UndefinedVar value;
+};
 Var* Var::Undefined() {
-  struct State {
-    UndefinedVar value;
-  };
-  return &SessionService<State>().value;
+  return &SessionService<UndefinedVariableState>().value;
 }
 
 SimpleVar::SimpleVar(VarOrigin origin, Frame* definition, Loc loc)

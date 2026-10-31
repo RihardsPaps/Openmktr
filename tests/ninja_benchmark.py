@@ -23,6 +23,17 @@ spec.loader.exec_module(benchmark)
 
 
 class Evidence(unittest.TestCase):
+    def test_no_regression_gate_requires_every_requested_cell_and_sample(self):
+        complete = [dict(pairs=7, parity_passed=True) for _ in range(5)]
+        self.assertTrue(benchmark.no_regression_passed(complete, complete, 5, 7))
+        self.assertFalse(benchmark.no_regression_passed(complete[:-1], complete, 5, 7))
+        self.assertFalse(benchmark.no_regression_passed(complete, [], 5, 7))
+        self.assertFalse(benchmark.no_regression_passed([], [], 0, 7))
+        self.assertFalse(benchmark.no_regression_passed(complete, complete, 5, 9))
+        regressing = [*complete[:-1], dict(pairs=7, parity_passed=False)]
+        self.assertFalse(benchmark.no_regression_passed(regressing, complete, 5, 7))
+        self.assertFalse(benchmark.no_regression_passed(complete, regressing, 5, 7))
+
     def test_direct_and_make_lanes_include_no_generation(self):
         for kind, entrypoint in (("make", "build"), ("make", "legacy"),
                                  ("omktr", "direct")):

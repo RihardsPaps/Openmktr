@@ -10,6 +10,9 @@
 // Runtime caches remain in the stable output directory. Only the coherent
 // graph/environment/launcher/stamp bundle goes through the generation pointer.
 std::string ResolveGenerationArtifact(const std::string& path);
+// Launchers consume the coherent bundle even when a caller-owned cache alias
+// prevents reuse by the regeneration checker.
+std::string CurrentGenerationPointer();
 std::string GenerationPath(const std::string& directory,
                            const std::string& name);
 class GenerationReader {

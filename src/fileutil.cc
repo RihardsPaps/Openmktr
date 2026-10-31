@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Reuse the running executable identity within each invocation.
 // Own invocation state and publish coherent generations with typed freshness.
 // Keep filesystem identities, observation epochs, globbing and recipe state
 // separate from process supervision. Reject nonregular recipe-state files
@@ -25,6 +26,7 @@
 
 #include "fileutil.h"
 #include "observation.h"
+#include "recipe_state.h"
 #include "session.h"
 
 #include <errno.h>
@@ -281,6 +283,8 @@ std::string GetOutputStamp(std::string_view path) {
 
 bool ReadNinjaRecipeState(const std::string& path, std::string* state) {
   state->clear();
+  if (IsPackedRecipeState(path))
+    return ReadPackedRecipeState(path, state);
   const int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
   if (fd < 0)
     return false;
@@ -310,6 +314,8 @@ bool ReadNinjaRecipeState(const std::string& path, std::string* state) {
 }
 
 std::string NinjaRecipeStateOwner(const std::string& path) {
+  if (IsPackedRecipeState(path))
+    return path.substr(0, path.rfind(".packed-"));
   const size_t marker = path.rfind(".version-");
   return marker == std::string::npos ||
                  path.find_first_not_of("0123456789.", marker + 9) !=
@@ -317,15 +323,6 @@ std::string NinjaRecipeStateOwner(const std::string& path) {
              ? path
              : path.substr(0, marker);
 }
-std::string PublishNinjaRecipeState(const std::string& owner,
-                                    const std::string& state) {
-  // Existing legacy expected files stay intact for old graphs. A new graph
-  // only needs its immutable version; success/read history uses the owner as
-  // a name prefix, so creating a second copy of the expected bytes is wasteful.
-  return PublishGraphObject(owner + ".version-" + GraphDigest(state), state,
-                            true);
-}
-
 void WriteNinjaRecipeState(const std::string& path, const std::string& state) {
   std::string previous;
   if (ReadNinjaRecipeState(path, &previous) && previous == state)
@@ -384,7 +381,8 @@ void DeleteChangedOutput(std::string_view path, const std::string& previous) {
     unlink(std::string(path).c_str());
 }
 
-std::string GetExecutablePath() {
+namespace {
+std::string ReadExecutablePath() {
 #if defined(__linux__)
   char mypath[PATH_MAX + 1];
   ssize_t l = readlink("/proc/self/exe", mypath, PATH_MAX);
@@ -404,6 +402,15 @@ std::string GetExecutablePath() {
 #else
 #error "Unsupported OS"
 #endif
+}
+struct ExecutablePath {
+  const std::string value = ReadExecutablePath();
+};
+}  // namespace
+
+std::string GetExecutablePath() {
+  return BuildSession::Active() ? SessionService<ExecutablePath>().value
+                                : ReadExecutablePath();
 }
 
 namespace {

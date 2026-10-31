@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Launch validation workers only when independent observations need checking.
 // Own invocation state and publish coherent generations with typed freshness.
 // Separate runtime services and preserve scoped resource ownership.
 // Track and validate incremental evaluation, include proofs and imported Ninja
@@ -509,7 +510,7 @@ class StampChecker {
   }
 
   bool CheckStep2() {
-    auto glob_future = std::async([this, session = BuildSession::Active()]() {
+    auto check_globs = [this, session = BuildSession::Active()]() {
       SessionBinding binding(session);
       std::string err;
       // TODO: Make glob cache thread safe and create a task for each glob.
@@ -523,9 +524,9 @@ class StampChecker {
           break;
         }
       }
-    });
+    };
 
-    auto shell_future = std::async([this, session = BuildSession::Active()]() {
+    auto check_shells = [this, session = BuildSession::Active()]() {
       SessionBinding binding(session);
       for (ShellResult* sr : commands_) {
         std::string err;
@@ -537,10 +538,17 @@ class StampChecker {
           }
         }
       }
-    });
+    };
 
-    glob_future.get();
-    shell_future.get();
+    if (!globs_.empty() && !commands_.empty()) {
+      auto glob_future = std::async(std::launch::async, check_globs);
+      check_shells();
+      glob_future.get();
+    } else if (!globs_.empty()) {
+      check_globs();
+    } else if (!commands_.empty()) {
+      check_shells();
+    }
     if (needs_regen_) {
       fprintf(stderr, "%s", msg_.c_str());
     }

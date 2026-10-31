@@ -1238,21 +1238,23 @@ print(sys.argv[1])
     def test_ninja_fifo_creation_reports_errors_and_preserves_collisions(self):
         self.makefile(".PHONY: all\nall:\n\t@:\n")
         self.run_tool("--ninja", "-j1")
-        tools = self.root / "tools"
-        tools.mkdir()
         temporary = self.root / "temporary"
         temporary.mkdir()
-        shim = tools / "mkfifo"
-        shim.write_text("#!/bin/sh\nprintf 'deliberate FIFO setup failure\\n' >&2\nexit 1\n")
-        shim.chmod(0o755)
-        env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ["PATH"],
-                   TMPDIR=str(temporary), KATI_JOBS="1")
+        blocked = self.root / "not-a-directory"
+        blocked.write_text("keep")
+        env = dict(os.environ, TMPDIR=str(blocked), KATI_JOBS="1")
         env.pop("KATI_JOBSERVER_FIFO", None)
 
-        def launch():
+        def launch(collide=False):
+            def occupy_name():
+                if collide:
+                    path = temporary / f"kati-jobserver-{os.getpid()}"
+                    path.symlink_to("missing-collision-target")
+                    (self.root / "fifo-collision").write_text(str(path))
             child = subprocess.Popen(["sh", "./ninja.sh", "-j1"], cwd=self.root,
                                      env=env, stdout=subprocess.PIPE,
-                                     stderr=subprocess.STDOUT, text=True, start_new_session=True)
+                                     stderr=subprocess.STDOUT, text=True, start_new_session=True,
+                                     preexec_fn=occupy_name)
             try:
                 output, _ = child.communicate(timeout=5)
             except subprocess.TimeoutExpired:
@@ -1264,18 +1266,10 @@ print(sys.argv[1])
         status, output = launch()
         self.assertNotEqual(status, 0)
         self.assertIn("cannot create jobserver FIFO", output)
-        self.assertIn("deliberate FIFO setup failure", output)
+        self.assertEqual(blocked.read_text(), "keep")
         self.assertEqual(list(temporary.iterdir()), [])
-        shim.write_text(f"#!{sys.executable}\n"
-                        "from pathlib import Path\nimport os,sys\n"
-                        "marker=Path('fifo-collision')\n"
-                        "path=Path(sys.argv[-1])\n"
-                        "if not marker.exists():\n"
-                        " path.symlink_to('missing-collision-target')\n"
-                        " marker.write_text(str(path))\n"
-                        " sys.exit(1)\n"
-                        "os.mkfifo(path,0o600)\n")
-        status, output = launch()
+        env["TMPDIR"] = str(temporary)
+        status, output = launch(collide=True)
         self.assertEqual(status, 0, output)
         collision = Path((self.root / "fifo-collision").read_text())
         self.assertTrue(collision.is_symlink())

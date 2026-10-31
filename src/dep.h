@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Store only the logical execution flag needed by recipe expansion.
 // Return dependency storage to the graph's caller for bounded lifetimes.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
@@ -27,7 +28,6 @@
 
 #include <atomic>
 #include <memory>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -79,6 +79,7 @@ struct DepNode {
   bool ignore_errors;
   bool silent;
   bool export_all_variables;
+  mutable bool execution_updated = false;
   std::vector<Symbol> implicit_outputs;
   // Prerequisites contributed by the selected implicit rule. These are
   // distinct from explicit prerequisites merged onto the target and are
@@ -94,9 +95,12 @@ struct DepNode {
   std::vector<Symbol> low_resolution_inputs;
   // Shared automatic-variable contract: completed direct prerequisites retain
   // logical updates; serialized Ninja recipes retain phony prerequisite names.
-  mutable std::optional<FileStamp> execution_stamp;
-  std::vector<Symbol> phony_inputs;
-  std::vector<Symbol> logical_inputs;
+  // Only decoded runtime recipes need serialized logical input lists.
+  struct RuntimeInputs {
+    std::vector<Symbol> phony;
+    std::vector<Symbol> logical;
+  };
+  std::unique_ptr<RuntimeInputs> runtime_inputs;
   std::vector<std::vector<Symbol>> wait_groups;
   std::vector<Symbol> actual_validations;
   Vars* rule_vars;

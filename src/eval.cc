@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Skip symlink interpretation when no VPATH search is configured.
 // Own invocation state and publish coherent generations with typed freshness.
 // Observe runtime recipe variable lookups without evaluating extra expressions.
 // Preserve recipe snapshots and expose recipe-time target assignments.
@@ -1098,6 +1099,8 @@ void Evaluator::RefreshVpath() {
 
 std::string Evaluator::ResolveVpath(Symbol target) const {
   const bool local_exists = Exists(target.str());
+  if (vpaths_.empty())
+    return local_exists ? target.str() : std::string();
   char link[PATH_MAX];
   const ssize_t link_size = readlink(target.c_str(), link, sizeof(link));
   std::string link_path;

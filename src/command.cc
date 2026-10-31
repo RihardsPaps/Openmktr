@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Read logical updates directly from the dependency execution flag.
 // Own invocation state and publish coherent generations with typed freshness.
 // Separate runtime services and preserve scoped resource ownership.
 // Echo ordinary Make recipes by default; retain opt-in compact progress output.
@@ -966,8 +967,9 @@ int RunRuntimeRecipe(const char* path) {
   const std::string structural = take(&data);
   const std::string generation = take(&data);
   const std::string identity = take(&data);
-  for (auto* inputs : {&node.low_resolution_inputs, &node.phony_inputs,
-                       &node.logical_inputs}) {
+  node.runtime_inputs = std::make_unique<DepNode::RuntimeInputs>();
+  for (auto* inputs : {&node.low_resolution_inputs, &node.runtime_inputs->phony,
+                       &node.runtime_inputs->logical}) {
     const std::string storage = take(&data);
     std::string_view names(storage);
     while (!names.empty())
@@ -1622,23 +1624,25 @@ void AutoQuestionVar::Eval(Evaluator* ev, std::string* s) const {
           // Recipes may change an already visited prerequisite as a side
           // effect. Reobserve physical files; only a logical update survives
           // independently of the current filesystem timestamp.
-          if (dependency.second->execution_stamp == FileStamp::Updated())
+          if (dependency.second->execution_updated)
             input_age = FileStamp::Updated();
           if (dependency.second->is_phony)
             input_age = FileStamp::Updated();
           break;
         }
       }
-      if (std::find(n->phony_inputs.begin(), n->phony_inputs.end(), ai) !=
-              n->phony_inputs.end() ||
+      if ((n->runtime_inputs && std::find(n->runtime_inputs->phony.begin(),
+                                          n->runtime_inputs->phony.end(), ai) !=
+                                    n->runtime_inputs->phony.end()) ||
           std::find(g_flags.what_if_files.begin(), g_flags.what_if_files.end(),
                     ai.str()) != g_flags.what_if_files.end())
         input_age = FileStamp::Updated();
       // A completed explicit rule can intentionally leave no physical file.
       // Missing intermediates are excluded: their pruning is edge-specific.
-      if (input_age == FileStamp::Missing() &&
-          std::find(n->logical_inputs.begin(), n->logical_inputs.end(), ai) !=
-              n->logical_inputs.end())
+      if (input_age == FileStamp::Missing() && n->runtime_inputs &&
+          std::find(n->runtime_inputs->logical.begin(),
+                    n->runtime_inputs->logical.end(),
+                    ai) != n->runtime_inputs->logical.end())
         input_age = FileStamp::Updated();
       if (std::find(n->low_resolution_inputs.begin(),
                     n->low_resolution_inputs.end(),
