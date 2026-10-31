@@ -176,8 +176,11 @@ class Architecture(unittest.TestCase):
 
     def test_native_launch_plan_damage_fails_closed_and_build_repairs_it(self):
         self.write("all: output\noutput:\n\t@printf stable > $@\n")
+        public = self.root / "ninja.sh.launch"
+        public.write_text("caller-owned")
         for damage in (None, b"partial record"):
             self.run_tool("--ninja", "all")
+            self.assertEqual(public.read_text(), "caller-owned")
             plan = self.current() / "ninja.sh.launch"
             if damage is None:
                 plan.unlink()

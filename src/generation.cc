@@ -35,6 +35,11 @@ std::string OutputDirectory() {
 std::string Suffix() {
   return g_flags.ninja_suffix ? g_flags.ninja_suffix : "";
 }
+bool PublicArtifact(const std::string& name) {
+  // Launch plans are consumed only through a pinned bundle. Avoid introducing
+  // a new file in the recipe working directory (and its wildcard results).
+  return name != "ninja" + Suffix() + ".sh.launch";
+}
 std::string Root() {
   return OutputDirectory() + "/.omktr-generations/" + GraphDigest(Suffix());
 }
@@ -179,6 +184,8 @@ GenerationReader::GenerationReader(const std::string& explicit_directory) {
     const auto selected = std::string(Basename(directory_));
     const bool direct_pointer = PointsTo(current, selected);
     for (const auto& name : Artifacts()) {
+      if (!PublicArtifact(name))
+        continue;
       if (!fs::exists(directory_ + "/" + name))
         continue;
       const auto public_path = OutputDirectory() + "/" + name;
@@ -268,6 +275,8 @@ void GenerationTransaction::Commit() {
     const std::string legacy = root_ + "/legacy";
     fs::create_directories(legacy);
     for (const auto& name : artifacts) {
+      if (!PublicArtifact(name))
+        continue;
       const auto source = OutputDirectory() + "/" + name;
       std::error_code error;
       if (fs::is_regular_file(source, error)) {
@@ -282,6 +291,8 @@ void GenerationTransaction::Commit() {
     SyncDirectory(fs::path(root_).parent_path().string());
   }
   for (size_t i = 0; i < artifacts.size(); ++i) {
+    if (!PublicArtifact(artifacts[i]))
+      continue;
     const auto path = OutputDirectory() + "/" + artifacts[i];
     // Cache paths may be occupied by a user's directory. Keep its contents;
     // that invocation simply cannot reuse the public cache entry next time.

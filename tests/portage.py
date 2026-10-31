@@ -131,7 +131,8 @@ class PortageWrapper(unittest.TestCase):
                              PATH=str(alternative) + os.pathsep + self.env['PATH'])
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual((self.cwd / 'result').read_text(), 'done')
-        self.assertIn(expected.encode(), (self.cwd / '.openmktr/ninja.sh.launch').read_bytes())
+        bundle = (self.cwd / '.openmktr/build.ninja').resolve().parent
+        self.assertIn(expected.encode(), (bundle / 'ninja.sh.launch').read_bytes())
 
     def test_invalid_mode_missing_binary_and_failure(self):
         result = self.invoke(OMKTR_PORTAGE_MODE='unknown')
