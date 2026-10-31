@@ -962,7 +962,8 @@ else:
                 sidecars = list(root.glob(".kati_runtime-*"))
                 self.assertTrue(sidecars)
                 for sidecar in sidecars:
-                    sidecar.write_bytes(b"corrupt")
+                sidecar.chmod(0o600)  # Deliberately break an immutable object.
+                sidecar.write_bytes(b"corrupt")
                 (root / "result").unlink()
                 failed = subprocess.run(
                     ["sh", "./ninja.sh", "-j2"], cwd=root,
