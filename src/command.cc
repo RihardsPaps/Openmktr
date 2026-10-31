@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Preserve logical prerequisites in deferred double-colon freshness checks.
 // Read optional double-colon metadata through the shared dependency view.
 // Read logical updates directly from the dependency execution flag.
 // Own invocation state and publish coherent generations with typed freshness.
@@ -1578,34 +1579,34 @@ void AutoQuestionVar::Eval(Evaluator* ev, std::string* s) const {
     // instead.
     *s += "${KATI_NEW_INPUTS}";
     if (!ce_->found_new_inputs()) {
-      std::string def;
-
-      bool have_probe_inputs = false;
-      def = "KATI_NEW_INPUTS=$( ";
+      std::string def = "KATI_NEW_INPUTS=$( ";
       def += ShellQuoteCommand(GetExecutablePath());
-      def += " --internal-newer-inputs ";
+      def += " --internal-newer-inputs-v2 ";
       def += ShellQuoteCommand(n->lexical_output.str());
-      // Command expansion happens before BuildPlan has populated n->deps.
-      // Use the already materialized prerequisite list instead of the later
-      // dependency-node list; otherwise secondary-expanded rules can lose
-      // prerequisites when the deferred timestamp probe runs.
+      std::unordered_map<Symbol, char> kinds;
+      for (const auto& dependency : n->deps) {
+        if (dependency.second->is_phony)
+          kinds[dependency.first] = 'p';
+        else if (dependency.second->has_rule &&
+                 !dependency.second->intermediate)
+          kinds[dependency.first] = 'l';
+      }
+      const std::unordered_set<Symbol> low_resolution(
+          n->low_resolution_inputs.begin(), n->low_resolution_inputs.end());
+      // Retain lexical prerequisite order and deduplication. Each input
+      // carries its logical kind and timestamp resolution, so a phony or
+      // completed fileless rule is not lost to a filesystem-only probe.
       for (Symbol ai : n->actual_inputs) {
         if (seen.insert(ai.str()).second) {
           def += " ";
-          def += ShellQuoteCommand(ai.str());
-          have_probe_inputs = true;
-        }
-      }
-      if (have_probe_inputs) {
-        def += " --";
-        for (Symbol ai : n->low_resolution_inputs) {
+          auto kind = kinds.find(ai);
+          def += kind == kinds.end() ? 'f' : kind->second;
+          def += low_resolution.count(ai) ? '1' : '0';
           def += " ";
           def += ShellQuoteCommand(ai.str());
         }
-        def += " ) && export KATI_NEW_INPUTS";
-      } else {
-        def = "KATI_NEW_INPUTS=; export KATI_NEW_INPUTS";
       }
+      def += " ) && export KATI_NEW_INPUTS";
       ev->add_delayed_output_command(def);
       ce_->set_found_new_inputs(true);
     }

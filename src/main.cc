@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Retain logical prerequisite metadata in deferred newer-input probes.
 // Share generation pinning and collection-race recovery across launchers.
 // Read optional double-colon metadata through the shared dependency view.
 // Launch checked generation plans without repeated shell/helper startup.
@@ -274,15 +275,26 @@ bool IsNewer(const struct stat& input,
                       EdgeKind::Normal, low_resolution);
 }
 
-int HandleNewerInputs(int argc, char** argv) {
-  if (argc < 3)
+int HandleNewerInputs(int argc, char** argv, bool typed = false) {
+  if (argc < 3 || (typed && argc % 2 == 0))
     return 2;
 
-  struct stat output_stat;
-  const bool output_exists = StatPath(argv[2], &output_stat);
+  // Saved graphs still use the original filename/low-resolution-list format.
+  // New graphs use kind/resolution pairs: f(ile), l(ogical), or p(hony),
+  // followed by 0 (nanoseconds) or 1 (whole seconds), then the filename.
+  if (typed) {
+    for (int i = 3; i < argc; i += 2) {
+      std::string_view flags(argv[i]);
+      if (flags.size() != 2 ||
+          (flags[0] != 'f' && flags[0] != 'l' && flags[0] != 'p') ||
+          (flags[1] != '0' && flags[1] != '1'))
+        return 2;
+    }
+  }
+  const FileStamp output = FileStamp::Read(argv[2]);
   std::unordered_set<std::string> low_resolution_inputs;
   int separator = argc;
-  for (int i = 3; i < argc; ++i) {
+  for (int i = 3; !typed && i < argc; ++i) {
     if (strcmp(argv[i], "--") == 0) {
       separator = i;
       for (int j = i + 1; j < argc; ++j)
@@ -292,16 +304,19 @@ int HandleNewerInputs(int argc, char** argv) {
   }
 
   bool first = true;
-  for (int i = 3; i < separator; ++i) {
-    struct stat input_stat;
-    if (!StatPath(argv[i], &input_stat) ||
-        (output_exists && !IsNewer(input_stat, output_stat,
-                                   low_resolution_inputs.find(argv[i]) !=
-                                       low_resolution_inputs.end())))
+  for (int i = 3; i < separator; i += typed ? 2 : 1) {
+    const char* name = argv[i + (typed ? 1 : 0)];
+    FileStamp input = FileStamp::Read(name);
+    if (typed && (argv[i][0] == 'p' ||
+                  (argv[i][0] == 'l' && input == FileStamp::Missing())))
+      input = FileStamp::Updated();
+    const bool low_resolution =
+        typed ? argv[i][1] == '1' : low_resolution_inputs.count(name) != 0;
+    if (!InputIsNewer(input, output, EdgeKind::Normal, low_resolution))
       continue;
     if (!first && putchar(' ') == EOF)
       return 1;
-    if (fputs(argv[i], stdout) == EOF)
+    if (fputs(name, stdout) == EOF)
       return 1;
     first = false;
   }
@@ -2086,6 +2101,8 @@ static int Main(int argc, char* argv[]) {
       return 0;
     } else if (!strcmp(argv[1], "--internal-newer-inputs")) {
       return HandleNewerInputs(argc, argv);
+    } else if (!strcmp(argv[1], "--internal-newer-inputs-v2")) {
+      return HandleNewerInputs(argc, argv, true);
     } else if (!strcmp(argv[1], "--internal-output-stamp") && argc == 3) {
       puts(GetOutputStamp(argv[2]).c_str());
       return 0;

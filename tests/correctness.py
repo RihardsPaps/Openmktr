@@ -1786,6 +1786,62 @@ class BuildCorrectness(unittest.TestCase):
         self.direct("a")
         self.assertEqual((self.directory / "a").read_text(), "rule2")
 
+    def test_double_colon_newer_inputs_preserve_logical_prerequisites(self):
+        for mode in ("direct", "build", "legacy"):
+            for kind in ("phony", "phony-file", "logical"):
+                for jobs in (1, 4):
+                    with self.subTest(mode=mode, kind=kind, jobs=jobs):
+                        with tempfile.TemporaryDirectory(dir=self.directory) as path:
+                            directory = Path(path)
+                            (directory / "Makefile").write_text(
+                                (".PHONY: force\n" if kind.startswith("phony") else "") +
+                                "output:: force force | order\n"
+                                "\t@if test -n \"$?\"; then printf '%s' \"$?\" > $@; fi\n"
+                                "output::; @:\nforce:; @:\n"
+                                ".PHONY: order\norder:; @:\n")
+                            if kind == "phony-file":
+                                (directory / "force").write_text("")
+                                os.utime(directory / "force", (100, 100))
+                            def invoke(*args):
+                                result = subprocess.run(args, cwd=directory,
+                                                        capture_output=True, text=True,
+                                                        timeout=15)
+                                self.assertEqual(result.returncode, 0,
+                                                 result.stdout + result.stderr)
+                            if mode == "legacy":
+                                invoke(str(KATI), "--ninja", "output")
+                                command = ("sh", "./ninja.sh", f"-j{jobs}", "output")
+                            else:
+                                command = (str(KATI), *(("build",) if mode == "build" else ()),
+                                           f"-j{jobs}", "output")
+                            invoke(*command)
+                            self.assertEqual((directory / "output").read_text(), "force")
+                            (directory / "output").write_text("stale")
+                            invoke(*command)
+                            self.assertEqual((directory / "output").read_text(), "force")
+
+    def test_deferred_newer_input_metadata_and_saved_graph_format(self):
+        for name in ("output", "newer", "phony", "--"):
+            (self.directory / name).write_text("")
+        os.utime(self.directory / "output", ns=(100_500_000_000, 100_500_000_000))
+        os.utime(self.directory / "newer", ns=(100_750_000_000, 100_750_000_000))
+        os.utime(self.directory / "phony", ns=(100_000_000_000, 100_000_000_000))
+        _, output = self.direct("--internal-newer-inputs-v2", "output",
+                                "p0", "phony", "l0", "logical",
+                                "f0", "missing", "f0", "newer", "f0", "--")
+        self.assertEqual(output, "phony logical newer --")
+        _, output = self.direct("--internal-newer-inputs-v2", "output",
+                                "f1", "newer", "l0", "phony")
+        self.assertEqual(output, "")
+        for arguments in (("p0",), ("x0", "missing"), ("f2", "newer")):
+            status, _ = self.direct("--internal-newer-inputs-v2", "output",
+                                    *arguments, success=False)
+            self.assertEqual(status, 2)
+        _, output = self.direct("--internal-newer-inputs", "output", "newer", "missing")
+        self.assertEqual(output, "newer")
+        _, output = self.direct("--internal-newer-inputs", "output", "newer", "--", "newer")
+        self.assertEqual(output, "")
+
     def test_shell_function_stops_at_nul_without_truncating_recipe(self):
         (self.directory / "loader").write_bytes(b"/lib/loader.so\0")
         self.makefile("all:\n"
