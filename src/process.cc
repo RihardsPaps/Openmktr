@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Centralize spawn error checks and let each temporary recipe be removed once.
 // Own invocation state and publish coherent generations with typed freshness.
 // Extract process supervision from filesystem observation. Reap failed
 // launches and return job leases on infrastructure errors; preserve shell
@@ -290,44 +291,27 @@ int RunCommandImpl(const std::string& shell,
 #endif
 
   auto& action = resources.actions;
-  int err = posix_spawn_file_actions_init(&action);
-  if (err != 0) {
-    CheckProcessCall(err, "posix_spawn_file_actions_init");
-  }
-
+  CheckProcessCall(posix_spawn_file_actions_init(&action),
+                   "posix_spawn_file_actions_init");
   resources.actions_ready = true;
-  err = posix_spawn_file_actions_addclose(&action, pipefd[0]);
-  if (err != 0) {
-    CheckProcessCall(err, "posix_spawn_file_actions_addclose");
-  }
+  CheckProcessCall(posix_spawn_file_actions_addclose(&action, pipefd[0]),
+                   "posix_spawn_file_actions_addclose");
 
   if (redirect_stderr == RedirectStderr::STDOUT) {
-    err = posix_spawn_file_actions_adddup2(&action, pipefd[1], 2);
-    if (err != 0) {
-      CheckProcessCall(err, "posix_spawn_file_actions_adddup2");
-    }
+    CheckProcessCall(posix_spawn_file_actions_adddup2(&action, pipefd[1], 2),
+                     "posix_spawn_file_actions_adddup2");
   } else if (redirect_stderr == RedirectStderr::DEV_NULL) {
-    err =
-        posix_spawn_file_actions_addopen(&action, 2, "/dev/null", O_WRONLY, 0);
-    if (err != 0) {
-      CheckProcessCall(err, "posix_spawn_file_actions_addopen");
-    }
+    CheckProcessCall(
+        posix_spawn_file_actions_addopen(&action, 2, "/dev/null", O_WRONLY, 0),
+        "posix_spawn_file_actions_addopen");
   }
-  err = posix_spawn_file_actions_adddup2(&action, pipefd[1], 1);
-  if (err != 0) {
-    CheckProcessCall(err, "posix_spawn_file_actions_adddup2");
-  }
-  err = posix_spawn_file_actions_addclose(&action, pipefd[1]);
-  if (err != 0) {
-    CheckProcessCall(err, "posix_spawn_file_actions_addclose");
-  }
+  CheckProcessCall(posix_spawn_file_actions_adddup2(&action, pipefd[1], 1),
+                   "posix_spawn_file_actions_adddup2");
+  CheckProcessCall(posix_spawn_file_actions_addclose(&action, pipefd[1]),
+                   "posix_spawn_file_actions_addclose");
 
   auto& attr = resources.attributes;
-  err = posix_spawnattr_init(&attr);
-  if (err != 0) {
-    CheckProcessCall(err, "posix_spawnattr_init");
-  }
-
+  CheckProcessCall(posix_spawnattr_init(&attr), "posix_spawnattr_init");
   resources.attributes_ready = true;
   short flags = 0;
   if (build_signals_active) {
@@ -342,21 +326,17 @@ int RunCommandImpl(const std::string& shell,
   flags |= POSIX_SPAWN_USEVFORK;
 #endif
 
-  err = posix_spawnattr_setflags(&attr, flags);
-  if (err != 0) {
-    CheckProcessCall(err, "posix_spawnattr_setflags");
-  }
+  CheckProcessCall(posix_spawnattr_setflags(&attr, flags),
+                   "posix_spawnattr_setflags");
 
   pid_t& pid = resources.child;
   resources.cleanup_output = cleanup_output;
   resources.output_stamp =
       cleanup_output.empty() ? "" : GetOutputStamp(cleanup_output);
   RecordStatCounter("process_launch_attempts");
-  err = posix_spawn(&pid, argv[0], &action, &attr, const_cast<char**>(argv),
-                    custom_env ? child_env.data() : environ);
+  int err = posix_spawn(&pid, argv[0], &action, &attr, const_cast<char**>(argv),
+                        custom_env ? child_env.data() : environ);
   if (err != 0) {
-    if (!recipe_path.empty())
-      unlink(recipe_path.c_str());
     if (err == E2BIG) {
       size_t argument_bytes = 0;
       for (const char* argument : argv)
@@ -456,8 +436,11 @@ int RunCommandImpl(const std::string& shell,
       CheckProcessCall(errno, "poll process failed");
     }
   }
-  if (!recipe_path.empty() && unlink(recipe_path.c_str()) != 0)
-    CheckProcessCall(errno, "unlink recipe failed");
+  if (!recipe_path.empty()) {
+    if (unlink(recipe_path.c_str()) != 0)
+      CheckProcessCall(errno, "unlink recipe failed");
+    recipe_path.clear();
+  }
 
   // Shell traps used by older generated graphs cleaned up these four signal
   // statuses, including explicit `exit 130` and similar recipe failures.

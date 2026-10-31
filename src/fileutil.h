@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Drop process-only headers after separating runtime supervision.
 // Own invocation state and publish coherent generations with typed freshness.
 // Separate runtime services and preserve scoped resource ownership.
 // Preserve owned path strings through filesystem-probe cache lookups.
@@ -34,10 +35,8 @@
 #define FILEUTIL_H_
 
 #include <errno.h>
-#include <signal.h>
 
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>

@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Share generation pinning and collection-race recovery across launchers.
 // Read optional double-colon metadata through the shared dependency view.
 // Launch checked generation plans without repeated shell/helper startup.
 // Own generated launcher FIFOs and leases in the native supervisor.
@@ -1943,18 +1944,23 @@ static bool IsWorkspaceAction(const char* argument) {
   return false;
 }
 
+static std::unique_ptr<GenerationReader> PinGeneration(const char* directory) {
+  auto generation = std::make_unique<GenerationReader>(directory);
+  if (!generation->valid()) {
+    // Collection can win before a reader acquires its lease. Restore the
+    // previous binding before trying the currently published bundle.
+    const std::string current = std::string(Dirname(directory)) + "/current";
+    generation.reset();
+    generation = std::make_unique<GenerationReader>(current);
+  }
+  if (!generation->valid())
+    ERROR("invalid generation; regenerate the Ninja graph");
+  return generation;
+}
+
 static int Main(int argc, char* argv[]) {
   if (argc >= 4 && !strcmp(argv[1], "--internal-pin-generation")) {
-    // A reader can race collection before acquiring its lease. Retry the
-    // currently published bundle; every subsequent path is pinned to it.
-    auto generation = std::make_unique<GenerationReader>(argv[2]);
-    if (!generation->valid()) {
-      std::string current = std::string(Dirname(argv[2])) + "/current";
-      generation.reset();
-      generation = std::make_unique<GenerationReader>(current);
-    }
-    if (!generation->valid())
-      ERROR("invalid generation; regenerate the Ninja graph");
+    auto generation = PinGeneration(argv[2]);
     const std::string directory = generation->directory();
     std::string launcher = directory + "/" + argv[3];
     setenv("OMKTR_PINNED_GENERATION", directory.c_str(), 1);
@@ -2015,14 +2021,7 @@ static int Main(int argc, char* argv[]) {
       execvp(arguments.front(), arguments.data());
       PERROR("execute workspace frontend");
     } else if (!strcmp(argv[1], "--internal-launch-generation") && argc >= 4) {
-      auto generation = std::make_unique<GenerationReader>(argv[2]);
-      if (!generation->valid()) {
-        const std::string current = std::string(Dirname(argv[2])) + "/current";
-        generation.reset();
-        generation = std::make_unique<GenerationReader>(current);
-      }
-      if (!generation->valid())
-        ERROR("invalid generation; regenerate the Ninja graph");
+      auto generation = PinGeneration(argv[2]);
       return RunGeneratedNinja(*generation, argv[3], argc - 4, argv + 4);
     } else if (!strcmp(argv[1], "--internal-run-ninja") && argc >= 4) {
       return HandleRunNinja(argc, argv);

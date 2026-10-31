@@ -22,12 +22,16 @@ std::string NinjaLaunchPlan::Encode() const {
   for (const auto* field :
        {&load, &ninja, &graph, &public_graph, &jobs, &remote_jobs, &goals})
     AppendGraphString(*field, &bytes);
-  for (const auto& [name, value] : exports)
-    for (const auto& field : {std::string("set"), name, value})
-      AppendGraphString(field, &bytes);
-  for (const auto& name : unsets)
-    for (const auto& field : {std::string("unset"), name, std::string()})
-      AppendGraphString(field, &bytes);
+  for (const auto& [name, value] : exports) {
+    AppendGraphString("set", &bytes);
+    AppendGraphString(name, &bytes);
+    AppendGraphString(value, &bytes);
+  }
+  for (const auto& name : unsets) {
+    AppendGraphString("unset", &bytes);
+    AppendGraphString(name, &bytes);
+    AppendGraphString("", &bytes);
+  }
   return bytes;
 }
 

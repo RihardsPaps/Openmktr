@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Remove the redundant self-include from the diagnostic interface.
 // Own invocation state and publish coherent generations with typed freshness.
 // Fork changes are covered by MPL-2.0; see docs/LICENSING.md and NOTICE.
 // Copyright 2015 Google Inc. All rights reserved
@@ -26,7 +27,6 @@
 #include <memory>
 #include <stdexcept>
 #include "flags.h"
-#include "log.h"
 #include "session.h"
 #include "stringprintf.h"
 

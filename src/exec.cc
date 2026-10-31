@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Consolidate completed-node bookkeeping and remove obsolete scheduler code.
 // Consume ready prerequisites directly and complete observed source leaves
 // once. Avoid copying path names when testing optional timestamp overrides.
 // Keep observed timestamps in outcomes and only logical updates in graph nodes.
@@ -38,12 +39,8 @@
 
 #include <algorithm>
 #include <atomic>
-#include <chrono>
-#include <cmath>
-#include <condition_variable>
 #include <cstdint>
 #include <filesystem>
-#include <limits>
 #include <memory>
 #include <mutex>
 #include <string_view>
@@ -63,7 +60,6 @@
 #include "freshness.h"
 #include "graph_optimization.h"
 #include "jobserver.h"
-#include "load_limit.h"
 #include "log.h"
 #include "process.h"
 #include "ready_queue.h"
@@ -147,14 +143,13 @@ class Executor {
   }
 
   static int EffectiveJobLimit() {
-    int jobs = g_flags.num_jobs > 0 ? g_flags.num_jobs : 1;
     // A shared jobserver, when present, is the authority across recursive
     // Kati processes.  Do not reduce nested executors based on KATI_DEPTH:
     // that old heuristic serialized recursive work and made the graph's
     // effective parallelism depend on recursion depth.  Each executor may
     // schedule up to the requested local limit; RunCommand obtains a shared
     // token before starting the actual recipe.
-    return jobs;
+    return std::max(1, g_flags.num_jobs);
   }
 
   void ExplainNode(const DepNode& n,
@@ -288,45 +283,39 @@ class Executor {
         parallel_ ? nullptr
                   : std::make_shared<Ancestry>(Ancestry{n.output, parent});
     {
-      std::unique_lock<std::mutex> lock(state_mu_);
-      for (;;) {
-        auto found = done_.find(n.output);
-        if (found != done_.end()) {
-          if (!(found->second.outcome == NodeOutcome::Running))
-            return found->second.timestamp;
-          if (found->second.owner == std::this_thread::get_id()) {
-            WARN("Circular %s <- %s dependency dropped.",
-                 needed_by ? needed_by : "(null)", n.output.c_str());
-            return kIgnoredEdge;
-          }
-          // Parallel execution submits only ready nodes, each owned once.
-          // Serial traversal can encounter only its own ancestry above.
-          CHECK(false);
+      std::lock_guard<std::mutex> lock(state_mu_);
+      auto found = done_.find(n.output);
+      if (found != done_.end()) {
+        if (found->second.outcome != NodeOutcome::Running)
+          return found->second.timestamp;
+        if (found->second.owner == std::this_thread::get_id()) {
+          WARN("Circular %s <- %s dependency dropped.",
+               needed_by ? needed_by : "(null)", n.output.c_str());
+          return kIgnoredEdge;
         }
-        if (cancel_requested_.load(std::memory_order_relaxed)) {
-          done_[n.output] =
-              NodeState{NodeOutcome::Failed, kNotExist, std::thread::id()};
-          n.execution_updated =
-              done_[n.output].timestamp == FileStamp::Updated();
-          return kNotExist;
-        }
-        // The ready-graph walk already observed source leaves. They have no
-        // rule, expansion or dependency work, and need no running transition
-        // or second directory probe while recipe workers contend for state.
-        if (parallel_ && initial_timestamp && initial_timestamp->exists() &&
-            !n.has_rule && !n.is_phony && n.cmds.empty() && n.deps.empty() &&
-            n.order_onlys.empty() && n.validations.empty()) {
-          done_.emplace(n.output,
-                        NodeState{NodeOutcome::Succeeded, *initial_timestamp,
-                                  std::thread::id()});
-          n.execution_updated = false;
-          return *initial_timestamp;
-        }
-        done_[n.output] = NodeState{NodeOutcome::Running, kIgnoredEdge,
-                                    std::this_thread::get_id()};
-        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
-        break;
+        // Parallel execution submits only ready nodes, each owned once.
+        // Serial traversal can encounter only its own ancestry above.
+        CHECK(false);
       }
+      if (cancel_requested_.load(std::memory_order_relaxed)) {
+        CompleteNode(n, NodeOutcome::Failed, kNotExist);
+        return kNotExist;
+      }
+      // The ready-graph walk already observed source leaves. They have no
+      // rule, expansion or dependency work, and need no running transition
+      // or second directory probe while recipe workers contend for state.
+      if (parallel_ && initial_timestamp && initial_timestamp->exists() &&
+          !n.has_rule && !n.is_phony && n.cmds.empty() && n.deps.empty() &&
+          n.order_onlys.empty() && n.validations.empty()) {
+        done_.emplace(n.output,
+                      NodeState{NodeOutcome::Succeeded, *initial_timestamp,
+                                std::thread::id()});
+        n.execution_updated = false;
+        return *initial_timestamp;
+      }
+      done_[n.output] = NodeState{NodeOutcome::Running, kIgnoredEdge,
+                                  std::this_thread::get_id()};
+      n.execution_updated = false;
     }
     // Evaluator tracing uses one process-global stack.  Parallel workers
     // cannot push/pop that stack concurrently; doing so corrupts the stack
@@ -385,9 +374,7 @@ class Executor {
       }
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] =
-            NodeState{NodeOutcome::Failed, kNotExist, std::thread::id()};
-        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
+        CompleteNode(n, NodeOutcome::Failed, kNotExist);
       }
       failed_.store(true, std::memory_order_relaxed);
       return kNotExist;
@@ -450,9 +437,7 @@ class Executor {
     if (dependency_failed) {
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] =
-            NodeState{NodeOutcome::Failed, output_ts, std::thread::id()};
-        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
+        CompleteNode(n, NodeOutcome::Failed, output_ts);
       }
       failed_.store(true, std::memory_order_relaxed);
       return output_ts;
@@ -475,9 +460,7 @@ class Executor {
       ExplainNode(n, output_ts, "kept unchanged by -o");
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] =
-            NodeState{NodeOutcome::Succeeded, output_ts, std::thread::id()};
-        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
+        CompleteNode(n, NodeOutcome::Succeeded, output_ts);
       }
       return output_ts;
     }
@@ -487,10 +470,7 @@ class Executor {
     if (g_flags.is_touch && n.is_phony) {
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] = NodeState{
-            dependency_failed ? NodeOutcome::Failed : NodeOutcome::Succeeded,
-            output_ts, std::thread::id()};
-        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
+        CompleteNode(n, NodeOutcome::Succeeded, output_ts);
       }
       return output_ts;
     }
@@ -500,9 +480,7 @@ class Executor {
       ExplainNode(n, output_ts, "up to date");
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] =
-            NodeState{NodeOutcome::Succeeded, output_ts, std::thread::id()};
-        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
+        CompleteNode(n, NodeOutcome::Succeeded, output_ts);
       }
       return output_ts;
     }
@@ -559,9 +537,7 @@ class Executor {
       const FileStamp touched_ts = FileStamp::Read(n.output.c_str());
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] =
-            NodeState{NodeOutcome::Succeeded, touched_ts, std::thread::id()};
-        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
+        CompleteNode(n, NodeOutcome::Succeeded, touched_ts);
       }
       return touched_ts;
     }
@@ -626,9 +602,7 @@ class Executor {
       ExplainNode(n, output_ts, "up to date (directory)", &commands);
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] =
-            NodeState{NodeOutcome::Succeeded, output_ts, std::thread::id()};
-        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
+        CompleteNode(n, NodeOutcome::Succeeded, output_ts);
       }
       return output_ts;
     }
@@ -677,9 +651,7 @@ class Executor {
       ExplainNode(n, output_ts, reason, &commands, &group_needs_build);
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] =
-            NodeState{NodeOutcome::Succeeded, logical_ts, std::thread::id()};
-        n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
+        CompleteNode(n, NodeOutcome::Succeeded, logical_ts);
       }
       return logical_ts;
     }
@@ -820,10 +792,9 @@ class Executor {
       std::lock_guard<std::mutex> lock(state_mu_);
       if (ran_recipe && !node_failed)
         built_outputs_.insert(n.output);
-      done_[n.output] =
-          NodeState{node_failed ? NodeOutcome::Failed : NodeOutcome::Succeeded,
-                    completed_ts, std::thread::id()};
-      n.execution_updated = done_[n.output].timestamp == FileStamp::Updated();
+      CompleteNode(n,
+                   node_failed ? NodeOutcome::Failed : NodeOutcome::Succeeded,
+                   completed_ts);
     }
     return completed_ts;
   }
@@ -1007,8 +978,7 @@ class Executor {
       for (const auto& edge : *edges) {
         const auto input = done_.find(edge.second->output);
         if (input == done_.end() ||
-            (input->second.outcome == NodeOutcome::Running) ||
-            (input->second.outcome == NodeOutcome::Failed))
+            input->second.outcome != NodeOutcome::Succeeded)
           return false;
       }
     return true;
@@ -1120,12 +1090,12 @@ class Executor {
     RecordStatCounter("scheduler_nodes", nodes.size());
     std::vector<std::unique_ptr<std::vector<Command>>> prepared(nodes.size());
     const ReadyQueueStats stats = RunReadyQueue(
-        // The coordinator overlaps metadata preparation with these workers.
-        // ProcessLease also admits evaluation shells to the same job budget.
+        // The caller and lazy workers share ready work. ProcessLease also
+        // admits evaluation shells to the same job budget.
         tasks, static_cast<size_t>(job_limit_),
         [&](size_t id) {
           ExecNode(*nodes[id], needed_by[id], nullptr, nullptr, &timestamps[id],
-                   prepared[id] ? &*prepared[id] : nullptr);
+                   prepared[id].get());
         },
         [&](size_t id) {
           if (CanFinishInline(*nodes[id], timestamps[id]))
@@ -1162,6 +1132,16 @@ class Executor {
     FileStamp timestamp;
     std::thread::id owner;
   };
+
+  // Called with state_mu_ held so the outcome and logical-update marker
+  // become visible together. Use the supplied timestamp without a second
+  // map lookup.
+  void CompleteNode(const DepNode& node,
+                    NodeOutcome outcome,
+                    FileStamp timestamp) {
+    done_[node.output] = NodeState{outcome, timestamp, std::thread::id()};
+    node.execution_updated = timestamp == FileStamp::Updated();
+  }
 
   bool IsFailed(Symbol output) {
     std::lock_guard<std::mutex> lock(state_mu_);

@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Resolve each thread's owned connection once per acquisition, without macros.
 // Own invocation state and publish coherent generations with typed freshness.
 // Extract shared FIFO reservations and load admission into a runtime service.
 // Scope recipe reservations and close per-thread transport descriptors.
@@ -45,6 +46,9 @@
 namespace {
 
 struct JobserverConnection {
+  JobserverConnection() = default;
+  JobserverConnection(const JobserverConnection&) = delete;
+  JobserverConnection& operator=(const JobserverConnection&) = delete;
   int fd = -1;
   std::string path;
   ~JobserverConnection() {
@@ -54,9 +58,9 @@ struct JobserverConnection {
 };
 constexpr int kReservedKatiJobToken = -2;
 struct JobserverState {
-  std::mutex connection_mu;
-  std::unordered_map<std::thread::id, std::unique_ptr<JobserverConnection>>
-      connections;
+  // Connections are indexed only while read_mu is held and remain alive
+  // until all workers have joined and the session is destroyed.
+  std::unordered_map<std::thread::id, JobserverConnection> connections;
   std::atomic<bool> reserved{false};
   std::mutex read_mu;
 #if defined(__linux__)
@@ -68,20 +72,6 @@ struct JobserverState {
   }
 #endif
 };
-JobserverConnection& Connection() {
-  auto& state = SessionService<JobserverState>();
-  std::lock_guard<std::mutex> lock(state.connection_mu);
-  auto& connection = state.connections[std::this_thread::get_id()];
-  if (!connection)
-    connection = std::make_unique<JobserverConnection>();
-  return *connection;
-}
-#define jobserver_connection (Connection())
-#define reserved_kati_job_in_use (SessionService<JobserverState>().reserved)
-#define kati_jobserver_read_mu (SessionService<JobserverState>().read_mu)
-#define reserved_kati_wakeup_fd (SessionService<JobserverState>().wakeup_fd)
-#define reserved_kati_wakeup_initialized \
-  (SessionService<JobserverState>().initialized)
 
 struct ProcessAdmission {
   std::mutex mutex;
@@ -90,21 +80,21 @@ struct ProcessAdmission {
   bool load_warning = false;
 };
 
-// Called with kati_jobserver_read_mu held. The descriptor carries wakeups,
+// Called with state.read_mu held. The descriptor carries wakeups,
 // never job tokens, and must not survive a recipe exec.
-int ReservedKatiWakeupFd() {
+int ReservedKatiWakeupFd(JobserverState& state) {
 #if defined(__linux__)
-  if (!reserved_kati_wakeup_initialized) {
+  if (!state.initialized) {
     int fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
     if (fd >= 0 && fd <= STDERR_FILENO) {
       const int replacement = fcntl(fd, F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
       close(fd);
       fd = replacement;
     }
-    reserved_kati_wakeup_fd.store(fd, std::memory_order_release);
-    reserved_kati_wakeup_initialized = true;
+    state.wakeup_fd.store(fd, std::memory_order_release);
+    state.initialized = true;
   }
-  return reserved_kati_wakeup_fd.load(std::memory_order_relaxed);
+  return state.wakeup_fd.load(std::memory_order_relaxed);
 #else
   return -1;
 #endif
@@ -112,7 +102,8 @@ int ReservedKatiWakeupFd() {
 
 void WakeReservedKatiWaiters() {
 #if defined(__linux__)
-  const int fd = reserved_kati_wakeup_fd.load(std::memory_order_acquire);
+  const int fd = SessionService<JobserverState>().wakeup_fd.load(
+      std::memory_order_acquire);
   const uint64_t notification = 1;
   if (fd >= 0 &&
       HANDLE_EINTR(write(fd, &notification, sizeof(notification))) < 0 &&
@@ -145,7 +136,8 @@ int TryAcquireReservedKatiJobToken() {
   const char* reserved = getenv("KATI_JOBSERVER_RESERVED");
   bool expected = false;
   if (reserved != nullptr && strcmp(reserved, "1") == 0 &&
-      reserved_kati_job_in_use.compare_exchange_strong(expected, true))
+      SessionService<JobserverState>().reserved.compare_exchange_strong(
+          expected, true))
     return kReservedKatiJobToken;
   return -1;
 }
@@ -172,27 +164,30 @@ int AcquireKatiJobToken() {
 
   // One reader per process waits on the shared FIFO. Waking every local
   // recipe for one token only creates read/EAGAIN contention.
-  std::unique_lock<std::mutex> reader_lock(kati_jobserver_read_mu);
-  if (jobserver_connection.fd >= 0 && jobserver_connection.path != fifo) {
-    close(jobserver_connection.fd);
-    jobserver_connection.fd = -1;
-    jobserver_connection.path.clear();
+  auto& state = SessionService<JobserverState>();
+  std::unique_lock<std::mutex> reader_lock(state.read_mu);
+  auto& connection = state.connections[std::this_thread::get_id()];
+  if (connection.fd >= 0 && connection.path != fifo) {
+    close(connection.fd);
+    connection.fd = -1;
+    connection.path.clear();
   }
 
-  if (jobserver_connection.fd < 0) {
-    jobserver_connection.fd = OpenKatiJobserver();
-    if (jobserver_connection.fd < 0) {
+  if (connection.fd < 0) {
+    connection.fd = OpenKatiJobserver();
+    if (connection.fd < 0) {
       LOG("jobserver unavailable: %s", fifo);
       return -1;
     }
-    jobserver_connection.path = fifo;
-    if (fcntl(jobserver_connection.fd, F_SETFL, O_NONBLOCK) < 0)
+    connection.path = fifo;
+    if (fcntl(connection.fd, F_SETFL, O_NONBLOCK) < 0)
       PERROR("fcntl(O_NONBLOCK) failed");
   }
 
   const char* inherited = getenv("KATI_JOBSERVER_RESERVED");
-  const int wakeup_fd =
-      inherited && strcmp(inherited, "1") == 0 ? ReservedKatiWakeupFd() : -1;
+  const int wakeup_fd = inherited && strcmp(inherited, "1") == 0
+                            ? ReservedKatiWakeupFd(state)
+                            : -1;
   char token;
   while (true) {
     if (GetBuildSignal() != 0)
@@ -201,7 +196,7 @@ int AcquireKatiJobToken() {
     // waits for FIFO capacity owned by another process.
     if (TryAcquireReservedKatiJobToken() == kReservedKatiJobToken)
       return kReservedKatiJobToken;
-    struct pollfd ready[2] = {{jobserver_connection.fd, POLLIN, 0},
+    struct pollfd ready[2] = {{connection.fd, POLLIN, 0},
                               {wakeup_fd, POLLIN, 0}};
     int available = poll(ready, wakeup_fd >= 0 ? 2 : 1, 100);
     if (available == 0 || (available < 0 && errno == EINTR))
@@ -213,24 +208,24 @@ int AcquireKatiJobToken() {
       HANDLE_EINTR(read(wakeup_fd, &notifications, sizeof(notifications)));
       continue;
     }
-    ssize_t n = HANDLE_EINTR(read(jobserver_connection.fd, &token, 1));
+    ssize_t n = HANDLE_EINTR(read(connection.fd, &token, 1));
     if (n == 1)
-      return jobserver_connection.fd;
+      return connection.fd;
     if (n == 0)
       break;
     if (n < 0 && errno != EAGAIN)
       break;
   }
 
-  close(jobserver_connection.fd);
-  jobserver_connection.fd = -1;
-  jobserver_connection.path.clear();
+  close(connection.fd);
+  connection.fd = -1;
+  connection.path.clear();
   return -1;
 }
 
 void ReleaseKatiJobToken(int fd) {
   if (fd == kReservedKatiJobToken) {
-    reserved_kati_job_in_use.store(false);
+    SessionService<JobserverState>().reserved.store(false);
     WakeReservedKatiWaiters();
     return;
   }
