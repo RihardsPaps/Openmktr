@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Capture actual direct bootstrap reads for later deferred recipe identities.
 // Expose private recipe snapshot and runtime evaluation helpers.
 // Prepare sealed, build-owned runtime contexts for inherited recipe helpers.
@@ -30,6 +31,7 @@
 #include <vector>
 
 #include "fileutil.h"
+#include "freshness.h"
 #include "symtab.h"
 
 struct DepNode;
@@ -66,6 +68,7 @@ struct Command {
   std::string runtime_sidecar;
   std::string runtime_context;
   std::string runtime_identity;
+  bool runtime_freshness_only = false;
   std::string shell;
   std::string shellflag;
   std::vector<std::string> environment;
@@ -83,12 +86,12 @@ class CommandEvaluator {
   explicit CommandEvaluator(Evaluator* ev);
   ~CommandEvaluator();
   std::vector<Command> Eval(const DepNode& n);
-  std::vector<Command> Eval(const DepNode& n, double target_age);
+  std::vector<Command> Eval(const DepNode& n, FileStamp target_age);
   std::vector<Command> Eval(const DepNode& n,
-                            double target_age,
+                            FileStamp target_age,
                             size_t double_colon_group);
   const DepNode* current_dep_node() const { return current_dep_node_; }
-  double target_age() const { return target_age_; }
+  FileStamp target_age() const { return target_age_; }
   Evaluator* evaluator() const { return ev_; }
   bool found_new_inputs() const { return found_new_inputs_; }
   void set_found_new_inputs(bool val) { found_new_inputs_ = val; }
@@ -96,7 +99,7 @@ class CommandEvaluator {
  private:
   Evaluator* ev_;
   const DepNode* current_dep_node_;
-  double target_age_;
+  FileStamp target_age_;
   bool found_new_inputs_;
   FileObservationCache observations_;
   uint64_t filesystem_epoch_ = static_cast<uint64_t>(-1);

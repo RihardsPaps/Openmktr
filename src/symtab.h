@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Add non-mutating symbol lookup for incremental dependency validation.
 // Materialize validated runtime variable definitions only when looked up.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
@@ -31,7 +32,8 @@
 #include <string_view>
 #include <vector>
 
-extern std::vector<std::string*>* g_symbols;
+const std::vector<std::string*>& SessionSymbols();
+#define g_symbols (&SessionSymbols())
 
 class Symtab;
 class Var;
@@ -39,7 +41,8 @@ enum struct VarOrigin : char;
 
 class Symbol {
  public:
-  explicit Symbol() : v_(-1) {}
+  constexpr explicit Symbol() : v_(-1) {}
+  static constexpr Symbol Builtin(int index) { return Symbol(index); }
 
   const std::string& str() const { return *((*g_symbols)[v_]); }
 
@@ -66,7 +69,7 @@ class Symbol {
   void SetLazyGlobalVar(VarOrigin origin, std::function<Var*()> restore) const;
 
  private:
-  explicit Symbol(int v);
+  constexpr explicit Symbol(int v) : v_(v) {}
 
   int v_;
 
@@ -225,11 +228,11 @@ struct hash<Symbol> {
 };
 }  // namespace std
 
-extern Symbol kEmptySym;
-extern Symbol kShellSym;
-extern Symbol kShellFlagsSym;
-extern Symbol kAllowRulesSym;
-extern Symbol kKatiReadonlySym;
+inline constexpr Symbol kEmptySym = Symbol::Builtin(0);
+inline constexpr Symbol kShellSym = Symbol::Builtin(256);
+inline constexpr Symbol kShellFlagsSym = Symbol::Builtin(257);
+inline constexpr Symbol kAllowRulesSym = Symbol::Builtin(259);
+inline constexpr Symbol kKatiReadonlySym = Symbol::Builtin(260);
 
 Symbol Intern(std::string_view s);
 // Return an invalid symbol without interning an absent name.

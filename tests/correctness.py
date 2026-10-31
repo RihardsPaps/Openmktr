@@ -1124,7 +1124,7 @@ class BuildCorrectness(unittest.TestCase):
         second.write_text("second\n")
         self.direct("--ninja", "all")
         self.run_command("sh", "./ninja.sh", "-j2")
-        self.assertEqual(output.read_text(), "first second kati_missing_output")
+        self.assertEqual(output.read_text(), "first second")
 
         # Put the output later in the same second as both inputs, then move
         # one prerequisite 250 ms ahead without relying on sleeps or crossing
@@ -1134,7 +1134,7 @@ class BuildCorrectness(unittest.TestCase):
         os.utime(output, ns=(2_000_000_000, 2_000_000_000))
         os.utime(second, ns=(2_250_000_000, 2_250_000_000))
         self.run_command("sh", "./ninja.sh", "-j2")
-        self.assertEqual(output.read_text(), "second kati_missing_output")
+        self.assertEqual(output.read_text(), "second")
 
     def test_ninja_question_preserves_low_resolution_prerequisite_semantics(self):
         self.makefile(
@@ -1156,12 +1156,12 @@ class BuildCorrectness(unittest.TestCase):
         os.utime(second, ns=(base + 750_000_000, base + 750_000_000))
         os.utime(output, ns=(base + 500_000_000, base + 500_000_000))
         self.run_command("sh", "./ninja.sh", "-j2")
-        self.assertEqual(output.read_text(), "first second kati_missing_output")
+        self.assertEqual(output.read_text(), "first second")
 
         os.utime(second, ns=(base + 2_000_000_000, base + 2_000_000_000))
         os.utime(output, ns=(base + 1_500_000_000, base + 1_500_000_000))
         self.run_command("sh", "./ninja.sh", "-j2")
-        self.assertEqual(output.read_text(), "second kati_missing_output")
+        self.assertEqual(output.read_text(), "second")
 
     def test_multiline_function_call_in_define(self):
         self.makefile(

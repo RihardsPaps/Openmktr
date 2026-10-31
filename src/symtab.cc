@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Validate without interning and record ordered symbol observations for replay.
 // Snapshot symbol enumeration before lazy expression decoding can intern names.
 // Defer global variable materialization while preserving assignment precedence.
@@ -28,6 +29,8 @@
 // #define ENABLE_TID_CHECK
 
 #include "symtab.h"
+#include "observation.h"
+#include "session.h"
 
 #ifdef ENABLE_TID_CHECK
 #include <pthread.h>
@@ -49,18 +52,10 @@ struct SymbolData {
   std::unique_ptr<std::function<Var*()>> restore;
 };
 
-std::vector<std::string*>* g_symbols;
-static std::vector<SymbolData> g_symbol_data;
-
-Symbol kEmptySym;
-Symbol kShellSym;
-Symbol kShellFlagsSym;
-Symbol kAllowRulesSym;
-Symbol kKatiReadonlySym;
-Symbol kVariablesSym;
-Symbol kKatiSymbolsSym;
-
-Symbol::Symbol(int v) : v_(v) {}
+struct SymbolBindings {
+  std::vector<SymbolData> entries;
+};
+#define g_symbol_data (SessionService<SymbolBindings>().entries)
 
 Var* Symbol::PeekGlobalVar() const {
   if (static_cast<size_t>(v_) >= g_symbol_data.size()) {
@@ -159,12 +154,9 @@ class Symtab {
     tid_ = pthread_self();
 #endif
 
-    CHECK(g_symbols == NULL);
-    g_symbols = &symbols_;
-
     Symbol s = InternImpl("");
     CHECK(s.v_ == 0);
-    CHECK(Intern("") == s);
+
     char b[2];
     b[1] = 0;
     for (int i = 1; i < 256; i++) {
@@ -173,22 +165,18 @@ class Symtab {
       CHECK(s.val() == i);
     }
 
-    kEmptySym = Intern("");
-    kShellSym = Intern("SHELL");
-    kShellFlagsSym = Intern(".SHELLFLAGS");
-    Symbol shellStatusSym = Intern(".SHELLSTATUS");
-    shellStatusSym.SetGlobalVar(new ShellStatusVar(), false, nullptr);
-    kAllowRulesSym = Intern(".KATI_ALLOW_RULES");
-    kKatiReadonlySym = Intern(".KATI_READONLY");
-    kVariablesSym = Intern(".VARIABLES");
-    kVariablesSym.SetGlobalVar(new VariableNamesVar(".VARIABLES", true), false,
-                               nullptr);
-    kKatiSymbolsSym = Intern(".KATI_SYMBOLS");
-    kKatiSymbolsSym.SetGlobalVar(new VariableNamesVar(".KATI_SYMBOLS", false),
-                                 false, nullptr);
+    CHECK(InternImpl("SHELL") == kShellSym);
+    CHECK(InternImpl(".SHELLFLAGS") == kShellFlagsSym);
+    InternImpl(".SHELLSTATUS")
+        .SetGlobalVar(new ShellStatusVar(), false, nullptr);
+    CHECK(InternImpl(".KATI_ALLOW_RULES") == kAllowRulesSym);
+    CHECK(InternImpl(".KATI_READONLY") == kKatiReadonlySym);
+    InternImpl(".VARIABLES")
+        .SetGlobalVar(new VariableNamesVar(".VARIABLES", true));
+    InternImpl(".KATI_SYMBOLS")
+        .SetGlobalVar(new VariableNamesVar(".KATI_SYMBOLS", false));
   }
-
-  ~Symtab() { LOG_STAT("%zu symbols", symbols_.size()); }
+  const std::vector<std::string*>& symbols() const { return symbols_; }
 
   Symbol InternImpl(std::string_view s) {
     auto found = symtab_.find(s);
@@ -252,10 +240,15 @@ class Symtab {
 #endif
 };
 
-static Symtab g_symtab;
+#define g_symtab (SessionService<Symtab>())
+const std::vector<std::string*>& SessionSymbols() {
+  return g_symtab.symbols();
+}
 
 Symbol Intern(std::string_view s) {
   RecordEvaluationIntern(s);
+  if (ObservationLog::Active())
+    ObservationLog::Record({ObservationKind::Intern, {std::string(s)}});
   return g_symtab.Intern(s);
 }
 

@@ -20,6 +20,7 @@
 
 #include "fileutil.h"
 #include "jobserver.h"
+#include "log.h"
 #include "process.h"
 
 namespace {
@@ -237,6 +238,97 @@ bool WriteGraphCache(const std::string& path, std::string_view payload) {
     ok = rename(temporary.c_str(), path.c_str()) == 0;
   unlink(temporary.c_str());
   return ok;
+}
+
+std::string PublishGraphObject(const std::string& base,
+                               std::string_view payload,
+                               bool raw) {
+  std::string temporary;
+  auto read = [&](const std::string& path, std::string* bytes) {
+    if (!raw)
+      return ReadGraphCache(path, bytes);
+    int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC);
+    if (fd < 0)
+      return false;
+    struct stat metadata;
+    bool ok = fstat(fd, &metadata) == 0 && S_ISREG(metadata.st_mode) &&
+              metadata.st_size >= 0 &&
+              metadata.st_size <= static_cast<off_t>(kMaxCacheSize);
+    if (ok) {
+      bytes->resize(metadata.st_size);
+      size_t offset = 0;
+      while (offset < bytes->size()) {
+        ssize_t count = HANDLE_EINTR(
+            ::read(fd, bytes->data() + offset, bytes->size() - offset));
+        if (count <= 0) {
+          ok = false;
+          break;
+        }
+        offset += count;
+      }
+    }
+    close(fd);
+    return ok;
+  };
+  if (payload.size() > kMaxCacheSize)
+    ERROR("immutable graph object exceeds size budget");
+  for (size_t collision = 0; collision < 1024; ++collision) {
+    const std::string path =
+        base + (collision ? "." + std::to_string(collision) : "");
+    std::string previous;
+    if (read(path, &previous) && previous == payload) {
+      if (!temporary.empty())
+        unlink(temporary.c_str());
+      return path;
+    }
+    struct stat metadata;
+    if (lstat(path.c_str(), &metadata) == 0)
+      continue;
+    if (errno != ENOENT)
+      break;
+    if (temporary.empty()) {
+      temporary = base + ".object-XXXXXX";
+      int fd = mkstemp(temporary.data());
+      if (fd < 0)
+        break;
+      bool written = !raw || WriteAll(fd, payload);
+      if (close(fd) != 0)
+        written = false;
+      if (!written || (!raw && !WriteGraphCache(temporary, payload)))
+        break;
+      fd = open(temporary.c_str(), O_RDONLY | O_CLOEXEC);
+      const bool synced = fd >= 0 && fsync(fd) == 0;
+      if (fd >= 0)
+        close(fd);
+      if (!synced)
+        break;
+    }
+    if (link(temporary.c_str(), path.c_str()) == 0) {
+      unlink(temporary.c_str());
+      const auto slash = path.rfind('/');
+      const std::string parent =
+          slash == std::string::npos ? "." : path.substr(0, slash);
+      int fd = open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+      const bool synced = fd >= 0 && fsync(fd) == 0;
+      if (fd >= 0)
+        close(fd);
+      if (!synced)
+        ERROR("cannot sync immutable graph object directory: %s",
+              parent.c_str());
+      return path;
+    }
+    if (errno != EEXIST)
+      break;
+    // A concurrent publisher may have installed these exact bytes.
+    if (read(path, &previous) && previous == payload) {
+      unlink(temporary.c_str());
+      return path;
+    }
+  }
+  if (!temporary.empty())
+    unlink(temporary.c_str());
+  ERROR("cannot publish immutable graph object: %s", base.c_str());
+  return {};
 }
 
 int WriteIfChanged(int argc, char** argv) {

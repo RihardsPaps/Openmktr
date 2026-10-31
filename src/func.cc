@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Separate runtime services and preserve scoped resource ownership.
 // Emit deferred diagnostics with a fixed POSIX printf format.
 // Queue recipe file writes as effects while preserving their empty Make value.
@@ -29,7 +30,10 @@
 // +build ignore
 
 #include "func.h"
+#include <deque>
 #include "incremental_eval.h"
+#include "observation.h"
+#include "session.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -371,12 +375,10 @@ void WildcardFunc(const std::vector<Value*>& args,
   for (std::string_view tok : WordScanner(pat)) {
     const auto& files = Glob(tok);
     if (ev->incremental_evaluator()->Observing()) {
-      std::string observation;
-      AppendGraphString("glob", &observation);
-      AppendGraphString(tok, &observation);
-      for (const auto& file : files)
-        AppendGraphString(file, &observation);
-      ev->incremental_evaluator()->Observe(std::move(observation));
+      ObservationRecord observation{ObservationKind::Glob, {std::string(tok)}};
+      observation.fields.insert(observation.fields.end(), files.begin(),
+                                files.end());
+      ev->incremental_evaluator()->Observe(observation.Encode());
     }
     for (const std::string& file : files) {
       ww.Write(file);
@@ -533,10 +535,14 @@ void EvalFunc(const std::vector<Value*>& args, Evaluator* ev, std::string*) {
         "--strict-compat: $(eval) in a recipe changes Make state at "
         "execution time; Ninja expands recipes during conversion. "
         "Use direct mode or move the eval outside the recipe.");
-  // TODO: eval leaks everything... for now.
-  // const string text = args[0]->Eval(ev);
+  // Keep backing text alive for the invocation: expression nodes borrow views.
   ev->CheckStack();
-  std::string* text = new std::string;
+  struct EvalText {
+    std::deque<std::string> buffers;
+  };
+  auto& buffers = SessionService<EvalText>().buffers;
+  buffers.emplace_back();
+  std::string* text = &buffers.back();
   args[0]->Eval(ev, text);
   if (ev->avoid_io()) {
     KATI_WARN_LOC(ev->loc(),
@@ -637,7 +643,10 @@ static int ShellFuncImpl(Evaluator* ev,
   return 1;
 }
 
-static std::vector<CommandResult*> g_command_results;
+struct CommandResults {
+  std::vector<CommandResult*> values;
+};
+#define g_command_results (SessionService<CommandResults>().values)
 
 bool ShouldStoreCommandResult(std::string_view cmd) {
   // We really just want to ignore this one, or remove BUILD_DATETIME from
@@ -825,13 +834,9 @@ void VarVisibilityFunc(const std::vector<Value*>& args,
 }
 
 void CallFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
-  static const Symbol tmpvar_names[] = {
+  const Symbol tmpvar_names[] = {
       Intern("0"), Intern("1"), Intern("2"), Intern("3"), Intern("4"),
       Intern("5"), Intern("6"), Intern("7"), Intern("8"), Intern("9")};
-  // Each invocation records the same symbol observations, including when the
-  // static names were initialized by an earlier call in this process.
-  for (Symbol name : tmpvar_names)
-    Intern(name.str());
 
   ev->CheckStack();
   const std::string&& func_name_buf = args[0]->Eval(ev);
@@ -1078,11 +1083,8 @@ void ObserveNativeFile(Evaluator* ev,
     ev->incremental_evaluator()->Effect();
     return;
   }
-  std::string record;
-  AppendGraphString("file", &record);
-  AppendGraphString(filename, &record);
-  AppendGraphString(expected, &record);
-  ev->incremental_evaluator()->Observe(std::move(record));
+  ev->incremental_evaluator()->Observe(
+      ObservationRecord{ObservationKind::File, {filename, expected}}.Encode());
 }
 
 static void FileReadFunc_(Evaluator* ev,

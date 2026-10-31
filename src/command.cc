@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Separate runtime services and preserve scoped resource ownership.
 // Echo ordinary Make recipes by default; retain opt-in compact progress output.
 // Index lazy variable definitions over immutable buffers and reuse validated
@@ -43,6 +44,7 @@
 // +build ignore
 
 #include "command.h"
+#include "session.h"
 
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -69,6 +71,7 @@
 #include "file_cache.h"
 #include "fileutil.h"
 #include "flags.h"
+#include "freshness.h"
 #include "func.h"
 #include "graph_optimization.h"
 #include "log.h"
@@ -88,7 +91,9 @@ struct RecipeInspection {
   bool io = false;
   bool dynamic = false;
   bool conservative = false;
+  bool automatic_freshness = false;
   void Variable(const std::string& name) {
+    automatic_freshness |= name == "?" || name == "?D" || name == "?F";
     if (name == ".VARIABLES" || name == ".KATI_SYMBOLS")
       conservative = true;
     Symbol symbol = Intern(name);
@@ -292,7 +297,7 @@ RuntimeRecipeReadCapture::RuntimeRecipeReadCapture(const Command& command,
     if (!ConsumeGraphString(&data, &fields.back()))
       ERROR("invalid bootstrap runtime metadata");
   }
-  if (fields.size() != 14 || fields[0] != "runtime-recipe-v5")
+  if (fields.size() != 17 || fields[0] != "runtime-recipe-v7")
     ERROR("incompatible bootstrap runtime metadata");
   impl_->observation = fields[10];
   if (impl_->observation.empty())
@@ -302,9 +307,14 @@ RuntimeRecipeReadCapture::RuntimeRecipeReadCapture(const Command& command,
   impl_->identity = fields[13];
   // One immutable global table is shared across the serialized expansions;
   // target records remain separate and never duplicate the whole context.
-  static std::string cached_path;
-  static std::string cached_file_identity;
-  static std::shared_ptr<const Impl::Context> cached_globals;
+  struct ContextCache {
+    std::string path, identity;
+    std::shared_ptr<const Impl::Context> globals;
+  };
+  auto& cache = SessionService<ContextCache>();
+  auto& cached_path = cache.path;
+  auto& cached_file_identity = cache.identity;
+  auto& cached_globals = cache.globals;
   const std::string file_identity = GetFileIdentity(fields[7]);
   if (!cached_globals || cached_path != fields[7] ||
       cached_file_identity != file_identity) {
@@ -410,7 +420,9 @@ bool MakeRuntimeRecipe(const DepNode& node,
         inspection.Variable(name.str());
   if (node.export_all_variables)
     inspection.dynamic = true;
-  if (!inspection.io && !inspection.dynamic) {
+  if (!inspection.io && !inspection.dynamic &&
+      (!inspection.automatic_freshness ||
+       node.double_colon_group_inputs.size() > 1)) {
     ev->set_current_scope(nullptr);
     return false;
   }
@@ -418,13 +430,14 @@ bool MakeRuntimeRecipe(const DepNode& node,
   // Computed references and every deferred shell can observe a newly added
   // inherited export. Reparse before reusing the bounded definitions/read set;
   // a watch list of previously existing environment names cannot detect it.
-  MakefileCacheManager::Get().RequireEvaluation();
+  if (inspection.io || inspection.dynamic)
+    MakefileCacheManager::Get().RequireEvaluation();
   if (node.double_colon_group_inputs.size() > 1)
     ERROR(
         "runtime recipe evaluation does not support multiple double-colon "
         "groups");
   std::string payload;
-  AppendGraphString("runtime-recipe-v5", &payload);
+  AppendGraphString("runtime-recipe-v7", &payload);
   AppendGraphString(node.lexical_output.str(), &payload);
   AppendGraphString(
       node.output_pattern.IsValid() ? node.output_pattern.str() : "", &payload);
@@ -469,9 +482,15 @@ bool MakeRuntimeRecipe(const DepNode& node,
   }
   AppendGraphString(recipes, &payload);
   std::string variables;
-  static Evaluator* context_evaluator = nullptr;
-  static uint64_t context_epoch = UINT64_MAX;
-  static std::string full_context_path;
+  struct SnapshotCache {
+    Evaluator* evaluator = nullptr;
+    uint64_t epoch = UINT64_MAX;
+    std::string path;
+  };
+  auto& snapshot = SessionService<SnapshotCache>();
+  auto& context_evaluator = snapshot.evaluator;
+  auto& context_epoch = snapshot.epoch;
+  auto& full_context_path = snapshot.path;
   std::string context_path;
   if (inspection.dynamic && context_evaluator == ev &&
       context_epoch == ev->recipe_snapshot_epoch() &&
@@ -496,11 +515,8 @@ bool MakeRuntimeRecipe(const DepNode& node,
           (dynamic_cast<SimpleVar*>(var) || dynamic_cast<RecursiveVar*>(var)))
         AppendGraphString(RecipeVariable(symbol, var), &globals);
     }
-    context_path = directory + "/.kati_runtime-context-" + GraphDigest(globals);
-    std::string previous;
-    if ((!ReadGraphCache(context_path, &previous) || previous != globals) &&
-        !WriteGraphCache(context_path, globals))
-      ERROR("cannot write runtime variable context");
+    context_path = PublishGraphObject(
+        directory + "/.kati_runtime-context-" + GraphDigest(globals), globals);
     if (inspection.dynamic) {
       context_evaluator = ev;
       context_epoch = ev->recipe_snapshot_epoch();
@@ -555,9 +571,15 @@ bool MakeRuntimeRecipe(const DepNode& node,
   // Every shell can read its inherited exports, including a name that did
   // not exist when a successful read set was recorded. Track that name set
   // structurally; bounded contexts also retain the exported definitions.
-  static Evaluator* environment_evaluator = nullptr;
-  static uint64_t environment_epoch = UINT64_MAX;
-  static std::vector<Symbol> environment_symbols;
+  struct EnvironmentCache {
+    Evaluator* evaluator = nullptr;
+    uint64_t epoch = UINT64_MAX;
+    std::vector<Symbol> symbols;
+  };
+  auto& environment = SessionService<EnvironmentCache>();
+  auto& environment_evaluator = environment.evaluator;
+  auto& environment_epoch = environment.epoch;
+  auto& environment_symbols = environment.symbols;
   if (environment_evaluator != ev ||
       environment_epoch != ev->recipe_snapshot_epoch()) {
     environment_symbols.clear();
@@ -588,6 +610,19 @@ bool MakeRuntimeRecipe(const DepNode& node,
   AppendGraphString(environment_names, &structural);
   if (!inspection.dynamic)
     AppendGraphString(environment_definitions, &identity);
+  std::string low_resolution, phony_inputs, logical_inputs;
+  for (Symbol input : node.low_resolution_inputs)
+    AppendGraphString(input.str(), &low_resolution);
+  for (const auto& input : node.deps) {
+    if (input.second->is_phony)
+      AppendGraphString(input.first.str(), &phony_inputs);
+    if (input.second->has_rule && !input.second->intermediate)
+      AppendGraphString(input.first.str(), &logical_inputs);
+  }
+  for (const auto& metadata : {low_resolution, phony_inputs, logical_inputs}) {
+    AppendGraphString(metadata, &identity);
+    AppendGraphString(metadata, &structural);
+  }
   const std::string observation =
       inspection.dynamic && !node.export_all_variables && !node.is_phony
           ? directory + "/.kati_runtime-reads-" + GraphDigest(structural)
@@ -610,12 +645,12 @@ bool MakeRuntimeRecipe(const DepNode& node,
   AppendGraphString(structural, &payload);
   AppendGraphString(generation, &payload);
   AppendGraphString(identity, &payload);
+  AppendGraphString(low_resolution, &payload);
+  AppendGraphString(phony_inputs, &payload);
+  AppendGraphString(logical_inputs, &payload);
   ev->set_current_scope(nullptr);
-  const std::string path = directory + "/.kati_runtime-" + GraphDigest(payload);
-  std::string previous;
-  if ((!ReadGraphCache(path, &previous) || previous != payload) &&
-      !WriteGraphCache(path, payload))
-    ERROR("cannot write runtime recipe sidecar: %s", path.c_str());
+  const std::string path = PublishGraphObject(
+      directory + "/.kati_runtime-" + GraphDigest(payload), payload);
   std::string executable = GetExecutablePath();
   std::string quoted_path = path;
   EscapeShell(&executable);
@@ -624,6 +659,7 @@ bool MakeRuntimeRecipe(const DepNode& node,
   command.runtime_sidecar = path;
   command.runtime_context = context_path;
   command.runtime_identity = std::move(identity);
+  command.runtime_freshness_only = !inspection.io && !inspection.dynamic;
   command.cmd = "\"" + executable + "\" --internal-evaluate-recipe \"" +
                 quoted_path + "\"";
   command.shell = "/bin/sh";
@@ -807,7 +843,7 @@ int RunRuntimeRecipe(const char* path) {
       ERROR("invalid runtime recipe sidecar; regenerate the Ninja graph");
     return value;
   };
-  if (take(&data) != "runtime-recipe-v5")
+  if (take(&data) != "runtime-recipe-v7")
     ERROR("incompatible runtime recipe sidecar; regenerate the Ninja graph");
   Evaluator evaluator;
   evaluator.Start();
@@ -930,6 +966,13 @@ int RunRuntimeRecipe(const char* path) {
   const std::string structural = take(&data);
   const std::string generation = take(&data);
   const std::string identity = take(&data);
+  for (auto* inputs : {&node.low_resolution_inputs, &node.phony_inputs,
+                       &node.logical_inputs}) {
+    const std::string storage = take(&data);
+    std::string_view names(storage);
+    while (!names.empty())
+      inputs->push_back(Intern(take(&names)));
+  }
   const char* owner_env = getenv("KATI_RECIPE_STATE_PATH");
   const std::string owner = owner_env ? owner_env : "";
   const bool observe = !observation.empty() && !owner.empty();
@@ -1523,7 +1566,7 @@ void AutoStarVar::Eval(Evaluator*, std::string* s) const {
 
 void AutoQuestionVar::Eval(Evaluator* ev, std::string* s) const {
   const DepNode* n = ce_->current_dep_node();
-  if (!n)
+  if (!n || n->actual_inputs.empty())
     return;
   std::unordered_set<std::string_view> seen;
 
@@ -1531,12 +1574,6 @@ void AutoQuestionVar::Eval(Evaluator* ev, std::string* s) const {
     // Check timestamps using the shell at the start of rule execution
     // instead.
     *s += "${KATI_NEW_INPUTS}";
-    // Command-state files can outlive their output. GNU make does not
-    // consider a saved command sufficient when the target itself is absent;
-    // FORCE-only rules must still execute. Preserve that rule generically
-    // instead of relying on a stale savedcmd value.
-    if (!Exists(n->output.str()))
-      *s += " kati_missing_output";
     if (!ce_->found_new_inputs()) {
       std::string def;
 
@@ -1575,15 +1612,39 @@ void AutoQuestionVar::Eval(Evaluator* ev, std::string* s) const {
     // updating prerequisites. A prerequisite recipe may also rewrite the
     // target as a side effect; restating it here would erase the original
     // newer-prerequisite list used by generated makefile refresh recipes.
-    double target_age = ce_->target_age();
+    FileStamp target_age = ce_->target_age();
     for (Symbol ai : n->actual_inputs) {
       ai = EffectivePrerequisite(ev, n, ai);
-      double input_age = GetTimestamp(ai.str());
+      FileStamp input_age = FileStamp::Read(ai.str());
+      for (const auto& dependency : n->deps) {
+        if (dependency.first == ai || dependency.second->output == ai ||
+            dependency.second->lexical_output == ai) {
+          // Recipes may change an already visited prerequisite as a side
+          // effect. Reobserve physical files; only a logical update survives
+          // independently of the current filesystem timestamp.
+          if (dependency.second->execution_stamp == FileStamp::Updated())
+            input_age = FileStamp::Updated();
+          if (dependency.second->is_phony)
+            input_age = FileStamp::Updated();
+          break;
+        }
+      }
+      if (std::find(n->phony_inputs.begin(), n->phony_inputs.end(), ai) !=
+              n->phony_inputs.end() ||
+          std::find(g_flags.what_if_files.begin(), g_flags.what_if_files.end(),
+                    ai.str()) != g_flags.what_if_files.end())
+        input_age = FileStamp::Updated();
+      // A completed explicit rule can intentionally leave no physical file.
+      // Missing intermediates are excluded: their pruning is edge-specific.
+      if (input_age == FileStamp::Missing() &&
+          std::find(n->logical_inputs.begin(), n->logical_inputs.end(), ai) !=
+              n->logical_inputs.end())
+        input_age = FileStamp::Updated();
       if (std::find(n->low_resolution_inputs.begin(),
                     n->low_resolution_inputs.end(),
                     ai) != n->low_resolution_inputs.end())
-        input_age = std::floor(input_age);
-      if (seen.insert(ai.str()).second && input_age > target_age) {
+        input_age = input_age.LowResolution();
+      if (seen.insert(ai.str()).second && InputIsNewer(input_age, target_age)) {
         ww.Write(ai.str());
       }
     }
@@ -1685,16 +1746,16 @@ CommandEvaluator::~CommandEvaluator() {
 }
 
 std::vector<Command> CommandEvaluator::Eval(const DepNode& n) {
-  return Eval(n, GetTimestamp(n.output.str()));
+  return Eval(n, FileStamp::Read(n.output.str()));
 }
 
 std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
-                                            double target_age) {
+                                            FileStamp target_age) {
   return Eval(n, target_age, static_cast<size_t>(-1));
 }
 
 std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
-                                            double target_age,
+                                            FileStamp target_age,
                                             size_t double_colon_group) {
   std::vector<Command> result;
   const bool observe =

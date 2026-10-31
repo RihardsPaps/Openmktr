@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Schedule resolved dependencies with a bounded ready queue. Preserve serial
 // goal order and parent-specific intermediate decisions. Expand recipes under
 // one evaluator lock; share process supervision and recursive job leases.
@@ -56,6 +57,7 @@
 #include "expr.h"
 #include "fileutil.h"
 #include "flags.h"
+#include "freshness.h"
 #include "graph_optimization.h"
 #include "jobserver.h"
 #include "load_limit.h"
@@ -69,8 +71,8 @@
 
 namespace {
 
-const double kNotExist = -2.0;
-const double kProcessing = -1.0;
+constexpr FileStamp kNotExist = FileStamp::Missing();
+constexpr FileStamp kIgnoredEdge = FileStamp::Ignored();
 
 int CommandExitStatus(int status) {
   if (WIFEXITED(status))
@@ -80,8 +82,8 @@ int CommandExitStatus(int status) {
   return status;
 }
 
-static double LowResolutionTimestamp(double timestamp) {
-  return std::floor(timestamp);
+static FileStamp LowResolutionTimestamp(FileStamp timestamp) {
+  return timestamp.LowResolution();
 }
 
 static bool IsRecursiveKatiCommandMarker(const std::string& command) {
@@ -130,27 +132,10 @@ class Executor {
     std::shared_ptr<const Ancestry> parent;
   };
 
-  class LocalJobLease {
-   public:
-    explicit LocalJobLease(Executor* executor)
-        : executor_(executor->AcquireJob() ? executor : nullptr) {}
-    ~LocalJobLease() {
-      if (executor_)
-        executor_->ReleaseJob();
-    }
-    explicit operator bool() const { return executor_ != nullptr; }
-    LocalJobLease(const LocalJobLease&) = delete;
-    LocalJobLease& operator=(const LocalJobLease&) = delete;
-
-   private:
-    Executor* executor_;
-  };
-
  public:
   explicit Executor(Evaluator* ev, bool parallel, bool runtime_bootstrap)
       : ce_(ev),
         job_limit_(EffectiveJobLimit()),
-        active_jobs_(0),
         num_commands_(0),
         parallel_(parallel && job_limit_ > 1),
         runtime_bootstrap_(runtime_bootstrap) {
@@ -170,7 +155,7 @@ class Executor {
   }
 
   void ExplainNode(const DepNode& n,
-                   double output_ts,
+                   FileStamp output_ts,
                    const char* reason,
                    const std::vector<Command>* expanded = nullptr,
                    const std::vector<bool>* groups = nullptr) {
@@ -212,7 +197,7 @@ class Executor {
       }
     }
     for (const auto& dep : n.deps) {
-      double timestamp = GetTimestamp(dep.second->output.c_str());
+      FileStamp timestamp = FileStamp::Read(dep.second->output.c_str());
       {
         std::lock_guard<std::mutex> state_lock(state_mu_);
         const auto completed = done_.find(dep.second->output);
@@ -248,7 +233,7 @@ class Executor {
   }
 
   bool DependenciesAreCurrent(const DepNode& node,
-                              double target_timestamp,
+                              FileStamp target_timestamp,
                               std::unordered_set<Symbol>* visiting) {
     if (!visiting->insert(node.output).second)
       return false;
@@ -261,7 +246,7 @@ class Executor {
       const DepNode& child = *dep.second;
       if (child.is_phony || IsWhatIf(child.output))
         return false;
-      const double child_timestamp = GetTimestamp(child.output.c_str());
+      const FileStamp child_timestamp = FileStamp::Read(child.output.c_str());
       if (child_timestamp == kNotExist &&
           (!child.intermediate || (child.deps.empty() && child.cmds.empty()) ||
            !DependenciesAreCurrent(child, target_timestamp, visiting)))
@@ -272,7 +257,8 @@ class Executor {
         return false;
     }
     for (const auto& dep : node.order_onlys) {
-      const double order_timestamp = GetTimestamp(dep.second->output.c_str());
+      const FileStamp order_timestamp =
+          FileStamp::Read(dep.second->output.c_str());
       if (dep.second->is_phony || IsWhatIf(dep.second->output) ||
           order_timestamp == kNotExist ||
           !DependenciesAreCurrent(*dep.second, order_timestamp, visiting))
@@ -282,17 +268,17 @@ class Executor {
     return true;
   }
 
-  double ExecNode(const DepNode& n,
-                  const char* needed_by,
-                  std::shared_ptr<const Ancestry> parent = nullptr,
-                  const DepNode* parent_node = nullptr,
-                  const double* initial_timestamp = nullptr,
-                  std::vector<Command>* prepared_commands = nullptr) {
+  FileStamp ExecNode(const DepNode& n,
+                     const char* needed_by,
+                     std::shared_ptr<const Ancestry> parent = nullptr,
+                     const DepNode* parent_node = nullptr,
+                     const FileStamp* initial_timestamp = nullptr,
+                     std::vector<Command>* prepared_commands = nullptr) {
     for (auto path = parent; path != nullptr; path = path->parent) {
       if (path->output == n.output) {
         WARN("Circular %s <- %s dependency dropped.",
              needed_by ? needed_by : "(null)", n.output.c_str());
-        return kProcessing;
+        return kIgnoredEdge;
       }
     }
     auto ancestry =
@@ -303,12 +289,12 @@ class Executor {
       for (;;) {
         auto found = done_.find(n.output);
         if (found != done_.end()) {
-          if (!found->second.processing)
+          if (!(found->second.outcome == NodeOutcome::Running))
             return found->second.timestamp;
           if (found->second.owner == std::this_thread::get_id()) {
             WARN("Circular %s <- %s dependency dropped.",
                  needed_by ? needed_by : "(null)", n.output.c_str());
-            return kProcessing;
+            return kIgnoredEdge;
           }
           // Parallel execution submits only ready nodes, each owned once.
           // Serial traversal can encounter only its own ancestry above.
@@ -316,11 +302,13 @@ class Executor {
         }
         if (cancel_requested_.load(std::memory_order_relaxed)) {
           done_[n.output] =
-              NodeState{false, kNotExist, true, std::thread::id()};
+              NodeState{NodeOutcome::Failed, kNotExist, std::thread::id()};
+          n.execution_stamp = done_[n.output].timestamp;
           return kNotExist;
         }
-        done_[n.output] =
-            NodeState{true, kProcessing, false, std::this_thread::get_id()};
+        done_[n.output] = NodeState{NodeOutcome::Running, kIgnoredEdge,
+                                    std::this_thread::get_id()};
+        n.execution_stamp = done_[n.output].timestamp;
         break;
       }
     }
@@ -333,10 +321,10 @@ class Executor {
       frame = std::make_unique<ScopedFrame>(
           ce_.evaluator()->Enter(FrameType::EXEC, n.output.c_str(), n.loc));
     }
-    double output_ts =
-        initial_timestamp ? *initial_timestamp : GetTimestamp(n.output.c_str());
+    FileStamp output_ts = initial_timestamp ? *initial_timestamp
+                                            : FileStamp::Read(n.output.c_str());
     if (output_ts == kNotExist && n.vpath_provider.IsValid())
-      output_ts = GetTimestamp(n.vpath_provider.c_str());
+      output_ts = FileStamp::Read(n.vpath_provider.c_str());
 
     // GNU make does not regenerate a missing implicit intermediate merely
     // because it cleaned that file after an earlier successful build. If an
@@ -344,7 +332,7 @@ class Executor {
     // let the parent use its own timestamp without recreating the chain.
     if (!parallel_ && n.intermediate && output_ts == kNotExist && parent_node &&
         !parent_node->is_phony) {
-      const double parent_ts = GetTimestamp(needed_by);
+      const FileStamp parent_ts = FileStamp::Read(needed_by);
       std::unordered_set<Symbol> visited;
       if (parent_ts != kNotExist &&
           DependenciesAreCurrent(*parent_node, parent_ts, &visited)) {
@@ -381,13 +369,15 @@ class Executor {
       }
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] = NodeState{false, kNotExist, true, std::thread::id()};
+        done_[n.output] =
+            NodeState{NodeOutcome::Failed, kNotExist, std::thread::id()};
+        n.execution_stamp = done_[n.output].timestamp;
       }
       failed_.store(true, std::memory_order_relaxed);
       return kNotExist;
     }
 
-    double latest = kProcessing;
+    FileStamp latest = kIgnoredEdge;
     bool dependency_failed = false;
     auto is_low_resolution = [&n](Symbol input) {
       return std::find(n.low_resolution_inputs.begin(),
@@ -395,7 +385,7 @@ class Executor {
                        input) != n.low_resolution_inputs.end();
     };
     auto visit_child = [&](const auto& d, bool order_only) {
-      double ts = kProcessing;
+      FileStamp ts = kIgnoredEdge;
       bool ignored = false;
       if (parallel_) {
         const auto parent = ignored_inputs_.find(n.output);
@@ -417,9 +407,9 @@ class Executor {
       // phony recursive submake barriers: GNU make does not rebuild a
       // library merely because such a prerequisite ran.
       if (!order_only && IsWhatIf(d.second->output))
-        latest = std::numeric_limits<double>::infinity();
+        latest = FileStamp::Updated();
       else if (d.second->is_phony && !order_only)
-        latest = std::numeric_limits<double>::infinity();
+        latest = FileStamp::Updated();
       else if (!order_only && latest < ts)
         latest = is_low_resolution(d.first) ? LowResolutionTimestamp(ts) : ts;
     };
@@ -432,7 +422,9 @@ class Executor {
     if (dependency_failed) {
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] = NodeState{false, output_ts, true, std::thread::id()};
+        done_[n.output] =
+            NodeState{NodeOutcome::Failed, output_ts, std::thread::id()};
+        n.execution_stamp = done_[n.output].timestamp;
       }
       failed_.store(true, std::memory_order_relaxed);
       return output_ts;
@@ -455,7 +447,9 @@ class Executor {
       ExplainNode(n, output_ts, "kept unchanged by -o");
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] = NodeState{false, output_ts, false, std::thread::id()};
+        done_[n.output] =
+            NodeState{NodeOutcome::Succeeded, output_ts, std::thread::id()};
+        n.execution_stamp = done_[n.output].timestamp;
       }
       return output_ts;
     }
@@ -465,18 +459,22 @@ class Executor {
     if (g_flags.is_touch && n.is_phony) {
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] =
-            NodeState{false, output_ts, dependency_failed, std::thread::id()};
+        done_[n.output] = NodeState{
+            dependency_failed ? NodeOutcome::Failed : NodeOutcome::Succeeded,
+            output_ts, std::thread::id()};
+        n.execution_stamp = done_[n.output].timestamp;
       }
       return output_ts;
     }
 
-    if (output_ts != kNotExist && output_ts >= latest && !n.is_phony &&
+    if (!DecideFreshness(output_ts, latest, n.is_phony).dirty() &&
         !output_is_directory && n.double_colon_group_inputs.empty()) {
       ExplainNode(n, output_ts, "up to date");
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] = NodeState{false, output_ts, false, std::thread::id()};
+        done_[n.output] =
+            NodeState{NodeOutcome::Succeeded, output_ts, std::thread::id()};
+        n.execution_stamp = done_[n.output].timestamp;
       }
       return output_ts;
     }
@@ -485,7 +483,8 @@ class Executor {
     // needs to run in that case. Expand recipes only after the fast path;
     // this also keeps expensive variable and shell-function evaluation out of
     // incremental no-op builds.
-    auto double_colon_group_needs_build = [&](size_t group, double target_ts) {
+    auto double_colon_group_needs_build = [&](size_t group,
+                                              FileStamp target_ts) {
       if (target_ts == kNotExist || n.is_phony ||
           !n.double_colon_group_has_prerequisites[group])
         return true;
@@ -503,7 +502,7 @@ class Executor {
               completed->second.timestamp > target_ts)
             return true;
         }
-        if (GetTimestamp(input.c_str()) > target_ts)
+        if (FileStamp::Read(input.c_str()) > target_ts)
           return true;
       }
       return false;
@@ -529,11 +528,12 @@ class Executor {
       if (fd < 0 || close(fd) != 0 ||
           utimensat(AT_FDCWD, n.output.c_str(), nullptr, 0) < 0)
         PERROR("touch %s", n.output.c_str());
-      const double touched_ts = GetTimestamp(n.output.c_str());
+      const FileStamp touched_ts = FileStamp::Read(n.output.c_str());
       {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] =
-            NodeState{false, touched_ts, false, std::thread::id()};
+            NodeState{NodeOutcome::Succeeded, touched_ts, std::thread::id()};
+        n.execution_stamp = done_[n.output].timestamp;
       }
       return touched_ts;
     }
@@ -598,7 +598,9 @@ class Executor {
       ExplainNode(n, output_ts, "up to date (directory)", &commands);
       {
         std::lock_guard<std::mutex> lock(state_mu_);
-        done_[n.output] = NodeState{false, output_ts, false, std::thread::id()};
+        done_[n.output] =
+            NodeState{NodeOutcome::Succeeded, output_ts, std::thread::id()};
+        n.execution_stamp = done_[n.output].timestamp;
       }
       return output_ts;
     }
@@ -609,10 +611,9 @@ class Executor {
         n.has_rule && commands.empty() &&
         (output_ts == kNotExist ||
          (n.vpath_provider.IsValid() && !n.cmds.empty() &&
-          GetTimestamp(n.output.c_str()) == kNotExist));
-    double logical_ts = missing_empty_rule
-                            ? std::numeric_limits<double>::infinity()
-                            : output_ts;
+          FileStamp::Read(n.output.c_str()) == kNotExist));
+    FileStamp logical_ts =
+        missing_empty_rule ? FileStamp::Updated() : output_ts;
 
     if (n.vpath_provider.IsValid() && (n.is_phony || !n.cmds.empty())) {
       ScopedFilesystemEffect effect;
@@ -633,24 +634,25 @@ class Executor {
            (n.double_colon_group_inputs.empty() || any_group_needs_build))) {
         needs_build_.store(true, std::memory_order_relaxed);
         if (g_flags.explain)
-          logical_ts = std::numeric_limits<double>::infinity();
+          logical_ts = FileStamp::Updated();
       }
       const char* reason =
-          n.is_phony               ? "outdated: phony target"
-          : output_ts == kNotExist ? "outdated: output is missing"
+          n.is_phony || output_ts == kNotExist
+              ? DecideFreshness(output_ts, latest, n.is_phony).explanation()
           : !group_needs_build.empty()
               ? (any_group_needs_build
                      ? "outdated: double-colon group is unconditional or has "
                        "an outdated prerequisite"
                      : "up to date: all double-colon groups are current")
           : output_ts < latest
-              ? "outdated: prerequisite is newer or would be rebuilt"
+              ? DecideFreshness(output_ts, latest, n.is_phony).explanation()
               : "outdated: recursive directory recipe";
       ExplainNode(n, output_ts, reason, &commands, &group_needs_build);
       {
         std::lock_guard<std::mutex> lock(state_mu_);
         done_[n.output] =
-            NodeState{false, logical_ts, false, std::thread::id()};
+            NodeState{NodeOutcome::Succeeded, logical_ts, std::thread::id()};
+        n.execution_stamp = done_[n.output].timestamp;
       }
       return logical_ts;
     }
@@ -703,8 +705,9 @@ class Executor {
               command.shell.empty() ? shell_ : command.shell;
           const std::string& command_shellflag =
               command.shellflag.empty() ? shellflag_ : command.shellflag;
-          LocalJobLease job(this);
-          if (!job) {
+
+          if (cancel_requested_.load(std::memory_order_relaxed) ||
+              GetBuildSignal()) {
             node_failed = true;
             break;
           }
@@ -743,8 +746,9 @@ class Executor {
             command.shell.empty() ? shell_ : command.shell;
         const std::string& command_shellflag =
             command.shellflag.empty() ? shellflag_ : command.shellflag;
-        LocalJobLease job(this);
-        if (!job) {
+
+        if (cancel_requested_.load(std::memory_order_relaxed) ||
+            GetBuildSignal()) {
           node_failed = true;
           break;
         }
@@ -778,19 +782,21 @@ class Executor {
       CommitRuntimeRecipeReads(bootstrap_owner, bootstrap_identity);
       WriteNinjaRecipeState(bootstrap_owner + ".success", bootstrap_identity);
     }
-    double completed_ts =
-        ran_recipe ? GetTimestamp(n.output.c_str()) : logical_ts;
+    FileStamp completed_ts =
+        ran_recipe ? FileStamp::Read(n.output.c_str()) : logical_ts;
     // A successful recipe counts as updating its target for this invocation,
     // even if it deliberately leaves no file behind (Automake's force rules
     // are a common example).  Dependents must observe that logical update.
     if (ran_recipe && !node_failed && completed_ts == kNotExist)
-      completed_ts = std::numeric_limits<double>::infinity();
+      completed_ts = FileStamp::Updated();
     {
       std::lock_guard<std::mutex> lock(state_mu_);
       if (ran_recipe && !node_failed)
         built_outputs_.insert(n.output);
       done_[n.output] =
-          NodeState{false, completed_ts, node_failed, std::thread::id()};
+          NodeState{node_failed ? NodeOutcome::Failed : NodeOutcome::Succeeded,
+                    completed_ts, std::thread::id()};
+      n.execution_stamp = done_[n.output].timestamp;
     }
     return completed_ts;
   }
@@ -968,14 +974,15 @@ class Executor {
     for (const auto* edges : {&node.deps, &node.order_onlys})
       for (const auto& edge : *edges) {
         const auto input = done_.find(edge.second->output);
-        if (input == done_.end() || input->second.processing ||
-            input->second.failed)
+        if (input == done_.end() ||
+            (input->second.outcome == NodeOutcome::Running) ||
+            (input->second.outcome == NodeOutcome::Failed))
           return false;
       }
     return true;
   }
 
-  bool CanFinishInline(const DepNode& node, double timestamp) {
+  bool CanFinishInline(const DepNode& node, FileStamp timestamp) {
     if (cancel_requested_.load(std::memory_order_relaxed) || GetBuildSignal())
       return true;
     if (timestamp == kNotExist || node.is_phony ||
@@ -986,9 +993,10 @@ class Executor {
       if (input.second->is_phony || IsWhatIf(input.second->output))
         return false;
       auto completed = done_.find(input.second->output);
-      if (completed == done_.end() || completed->second.processing)
+      if (completed == done_.end() ||
+          (completed->second.outcome == NodeOutcome::Running))
         return false;
-      double input_time = completed->second.timestamp;
+      FileStamp input_time = completed->second.timestamp;
       if (std::find(node.low_resolution_inputs.begin(),
                     node.low_resolution_inputs.end(),
                     input.first) != node.low_resolution_inputs.end())
@@ -1004,7 +1012,7 @@ class Executor {
   void RunReadyGraph(const std::vector<NamedDepNode>& roots) {
     std::vector<const DepNode*> nodes;
     std::vector<const char*> needed_by;
-    std::vector<double> timestamps;
+    std::vector<FileStamp> timestamps;
     std::vector<ReadyTask> tasks;
     std::unordered_map<Symbol, size_t> ids;
     std::vector<unsigned char> colors;
@@ -1016,9 +1024,9 @@ class Executor {
       tasks.emplace_back();
       tasks.back().inline_work = node->cmds.empty();
       colors.push_back(1);
-      double timestamp = GetTimestamp(node->output.c_str());
+      FileStamp timestamp = FileStamp::Read(node->output.c_str());
       if (timestamp == kNotExist && node->vpath_provider.IsValid())
-        timestamp = GetTimestamp(node->vpath_provider.c_str());
+        timestamp = FileStamp::Read(node->vpath_provider.c_str());
       timestamps.push_back(timestamp);
       return id;
     };
@@ -1051,10 +1059,10 @@ class Executor {
           // A missing implicit intermediate can be unnecessary for one parent
           // but required by another. Store that decision on the edge, never as
           // a globally completed node.
-          const double parent_time = timestamps[id];
+          const FileStamp parent_time = timestamps[id];
           if (child->intermediate && !node.is_phony &&
               parent_time != kNotExist &&
-              GetTimestamp(child->output.c_str()) == kNotExist) {
+              FileStamp::Read(child->output.c_str()) == kNotExist) {
             std::unordered_set<Symbol> visiting;
             if (DependenciesAreCurrent(node, parent_time, &visiting)) {
               ignored_inputs_[node.output][child->output] = parent_time;
@@ -1065,7 +1073,7 @@ class Executor {
           if (found != ids.end() && colors[found->second] == 1) {
             WARN("Circular %s <- %s dependency dropped.", node.output.c_str(),
                  child->output.c_str());
-            ignored_inputs_[node.output][child->output] = kProcessing;
+            ignored_inputs_[node.output][child->output] = kIgnoredEdge;
             continue;
           }
           const bool discovered = found == ids.end();
@@ -1081,7 +1089,7 @@ class Executor {
     std::vector<std::unique_ptr<std::vector<Command>>> prepared(nodes.size());
     const ReadyQueueStats stats = RunReadyQueue(
         // One preparation slot overlaps recipe expansion/output bookkeeping
-        // with the admitted recipes. AcquireJob remains the authority for the
+        // with the admitted recipes. ProcessLease remains the authority for the
         // local recipe limit; preparation does not increase that limit.
         tasks, static_cast<size_t>(job_limit_) + 1,
         [&](size_t id) {
@@ -1107,49 +1115,27 @@ class Executor {
                                            ? shellflag_
                                            : command.shellflag) == "-c";
                              });
+        },
+        [&] {
+          cancel_requested_.store(true, std::memory_order_relaxed);
+          CancelBuildProcesses();
         });
     RecordStatCounter("scheduler_workers", stats.workers);
     RecordStatCounter("scheduler_inline_tasks", stats.inline_tasks);
     RecordStatMaximum("scheduler_peak_active", stats.peak_active);
   }
 
+  enum class NodeOutcome { Running, Succeeded, Failed };
   struct NodeState {
-    bool processing;
-    double timestamp;
-    bool failed;
+    NodeOutcome outcome;
+    FileStamp timestamp;
     std::thread::id owner;
   };
 
   bool IsFailed(Symbol output) {
     std::lock_guard<std::mutex> lock(state_mu_);
     auto it = done_.find(output);
-    return it != done_.end() && it->second.failed;
-  }
-
-  bool AcquireJob() {
-    std::unique_lock<std::mutex> lock(job_mu_);
-    while (!cancel_requested_.load(std::memory_order_relaxed) &&
-           GetBuildSignal() == 0) {
-      if (active_jobs_ < job_limit_) {
-        double sample = -1;
-        if (g_flags.load_limit >= 0 && active_jobs_ > 0 && !load_warning_ &&
-            getloadavg(&sample, 1) != 1) {
-          sample = -1;
-          fprintf(stderr,
-                  "omktr: cannot read load average; limiting this executor "
-                  "to one recipe at a time\n");
-          load_warning_ = true;
-        }
-        if (LoadAllowsJob(g_flags.load_limit, active_jobs_, sample)) {
-          ++active_jobs_;
-          return true;
-        }
-      }
-      // Load can drop without a recipe completing. Poll with a bounded wait
-      // that also makes cancellation responsive; never hold a FIFO token here.
-      job_cv_.wait_for(lock, std::chrono::milliseconds(100));
-    }
-    return false;
+    return it != done_.end() && (it->second.outcome == NodeOutcome::Failed);
   }
 
   std::unique_lock<std::mutex> LockRecursiveCommand() {
@@ -1164,15 +1150,9 @@ class Executor {
     return lock;
   }
 
-  void ReleaseJob() {
-    std::lock_guard<std::mutex> lock(job_mu_);
-    --active_jobs_;
-    job_cv_.notify_one();
-  }
-
-  void DeleteFailedOutput(const DepNode& node, double previous_ts) {
+  void DeleteFailedOutput(const DepNode& node, FileStamp previous_ts) {
     if (node.delete_on_error && !node.precious &&
-        GetTimestamp(node.output.str()) != previous_ts) {
+        FileStamp::Read(node.output.str()) != previous_ts) {
       ScopedFilesystemEffect effect;
       unlink(node.output.c_str());
     }
@@ -1180,18 +1160,14 @@ class Executor {
 
   CommandEvaluator ce_;
   std::unordered_map<Symbol, NodeState> done_;
-  std::unordered_map<Symbol, std::unordered_map<Symbol, double>>
+  std::unordered_map<Symbol, std::unordered_map<Symbol, FileStamp>>
       ignored_inputs_;
   std::unordered_set<Symbol> built_outputs_;
   std::mutex state_mu_;
   std::mutex eval_mu_;
   std::mutex output_mu_;
   std::mutex recursive_command_mu_;
-  std::mutex job_mu_;
-  std::condition_variable job_cv_;
   int job_limit_;
-  int active_jobs_;
-  bool load_warning_ = false;
   std::string shell_;
   std::string shellflag_;
   uint64_t num_commands_;

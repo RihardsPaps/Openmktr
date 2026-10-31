@@ -25,6 +25,7 @@ ReadyQueueStats RunReadyQueue(
     const std::vector<ReadyTask>& tasks,
     size_t jobs,
     const std::function<void(size_t)>& execute,
-    const std::function<bool(size_t)>& can_inline = {});
+    const std::function<bool(size_t)>& can_inline = {},
+    const std::function<void()>& cancel = {});
 
 #endif  // READY_QUEUE_H_

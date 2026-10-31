@@ -375,7 +375,10 @@ print(sys.argv[1])
         plain = subprocess.check_output(["ninja", "-t", "commands"], cwd=self.root)
         self.run_tool("--ninja", "--graph_optimizations=safe")
         compact = subprocess.check_output(["ninja", "-t", "commands"], cwd=self.root)
-        self.assertEqual(plain, compact)
+        # Profiles are carried by immutable environment snapshots. The
+        # serialization comparison excludes only that content-selected path.
+        normalize = lambda value: re.sub(rb"/env-[0-9]+(?:\.[0-9]+)?", b"/env-SNAPSHOT", value)
+        self.assertEqual(normalize(plain), normalize(compact))
         graph = (self.root / "build.ninja").read_text()
         self.assertEqual(graph.count("\nrule "), 1)
         self.assertEqual(graph.count(" --internal-run-recipe "), 1)
@@ -919,7 +922,7 @@ print(sys.argv[1])
         self.run_tool("build", "--graph_optimizations=aggressive",
                       "--disable_graph_optimization=compact")
         self.assertIn("subninja ", (self.root / ".openmktr/build.ninja").read_text())
-        graphs = list((self.root / ".openmktr/.imports").rglob("build.ninja"))
+        graphs = list({path.resolve() for path in (self.root / ".openmktr/.imports").rglob("build.ninja")})
         self.assertEqual(len(graphs), 1)
         self.assertNotIn("omktr_command", graphs[0].read_text())
 
@@ -1144,7 +1147,8 @@ print(sys.argv[1])
         stamp.symlink_to(sentinel)
         self.run_tool("build")
         self.assertEqual(sentinel.read_text(), "preserved")
-        self.assertFalse(stamp.is_symlink())
+        self.assertNotEqual(stamp.resolve(), sentinel)
+        self.assertIn(".omktr-generations", str(stamp.resolve()))
 
     def test_monitor_tracks_include_rename_delete_recreate_and_symlinks(self):
         if not Path("/dev/shm").is_dir():
@@ -1290,16 +1294,19 @@ print(sys.argv[1])
             "'$(origin KATI_GRAPH_SETTINGS)' '$(MAKE)' > result\n")
         cases = [
             (["--graph_optimizations=off"], "v1:off",
-             "evaluation=0 includes=0 recursive=0 compact=0 monitor=0 full=0 pattern_index=0"),
+             "evaluation=0 includes=0 recursive=0 compact=0 monitor=0 full=0 pattern_index=0 resolution=0"),
             (["--graph_optimizations=safe"], "v1:safe",
-             "evaluation=1 includes=1 recursive=0 compact=1 monitor=0 full=0 pattern_index=1"),
+             "evaluation=1 includes=1 recursive=0 compact=1 monitor=0 full=0 pattern_index=1 resolution=1"),
             (["--graph_optimizations=aggressive", "--disable_graph_optimization=evaluation",
               "--disable_graph_optimization=compact"], "v1:aggressive:evaluation:compact",
-             "evaluation=0 includes=1 recursive=1 compact=0 monitor=1 full=1 pattern_index=1"),
+             "evaluation=0 includes=1 recursive=1 compact=0 monitor=1 full=1 pattern_index=1 resolution=1"),
             (["--graph_optimizations=aggressive", "--disable_graph_optimization=pattern_index"],
              "v1:aggressive:pattern_index",
-             "evaluation=1 includes=1 recursive=1 compact=1 monitor=1 full=1 pattern_index=0"),
+             "evaluation=1 includes=1 recursive=1 compact=1 monitor=1 full=1 pattern_index=0 resolution=1"),
         ]
+        cases.append((["--graph_optimizations=safe", "--disable_graph_optimization=resolution"],
+                      "v1:safe:resolution",
+                      "evaluation=1 includes=1 recursive=0 compact=1 monitor=0 full=0 pattern_index=1 resolution=0"))
         for jobs in (1, 8, 16):
             for options, transport, settings in cases:
                 for ninja in (False, True):

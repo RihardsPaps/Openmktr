@@ -48,7 +48,7 @@ def effective_settings(options):
             disabled.add(option.split("=", 1)[1])
     features = {feature: profile != "off" and feature not in disabled and
                 (profile == "aggressive" or feature not in ("recursive", "monitor"))
-                for feature in ("evaluation", "includes", "recursive", "compact", "monitor")}
+                for feature in ("evaluation", "pattern_index", "resolution", "includes", "recursive", "compact", "monitor")}
     return dict(profile=profile, enabled=features,
                 general_state_replay=profile == "aggressive" and features["evaluation"],
                 monitor_policy="already-running-only")
@@ -106,6 +106,21 @@ def parity_summary(rows):
                         "ratio_upper_95": upper,
                         "parity_passed": cell["pairs"] >= 7 and
                         statistics.median(ratios) <= 1 and upper <= 1.05})
+    return results
+
+
+def memory_summary(rows):
+    """Per-command wait4 peak process RSS, paired separately from wall time."""
+    converted = []
+    for row in rows:
+        peak = row.get("peak_rss_kib", 0)
+        if peak > 0:
+            converted.append({**row, "total_seconds": peak})
+    results = parity_summary(converted)
+    for cell in results:
+        cell["metric"] = "wait4_peak_process_rss_kib"
+        cell["baseline_median_rss_kib"] = cell.pop("baseline_median_seconds")
+        cell["candidate_median_rss_kib"] = cell.pop("candidate_median_seconds")
     return results
 
 
@@ -388,6 +403,7 @@ def main():
                             row = dict(project=args.project, entrypoint=entrypoint, jobs=jobs,
                                        sample=sample, warmup=sample < args.warmups, variant=variant,
                                        scenario=scenario, total_seconds=elapsed, phases=phases,
+                                       peak_rss_kib=max((phase.get("peak_rss_kib", 0) for phase in phases.values()), default=0),
                                        configuration=configuration, config_sha256=config_hash,
                                        artifacts=output_hashes, changed_objects=changed,
                                        graph_bytes=graph.stat().st_size if graph.exists() else 0)
@@ -423,13 +439,17 @@ def main():
         report = dict(metadata=metadata, failure=failure or ("monitor cleanup failed" if cleanup_errors else None),
                       monitor_cleanup_errors=cleanup_errors, source_changes=changed,
                       summary=paired_summary(rows),
-                      parity=parity_summary(rows) if args.baseline_kind == "make" else None)
+                      parity=parity_summary(rows) if args.baseline_kind == "make" else None,
+                      memory=memory_summary(rows))
         expected_cells = len(args.jobs) * len(args.entrypoints) * (4 if args.retained else 5)
         report["parity_passed"] = (args.baseline_kind == "make" and failure is None and
                                    not cleanup_errors and not changed and
                                    len(report["parity"]) == expected_cells and
                                    all(cell["pairs"] == args.samples and cell["parity_passed"]
-                                       for cell in report["parity"]))
+                                       for cell in report["parity"]) and
+                                   len(report["memory"]) == expected_cells and
+                                   all(cell["pairs"] == args.samples and cell["parity_passed"]
+                                       for cell in report["memory"]))
         (root / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         if changed:
             raise RuntimeError(f"Release source contents changed: {changed[:10]}")

@@ -27,11 +27,13 @@
 
 #include <atomic>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
+#include "freshness.h"
 #include "loc.h"
 #include "symtab.h"
 
@@ -90,6 +92,11 @@ struct DepNode {
   std::vector<bool> double_colon_group_has_prerequisites;
   std::vector<size_t> double_colon_group_for_cmd;
   std::vector<Symbol> low_resolution_inputs;
+  // Shared automatic-variable contract: completed direct prerequisites retain
+  // logical updates; serialized Ninja recipes retain phony prerequisite names.
+  mutable std::optional<FileStamp> execution_stamp;
+  std::vector<Symbol> phony_inputs;
+  std::vector<Symbol> logical_inputs;
   std::vector<std::vector<Symbol>> wait_groups;
   std::vector<Symbol> actual_validations;
   Vars* rule_vars;

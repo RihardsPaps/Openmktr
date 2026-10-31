@@ -3191,7 +3191,7 @@
       "c",
       "d"
     ],
-    "output": "./build.ninja is missing, regenerating...\n[1/4] build a\n[2/4] build b\n[3/4] build c\n[4/4] build d\na b c kati_missing_output\n[1/1] build d\nb kati_missing_output\n",
+    "output": "./build.ninja is missing, regenerating...\n[1/4] build a\n[2/4] build b\n[3/4] build c\n[4/4] build d\necho a b c > d\na b c\n[1/1] build d\necho b > d\nb\n",
     "status": 0
   },
   "ninja_regen.sh:script": {

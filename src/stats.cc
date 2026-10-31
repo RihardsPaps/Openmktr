@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Use monotonic durations and retain the registry across repeated reports.
 // Fork changes are covered by MPL-2.0; see docs/LICENSING.md.
 // Copyright 2015 Google Inc. All rights reserved
@@ -18,6 +19,7 @@
 // +build ignore
 
 #include "stats.h"
+#include "session.h"
 
 #include <fcntl.h>
 #include <sys/resource.h>
@@ -35,9 +37,15 @@
 
 namespace {
 
-std::mutex g_mu;
-std::map<std::string, double> phase_times;
-std::map<std::string, size_t> counters;
+struct StatisticsState {
+  std::mutex mutex;
+  std::map<std::string, double> phases;
+  std::map<std::string, size_t> counts;
+  std::map<std::string, std::unique_ptr<Stats>> statistics;
+};
+#define g_mu (SessionService<StatisticsState>().mutex)
+#define phase_times (SessionService<StatisticsState>().phases)
+#define counters (SessionService<StatisticsState>().counts)
 
 std::string JsonString(const std::string& value) {
   std::string result = "\"";
@@ -53,17 +61,22 @@ std::string JsonString(const std::string& value) {
   }
   return result + '"';
 }
-std::vector<Stats*>& Registry() {
-  static std::vector<Stats*> registry;
-  return registry;
-}
-
 }  // namespace
 
-Stats::Stats(const char* name) : name_(name), elapsed_(0), cnt_(0) {
-  std::unique_lock<std::mutex> lock(g_mu);
-  Registry().push_back(this);
+Stats& SessionStats(const char* name) {
+  if (!g_flags.enable_stat_logs && !g_flags.stats_json) {
+    struct DisabledStats {
+      Stats value{"disabled"};
+    };
+    return SessionService<DisabledStats>().value;
+  }
+  std::lock_guard<std::mutex> lock(g_mu);
+  auto& slot = SessionService<StatisticsState>().statistics[name];
+  if (!slot)
+    slot = std::make_unique<Stats>(name);
+  return *slot;
 }
+Stats::Stats(const char* name) : name_(name), elapsed_(0), cnt_(0) {}
 
 void Stats::DumpTop() const {
   std::unique_lock<std::mutex> lock(mu_);
@@ -189,7 +202,8 @@ void ReportAllStats() {
   std::vector<Stats*> snapshot;
   {
     std::lock_guard<std::mutex> lock(g_mu);
-    snapshot = Registry();
+    for (auto& item : SessionService<StatisticsState>().statistics)
+      snapshot.push_back(item.second.get());
   }
   for (Stats* st : snapshot) {
     LOG_STAT("%s", st->String().c_str());

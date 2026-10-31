@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Extract process supervision from filesystem observation. Reap failed
 // launches and return job leases on infrastructure errors; preserve shell
 // execution, streaming output, cancellation, and cleanup behavior.
@@ -21,6 +22,7 @@
 // limitations under the License.
 
 #include "process.h"
+#include "session.h"
 
 #include <fcntl.h>
 #include <poll.h>
@@ -82,7 +84,12 @@ ScopedBuildSignals::~ScopedBuildSignals() {
 }
 
 int GetBuildSignal() {
-  return build_signal.load(std::memory_order_relaxed);
+  const int signal = build_signal.load(std::memory_order_relaxed);
+  const auto* session = BuildSession::Active();
+  return signal ? signal : session ? session->cancellation() : 0;
+}
+void CancelBuildProcesses() {
+  BuildSession::Current().Cancel(SIGTERM);
 }
 
 namespace {
@@ -159,6 +166,9 @@ int RunCommandImpl(const std::string& shell,
   // nested Kati processes started indirectly by scripts or configure tests.
   // An explicitly recursive boundary can pass along an inherited reservation
   // without taking an additional FIFO token.
+  ProcessLease admission;
+  if (!admission)
+    return GetBuildSignal();
   JobLease job(acquire_job_token);
   if (GetBuildSignal() != 0) {
     return GetBuildSignal();

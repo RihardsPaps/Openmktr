@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Separate runtime services and preserve scoped resource ownership.
 // Track and validate incremental evaluation, include proofs and imported Ninja
 // graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
@@ -27,6 +28,8 @@
 // +build ignore
 
 #include "regen.h"
+#include "generation.h"
+#include "session.h"
 
 #include <sys/stat.h>
 
@@ -506,7 +509,8 @@ class StampChecker {
   }
 
   bool CheckStep2() {
-    auto glob_future = std::async([this]() {
+    auto glob_future = std::async([this, session = BuildSession::Active()]() {
+      SessionBinding binding(session);
       std::string err;
       // TODO: Make glob cache thread safe and create a task for each glob.
       for (GlobResult* gr : globs_) {
@@ -521,7 +525,8 @@ class StampChecker {
       }
     });
 
-    auto shell_future = std::async([this]() {
+    auto shell_future = std::async([this, session = BuildSession::Active()]() {
+      SessionBinding binding(session);
       for (ShellResult* sr : commands_) {
         std::string err;
         if (CheckShellResult(sr, &err)) {
@@ -534,8 +539,8 @@ class StampChecker {
       }
     });
 
-    glob_future.wait();
-    shell_future.wait();
+    glob_future.get();
+    shell_future.get();
     if (needs_regen_) {
       fprintf(stderr, "%s", msg_.c_str());
     }
@@ -555,5 +560,11 @@ class StampChecker {
 }  // namespace
 
 bool NeedsRegen(double start_time, const std::string& orig_args) {
+  GenerationReader generation;
+  if (!generation.valid()) {
+    // Preserve diagnostics for legacy paths while requiring one-time migration.
+    StampChecker().NeedsRegen(start_time, orig_args);
+    return true;
+  }
   return StampChecker().NeedsRegen(start_time, orig_args);
 }

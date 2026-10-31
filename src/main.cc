@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Report supervisor phases and exclude diagnostic paths from graph identity.
 // Suppress no-op announcements for internal included-makefile updates.
 // Prepare immutable runtime contexts once per known Ninja invocation.
@@ -71,7 +72,9 @@
 #include "fileutil.h"
 #include "find.h"
 #include "flags.h"
+#include "freshness.h"
 #include "func.h"
+#include "generation.h"
 #include "graph_import.h"
 #include "graph_optimization.h"
 #include "jobserver.h"
@@ -85,6 +88,7 @@
 #include "regen.h"
 #include "regen_dump.h"
 #include "rule.h"
+#include "session.h"
 #include "stats.h"
 #include "stmt.h"
 #include "stringprintf.h"
@@ -93,7 +97,10 @@
 #include "timeutil.h"
 #include "var.h"
 
-static char** g_argv;
+struct InvocationArguments {
+  char** value = nullptr;
+};
+#define g_argv (SessionService<InvocationArguments>().value)
 
 static volatile sig_atomic_t build_child = 0;
 static volatile sig_atomic_t build_signal = 0;
@@ -249,18 +256,8 @@ bool StatPath(const char* path, struct stat* result) {
 bool IsNewer(const struct stat& input,
              const struct stat& output,
              bool low_resolution) {
-#if defined(__APPLE__)
-  const struct timespec input_time = input.st_mtimespec;
-  const struct timespec output_time = output.st_mtimespec;
-#else
-  const struct timespec input_time = input.st_mtim;
-  const struct timespec output_time = output.st_mtim;
-#endif
-  if (low_resolution)
-    return input_time.tv_sec > output_time.tv_sec;
-  return input_time.tv_sec > output_time.tv_sec ||
-         (input_time.tv_sec == output_time.tv_sec &&
-          input_time.tv_nsec > output_time.tv_nsec);
+  return InputIsNewer(FileStamp::FromStat(input), FileStamp::FromStat(output),
+                      EdgeKind::Normal, low_resolution);
 }
 
 int HandleNewerInputs(int argc, char** argv) {
@@ -435,7 +432,8 @@ int HandleIntermediateCurrent(const char* output,
     if (state != states.end()) {
       std::string expected, successful;
       if (!ReadNinjaRecipeState(state->second, &expected) ||
-          !ReadNinjaRecipeState(state->second + ".success", &successful) ||
+          !ReadNinjaRecipeState(
+              NinjaRecipeStateOwner(state->second) + ".success", &successful) ||
           expected != successful)
         return false;
     }
@@ -1637,6 +1635,13 @@ static void FindFirstMakefie() {
 }
 
 static int HandleRunNinja(int argc, char** argv) {
+  if (const char* lease = getenv("OMKTR_GENERATION_LEASE_FD")) {
+    char* end = nullptr;
+    const long fd = strtol(lease, &end, 10);
+    if (*lease && !*end && fd >= 20 && fd <= INT_MAX)
+      close(static_cast<int>(fd));
+    unsetenv("OMKTR_GENERATION_LEASE_FD");
+  }
   // argv: tool, helper, generation-time limit (empty means disabled), Ninja,
   // then Ninja arguments. Keep targets after -- completely opaque.
   double limit = *argv[2] ? ParseLoadLimit(argv[2]) : -1;
@@ -1740,7 +1745,8 @@ static int HandleRunNinja(int argc, char** argv) {
       arguments.insert(arguments.begin() + option_end, "-j1");
   }
   if (known_goals)
-    PrepareRuntimeContexts(RuntimeContextManifestPath(ninja_file));
+    PrepareRuntimeContexts(
+        RuntimeContextManifestPath(ResolveGenerationArtifact(ninja_file)));
   else
     unsetenv("KATI_RUNTIME_CONTEXT_FD");
   if (state.empty()) {
@@ -1831,7 +1837,30 @@ static bool IsWorkspaceAction(const char* argument) {
   return false;
 }
 
-int main(int argc, char* argv[]) {
+static int Main(int argc, char* argv[]) {
+  if (argc >= 4 && !strcmp(argv[1], "--internal-pin-generation")) {
+    // A reader can race collection before acquiring its lease. Retry the
+    // currently published bundle; every subsequent path is pinned to it.
+    auto generation = std::make_unique<GenerationReader>(argv[2]);
+    if (!generation->valid()) {
+      std::string current = std::string(Dirname(argv[2])) + "/current";
+      generation.reset();
+      generation = std::make_unique<GenerationReader>(current);
+    }
+    if (!generation->valid())
+      ERROR("invalid generation; regenerate the Ninja graph");
+    const std::string directory = generation->directory();
+    std::string launcher = directory + "/" + argv[3];
+    setenv("OMKTR_PINNED_GENERATION", directory.c_str(), 1);
+    std::vector<char*> arguments = {const_cast<char*>("/bin/sh"),
+                                    launcher.data()};
+    arguments.insert(arguments.end(), argv + 4, argv + argc);
+    arguments.push_back(nullptr);
+    const std::string lease = std::to_string(generation->InheritLease());
+    setenv("OMKTR_GENERATION_LEASE_FD", lease.c_str(), 1);
+    execv(arguments[0], arguments.data());
+    PERROR("execute pinned generation launcher");
+  }
   if (argc == 3 && !strcmp(argv[1], "--internal-evaluate-recipe"))
     return RunRuntimeRecipe(argv[2]);
   if (argc == 4 && strcmp(argv[1], "--internal-native-find") == 0 &&
@@ -1902,7 +1931,8 @@ int main(int argc, char* argv[]) {
               "missing or invalid workspace recipe state; regenerate the Ninja "
               "graph");
         std::string previous;
-        const std::string success_file = std::string(argv[6]) + ".success";
+        const std::string owner = NinjaRecipeStateOwner(argv[6]);
+        const std::string success_file = owner + ".success";
         const bool recorded = ReadNinjaRecipeState(success_file, &previous);
         if (!recorded && Exists(success_file))
           ERROR(
@@ -1910,8 +1940,8 @@ int main(int argc, char* argv[]) {
               "workspace");
         setenv("KATI_RECIPE_CHANGED",
                recorded && previous != recipe_state ? "1" : "0", 1);
-        setenv("KATI_RECIPE_STATE_PATH", argv[6], 1);
-        unlink((std::string(argv[6]) + ".reads-pending").c_str());
+        setenv("KATI_RECIPE_STATE_PATH", owner.c_str(), 1);
+        unlink((owner + ".reads-pending").c_str());
       } else {
         unsetenv("KATI_RECIPE_STATE_PATH");
       }
@@ -1929,8 +1959,9 @@ int main(int argc, char* argv[]) {
       if (GetBuildSignal() != 0)
         return 128 + GetBuildSignal();
       if (argc == 7 && WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-        CommitRuntimeRecipeReads(argv[6], recipe_state);
-        WriteNinjaRecipeState(std::string(argv[6]) + ".success", recipe_state);
+        const std::string owner = NinjaRecipeStateOwner(argv[6]);
+        CommitRuntimeRecipeReads(owner, recipe_state);
+        WriteNinjaRecipeState(owner + ".success", recipe_state);
       }
       return WIFEXITED(status)     ? WEXITSTATUS(status)
              : WIFSIGNALED(status) ? 128 + WTERMSIG(status)
@@ -2011,4 +2042,16 @@ int main(int argc, char* argv[]) {
   int r = Run(g_flags.targets, g_flags.cl_vars, orig_args, invocation_dir);
   ReportAllStats();
   return r;
+}
+
+int main(int argc, char* argv[]) {
+  BuildSession session;
+  try {
+    return Main(argc, argv);
+  } catch (const BuildExit& e) {
+    return e.status;
+  } catch (const std::exception& e) {
+    fprintf(stderr, "%s\n", e.what());
+    return 1;
+  }
 }

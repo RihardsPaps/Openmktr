@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Keep filesystem identities, observation epochs, globbing and recipe state
 // separate from process supervision. Reject nonregular recipe-state files
 // without blocking, and retain bounded atomic state publication.
@@ -23,6 +24,8 @@
 // +build ignore
 
 #include "fileutil.h"
+#include "observation.h"
+#include "session.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -46,30 +49,38 @@
 #include <unordered_set>
 
 #include "flags.h"
+#include "graph_optimization.h"
 #include "log.h"
 #include "strutil.h"
 
 namespace {
-std::atomic<uint64_t> filesystem_epoch{0};
-std::atomic<size_t> filesystem_effects{0};
+struct FilesystemSession {
+  std::atomic<uint64_t> epoch{0};
+  std::atomic<size_t> effects{0};
+};
+
 }  // namespace
 
 uint64_t FilesystemObservationEpoch() {
-  return filesystem_epoch.load(std::memory_order_acquire);
+  return SessionService<FilesystemSession>().epoch.load(
+      std::memory_order_acquire);
 }
 
 bool FilesystemEffectsActive() {
-  return filesystem_effects.load(std::memory_order_acquire) != 0;
+  return SessionService<FilesystemSession>().effects.load(
+             std::memory_order_acquire) != 0;
 }
 
 ScopedFilesystemEffect::ScopedFilesystemEffect() {
-  filesystem_effects.fetch_add(1, std::memory_order_acq_rel);
+  SessionService<FilesystemSession>().effects.fetch_add(
+      1, std::memory_order_acq_rel);
   InvalidateFileObservations();
 }
 
 ScopedFilesystemEffect::~ScopedFilesystemEffect() {
   InvalidateFileObservations();
-  filesystem_effects.fetch_sub(1, std::memory_order_release);
+  SessionService<FilesystemSession>().effects.fetch_sub(
+      1, std::memory_order_release);
 }
 
 struct FileObservationState {
@@ -125,7 +136,8 @@ ScopedFileObservations::~ScopedFileObservations() {
 bool ScopedFileObservations::valid() const {
   return state_ && state_->valid &&
          state_->epoch == FilesystemObservationEpoch() &&
-         filesystem_effects.load(std::memory_order_acquire) == 0;
+         SessionService<FilesystemSession>().effects.load(
+             std::memory_order_acquire) == 0;
 }
 std::unordered_map<std::string, std::string>
 ScopedFileObservations::Identities() const {
@@ -141,57 +153,66 @@ ScopedFileObservations::Identities() const {
   return result;
 }
 bool ObserveFile(const char* path, struct stat* st) {
-  if (!ScopedFileObservations::active_)
+  if (!ScopedFileObservations::active_ && !ObservationLog::Active())
     return stat(path, st) == 0;
   return ObserveFile(std::string(path), st);
 }
 
 bool ObserveFile(const std::string& name, struct stat* st) {
-  const char* path = name.c_str();
-  auto* state = ScopedFileObservations::active_;
-  if (!state)
-    return stat(path, st) == 0;
-  // Preserve the existing C-path interpretation even for embedded NULs.
-  if (name.find('\0') != std::string::npos)
-    return ObserveFile(path, st);
-  const uint64_t epoch = FilesystemObservationEpoch();
-  if (state->epoch != epoch) {
-    state->files.clear();
-    state->valid = false;
-    state->epoch = epoch;
-  }
-  if (filesystem_effects.load(std::memory_order_acquire)) {
-    ++state->fallbacks;
-    state->valid = false;
-    state->files.clear();
-    return stat(path, st) == 0;
-  }
-  auto found = state->files.find(name);
-  if (found == state->files.end()) {
-    if (state->files.size() >= 100000) {
+  const bool result = [&]() {
+    const char* path = name.c_str();
+    auto* state = ScopedFileObservations::active_;
+    if (!state)
+      return stat(path, st) == 0;
+    // Preserve the existing C-path interpretation even for embedded NULs.
+    if (name.find('\0') != std::string::npos)
+      return ObserveFile(path, st);
+    const uint64_t epoch = FilesystemObservationEpoch();
+    if (state->epoch != epoch) {
+      state->files.clear();
       state->valid = false;
+      state->epoch = epoch;
+    }
+    if (SessionService<FilesystemSession>().effects.load(
+            std::memory_order_acquire)) {
+      ++state->fallbacks;
+      state->valid = false;
+      state->files.clear();
       return stat(path, st) == 0;
     }
-    ++state->misses;
-    FileObservationState::Observation observation{};
-    observation.error = stat(path, &observation.metadata) == 0 ? 0 : errno;
-    found = state->files.emplace(name, observation).first;
-  } else {
-    ++state->hits;
-  }
-  if (FilesystemObservationEpoch() != epoch ||
-      filesystem_effects.load(std::memory_order_acquire)) {
-    state->files.clear();
-    state->valid = false;
-    ++state->fallbacks;
-    return stat(path, st) == 0;
-  }
-  *st = found->second.metadata;
-  errno = found->second.error;
-  return found->second.error == 0;
+    auto found = state->files.find(name);
+    if (found == state->files.end()) {
+      if (state->files.size() >= 100000) {
+        state->valid = false;
+        return stat(path, st) == 0;
+      }
+      ++state->misses;
+      FileObservationState::Observation observation{};
+      observation.error = stat(path, &observation.metadata) == 0 ? 0 : errno;
+      found = state->files.emplace(name, observation).first;
+    } else {
+      ++state->hits;
+    }
+    if (FilesystemObservationEpoch() != epoch ||
+        SessionService<FilesystemSession>().effects.load(
+            std::memory_order_acquire)) {
+      state->files.clear();
+      state->valid = false;
+      ++state->fallbacks;
+      return stat(path, st) == 0;
+    }
+    *st = found->second.metadata;
+    errno = found->second.error;
+    return found->second.error == 0;
+  }();
+  const int error = errno;
+  CaptureFileObservation(name, result, *st, error);
+  errno = error;
+  return result;
 }
 void InvalidateFileObservations() {
-  filesystem_epoch.fetch_add(1, std::memory_order_acq_rel);
+  SessionService<FilesystemSession>().epoch.fetch_add(
+      1, std::memory_order_acq_rel);
   if (auto* state = ScopedFileObservations::active_) {
     state->valid = false;
     state->files.clear();
@@ -288,6 +309,25 @@ bool ReadNinjaRecipeState(const std::string& path, std::string* state) {
   return valid;
 }
 
+std::string NinjaRecipeStateOwner(const std::string& path) {
+  const size_t marker = path.rfind(".version-");
+  return marker == std::string::npos ||
+                 path.find_first_not_of("0123456789.", marker + 9) !=
+                     std::string::npos
+             ? path
+             : path.substr(0, marker);
+}
+std::string PublishNinjaRecipeState(const std::string& owner,
+                                    const std::string& state) {
+  const auto path =
+      PublishGraphObject(owner + ".version-" + GraphDigest(state), state, true);
+  // The legacy owner is only a migration aid. New readers name the immutable
+  // expected version; success and read observations continue to use the owner.
+  if (!Exists(owner))
+    WriteNinjaRecipeState(owner, state);
+  return path;
+}
+
 void WriteNinjaRecipeState(const std::string& path, const std::string& state) {
   std::string previous;
   if (ReadNinjaRecipeState(path, &previous) && previous == state)
@@ -300,12 +340,22 @@ void WriteNinjaRecipeState(const std::string& path, const std::string& state) {
   while (written < state.size()) {
     const ssize_t count =
         HANDLE_EINTR(write(fd, state.data() + written, state.size() - written));
-    if (count <= 0)
+    if (count <= 0) {
+      const int error = errno;
+      close(fd);
+      unlink(temporary.c_str());
+      errno = error;
       PERROR("write Ninja recipe state failed");
+      return;
+    }
     written += count;
   }
-  if (close(fd) != 0 || rename(temporary.c_str(), path.c_str()) != 0)
+  if (close(fd) != 0 || rename(temporary.c_str(), path.c_str()) != 0) {
+    const int error = errno;
+    unlink(temporary.c_str());
+    errno = error;
     PERROR("publish Ninja recipe state failed");
+  }
 }
 
 std::string GetFileIdentity(std::string_view path) {
@@ -449,12 +499,18 @@ class GlobCache {
   uint64_t filesystem_epoch_ = 0;
 };
 
-static GlobCache g_gc;
+#define g_gc (SessionService<GlobCache>())
 
 }  // namespace
 
 const GlobMap::mapped_type& Glob(std::string_view pat) {
-  return g_gc.Get(pat);
+  const auto& result = g_gc.Get(pat);
+  if (ObservationLog::Active()) {
+    ObservationRecord record{ObservationKind::Glob, {std::string(pat)}};
+    record.fields.insert(record.fields.end(), result.begin(), result.end());
+    ObservationLog::Record(std::move(record));
+  }
+  return result;
 }
 
 const GlobMap& GetAllGlobCache() {

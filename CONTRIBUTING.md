@@ -136,6 +136,7 @@ as CI from the repository root inside Chimera:
 ```sh
 python tools/gen_sanitizer_build.py
 ninja -f build.sanitizer.ninja -j4 omktr-sanitized tests
+ASAN_OPTIONS=detect_leaks=1 out/sanitized/session_test
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/ready_queue_test
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/timeutil_test
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/find_test
@@ -144,6 +145,7 @@ ASAN_OPTIONS=detect_leaks=0 out/sanitized/strutil_test
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/load_limit_test
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/portage.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/load_limits.py
+ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/architecture.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/correctness.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/generated_recipe_reads.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/graph_optimizations.py
@@ -159,7 +161,7 @@ The normal build remains available for comparison.
 ## Measure performance
 
 See [core runtime refactor](docs/core-refactor.md) for the ready scheduler,
-structured timing output, new benchmark lanes, and remaining overhaul gates.
+invocation ownership, atomic publication, structured timing, and PC qualification.
 
 Build baseline and candidate binaries with the same toolchain. On Linux, run:
 

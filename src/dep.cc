@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Reuse explicitly named VPATH source providers before implicit regeneration.
 // Reuse immutable lexical prerequisite normalization during graph construction.
 // Retain pattern-variable indexing when evaluation memoization is disabled.
@@ -32,6 +33,7 @@
 // +build ignore
 
 #include "dep.h"
+#include "resolution_cache.h"
 
 #include <sys/stat.h>
 #include <algorithm>
@@ -1322,9 +1324,96 @@ class DepBuilder {
     return nullptr;
   }
 
+  void InitializeResolutionCache() {
+    constexpr size_t kIdentityBudget = 4 * 1024 * 1024;
+    struct BudgetExceeded {};
+    try {
+      if (rules_.size() > 65536 || implicit_rule_order_.size() > 65536 ||
+          suffix_rules_.size() > 65536 || phony_.size() > 65536)
+        throw BudgetExceeded{};
+      std::string identity;
+      auto append = [&](std::string_view value, std::string* destination) {
+        if (value.size() + 8 > kIdentityBudget - destination->size())
+          throw BudgetExceeded{};
+        AppendGraphString(value, destination);
+      };
+      auto text = [&](std::string_view value) { append(value, &identity); };
+      auto symbols = [&](const auto& values) {
+        std::string group;
+        for (Symbol value : values)
+          append(value.str(), &group);
+        text(group);
+      };
+      // Only facts read by the pure feasibility search belong to its identity.
+      // Recipe text/target-variable changes retain results; definition order,
+      // rule presence, pattern prerequisites and suffix precedence do not.
+      for (const auto& rule : rules_)
+        text(rule.first.str());
+      text("patterns");
+      std::vector<std::pair<size_t, const Rule*>> ordered;
+      for (const auto& item : implicit_rule_order_)
+        ordered.emplace_back(item.second, item.first);
+      std::sort(ordered.begin(), ordered.end());
+      auto rule = [&](const Rule* r) {
+        symbols(r->outputs);
+        symbols(r->output_patterns);
+        symbols(r->inputs);
+        symbols(r->order_only_inputs);
+        text(r->cmds.empty() ? "no-recipe" : "recipe");
+        text(r->secondary_expansion ? "secondary" : "ordinary");
+      };
+      for (const auto& item : ordered)
+        rule(item.second);
+      text("suffixes");
+      std::vector<std::string> suffixes;
+      for (const auto& item : suffix_rules_)
+        suffixes.emplace_back(item.first);
+      std::sort(suffixes.begin(), suffixes.end());
+      for (const auto& suffix : suffixes) {
+        text(suffix);
+        for (const auto& entry : suffix_rules_.at(suffix))
+          rule(entry.get());
+      }
+      text("phony");
+      std::vector<std::string> phonies;
+      for (Symbol name : phony_)
+        phonies.push_back(name.str());
+      std::sort(phonies.begin(), phonies.end());
+      for (const auto& name : phonies)
+        text(name);
+      resolution_cache_ =
+          std::make_unique<ResolutionCache>(std::move(identity));
+    } catch (const BudgetExceeded&) {
+      resolution_cache_ =
+          std::make_unique<ResolutionCache>(std::string(), false);
+      RecordStatCounter("resolution_budget_fallbacks");
+    }
+  }
+
   bool CanBuildImplicit(Symbol output,
                         const Rule* current_rule,
                         std::unordered_set<const Rule*>* used_rules) {
+    // VPATH's source-following symlink behavior and secondary expansions are
+    // handled normally. Cache only a pure top-level chain query, never bypass
+    // target scope selection or evaluation performed by BuildPlan.
+    auto order = implicit_rule_order_.find(current_rule);
+    if (!g_flags.GraphOptimizationEnabled("resolution") ||
+        !ev_->vpaths().empty() || used_rules->size() != 1 ||
+        !used_rules->count(current_rule) || order == implicit_rule_order_.end())
+      return CanBuildImplicitUncached(output, current_rule, used_rules);
+    if (!resolution_cache_)
+      InitializeResolutionCache();
+    std::string key;
+    AppendGraphString(output.str(), &key);
+    AppendGraphString(std::to_string(order->second), &key);
+    return resolution_cache_->Resolve(key, [&] {
+      return CanBuildImplicitUncached(output, current_rule, used_rules);
+    });
+  }
+
+  bool CanBuildImplicitUncached(Symbol output,
+                                const Rule* current_rule,
+                                std::unordered_set<const Rule*>* used_rules) {
     // Phony targets are always considered buildable and GNU make does not
     // search implicit rules to remake them.
     if (Exists(output) || phony_.exists(output))
@@ -2728,6 +2817,7 @@ class DepBuilder {
   bool add_parent_directory_edges_;
   std::unique_ptr<Vars> cur_rule_vars_;
 
+  std::unique_ptr<ResolutionCache> resolution_cache_;
   std::unique_ptr<RuleTrie> implicit_rules_;
   std::unordered_map<const Rule*, size_t> implicit_rule_order_;
   size_t next_implicit_rule_order_ = 0;

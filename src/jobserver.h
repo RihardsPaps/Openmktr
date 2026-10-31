@@ -31,4 +31,19 @@ class JobLease {
   int token_;
 };
 
+// Admission for every shell, including evaluation-time functions. Acquired
+// before shared tokens, released after child cleanup; no evaluator lock is
+// needed to return a slot.
+class ProcessLease {
+ public:
+  ProcessLease();
+  ~ProcessLease();
+  explicit operator bool() const { return acquired_; }
+  ProcessLease(const ProcessLease&) = delete;
+  ProcessLease& operator=(const ProcessLease&) = delete;
+
+ private:
+  bool acquired_ = false;
+};
+
 #endif  // JOBSERVER_H_

@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Refactor runtime service ownership and diagnostic timing for Openmktr.
 // Fork changes are covered by MPL-2.0; see docs/LICENSING.md and NOTICE.
 // Copyright 2015 Google Inc. All rights reserved
@@ -63,17 +64,18 @@ class ScopedStatsRecorder {
   double start_time_;
 };
 
+Stats& SessionStats(const char* name);
 void ReportAllStats();
 void RecordPhaseTime(const char* name, double seconds);
 void RecordStatCounter(const char* name, size_t count = 1);
 void RecordStatMaximum(const char* name, size_t value);
 
-#define COLLECT_STATS(name) \
-  static Stats stats(name); \
+#define COLLECT_STATS(name)          \
+  Stats& stats = SessionStats(name); \
   ScopedStatsRecorder ssr(&stats)
 
 #define COLLECT_STATS_WITH_SLOW_REPORT(name, msg) \
-  static Stats stats(name);                       \
+  Stats& stats = SessionStats(name);              \
   ScopedStatsRecorder ssr(&stats, msg)
 
 #endif  // STATS_H_

@@ -3,6 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include <assert.h>
 #include <time.h>
+#include "session.h"
 
 #include "flags.h"
 #include "stats.h"
@@ -25,11 +26,12 @@ extern "C" int __wrap_clock_gettime(clockid_t clock, struct timespec* value) {
 }
 
 int main() {
+  BuildSession session;
   simulated = true;
   assert(GetWallTime() == 1000);
   assert(GetMonotonicTime() == 10);
   g_flags.enable_stat_logs = true;
-  static Stats stats("clock regression");
+  Stats& stats = SessionStats("clock regression");
   {
     ScopedStatsRecorder record(&stats);
     wall -= 600;

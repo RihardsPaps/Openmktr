@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -85,6 +86,5 @@ Makefile::Makefile(const std::string& filename, bool from_stdin)
 }
 
 Makefile::~Makefile() {
-  for (Stmt* stmt : stmts_)
-    delete stmt;
+  // Statements and their borrowed expressions belong to the invocation arena.
 }

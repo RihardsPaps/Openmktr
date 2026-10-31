@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Retain replaced recipe bindings through evaluator-owned storage.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
@@ -31,7 +32,17 @@
 #include "log.h"
 #include "strutil.h"
 
-std::unordered_map<const Var*, std::string> Var::diagnostic_messages_;
+struct VariableSessionState {
+  SymbolSet used_env_vars;
+  bool is_set = false;
+  int shell_status = 0;
+  std::string shell_status_string;
+};
+#define used_env_vars_ (SessionService<VariableSessionState>().used_env_vars)
+#define is_set_ (SessionService<VariableSessionState>().is_set)
+#define shell_status_ (SessionService<VariableSessionState>().shell_status)
+#define shell_status_string_ \
+  (SessionService<VariableSessionState>().shell_status_string)
 
 const char* GetOriginStr(VarOrigin origin) {
   switch (origin) {
@@ -68,8 +79,14 @@ Var::Var(VarOrigin origin, Frame* definition, Loc loc)
       obsolete_(false),
       self_referential_(false) {}
 
+namespace {
+struct VariableDiagnostics {
+  std::unordered_map<const Var*, std::string> messages;
+};
+}  // namespace
 Var::~Var() {
-  diagnostic_messages_.erase(this);
+  if ((deprecated_ || obsolete_) && !DrainingSession())
+    SessionService<VariableDiagnostics>().messages.erase(this);
 }
 
 void Var::AppendVar(Evaluator*, Value*) {
@@ -78,12 +95,12 @@ void Var::AppendVar(Evaluator*, Value*) {
 
 void Var::SetDeprecated(const std::string_view& msg) {
   deprecated_ = true;
-  diagnostic_messages_[this] = std::string(msg);
+  SessionService<VariableDiagnostics>().messages[this] = std::string(msg);
 }
 
 void Var::SetObsolete(const std::string_view& msg) {
   obsolete_ = true;
-  diagnostic_messages_[this] = std::string(msg);
+  SessionService<VariableDiagnostics>().messages[this] = std::string(msg);
 }
 
 void Var::Used(Evaluator* ev, const Symbol& sym) const {
@@ -132,22 +149,18 @@ void Var::CheckCurrentReferencingFile(Loc loc, const char* name) {
 }
 
 const char* Var::diagnostic_message_text() const {
-  auto it = diagnostic_messages_.find(this);
-  return it == diagnostic_messages_.end() ? "" : it->second.c_str();
+  return DeprecatedMessage().c_str();
 }
 
 const std::string& Var::DeprecatedMessage() const {
-  static const std::string empty_string;
-  auto it = diagnostic_messages_.find(this);
-  return it == diagnostic_messages_.end() ? empty_string : it->second;
+  return SessionService<VariableDiagnostics>().messages[this];
 }
 
 Var* Var::Undefined() {
-  static Var* undefined_var;
-  if (!undefined_var) {
-    undefined_var = new UndefinedVar();
-  }
-  return undefined_var;
+  struct State {
+    UndefinedVar value;
+  };
+  return &SessionService<State>().value;
 }
 
 SimpleVar::SimpleVar(VarOrigin origin, Frame* definition, Loc loc)
@@ -305,10 +318,6 @@ std::string VariableNamesVar::DebugString() const {
   return "*VariableNamesVar*";
 }
 
-bool ShellStatusVar::is_set_ = false;
-int ShellStatusVar::shell_status_ = 0;
-std::string ShellStatusVar::shell_status_string_;
-
 ShellStatusVar::ShellStatusVar() {
   SetReadOnly();
   SetAssignOp(AssignOp::COLON_EQ);
@@ -360,6 +369,8 @@ std::string ShellStatusVar::DebugString() const {
 }
 
 Vars::~Vars() {
+  if (DrainingSession())
+    return;
   for (auto p : *this) {
     delete p.second;
   }
@@ -428,7 +439,9 @@ void Vars::Assign(Symbol name,
   }
 }
 
-SymbolSet Vars::used_env_vars_;
+const SymbolSet& Vars::used_env_vars() {
+  return used_env_vars_;
+}
 
 ScopedVar::ScopedVar(Vars* vars, Symbol name, Var* var)
     : vars_(vars), orig_(NULL) {

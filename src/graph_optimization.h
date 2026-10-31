@@ -15,6 +15,11 @@ int WriteIfChanged(int argc, char** argv);
 // corrupt records are misses. Publication never exposes a partial record.
 bool ReadGraphCache(const std::string& path, std::string* payload);
 bool WriteGraphCache(const std::string& path, std::string_view payload);
+// Publish an immutable object. Hashes select names only; compare full bytes,
+// and never replace a different object, even after a collision or corruption.
+std::string PublishGraphObject(const std::string& base,
+                               std::string_view payload,
+                               bool raw = false);
 void AppendGraphString(std::string_view value, std::string* data);
 bool ConsumeGraphString(std::string_view* data, std::string* value);
 bool ConsumeGraphStringView(std::string_view* data, std::string_view* value);

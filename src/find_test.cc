@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Refactor runtime service ownership and diagnostic timing for Openmktr.
 // Fork changes are covered by MPL-2.0; see docs/LICENSING.md and NOTICE.
 // Copyright 2015 Google Inc. All rights reserved
@@ -18,6 +19,7 @@
 // +build ignore
 
 #include "find.h"
+#include "session.h"
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -32,6 +34,7 @@
 int FindUnitTests();
 
 int main(int argc, char* argv[]) {
+  BuildSession session;
   if (argc == 1) {
     return FindUnitTests();
   }

@@ -41,6 +41,7 @@ class ScopedBuildSignals {
 };
 
 int GetBuildSignal();
+void CancelBuildProcesses();
 enum struct RedirectStderr {
   NONE,
   STDOUT,

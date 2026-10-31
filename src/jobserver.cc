@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Extract shared FIFO reservations and load admission into a runtime service.
 // Scope recipe reservations and close per-thread transport descriptors.
 // Changed by the Openmktr fork, maintained by Rihards Paps and Haralds Paps.
@@ -20,6 +21,10 @@
 // limitations under the License.
 
 #include "jobserver.h"
+#include <condition_variable>
+#include <thread>
+#include <unordered_map>
+#include "session.h"
 
 #include <fcntl.h>
 #include <poll.h>
@@ -47,14 +52,43 @@ struct JobserverConnection {
       close(fd);
   }
 };
-thread_local JobserverConnection jobserver_connection;
 constexpr int kReservedKatiJobToken = -2;
-std::atomic<bool> reserved_kati_job_in_use{false};
-std::mutex kati_jobserver_read_mu;
+struct JobserverState {
+  std::mutex connection_mu;
+  std::unordered_map<std::thread::id, std::unique_ptr<JobserverConnection>>
+      connections;
+  std::atomic<bool> reserved{false};
+  std::mutex read_mu;
 #if defined(__linux__)
-std::atomic<int> reserved_kati_wakeup_fd{-1};
-bool reserved_kati_wakeup_initialized = false;
+  std::atomic<int> wakeup_fd{-1};
+  bool initialized = false;
+  ~JobserverState() {
+    if (wakeup_fd >= 0)
+      close(wakeup_fd);
+  }
 #endif
+};
+JobserverConnection& Connection() {
+  auto& state = SessionService<JobserverState>();
+  std::lock_guard<std::mutex> lock(state.connection_mu);
+  auto& connection = state.connections[std::this_thread::get_id()];
+  if (!connection)
+    connection = std::make_unique<JobserverConnection>();
+  return *connection;
+}
+#define jobserver_connection (Connection())
+#define reserved_kati_job_in_use (SessionService<JobserverState>().reserved)
+#define kati_jobserver_read_mu (SessionService<JobserverState>().read_mu)
+#define reserved_kati_wakeup_fd (SessionService<JobserverState>().wakeup_fd)
+#define reserved_kati_wakeup_initialized \
+  (SessionService<JobserverState>().initialized)
+
+struct ProcessAdmission {
+  std::mutex mutex;
+  std::condition_variable available;
+  int active = 0;
+  bool load_warning = false;
+};
 
 // Called with kati_jobserver_read_mu held. The descriptor carries wakeups,
 // never job tokens, and must not survive a recipe exec.
@@ -280,4 +314,36 @@ JobLease::JobLease(bool acquire) {
 
 JobLease::~JobLease() {
   ReleaseKatiJobToken(token_);
+}
+
+ProcessLease::ProcessLease() {
+  auto& admission = SessionService<ProcessAdmission>();
+  std::unique_lock<std::mutex> lock(admission.mutex);
+  const int limit = std::max(1, g_flags.num_jobs);
+  while (GetBuildSignal() == 0) {
+    if (admission.active < limit) {
+      double sample = -1;
+      if (g_flags.load_limit >= 0 && admission.active > 0 &&
+          !admission.load_warning && getloadavg(&sample, 1) != 1) {
+        admission.load_warning = true;
+        WARN(
+            "omktr: cannot read load average; limiting this invocation to one "
+            "process at a time");
+      }
+      if (LoadAllowsJob(g_flags.load_limit, admission.active, sample)) {
+        ++admission.active;
+        acquired_ = true;
+        return;
+      }
+    }
+    admission.available.wait_for(lock, std::chrono::milliseconds(100));
+  }
+}
+ProcessLease::~ProcessLease() {
+  if (!acquired_)
+    return;
+  auto& admission = SessionService<ProcessAdmission>();
+  std::lock_guard<std::mutex> lock(admission.mutex);
+  --admission.active;
+  admission.available.notify_one();
 }

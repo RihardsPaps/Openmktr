@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Separate runtime services and preserve scoped resource ownership.
 // Preserve owned path strings through filesystem-probe cache lookups.
 // Track and validate incremental evaluation, include proofs and imported Ninja
@@ -99,6 +100,9 @@ class ScopedFilesystemEffect {
   ScopedFilesystemEffect& operator=(const ScopedFilesystemEffect&) = delete;
 };
 bool ReadNinjaRecipeState(const std::string& path, std::string* state);
+std::string NinjaRecipeStateOwner(const std::string& path);
+std::string PublishNinjaRecipeState(const std::string& owner,
+                                    const std::string& state);
 void WriteNinjaRecipeState(const std::string& path, const std::string& state);
 
 std::string GetOutputStamp(std::string_view path);

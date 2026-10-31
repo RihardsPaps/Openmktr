@@ -226,3 +226,46 @@ See [the archived investigation](history.log) for historical suite counts,
 optimized-Python checks, and the distinction between confirmed fixes and the
 unreproduced report. These results do not justify claiming a new runtime fix
 or closing the original report without evidence of its cause.
+
+## Qualify the core overhaul on the PC
+
+Use [`qualify_core.py`](qualify_core.py) with a copy of
+[`core-qualification.example.json`](core-qualification.example.json). Replace
+all paths and revision labels with the PC's actual tools and configuration.
+`root` must be a new disposable directory. The selected release archives must
+match [dependency-campaign.json](dependency-campaign.json); obtain them before
+running. LibreOffice's configuration JSON must contain the reviewed
+`configure_options` list. Its three probe paths must identify an enabled source,
+its object and an unrelated object in that configuration. The external build
+host needs the projects' configure/build dependencies, Python 3.12+, `pypdf`,
+GNU Make, Clang/LLVM and Ninja 1.13.2+. GNU Make is only the comparison tool.
+
+Inspect the concrete matrix without executing builds:
+
+```sh
+python3 validation/qualify_core.py --config /path/to/qualification.json --plan-only
+```
+
+Run sequentially on the PC with other performance workloads stopped:
+
+```sh
+python3 validation/qualify_core.py --config /path/to/qualification.json
+```
+
+The driver requires both direct and build modes, two warmups and seven measured
+pairs per requested job count. It alternates tool order, verifies clean and
+incremental artifacts, checks source integrity, and retains logs, hashes,
+application smoke products and every sample. LibreOffice covers source touch,
+missing object and graph touch in addition to clean/no-op and Writer/Calc/Impress.
+By default, completed LibreOffice source/build trees are removed after retaining
+evidence; `--retain-builds` keeps them. Other evidence is never overwritten.
+Failure leaves a partial `qualification.json` with `release_qualified: false`.
+
+Timing and memory each require every requested cell, a median candidate/GNU
+ratio at most 1.00 and a bootstrap 95% upper ratio at most 1.05. Missing samples
+cannot qualify. Memory is `wait4` peak individual-process RSS, including reaped
+children, rather than summed simultaneous tree memory. LibreOffice additionally
+retains sampled tree RSS. Build timers include graph generation/regeneration;
+configuration and verification remain outside them. Failed commands or artifact
+checks fail the campaign independently of timing. These PC runs remain unrun
+for the architectural overhaul; historical selected passes do not fill the gate.

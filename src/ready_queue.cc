@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "ready_queue.h"
+#include "session.h"
 
 #include <algorithm>
 #include <condition_variable>
@@ -14,7 +15,8 @@
 ReadyQueueStats RunReadyQueue(const std::vector<ReadyTask>& tasks,
                               size_t jobs,
                               const std::function<void(size_t)>& execute,
-                              const std::function<bool(size_t)>& can_inline) {
+                              const std::function<bool(size_t)>& can_inline,
+                              const std::function<void()>& cancel) {
   ReadyQueueStats stats;
   if (tasks.empty())
     return stats;
@@ -51,7 +53,9 @@ ReadyQueueStats RunReadyQueue(const std::vector<ReadyTask>& tasks,
     for (auto& worker : workers)
       worker.join();
   };
+  BuildSession* session = BuildSession::Active();
   auto work = [&]() {
+    SessionBinding binding(session);
     for (;;) {
       size_t id;
       {
@@ -68,6 +72,8 @@ ReadyQueueStats RunReadyQueue(const std::vector<ReadyTask>& tasks,
       try {
         execute(id);
       } catch (...) {
+        if (cancel)
+          cancel();
         std::lock_guard<std::mutex> lock(mutex);
         if (!failure)
           failure = std::current_exception();
@@ -135,6 +141,8 @@ ReadyQueueStats RunReadyQueue(const std::vector<ReadyTask>& tasks,
       }
     }
   } catch (...) {
+    if (cancel)
+      cancel();
     stop();
     throw;
   }
