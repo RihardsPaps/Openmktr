@@ -162,6 +162,12 @@ void BuildSession::Release(void* value) noexcept {
   chunk->live[index / 64] &= ~(uint64_t{1} << (index % 64));
   --owner->allocations_;
   if (!owner->draining_ && chunk->pool) {
+#ifdef SESSION_ASAN
+    // A tiny object (including a failed constructor) can be smaller than the
+    // allocator's free-list link. This is allocator metadata now, not a live
+    // object access; expose the link before writing it, then poison the slot.
+    __asan_unpoison_memory_region(value, sizeof(void*));
+#endif
     *static_cast<void**>(value) = chunk->pool->available;
     chunk->pool->available = value;
   }

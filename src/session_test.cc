@@ -37,6 +37,9 @@ struct Large : SessionAllocated<Large> {
 struct Throwing : SessionAllocated<Throwing> {
   Throwing() { throw std::runtime_error("constructor failed"); }
 };
+struct Tiny : SessionAllocated<Tiny> {
+  char value = 1;
+};
 struct SharedCounter {
   std::atomic<int> value{0};
 };
@@ -45,6 +48,11 @@ void ExerciseArena() {
   std::atomic<int> live{0};
   {
     BuildSession session;
+    for (int i = 0; i < 2; ++i) {
+      auto* tiny = new Tiny;
+      assert(tiny->value == 1);
+      delete tiny;
+    }
     std::vector<Counted*> values;
     // Cross chunk boundaries, recycle early deletions, and leave live objects
     // for teardown. An inner session must not receive the outer object's free.
