@@ -84,9 +84,10 @@ class Architecture(unittest.TestCase):
             self.assertEqual((self.root / "output").read_text(), "empty")
 
     def test_expansion_failure_cancels_and_reaps_active_siblings(self):
-        self.write(".PHONY: all fail\nall: output fail\noutput:\n"
+        self.write(".PHONY: all fail ready\nall: output fail\noutput:\n"
                    "\t@echo $$$$ > child; printf partial > output; touch started; sleep 30\n"
-                   "fail:\n\t@$(shell while test ! -f started; do sleep .01; done)$(error expansion failed)\n")
+                   "ready:\n\t@while test ! -f started; do sleep .01; done\n"
+                   "fail: ready\n\t@$(error expansion failed)\n")
         started = time.monotonic()
         result = self.run_tool("-j2", "all", check=False)
         self.assertNotEqual(result.returncode, 0)
