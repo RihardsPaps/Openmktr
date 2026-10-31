@@ -208,12 +208,16 @@ Both modes share parsing, evaluation, and dependency resolution.
 
 | Stage | Main source files |
 | --- | --- |
+| Own invocation state and language allocations | [session.cc](src/session.cc), [session.h](src/session.h) |
 | Parse statements and expressions | [parser.cc](src/parser.cc), [expr.cc](src/expr.cc) |
 | Cache parsed includes | [file_cache.cc](src/file_cache.cc) |
 | Evaluate variables, directives, functions, and rules | [eval.cc](src/eval.cc), [stmt.cc](src/stmt.cc), [func.cc](src/func.cc) |
-| Resolve rules and dependencies | [dep.cc](src/dep.cc) |
-| Expand recipes and schedule direct builds | [command.cc](src/command.cc), [exec.cc](src/exec.cc) |
+| Resolve rules, record observations and reuse pure queries | [dep.cc](src/dep.cc), [observation.cc](src/observation.cc), [resolution_cache.cc](src/resolution_cache.cc) |
+| Compare typed timestamps and edge freshness | [freshness.cc](src/freshness.cc) |
+| Expand recipes and schedule direct builds | [command.cc](src/command.cc), [exec.cc](src/exec.cc), [ready_queue.cc](src/ready_queue.cc) |
+| Admit, supervise and reap child processes | [jobserver.cc](src/jobserver.cc), [process.cc](src/process.cc) |
 | Generate Ninja files and check regeneration | [ninja.cc](src/ninja.cc), [regen.cc](src/regen.cc) |
+| Publish complete generations and retain active readers | [generation.cc](src/generation.cc) |
 
 ## Use external compatibility evidence
 

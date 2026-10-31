@@ -9,6 +9,22 @@ The matrix records specific releases and configurations; a passing result does
 not establish compatibility with every version or target. Read the
 [campaign guide](README.md) before using the tools or citing a row.
 
+## Core architecture completion — 31 October 2026
+
+The [core overhaul](../docs/core-refactor.md) now implements invocation ownership,
+ready scheduling and unified child-process admission, typed freshness, complete
+generation publication with reader leases, and bounded persistent implicit-rule
+query reuse. The pinned cloud portable and sanitizer gates pass; both snapshot
+profiles pass 858/858 scenarios. Exact revisions and limitations are retained in
+the [architecture evidence](evidence/core-architecture-2026-10-31.json).
+
+Only the real PC release qualification remains in this refactor's work plan.
+[`qualify_core.py`](qualify_core.py) and its [configuration example](core-qualification.example.json)
+cover Linux 7.3, FFmpeg 9.0.2 and LibreOffice 26.8.2.2 in direct and build modes,
+with alternating pairs, correctness checks, timing and memory gates. That matrix
+has been generated but **not executed**. Historical project passes below and
+cloud synthetic measurements do not qualify this new runtime revision.
+
 ## Evidence boundary
 
 A project pass requires a real build using this repository's `omktr` for

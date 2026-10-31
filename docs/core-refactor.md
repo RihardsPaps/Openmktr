@@ -56,6 +56,13 @@ manifest are completed and synced before a single `current` symlink rename
 publishes them. Public filenames remain entry points. A checksummed versioned
 manifest validates bundle artifacts; the stamp separately seals its structural
 bytes while allowing its validation checkpoint to advance.
+Immutable object writes use batches of at most 256 paths, syncing every file
+and each containing directory before publication. Unsealed reused paths
+participate too, so an interrupted or concurrent writer cannot supply an
+unsynced object to a committed graph. After flushing, objects become owner-read-only
+(`0400`); this seal permits later reuse without repeated disk barriers, while
+full bytes are still checked. Sealing precedes recording regeneration identities.
+These private cache files must remain immutable; regenerate after editing them.
 
 Generated launchers pin their selected bundle with a shared lease for the whole
 Ninja run. Collection checks exclusive leases, retains the current and preceding
@@ -111,6 +118,50 @@ report separately. Missing records on fatal exits never count as success.
 Existing `--kati_stats` diagnostics remain available, including resolution hits
 and misses. Filesystem timestamps and regeneration checkpoints remain wall-clock
 observations; elapsed timing uses monotonic clocks.
+
+## Portable validation
+
+The pinned cloud Chimera toolchain passed all 28 portable gate commands and all
+19 sanitizer build/test commands at architecture revision `7fdb573`. Both safe
+and aggressive snapshot profiles pass 858/858 scenarios. The full suites include
+187 correctness cases per profile, 45 runtime-recipe cases, 58 graph cases,
+30 workspace cases and 12 jobserver cases. The external GNU incremental campaign
+reports no correctness blocker, unnecessary rebuilding or harness error.
+
+The final runtime revision `62a7200` adds missing immutable environment-object
+revalidation and batches writes before sealing durable objects. Its normal and ASan/UBSan
+rechecks pass 10 architectural contracts, 58 graph cases, 45 runtime-recipe cases
+and 187 correctness cases. Session
+teardown also passes with LeakSanitizer enabled. The ordinary sanitizer suite
+uses its established `detect_leaks=0` setting; an optional broader leak-check
+attempt stopped in the LeakSanitizer tracer itself; an isolated retry passed.
+This does not establish a whole-program leak result. The evidence retains the
+failed attempt, the corrected cancellation-test and sealing order, and successful
+rechecks. The final normal recheck also runs as an unprivileged user.
+
+The [architecture report](../validation/evidence/core-architecture-2026-10-31.json)
+and [checksummed raw archive](../validation/evidence/core-architecture-2026-10-31.zip)
+record exact revisions, commands, samples and limitations. They supplement the
+historical first delivery; they do not qualify release-project performance.
+
+Seven alternating cloud pairs at `-j4` retain correct outputs and rebuild sets,
+but do **not** demonstrate speed parity. Ratios below are medians of paired
+candidate/baseline times; values above 1 mean slower:
+
+| Synthetic workload | Median ratio | Bootstrap 95% interval |
+| --- | ---: | ---: |
+| Direct clean | 1.069 | 1.035–1.120 |
+| Generated clean | 1.190 | 0.995–1.224 |
+| Generated Makefile change | 1.215 | 1.150–1.333 |
+| Direct no-op | 1.025 | 0.901–1.067 |
+| Generated no-op | 1.272 | 1.118–1.498 |
+
+A separate seven-repeat phase benchmark reduces parallel dispatch of 2,000
+phony no-op recipes from 17.01 to 12.04 ms (29.2%), while conversion of 10,000
+targets rises from 168.77 to 219.92 ms (30.3%). Conversion peak process RSS rises
+from 27,556 to 32,620 KiB. Batching and sealing avoid the earlier repeated-flush
+regression; all preceding measurements remain in the archive. These mixed
+results and the unrun PC campaign keep release performance unqualified.
 
 ## Remaining PC qualification
 
