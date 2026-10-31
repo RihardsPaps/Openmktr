@@ -42,7 +42,8 @@ def end_to_end(binary: Path, repeats: int) -> dict:
                     # Advance beyond every output on coarse timestamp filesystems.
                     # Waiting and edits are deliberately excluded from measurement.
                     if scenario != "noop":
-                        latest = max(p.stat().st_mtime_ns for p in cwd.iterdir())
+                        latest = max((cwd / f"out{i}").stat().st_mtime_ns
+                                     for i in range(32))
                         while time.time_ns() <= latest + 1_000_000_000:
                             time.sleep(0.01)
                         if scenario == "single_file_change":
