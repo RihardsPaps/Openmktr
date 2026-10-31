@@ -34,6 +34,7 @@ class GenerationTransaction {
   ~GenerationTransaction();
   GenerationTransaction(const GenerationTransaction&) = delete;
   GenerationTransaction& operator=(const GenerationTransaction&) = delete;
+  void SyncObjects();
   void Commit();
   const std::string& directory() const { return directory_; }
 

@@ -368,6 +368,9 @@ class NinjaGenerator {
         ERROR("cannot publish runtime context manifest");
       MakefileCacheManager::Get().AddGeneratedGraphDep(context_manifest_path);
     }
+    // Sealing changes object metadata. Observe it only after the durability
+    // barriers, so the generated dependency identities certify the final files.
+    generation.SyncObjects();
     GenerateStamp(orig_args);
     generation.Commit();
     if (g_flags.import_root) {

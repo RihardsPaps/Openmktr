@@ -212,8 +212,11 @@ GenerationTransaction::~GenerationTransaction() {
   if (lock_ >= 0)
     close(lock_);
 }
-void GenerationTransaction::Commit() {
+void GenerationTransaction::SyncObjects() {
   objects_.Flush();
+}
+void GenerationTransaction::Commit() {
+  SyncObjects();
   std::string manifest;
   AppendGraphString("generation-v1", &manifest);
   const auto artifacts = Artifacts();
