@@ -18,6 +18,31 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_phony_noop_preserves_ninja_depfile_inputs(self):
+        self.makefile(
+            ".PHONY: noop\n"
+            "noop: .KATI_DEPFILE = noop.d\n"
+            "noop:\n\t@:\n")
+        (self.directory / "noop").write_text("keep")
+        (self.directory / "input").write_text("input")
+        (self.directory / "noop.d").write_text("noop: input\n")
+        self.direct("--ninja", "noop")
+        self.run_command("sh", "./ninja.sh", "noop")
+        _, dependencies = self.run_command("ninja", "-t", "deps", "noop")
+        self.assertIn("    input\n", dependencies)
+        self.assertFalse((self.directory / "noop.d").exists())
+
+    def test_phony_noop_preserves_ninja_restat(self):
+        self.makefile(
+            ".PHONY: all noop\n.KATI_RESTAT: noop\nall: out\n"
+            "noop:\n\t@:\nout: noop\n\t@printf x >> $@\n")
+        (self.directory / "noop").write_text("keep")
+        self.direct("--ninja", "all")
+        for _ in range(2):
+            self.run_command("sh", "./ninja.sh", "-j4", "all")
+            self.assertEqual((self.directory / "out").read_text(), "x")
+        self.assertEqual((self.directory / "noop").read_text(), "keep")
+
     def test_ninja_silent_phony_noops_preserve_freshness_and_recipe_effects(self):
         root = self.directory
         for mode in ("direct", "build", "legacy"):

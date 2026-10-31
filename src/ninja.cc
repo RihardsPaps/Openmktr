@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Preserve explicit Ninja metadata when eliding phony no-op commands.
 // Elide shell launches for silent, side-effect-free phony no-op recipes.
 // Read optional double-colon metadata through the shared dependency view.
 // Cache command prefixes and source local environment objects after chdir.
@@ -954,8 +955,13 @@ class NinjaGenerator {
     // A silent ':' in the default shell has no observable recipe effect.
     // Keep its phony dependency edge (including the always-dirty input), but
     // avoid starting a shell. Deferred evaluation, exports, explicit recursive
-    // recipes, custom interpreters and visible commands still execute.
-    if (node->is_phony && commands.size() == 1) {
+    // recipes, custom interpreters and visible commands still execute. Explicit
+    // Ninja metadata can require an actual command (for example, depfile
+    // discovery or restat), even when its shell body is a no-op.
+    if (node->is_phony && commands.size() == 1 && !node->is_restat &&
+        !node->depfile_var && !node->ninja_pool_var && !node->tags_var &&
+        node->implicit_outputs.empty() && !node->is_notparallel &&
+        !g_flags.default_pool && !g_flags.use_ninja_phony_output) {
       const Command& command = commands.front();
       if (!command.echo && !command.force_run && command.cmd == ":" &&
           command.shell == "/bin/sh" && command.shellflag == "-c" &&
