@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Read optional double-colon metadata through the shared dependency view.
 // Read logical updates directly from the dependency execution flag.
 // Own invocation state and publish coherent generations with typed freshness.
 // Separate runtime services and preserve scoped resource ownership.
@@ -423,7 +424,7 @@ bool MakeRuntimeRecipe(const DepNode& node,
     inspection.dynamic = true;
   if (!inspection.io && !inspection.dynamic &&
       (!inspection.automatic_freshness ||
-       node.double_colon_group_inputs.size() > 1)) {
+       node.DoubleColon().inputs.size() > 1)) {
     ev->set_current_scope(nullptr);
     return false;
   }
@@ -433,7 +434,7 @@ bool MakeRuntimeRecipe(const DepNode& node,
   // a watch list of previously existing environment names cannot detect it.
   if (inspection.io || inspection.dynamic)
     MakefileCacheManager::Get().RequireEvaluation();
-  if (node.double_colon_group_inputs.size() > 1)
+  if (node.DoubleColon().inputs.size() > 1)
     ERROR(
         "runtime recipe evaluation does not support multiple double-colon "
         "groups");
@@ -1806,8 +1807,8 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
     std::string script;
     for (size_t i = 0; i < n.cmds.size(); ++i) {
       if (double_colon_group != static_cast<size_t>(-1) &&
-          (i >= n.double_colon_group_for_cmd.size() ||
-           n.double_colon_group_for_cmd[i] != double_colon_group))
+          (i >= n.DoubleColon().for_cmd.size() ||
+           n.DoubleColon().for_cmd[i] != double_colon_group))
         continue;
       Value* v = n.cmds[i];
       ev_->set_loc(v->Location());
@@ -1854,8 +1855,8 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
     for (size_t command_index = 0; command_index < n.cmds.size();
          ++command_index) {
       if (double_colon_group != static_cast<size_t>(-1) &&
-          (command_index >= n.double_colon_group_for_cmd.size() ||
-           n.double_colon_group_for_cmd[command_index] != double_colon_group))
+          (command_index >= n.DoubleColon().for_cmd.size() ||
+           n.DoubleColon().for_cmd[command_index] != double_colon_group))
         continue;
       Value* v = n.cmds[command_index];
       ev_->set_loc(v->Location());
@@ -1883,9 +1884,8 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
 
         if (!cmd.empty()) {
           Command& command = result.emplace_back(n.output);
-          if (command_index < n.double_colon_group_for_cmd.size())
-            command.double_colon_group =
-                n.double_colon_group_for_cmd[command_index];
+          if (command_index < n.DoubleColon().for_cmd.size())
+            command.double_colon_group = n.DoubleColon().for_cmd[command_index];
           command.cmd = std::string(cmd);
           command.display_cmd = command.cmd;
           command.verbose = is_verbose(echo && !n.silent);

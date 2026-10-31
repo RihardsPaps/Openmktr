@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Read optional double-colon metadata through the shared dependency view.
 // Launch checked generation plans without repeated shell/helper startup.
 // Own generated launcher FIFOs and leases in the native supervisor.
 // Own invocation state and publish coherent generations with typed freshness.
@@ -1294,13 +1295,12 @@ static int Run(const std::vector<Symbol>& targets,
         const DepNode* makefile_node = include.second;
         bool unconditional = false;
         for (size_t group = 0;
-             group < makefile_node->double_colon_group_has_prerequisites.size();
+             group < makefile_node->DoubleColon().has_prerequisites.size();
              ++group) {
-          if (!makefile_node->double_colon_group_has_prerequisites[group] &&
-              std::find(makefile_node->double_colon_group_for_cmd.begin(),
-                        makefile_node->double_colon_group_for_cmd.end(),
-                        group) !=
-                  makefile_node->double_colon_group_for_cmd.end())
+          if (!makefile_node->DoubleColon().has_prerequisites[group] &&
+              std::find(makefile_node->DoubleColon().for_cmd.begin(),
+                        makefile_node->DoubleColon().for_cmd.end(),
+                        group) != makefile_node->DoubleColon().for_cmd.end())
             unconditional = true;
         }
         // Secondary expansion can turn a syntactically nonempty list into
@@ -1413,7 +1413,7 @@ static int Run(const std::vector<Symbol>& targets,
                   !node->is_phony && !node->is_notparallel &&
                   !node->vpath_provider.IsValid() &&
                   node->implicit_outputs.empty() && node->validations.empty() &&
-                  node->double_colon_group_for_cmd.empty() &&
+                  node->DoubleColon().for_cmd.empty() &&
                   node->low_resolution_inputs.empty() &&
                   stat(node->output.c_str(), &st) == 0 && S_ISREG(st.st_mode);
               if (!eligible)

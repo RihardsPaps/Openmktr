@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <cstdint>
 #include <filesystem>
 #include <thread>
 #include <vector>
@@ -40,6 +41,9 @@ struct Throwing : SessionAllocated<Throwing> {
 struct Tiny : SessionAllocated<Tiny> {
   char value = 1;
 };
+struct alignas(std::max_align_t) Aligned : SessionAllocated<Aligned> {
+  char value = 2;
+};
 struct SharedCounter {
   std::atomic<int> value{0};
 };
@@ -52,6 +56,13 @@ void ExerciseArena() {
       auto* tiny = new Tiny;
       assert(tiny->value == 1);
       delete tiny;
+    }
+    for (int i = 0; i < 10000; ++i) {
+      auto* aligned = new Aligned;
+      assert(reinterpret_cast<uintptr_t>(aligned) % alignof(Aligned) == 0);
+      assert(aligned->value == 2);
+      if (i % 2)
+        delete aligned;
     }
     std::vector<Counted*> values;
     // Cross chunk boundaries, recycle early deletions, and leave live objects
@@ -88,7 +99,7 @@ void ExerciseArena() {
     for (auto& worker : workers)
       worker.join();
     assert(live == 14001);
-    assert(session.allocations() == 14001);
+    assert(session.allocations() == 19001);
     assert(SessionService<SharedCounter>().value == 40000);
   }
   assert(live == 0);

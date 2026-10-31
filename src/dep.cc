@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Materialize double-colon group storage only for double-colon rules.
 // Own invocation state and publish coherent generations with typed freshness.
 // Reuse explicitly named VPATH source providers before implicit regeneration.
 // Reuse immutable lexical prerequisite normalization during graph construction.
@@ -496,8 +497,8 @@ struct RuleMerger {
       auto add_group = [&](const Rule* rule) {
         if (!rule)
           return;
-        const size_t group = n->double_colon_group_inputs.size();
-        n->double_colon_group_inputs.emplace_back();
+        const size_t group = n->MutableDoubleColon().inputs.size();
+        n->MutableDoubleColon().inputs.emplace_back();
         std::vector<Symbol> first_inputs;
         auto has_first_pass_input = [&](const std::vector<Symbol>& inputs) {
           bool any = false;
@@ -513,21 +514,22 @@ struct RuleMerger {
         };
         const bool normal = has_first_pass_input(rule->inputs);
         const bool order_only = has_first_pass_input(rule->order_only_inputs);
-        n->double_colon_group_has_prerequisites.push_back(normal || order_only);
+        n->MutableDoubleColon().has_prerequisites.push_back(normal ||
+                                                            order_only);
         ApplyOutputPattern(*rule, output, first_inputs,
-                           &n->double_colon_group_inputs.back());
+                           &n->MutableDoubleColon().inputs.back());
         const Rule* recipe = rule;
         if (rule->cmds.empty() && pattern_rule) {
           recipe = pattern_rule;
           ApplyOutputPattern(*pattern_rule, output, pattern_rule->inputs,
-                             &n->double_colon_group_inputs.back());
+                             &n->MutableDoubleColon().inputs.back());
           if (!pattern_rule->inputs.empty() ||
               !pattern_rule->order_only_inputs.empty())
-            n->double_colon_group_has_prerequisites.back() = true;
+            n->MutableDoubleColon().has_prerequisites.back() = true;
         }
         n->cmds.insert(n->cmds.end(), recipe->cmds.begin(), recipe->cmds.end());
-        n->double_colon_group_for_cmd.insert(
-            n->double_colon_group_for_cmd.end(), recipe->cmds.size(), group);
+        n->MutableDoubleColon().for_cmd.insert(
+            n->MutableDoubleColon().for_cmd.end(), recipe->cmds.size(), group);
       };
       for (const Rule* rule : rules)
         add_group(rule);
@@ -2333,18 +2335,18 @@ class DepBuilder {
       active_merger->FillOneSecondaryInput(
           n->lexical_output, secondary_rule, n, ev_,
           secondary_rule == pattern_rule.get());
-      if (!n->double_colon_group_inputs.empty()) {
+      if (!n->DoubleColon().inputs.empty()) {
         const auto found_rule =
             std::find(active_merger->rules.begin(), active_merger->rules.end(),
                       secondary_rule);
         if (found_rule != active_merger->rules.end()) {
           const size_t group = found_rule - active_merger->rules.begin();
-          auto& inputs = n->double_colon_group_inputs[group];
+          auto& inputs = n->MutableDoubleColon().inputs[group];
           inputs.insert(inputs.end(), n->actual_inputs.begin() + prior_inputs,
                         n->actual_inputs.end());
           if (!inputs.empty() ||
               n->actual_order_only_inputs.size() > prior_order_only)
-            n->double_colon_group_has_prerequisites[group] = true;
+            n->MutableDoubleColon().has_prerequisites[group] = true;
         }
       }
     };
@@ -2393,8 +2395,9 @@ class DepBuilder {
     // real prerequisites.
     ResolveVpathInputs(&n->actual_inputs);
     ResolveVpathInputs(&n->actual_order_only_inputs);
-    for (auto& group : n->double_colon_group_inputs)
-      ResolveVpathInputs(&group);
+    if (n->double_colon)
+      for (auto& group : n->double_colon->inputs)
+        ResolveVpathInputs(&group);
 
     if (g_flags.warn_phony_looks_real && n->is_phony &&
         output.str().find('/') != std::string::npos) {

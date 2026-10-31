@@ -9,7 +9,8 @@
 #include <vector>
 
 // A resolved acyclic task graph. Workers never wait for prerequisite tasks:
-// only the coordinator makes tasks ready and records their completion.
+// a shared coordinator makes tasks ready and records completion under one lock.
+// The caller participates; both callbacks may run on bound worker threads.
 struct ReadyTask {
   std::vector<size_t> dependencies;
   bool inline_work = false;

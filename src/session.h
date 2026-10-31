@@ -84,7 +84,10 @@ class BuildSession {
     Chunk* current = nullptr;
     void* available = nullptr;
   };
-  static constexpr size_t kAlignment = alignof(std::max_align_t);
+  // Object sizes already include their required alignment. Pointer-sized
+  // classes avoid padding every 8/24/40-byte object to 16/32/48 bytes, while
+  // larger alignments still divide their size and the chunk's payload start.
+  static constexpr size_t kAlignment = alignof(void*);
   static constexpr size_t kMaxPooled = 1024;
   static constexpr size_t kChunkSize = 64 * 1024;
   using Pools = std::array<Pool, kMaxPooled / kAlignment>;

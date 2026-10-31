@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Pack recipe booleans together to avoid padding every expanded command.
 // Own invocation state and publish coherent generations with typed freshness.
 // Capture actual direct bootstrap reads for later deferred recipe identities.
 // Expose private recipe snapshot and runtime evaluation helpers.
@@ -68,7 +69,6 @@ struct Command {
   std::string runtime_sidecar;
   std::string runtime_context;
   std::string runtime_identity;
-  bool runtime_freshness_only = false;
   std::string shell;
   std::string shellflag;
   std::vector<std::string> environment;
@@ -78,6 +78,7 @@ struct Command {
   bool force_run = false;
   bool ignore_error;
   bool force_no_subshell;
+  bool runtime_freshness_only = false;
   size_t double_colon_group = static_cast<size_t>(-1);
 };
 

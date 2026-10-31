@@ -11,6 +11,10 @@ FileStamp FileStamp::FromStat(const struct stat& metadata) {
 #endif
   return At(time.tv_sec, time.tv_nsec);
 }
+FileStamp FileStamp::Read(const char* path) {
+  struct stat metadata;
+  return ObserveFile(path, &metadata) ? FromStat(metadata) : Missing();
+}
 FileStamp FileStamp::Read(const std::string& path) {
   struct stat metadata;
   return ObserveFile(path, &metadata) ? FromStat(metadata) : Missing();

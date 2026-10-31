@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Read optional double-colon metadata through the shared dependency view.
 // Cache command prefixes and source local environment objects after chdir.
 // Reuse output metadata within an emitted edge until an effect invalidates it.
 // Supervise generated launches and jobserver cleanup natively.
@@ -360,7 +361,7 @@ class NinjaGenerator {
         if (node.is_notparallel || node.vpath_provider.IsValid() ||
             node.output_pattern.IsValid() || !node.implicit_inputs.empty() ||
             !node.implicit_outputs.empty() || !node.validations.empty() ||
-            !node.double_colon_group_for_cmd.empty() ||
+            !node.DoubleColon().for_cmd.empty() ||
             !node.low_resolution_inputs.empty() || !node.wait_groups.empty() ||
             node.intermediate || node.precious || node.ignore_errors ||
             std::any_of(
@@ -537,14 +538,13 @@ class NinjaGenerator {
       std::string record, flags, inputs, order_only;
       AppendGraphString(entry->output.str(), &record);
       flags += entry->intermediate ? '1' : '0';
-      flags +=
-          entry->is_phony || !entry->validations.empty() ||
-                  std::find(entry->double_colon_group_has_prerequisites.begin(),
-                            entry->double_colon_group_has_prerequisites.end(),
-                            false) !=
-                      entry->double_colon_group_has_prerequisites.end()
-              ? '1'
-              : '0';
+      flags += entry->is_phony || !entry->validations.empty() ||
+                       std::find(entry->DoubleColon().has_prerequisites.begin(),
+                                 entry->DoubleColon().has_prerequisites.end(),
+                                 false) !=
+                           entry->DoubleColon().has_prerequisites.end()
+                   ? '1'
+                   : '0';
       AppendGraphString(flags, &record);
       for (const auto& edge : entry->deps) {
         AppendGraphString(edge.first.str(), &inputs);
@@ -1454,7 +1454,7 @@ class NinjaGenerator {
         node.ninja_pool_var || node.is_notparallel || node.precious ||
         node.delete_on_error || !node.validations.empty() ||
         !node.implicit_outputs.empty() || !node.wait_groups.empty() ||
-        !node.double_colon_group_for_cmd.empty())
+        !node.DoubleColon().for_cmd.empty())
       return false;
     if (node.rule_vars &&
         node.rule_vars->find(Intern("MAKEFLAGS")) != node.rule_vars->end())

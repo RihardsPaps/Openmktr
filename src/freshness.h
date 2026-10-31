@@ -24,6 +24,7 @@ class FileStamp {
     return FileStamp(Kind::Present, seconds, nanoseconds);
   }
   static FileStamp FromStat(const struct stat& metadata);
+  static FileStamp Read(const char* path);
   static FileStamp Read(const std::string& path);
   bool exists() const { return kind_ == Kind::Present; }
   Kind kind() const { return kind_; }

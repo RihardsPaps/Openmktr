@@ -1,4 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
+// Consume ready prerequisites directly and complete observed source leaves
+// once. Avoid copying path names when testing optional timestamp overrides.
 // Keep observed timestamps in outcomes and only logical updates in graph nodes.
 // Own invocation state and publish coherent generations with typed freshness.
 // Schedule resolved dependencies with a bounded ready queue. Preserve serial
@@ -189,10 +191,10 @@ class Executor {
       for (size_t group = 0; group < groups->size(); ++group) {
         printf("  Double-colon group %zu: %s; prerequisites:", group + 1,
                !(*groups)[group] ? "up to date"
-               : !n.double_colon_group_has_prerequisites[group]
+               : !n.DoubleColon().has_prerequisites[group]
                    ? "outdated (unconditional)"
                    : "outdated");
-        for (Symbol input : n.double_colon_group_inputs[group])
+        for (Symbol input : n.DoubleColon().inputs[group])
           printf(" %s", input.c_str());
         printf("\n");
       }
@@ -239,9 +241,9 @@ class Executor {
     if (!visiting->insert(node.output).second)
       return false;
     if (node.is_phony ||
-        std::find(node.double_colon_group_has_prerequisites.begin(),
-                  node.double_colon_group_has_prerequisites.end(),
-                  false) != node.double_colon_group_has_prerequisites.end())
+        std::find(node.DoubleColon().has_prerequisites.begin(),
+                  node.DoubleColon().has_prerequisites.end(),
+                  false) != node.DoubleColon().has_prerequisites.end())
       return false;
     for (const auto& dep : node.deps) {
       const DepNode& child = *dep.second;
@@ -307,6 +309,18 @@ class Executor {
           n.execution_updated =
               done_[n.output].timestamp == FileStamp::Updated();
           return kNotExist;
+        }
+        // The ready-graph walk already observed source leaves. They have no
+        // rule, expansion or dependency work, and need no running transition
+        // or second directory probe while recipe workers contend for state.
+        if (parallel_ && initial_timestamp && initial_timestamp->exists() &&
+            !n.has_rule && !n.is_phony && n.cmds.empty() && n.deps.empty() &&
+            n.order_onlys.empty() && n.validations.empty()) {
+          done_.emplace(n.output,
+                        NodeState{NodeOutcome::Succeeded, *initial_timestamp,
+                                  std::thread::id()});
+          n.execution_updated = false;
+          return *initial_timestamp;
         }
         done_[n.output] = NodeState{NodeOutcome::Running, kIgnoredEdge,
                                     std::this_thread::get_id()};
@@ -400,9 +414,21 @@ class Executor {
         }
       }
       if (!ignored) {
-        ts = ExecNode(*d.second, n.output.c_str(), ancestry, &n);
-        if (IsFailed(d.second->output))
-          dependency_failed = true;
+        if (parallel_) {
+          // Admission guarantees that these prerequisites have completed.
+          // Read timestamp and outcome together, without recursive dispatch
+          // and a second lock/hash lookup solely to check failure.
+          std::lock_guard<std::mutex> lock(state_mu_);
+          const auto completed = done_.find(d.second->output);
+          CHECK(completed != done_.end() &&
+                completed->second.outcome != NodeOutcome::Running);
+          ts = completed->second.timestamp;
+          dependency_failed |= completed->second.outcome == NodeOutcome::Failed;
+        } else {
+          ts = ExecNode(*d.second, n.output.c_str(), ancestry, &n);
+          if (IsFailed(d.second->output))
+            dependency_failed = true;
+        }
       }
       // Order-only prerequisites must be built before the recipe, but do
       // not participate in the timestamp comparison.  This includes
@@ -470,7 +496,7 @@ class Executor {
     }
 
     if (!DecideFreshness(output_ts, latest, n.is_phony).dirty() &&
-        !output_is_directory && n.double_colon_group_inputs.empty()) {
+        !output_is_directory && n.DoubleColon().inputs.empty()) {
       ExplainNode(n, output_ts, "up to date");
       {
         std::lock_guard<std::mutex> lock(state_mu_);
@@ -488,9 +514,9 @@ class Executor {
     auto double_colon_group_needs_build = [&](size_t group,
                                               FileStamp target_ts) {
       if (target_ts == kNotExist || n.is_phony ||
-          !n.double_colon_group_has_prerequisites[group])
+          !n.DoubleColon().has_prerequisites[group])
         return true;
-      for (Symbol input : n.double_colon_group_inputs[group]) {
+      for (Symbol input : n.DoubleColon().inputs[group]) {
         if (IsWhatIf(input))
           return true;
         for (const auto& dep : n.deps) {
@@ -510,7 +536,7 @@ class Executor {
       return false;
     };
     std::vector<bool> group_needs_build;
-    for (size_t group = 0; group < n.double_colon_group_inputs.size(); ++group)
+    for (size_t group = 0; group < n.DoubleColon().inputs.size(); ++group)
       group_needs_build.push_back(
           double_colon_group_needs_build(group, output_ts));
 
@@ -551,7 +577,7 @@ class Executor {
       std::unique_ptr<RuntimeRecipeReadCapture> capture;
       if (runtime_bootstrap_ && !g_flags.is_dry_run && !g_flags.is_question &&
           !g_flags.explain && !n.is_phony && !output_is_directory &&
-          n.double_colon_group_inputs.empty()) {
+          n.DoubleColon().inputs.empty()) {
         const std::string directory =
             g_flags.ninja_dir ? g_flags.ninja_dir : ".";
         std::error_code error;
@@ -592,7 +618,7 @@ class Executor {
     // directory timestamp.  Keep that recursive case live, but do not rerun
     // ordinary directory-creation recipes such as `mkdir ../lib` on every
     // invocation.
-    if (output_is_directory && n.double_colon_group_inputs.empty() &&
+    if (output_is_directory && n.DoubleColon().inputs.empty() &&
         output_ts != kNotExist && output_ts >= latest && !n.is_phony &&
         std::none_of(commands.begin(), commands.end(), [](const Command& c) {
           return IsRecursiveKatiCommand(c.cmd);
@@ -631,9 +657,8 @@ class Executor {
       const bool any_group_needs_build =
           std::any_of(group_needs_build.begin(), group_needs_build.end(),
                       [](bool needed) { return needed; });
-      if (n.is_phony ||
-          (!commands.empty() &&
-           (n.double_colon_group_inputs.empty() || any_group_needs_build))) {
+      if (n.is_phony || (!commands.empty() && (n.DoubleColon().inputs.empty() ||
+                                               any_group_needs_build))) {
         needs_build_.store(true, std::memory_order_relaxed);
         if (g_flags.explain)
           logical_ts = FileStamp::Updated();
@@ -664,7 +689,7 @@ class Executor {
     // file may have a rule and be rebuilt even though it was not missing.
     // The caller uses this result to decide whether GNU make-style
     // re-evaluation is required.
-    if (!commands.empty() && n.double_colon_group_inputs.empty())
+    if (!commands.empty() && n.DoubleColon().inputs.empty())
       needs_build_.store(true, std::memory_order_relaxed);
 
     bool node_failed = false;
@@ -920,8 +945,11 @@ class Executor {
   }
 
   bool IsWhatIf(Symbol output) const {
-    const std::string name(TrimLeadingCurdir(output.str()));
-    for (const std::string& file : g_flags.what_if_files) {
+    const auto& files = g_flags.what_if_files;
+    if (files.empty())
+      return false;
+    const std::string_view name = TrimLeadingCurdir(output.str());
+    for (const std::string& file : files) {
       if (file == name)
         return true;
     }
@@ -929,8 +957,11 @@ class Executor {
   }
 
   bool IsOldFile(Symbol output) const {
-    const std::string name(TrimLeadingCurdir(output.str()));
-    for (const std::string& file : g_flags.old_files) {
+    const auto& files = g_flags.old_files;
+    if (files.empty())
+      return false;
+    const std::string_view name = TrimLeadingCurdir(output.str());
+    for (const std::string& file : files) {
       if (file == name)
         return true;
     }
@@ -957,9 +988,8 @@ class Executor {
     // exported values and target-specific shells). Prepare them once after
     // successful prerequisites, then dispatch only if they require a shell.
     if (runtime_bootstrap_ || !node.is_phony || node.cmds.size() != 1 ||
-        !node.cmds.front()->IsLiteral() ||
-        !node.double_colon_group_inputs.empty() || g_flags.is_touch ||
-        g_flags.is_question ||
+        !node.cmds.front()->IsLiteral() || !node.DoubleColon().inputs.empty() ||
+        g_flags.is_touch || g_flags.is_question ||
         cancel_requested_.load(std::memory_order_relaxed) || GetBuildSignal())
       return false;
     std::string_view literal =
@@ -988,7 +1018,7 @@ class Executor {
     if (cancel_requested_.load(std::memory_order_relaxed) || GetBuildSignal())
       return true;
     if (timestamp == kNotExist || node.is_phony ||
-        !node.double_colon_group_inputs.empty() || FilesystemEffectsActive())
+        !node.DoubleColon().inputs.empty() || FilesystemEffectsActive())
       return false;
     std::lock_guard<std::mutex> lock(state_mu_);
     for (const auto& input : node.deps) {
