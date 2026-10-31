@@ -49,14 +49,14 @@ std::string ObjectParent(const std::string& path) {
 bool ObjectSealed(const std::string& path) {
   struct stat metadata;
   return lstat(path.c_str(), &metadata) == 0 && S_ISREG(metadata.st_mode) &&
-         (metadata.st_mode & 07777) == 0444;
+         (metadata.st_mode & 07777) == 0400;
 }
 void SealObject(const std::string& path) {
   // Seal only after both bytes and the directory entry are durable. Losing
   // this permission update after a crash merely repeats the next barrier.
   // Objects are private immutable cache files; full bytes are still checked
   // on every reuse. Mutable success/read history never uses this convention.
-  if (chmod(path.c_str(), 0444) != 0)
+  if (chmod(path.c_str(), 0400) != 0)
     ERROR("cannot seal immutable graph object: %s", path.c_str());
 }
 

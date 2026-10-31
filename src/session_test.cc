@@ -97,6 +97,9 @@ int main() {
   std::string bytes;
   assert(ReadGraphCache(one, &bytes) && bytes == "first");
   assert(ReadGraphCache(two, &bytes) && bytes == "second");
+  struct stat sealed;
+  assert(stat(one.c_str(), &sealed) == 0);
+  assert((sealed.st_mode & 07777) == 0400);
   const std::string raw = base + "-raw";
   assert(mkfifo(raw.c_str(), 0600) == 0);
   assert(PublishGraphObject(raw, "shell script", true) != raw);
