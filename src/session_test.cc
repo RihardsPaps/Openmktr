@@ -100,5 +100,21 @@ int main() {
   const std::string raw = base + "-raw";
   assert(mkfifo(raw.c_str(), 0600) == 0);
   assert(PublishGraphObject(raw, "shell script", true) != raw);
+  // A durability failure must prevent the caller from committing its graph.
+  {
+    GraphObjectBatch batch;
+    const auto pending = PublishGraphObject(base + "-pending", "pending");
+    assert(unlink(pending.c_str()) == 0);
+    bool failed = false;
+    try {
+      batch.Flush();
+    } catch (const BuildError&) {
+      failed = true;
+    }
+    assert(failed);
+  }
+  assert(ReadGraphCache(PublishGraphObject(base + "-pending", "recovered"),
+                        &bytes) &&
+         bytes == "recovered");
   std::filesystem::remove_all(directory);
 }

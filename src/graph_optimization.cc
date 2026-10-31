@@ -22,9 +22,30 @@
 #include "jobserver.h"
 #include "log.h"
 #include "process.h"
+#include "session.h"
 
 namespace {
 constexpr size_t kMaxCacheSize = 64 * 1024 * 1024;
+struct ObjectPublication {
+  GraphObjectBatch* batch = nullptr;
+};
+void SyncObjectPath(const std::string& path, bool directory) {
+  int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK |
+                                  (directory ? O_DIRECTORY : 0));
+  struct stat metadata;
+  const bool synced =
+      fd >= 0 && fstat(fd, &metadata) == 0 &&
+      (directory ? S_ISDIR(metadata.st_mode) : S_ISREG(metadata.st_mode)) &&
+      fsync(fd) == 0;
+  if (fd >= 0)
+    close(fd);
+  if (!synced)
+    ERROR("cannot sync immutable graph object: %s", path.c_str());
+}
+std::string ObjectParent(const std::string& path) {
+  const auto slash = path.rfind('/');
+  return slash == std::string::npos ? "." : path.substr(0, slash ? slash : 1);
+}
 
 bool StampChecksum(FILE* stream, size_t length, uint64_t* checksum) {
   if (fseek(stream, sizeof(double), SEEK_SET) != 0)
@@ -240,10 +261,45 @@ bool WriteGraphCache(const std::string& path, std::string_view payload) {
   return ok;
 }
 
+GraphObjectBatch::GraphObjectBatch()
+    : previous_(SessionService<ObjectPublication>().batch) {
+  SessionService<ObjectPublication>().batch = this;
+}
+GraphObjectBatch::~GraphObjectBatch() {
+  SessionService<ObjectPublication>().batch = previous_;
+}
+void GraphObjectBatch::Add(const std::string& path) {
+  paths_.insert(path);
+  if (paths_.size() >= 256)
+    Flush();
+}
+void GraphObjectBatch::Flush() {
+  std::unordered_set<std::string> directories;
+  // All writes precede all barriers, letting the filesystem coalesce them.
+  // Existing objects are included: another writer may just have linked one.
+  for (const auto& path : paths_) {
+    SyncObjectPath(path, false);
+    directories.insert(ObjectParent(path));
+  }
+  for (const auto& path : directories)
+    SyncObjectPath(path, true);
+  paths_.clear();
+}
+
 std::string PublishGraphObject(const std::string& base,
                                std::string_view payload,
                                bool raw) {
   std::string temporary;
+  auto* batch = SessionService<ObjectPublication>().batch;
+  auto finish = [&](const std::string& path) {
+    if (batch) {
+      batch->Add(path);
+    } else {
+      SyncObjectPath(path, false);
+      SyncObjectPath(ObjectParent(path), true);
+    }
+    return path;
+  };
   auto read = [&](const std::string& path, std::string* bytes) {
     if (!raw)
       return ReadGraphCache(path, bytes);
@@ -279,7 +335,7 @@ std::string PublishGraphObject(const std::string& base,
     if (read(path, &previous) && previous == payload) {
       if (!temporary.empty())
         unlink(temporary.c_str());
-      return path;
+      return finish(path);
     }
     struct stat metadata;
     if (lstat(path.c_str(), &metadata) == 0)
@@ -296,33 +352,17 @@ std::string PublishGraphObject(const std::string& base,
         written = false;
       if (!written || (!raw && !WriteGraphCache(temporary, payload)))
         break;
-      fd = open(temporary.c_str(), O_RDONLY | O_CLOEXEC);
-      const bool synced = fd >= 0 && fsync(fd) == 0;
-      if (fd >= 0)
-        close(fd);
-      if (!synced)
-        break;
     }
     if (link(temporary.c_str(), path.c_str()) == 0) {
       unlink(temporary.c_str());
-      const auto slash = path.rfind('/');
-      const std::string parent =
-          slash == std::string::npos ? "." : path.substr(0, slash);
-      int fd = open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-      const bool synced = fd >= 0 && fsync(fd) == 0;
-      if (fd >= 0)
-        close(fd);
-      if (!synced)
-        ERROR("cannot sync immutable graph object directory: %s",
-              parent.c_str());
-      return path;
+      return finish(path);
     }
     if (errno != EEXIST)
       break;
     // A concurrent publisher may have installed these exact bytes.
     if (read(path, &previous) && previous == payload) {
       unlink(temporary.c_str());
-      return path;
+      return finish(path);
     }
   }
   if (!temporary.empty())

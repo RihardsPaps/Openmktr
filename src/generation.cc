@@ -213,6 +213,7 @@ GenerationTransaction::~GenerationTransaction() {
     close(lock_);
 }
 void GenerationTransaction::Commit() {
+  objects_.Flush();
   std::string manifest;
   AppendGraphString("generation-v1", &manifest);
   const auto artifacts = Artifacts();

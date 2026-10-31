@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "graph_optimization.h"
+
 // Runtime caches remain in the stable output directory. Only the coherent
 // graph/environment/launcher/stamp bundle goes through the generation pointer.
 std::string ResolveGenerationArtifact(const std::string& path);
@@ -39,5 +41,6 @@ class GenerationTransaction {
   int lock_ = -1;
   std::string root_, directory_, previous_;
   bool committed_ = false;
+  GraphObjectBatch objects_;
 };
 #endif
