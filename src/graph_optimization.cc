@@ -46,6 +46,19 @@ std::string ObjectParent(const std::string& path) {
   const auto slash = path.rfind('/');
   return slash == std::string::npos ? "." : path.substr(0, slash ? slash : 1);
 }
+bool ObjectSealed(const std::string& path) {
+  struct stat metadata;
+  return lstat(path.c_str(), &metadata) == 0 && S_ISREG(metadata.st_mode) &&
+         (metadata.st_mode & 07777) == 0444;
+}
+void SealObject(const std::string& path) {
+  // Seal only after both bytes and the directory entry are durable. Losing
+  // this permission update after a crash merely repeats the next barrier.
+  // Objects are private immutable cache files; full bytes are still checked
+  // on every reuse. Mutable success/read history never uses this convention.
+  if (chmod(path.c_str(), 0444) != 0)
+    ERROR("cannot seal immutable graph object: %s", path.c_str());
+}
 
 bool StampChecksum(FILE* stream, size_t length, uint64_t* checksum) {
   if (fseek(stream, sizeof(double), SEEK_SET) != 0)
@@ -269,6 +282,8 @@ GraphObjectBatch::~GraphObjectBatch() {
   SessionService<ObjectPublication>().batch = previous_;
 }
 void GraphObjectBatch::Add(const std::string& path) {
+  if (ObjectSealed(path))
+    return;
   paths_.insert(path);
   if (paths_.size() >= 256)
     Flush();
@@ -276,13 +291,16 @@ void GraphObjectBatch::Add(const std::string& path) {
 void GraphObjectBatch::Flush() {
   std::unordered_set<std::string> directories;
   // All writes precede all barriers, letting the filesystem coalesce them.
-  // Existing objects are included: another writer may just have linked one.
+  // Unsealed existing objects are included: another writer may just have
+  // linked one, or abandoned a batch before making its objects durable.
   for (const auto& path : paths_) {
     SyncObjectPath(path, false);
     directories.insert(ObjectParent(path));
   }
   for (const auto& path : directories)
     SyncObjectPath(path, true);
+  for (const auto& path : paths_)
+    SealObject(path);
   paths_.clear();
 }
 
@@ -294,9 +312,10 @@ std::string PublishGraphObject(const std::string& base,
   auto finish = [&](const std::string& path) {
     if (batch) {
       batch->Add(path);
-    } else {
+    } else if (!ObjectSealed(path)) {
       SyncObjectPath(path, false);
       SyncObjectPath(ObjectParent(path), true);
+      SealObject(path);
     }
     return path;
   };
