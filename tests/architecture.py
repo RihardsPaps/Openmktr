@@ -177,6 +177,21 @@ class Architecture(unittest.TestCase):
         subprocess.run(["sh", "ninja.sh"], cwd=self.root, check=True, capture_output=True, timeout=10)
         self.assertEqual((self.root / "output").read_text(), "stable")
 
+    def test_missing_environment_object_regenerates_or_fails_before_recipe(self):
+        self.write("export WORD = retained\n.PHONY: all\nall:\n\t@printf '%s' \"$$WORD\" > result\n")
+        self.run_tool("build", "all")
+        for path in (self.root / ".openmktr/.omktr-objects").glob("env-*"):
+            path.unlink()
+        self.run_tool("build", "all")
+        self.assertEqual((self.root / "result").read_text(), "retained")
+        self.run_tool("--ninja", "all")
+        for path in (self.root / ".omktr-objects").glob("env-*"):
+            path.unlink()
+        result = subprocess.run(["ninja", "-f", "build.ninja"], cwd=self.root,
+                                capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.root / "result").read_text(), "retained")
+
     def test_implicit_resolution_revalidates_positive_and_negative_witnesses(self):
         self.write(".INTERMEDIATE: result.generated\nall: result.o\n"
                    "%.o: %.generated\n\t@cp $< $@\n"

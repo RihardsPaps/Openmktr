@@ -1691,6 +1691,12 @@ class NinjaGenerator {
       out << " " << EscapeBuildTarget(Intern(command.runtime_sidecar)) << " "
           << EscapeBuildTarget(Intern(command.runtime_context));
     }
+    if (!nn.commands.empty() && !env_snapshot_.empty()) {
+      if (!has_order_only)
+        out << " ||";
+      has_order_only = true;
+      out << " " << EscapeBuildTarget(Intern(env_snapshot_));
+    }
     if (g_flags.import_gate && rule_name != "phony") {
       if (!has_order_only)
         out << " ||";
@@ -2150,6 +2156,7 @@ class NinjaGenerator {
     const std::string snapshot = PublishGraphObject(
         object_directory + "/env-" + GraphDigest(env_bytes), env_bytes, true);
     AbsPath(snapshot, &env_snapshot_);
+    MakefileCacheManager::Get().AddGeneratedGraphDep(env_snapshot_);
 
     const std::string launcher_filename = GetNinjaShellScriptFilename();
     const std::string launcher_temporary = launcher_filename + ".tmp";

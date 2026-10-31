@@ -32,8 +32,8 @@ class GraphOptimizations(unittest.TestCase):
         self.run_tool("--ninja", "-j32", "--graph_optimizations=aggressive",
                       "dir/", "all")
         graph = (self.root / "build.ninja").read_text()
-        self.assertRegex(graph, r"(?m)^build a: \S+$")
-        self.assertRegex(graph, r"(?m)^build b: \S+ dir/$")
+        self.assertRegex(graph, r"(?m)^build a: \S+ \|\| \S+/.omktr-objects/env-\d+$")
+        self.assertRegex(graph, r"(?m)^build b: \S+ dir/ \|\| \S+/.omktr-objects/env-\d+$")
         subprocess.run(["ninja", "-j32"], cwd=self.root, check=True,
                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                        timeout=30)
