@@ -266,6 +266,12 @@ working directory used for generation.
 
 ## Everyday usage
 
+Direct execution uses one job unless `-jN`, inherited Make flags, or `KATI_JOBS`
+selects another limit. Ordinary recipes print their expanded commands; Makefile
+`@` prefixes and `-s` suppress them. Set `KATI_VERBOSE=0` to opt into compact
+`BUILD` progress messages, or use `V=1` to print commands in that display mode.
+Ninja retains its own progress display and launcher job controls.
+
 Use `omktr workspace run --name PROJECT --source PREPARED_SOURCE` to retain a
 version-independent build location. Repeat without `--source` for a hot
 incremental build, or supply a new prepared release to synchronize changed

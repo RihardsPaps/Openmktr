@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Suppress no-op announcements for internal included-makefile updates.
 // Prepare immutable runtime contexts once per known Ninja invocation.
 // Prune missing intermediates only for current consumers and known Ninja goals.
 // Normalize MFLAGS definitions across generated-include restarts.
@@ -1345,8 +1346,8 @@ static int Run(const std::vector<Symbol>& targets,
           // restart this process forever, even when it is up to date.
           const bool touch_mode = g_flags.is_touch;
           g_flags.is_touch = false;
-          include_result =
-              Exec(include_remake_nodes, &ev, true, g_flags.generate_ninja);
+          include_result = Exec(include_remake_nodes, &ev, true,
+                                g_flags.generate_ninja, false);
           if (include_result.needs_build)
             InvalidateEvaluationFilesystemQueries();
           if (g_flags.explain && include_result.needs_build)
@@ -1427,7 +1428,7 @@ static int Run(const std::vector<Symbol>& targets,
             const bool touch_mode = g_flags.is_touch;
             g_flags.is_touch = false;
             const ExecResult deferred_result =
-                Exec(deferred_include_nodes, &ev);
+                Exec(deferred_include_nodes, &ev, true, false, false);
             if (deferred_result.needs_build)
               InvalidateEvaluationFilesystemQueries();
             g_flags.is_touch = touch_mode;

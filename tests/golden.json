@@ -1,7 +1,7 @@
 {
   "abspath.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n<TESTDIR-SUBST>/foo <TESTDIR-SUBST>/foo <TESTDIR-SUBST>/foo / /usr\n  BUILD   test\n/tmp <TESTDIR-SUBST> <TESTDIR-SUBST> / <TESTDIR-SUBST>/a\n",
+    "output": "echo <TESTDIR-SUBST>/foo <TESTDIR-SUBST>/foo <TESTDIR-SUBST>/foo / /usr\n<TESTDIR-SUBST>/foo <TESTDIR-SUBST>/foo <TESTDIR-SUBST>/foo / /usr\necho /tmp <TESTDIR-SUBST> <TESTDIR-SUBST> / <TESTDIR-SUBST>/a\n/tmp <TESTDIR-SUBST> <TESTDIR-SUBST> / <TESTDIR-SUBST>/a\n",
     "status": 0
   },
   "abspath.mk:test:ninja": {
@@ -13,7 +13,7 @@
   },
   "addprefix.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nsrc/foo src/bar\n",
+    "output": "echo src/foo src/bar\nsrc/foo src/bar\n",
     "status": 0
   },
   "addprefix.mk:test:ninja": {
@@ -25,7 +25,7 @@
   },
   "addsuffix.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nfoo.c bar.c\n",
+    "output": "echo foo.c bar.c\nfoo.c bar.c\n",
     "status": 0
   },
   "addsuffix.mk:test:ninja": {
@@ -42,7 +42,7 @@
   },
   "and.mk:test:direct": {
     "files": [],
-    "output": "PASS_1\nPASS\nx \t \n  \ty\n  BUILD   test\nOK\n",
+    "output": "PASS_1\nPASS\nx \t \n  \ty\necho OK\nOK\n",
     "status": 0
   },
   "and.mk:test:ninja": {
@@ -64,7 +64,7 @@
   },
   "assign_after_tab.mk:default:direct": {
     "files": [],
-    "output": "  BUILD   test\n",
+    "output": "X=Y\n",
     "status": 0
   },
   "assign_after_tab.mk:default:ninja": {
@@ -76,7 +76,7 @@
   },
   "assign_in_parens.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "assign_in_parens.mk:test:ninja": {
@@ -88,7 +88,7 @@
   },
   "assign_types.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\naa a b b c\n",
+    "output": "echo aa a b b c\naa a b b c\n",
     "status": 0
   },
   "assign_types.mk:test:ninja": {
@@ -127,7 +127,7 @@
       "bdir",
       "bfile"
     ],
-    "output": "  BUILD   test1\n  BUILD   test1\n",
+    "output": "mkdir adir bdir\ntouch adir/afile bdir/bfile afile bfile\n",
     "status": 0
   },
   "auto_var_suffixes.mk:test1:ninja": {
@@ -153,7 +153,7 @@
   },
   "auto_vars.mk:test1:direct": {
     "files": [],
-    "output": "\n  BUILD   bar\n  BUILD   foo\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\nbaz\nfoo\nfoo bar\nfoo bar foo\ntest1\n",
+    "output": "\nbaz\necho \necho baz\necho foo\necho foo bar\necho foo bar foo\necho test1\nfoo\nfoo bar\nfoo bar foo\ntest1\n",
     "status": 0
   },
   "auto_vars.mk:test1:ninja": {
@@ -165,7 +165,7 @@
   },
   "auto_vars.mk:test2:direct": {
     "files": [],
-    "output": "\n  BUILD   bar\n  BUILD   foo\n  BUILD   test2\n  BUILD   test2\nbaz\nfoo bar\nfoo bar foo\n",
+    "output": "\nbaz\necho \necho baz\necho foo bar\necho foo bar foo\nfoo bar\nfoo bar foo\n",
     "status": 0
   },
   "auto_vars.mk:test2:ninja": {
@@ -177,7 +177,7 @@
   },
   "automake_stdin_recursive.sh:script": {
     "files": [],
-    "output": "kati: Nothing to be done for `generated.mk'.\nkati: Nothing to be done for `generated.mk'.\nkati: Nothing to be done for `generated.mk'.\n",
+    "output": "",
     "status": 0
   },
   "automatic_override.mk:test:direct": {
@@ -204,7 +204,7 @@
   },
   "backslash_before_empty_line.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "backslash_before_empty_line.mk:test:ninja": {
@@ -216,7 +216,7 @@
   },
   "backslash_before_special_character.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n\t #\n",
+    "output": "echo \\\t\" #\"\n\t #\n",
     "status": 0
   },
   "backslash_before_special_character.mk:test:ninja": {
@@ -228,7 +228,7 @@
   },
   "backslash_in_rule_command.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nfoobar\n",
+    "output": "echo foo\\\nbar\nfoobar\n",
     "status": 0
   },
   "backslash_in_rule_command.mk:test:ninja": {
@@ -240,7 +240,7 @@
   },
   "basename.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nsrc/foo src-1.0/bar hacks\n",
+    "output": "echo src/foo src-1.0/bar hacks\nsrc/foo src-1.0/bar hacks\n",
     "status": 0
   },
   "basename.mk:test:ninja": {
@@ -254,7 +254,7 @@
     "files": [
       "foo"
     ],
-    "output": "  BUILD   foo\n  BUILD   test1\ntest1\n",
+    "output": "echo foo > foo\necho test1\ntest1\n",
     "status": 0
   },
   "basic_dep.mk:test1:ninja": {
@@ -269,7 +269,7 @@
     "files": [
       "foo"
     ],
-    "output": "  BUILD   foo\n  BUILD   test2\ntest2\n",
+    "output": "echo foo > foo\necho test2\ntest2\n",
     "status": 0
   },
   "basic_dep.mk:test2:ninja": {
@@ -282,7 +282,7 @@
   },
   "basic_rule.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   foo\nfoo\n",
+    "output": "echo foo\nfoo\n",
     "status": 0
   },
   "basic_rule.mk:test:ninja": {
@@ -294,7 +294,7 @@
   },
   "basic_var.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nvar\n",
+    "output": "echo var\nvar\n",
     "status": 0
   },
   "basic_var.mk:test:ninja": {
@@ -306,7 +306,7 @@
   },
   "blank_line_before_command.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n/bin/sh: include: not found\n*** [test] Error 127\n    command: include foo\n",
+    "output": "include foo\n/bin/sh: include: not found\n*** [test] Error 127\n    command: include foo\n",
     "status": 1
   },
   "blank_line_before_command.mk:test:ninja": {
@@ -316,7 +316,7 @@
   },
   "build_once.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   foo\n  BUILD   foo.c\n  BUILD   foo.o\n  BUILD   proto.o\n  BUILD   protoc\n  BUILD   xbar.c\n  BUILD   xbar.o\ncompile foo.o from foo.c\ncompile proto.o from proto.c\ncompile xbar.o from xbar.c\nlink foo from foo.o\nlink protoc from proto.o\nprotoc foo.c from foo.proto\nprotoc xbar.c from xbar.proto\n",
+    "output": "compile foo.o from foo.c\ncompile proto.o from proto.c\ncompile xbar.o from xbar.c\necho compile foo.o from foo.c\necho compile proto.o from proto.c\necho compile xbar.o from xbar.c\necho link foo from foo.o\necho link protoc from proto.o\necho protoc foo.c from foo.proto\necho protoc xbar.c from xbar.proto\nlink foo from foo.o\nlink protoc from proto.o\nprotoc foo.c from foo.proto\nprotoc xbar.c from xbar.proto\n",
     "status": 0
   },
   "build_once.mk:test:ninja": {
@@ -343,7 +343,7 @@
       "bar.cc",
       "foo.c"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "touch foo.c bar.cc\n",
     "status": 0
   },
   "builtin_rules.mk:test1:ninja": {
@@ -367,7 +367,7 @@
   },
   "builtin_vars.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\ncc\n  BUILD   test\nc++\n  BUILD   test\n/bin/sh\n",
+    "output": "echo cc\ncc\necho c++\nc++\necho /bin/sh\n/bin/sh\n",
     "status": 0
   },
   "builtin_vars.mk:test:ninja": {
@@ -382,7 +382,7 @@
       "foo",
       "foo bar"
     ],
-    "output": "  BUILD   foo\n  BUILD   test\nfoo/\n  BUILD   test\nfoo bar/\n  BUILD   test\n./\n",
+    "output": "mkdir foo \"foo bar\"\necho foo/\nfoo/\necho foo bar/\nfoo bar/\necho ./\n./\n",
     "status": 0
   },
   "call.mk:test:ninja": {
@@ -396,7 +396,7 @@
   },
   "call_with_many_args.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "call_with_many_args.mk:test:ninja": {
@@ -418,7 +418,7 @@
   },
   "canned_recipes.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\ntest\n",
+    "output": "echo test\ntest\n",
     "status": 0
   },
   "canned_recipes.mk:test:ninja": {
@@ -430,7 +430,7 @@
   },
   "circular_dep.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   loop\n  BUILD   loop1\n  BUILD   loop2\n  BUILD   self\n  BUILD   test\nCircular loop2 <- loop dependency dropped.\nCircular self <- self dependency dropped.\nPASS\nloop\nloop1\nloop2\nself\n",
+    "output": "Circular loop2 <- loop dependency dropped.\nCircular self <- self dependency dropped.\nPASS\necho PASS\necho loop\necho loop1\necho loop2\necho self\nloop\nloop1\nloop2\nself\n",
     "status": 0
   },
   "circular_dep.mk:test:ninja": {
@@ -442,7 +442,7 @@
   },
   "close_paren_without_open.mk:test:direct": {
     "files": [],
-    "output": "}#\n  BUILD   test\nOK\n",
+    "output": "}#\necho OK\nOK\n",
     "status": 0
   },
   "close_paren_without_open.mk:test:ninja": {
@@ -509,7 +509,7 @@
   },
   "command_vars.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   foo\nfoo\n  BUILD   foo\nbar\n  BUILD   foo\nbar baz\n",
+    "output": "echo foo\nfoo\necho bar\nbar\necho bar baz\nbar baz\n",
     "status": 0
   },
   "command_vars.mk:test:ninja": {
@@ -521,7 +521,7 @@
   },
   "comment.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nOK\n",
+    "output": "echo OK  \nOK\n",
     "status": 0
   },
   "comment.mk:test:ninja": {
@@ -533,7 +533,7 @@
   },
   "comment_in_command.mk:test1:direct": {
     "files": [],
-    "output": "  BUILD   test1\n  BUILD   test1\nPASS\n",
+    "output": "# foo\necho PASS\nPASS\n",
     "status": 0
   },
   "comment_in_command.mk:test1:ninja": {
@@ -545,7 +545,7 @@
   },
   "comment_in_command.mk:test2:direct": {
     "files": [],
-    "output": "  BUILD   make4\nPASS\n",
+    "output": "# foo  \\\necho PASS\nPASS\n",
     "status": 0
   },
   "comment_in_command.mk:test2:ninja": {
@@ -557,7 +557,7 @@
   },
   "comment_in_command.mk:test3:direct": {
     "files": [],
-    "output": "  BUILD   foo\nOK\n",
+    "output": "echo OK\nOK\n",
     "status": 0
   },
   "comment_in_command.mk:test3:ninja": {
@@ -569,7 +569,7 @@
   },
   "comment_in_command.mk:test4:direct": {
     "files": [],
-    "output": "  BUILD   test4\nOK\n",
+    "output": "echo OK\nOK\n",
     "status": 0
   },
   "comment_in_command.mk:test4:ninja": {
@@ -581,7 +581,7 @@
   },
   "comment_in_command.mk:test5:direct": {
     "files": [],
-    "output": "  BUILD   test5\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "comment_in_command.mk:test5:ninja": {
@@ -593,7 +593,7 @@
   },
   "comment_in_define.mk:default:direct": {
     "files": [],
-    "output": "  BUILD   foo\n  BUILD   foo\n\n",
+    "output": "# PASS\necho # PASS\n\n",
     "status": 0
   },
   "comment_in_define.mk:default:ninja": {
@@ -605,7 +605,7 @@
   },
   "cond_syntax.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS\n",
+    "output": "echo  PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS\nPASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS PASS\n",
     "status": 0
   },
   "cond_syntax.mk:test:ninja": {
@@ -622,7 +622,7 @@
   },
   "crlf.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS PASS\n",
+    "output": "echo PASS PASS\nPASS PASS\n",
     "status": 0
   },
   "crlf.mk:test:ninja": {
@@ -644,7 +644,7 @@
   },
   "curdir.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   bar.c\n  BUILD   bar.o\n  BUILD   foo.c\n  BUILD   foo.o\n  BUILD   test\ncompiling bar.o from bar.c\ncompiling foo.o from foo.c\nlinking test from foo.o\nsource bar.c\nsource foo.c\n",
+    "output": "compiling bar.o from bar.c\ncompiling foo.o from foo.c\necho compiling bar.o from bar.c\necho compiling foo.o from foo.c\necho linking test from foo.o\necho source bar.c\necho source foo.c\nlinking test from foo.o\nsource bar.c\nsource foo.c\n",
     "status": 0
   },
   "curdir.mk:test:ninja": {
@@ -656,7 +656,7 @@
   },
   "curdir_implicit_rule.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   foo.c\n  BUILD   foo.o\n  BUILD   test\n  BUILD   xbar.c\n  BUILD   xbar.o\ncompiling foo.o from foo.c\ncompiling xbar.o from xbar.c\nlinking test from foo.o\nsource foo.c\nsource xbar.c\n",
+    "output": "compiling foo.o from foo.c\ncompiling xbar.o from xbar.c\necho compiling foo.o from foo.c\necho compiling xbar.o from xbar.c\necho linking test from foo.o\necho source foo.c\necho source xbar.c\nlinking test from foo.o\nsource foo.c\nsource xbar.c\n",
     "status": 0
   },
   "curdir_implicit_rule.mk:test:ninja": {
@@ -668,7 +668,7 @@
   },
   "curdir_var.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n  BUILD   test\n/tmp/\n",
+    "output": "# Make and kati will be executed in different subdirs\necho /tmp/\n/tmp/\n",
     "status": 0
   },
   "curdir_var.mk:test:ninja": {
@@ -692,7 +692,7 @@
   },
   "define.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nBEGIN echo foo\n  BUILD   test\nxxx END\n",
+    "output": "echo BEGIN echo foo\nBEGIN echo foo\necho xxx END\nxxx END\n",
     "status": 0
   },
   "define.mk:test:ninja": {
@@ -704,7 +704,7 @@
   },
   "define_newline.mk:test:direct": {
     "files": [],
-    "output": "This should have\ntwo lines\n  BUILD   test\nOK\n",
+    "output": "This should have\ntwo lines\necho OK\nOK\n",
     "status": 0
   },
   "define_newline.mk:test:ninja": {
@@ -716,7 +716,7 @@
   },
   "define_verbatim.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nfor i in 1 2 3 PASS; do echo ; done\n  BUILD   test\n1\n2\n3\nPASS\n",
+    "output": "echo \"for i in 1 2 3 PASS; do echo $i; done\"\nfor i in 1 2 3 PASS; do echo ; done\nfor i in 1 2 3 PASS; do echo $i; done\n1\n2\n3\nPASS\n",
     "status": 0
   },
   "define_verbatim.mk:test:ninja": {
@@ -728,7 +728,7 @@
   },
   "define_with_comments.mk:test:direct": {
     "files": [],
-    "output": "Makefile:12: extraneous text after `endef' directive\nMakefile:15: extraneous text after `endef' directive\n  BUILD   test\nPASS1\n  BUILD   test\nPASS2\n  BUILD   test\nPASS3\n  BUILD   test\nPASS4\n  BUILD   test\nPASS5\n  BUILD   test\nendefPASS\n  BUILD   test\nPASS6\n",
+    "output": "Makefile:12: extraneous text after `endef' directive\nMakefile:15: extraneous text after `endef' directive\necho PASS1\nPASS1\necho PASS2\nPASS2\necho PASS3\nPASS3\necho PASS4\nPASS4\necho PASS5\nPASS5\necho endefPASS\nendefPASS\necho PASS6\nPASS6\n",
     "status": 0
   },
   "define_with_comments.mk:test:ninja": {
@@ -740,7 +740,7 @@
   },
   "delete_on_error.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   file\n  BUILD   file\n*** [file] Error 1\n    command: false\n",
+    "output": "touch file\nfalse\n*** [file] Error 1\n    command: false\n",
     "status": 1
   },
   "delete_on_error.mk:test:ninja": {
@@ -750,7 +750,7 @@
   },
   "deprecated_export.mk:test:direct": {
     "files": [],
-    "output": "Makefile:7: C: export has been deprecated. Message.\nMakefile:8: B: unexport has been deprecated. Message.\n  BUILD   test\n/bin/sh: A: not found\n\n  BUILD   test\n/bin/sh: B: not found\n\n  BUILD   test\n/bin/sh: C: not found\n\n  BUILD   test\nDone\n",
+    "output": "Makefile:7: C: export has been deprecated. Message.\nMakefile:8: B: unexport has been deprecated. Message.\necho $(A)\n/bin/sh: A: not found\n\necho $(B)\n/bin/sh: B: not found\n\necho $(C)\n/bin/sh: C: not found\n\necho Done\nDone\n",
     "status": 0
   },
   "deprecated_export.mk:test:ninja": {
@@ -762,7 +762,7 @@
   },
   "deprecated_var.mk:test:direct": {
     "files": [],
-    "output": "Writing to an undefined deprecated variable\nMakefile:5: B has been deprecated.\nReading from deprecated variables - set before/after/never the deprecation func\nWriting to an undefined deprecated variable\nMakefile:12: A has been deprecated.\nMakefile:12: B has been deprecated.\nMakefile:12: C has been deprecated.\nMakefile:12: D has been deprecated.\nWriting to a reset deprecated variable\nMakefile:21: D has been deprecated.\nUsing a custom message\nMakefile:28: E has been deprecated. Use X instead.\nExpanding a recursive variable with an embedded deprecated variable\nMakefile:34: E has been deprecated. Use X instead.\nMakefile:34: C has been deprecated.\nAll of the previous variable references have been basic SymRefs, now check VarRefs\nMakefile:42: E has been deprecated. Use X instead.\nMakefile:42: C has been deprecated.\nAnd check VarSubst\nMakefile:49: C has been deprecated.\nDeprecated variable used in a rule-specific variable\nMakefile:55: E has been deprecated. Use X instead.\nMakefile:55: C has been deprecated.\nDeprecated variable used as a macro\nMakefile:63: B has been deprecated.\nMakefile:63: A has been deprecated.\nDeprecated variable used in an ifdef\nMakefile:70: C has been deprecated.\nDeprecated variable used in a rule\nMakefile:78: C has been deprecated.\n  BUILD   test\nDone\n",
+    "output": "Writing to an undefined deprecated variable\nMakefile:5: B has been deprecated.\nReading from deprecated variables - set before/after/never the deprecation func\nWriting to an undefined deprecated variable\nMakefile:12: A has been deprecated.\nMakefile:12: B has been deprecated.\nMakefile:12: C has been deprecated.\nMakefile:12: D has been deprecated.\nWriting to a reset deprecated variable\nMakefile:21: D has been deprecated.\nUsing a custom message\nMakefile:28: E has been deprecated. Use X instead.\nExpanding a recursive variable with an embedded deprecated variable\nMakefile:34: E has been deprecated. Use X instead.\nMakefile:34: C has been deprecated.\nAll of the previous variable references have been basic SymRefs, now check VarRefs\nMakefile:42: E has been deprecated. Use X instead.\nMakefile:42: C has been deprecated.\nAnd check VarSubst\nMakefile:49: C has been deprecated.\nDeprecated variable used in a rule-specific variable\nMakefile:55: E has been deprecated. Use X instead.\nMakefile:55: C has been deprecated.\nDeprecated variable used as a macro\nMakefile:63: B has been deprecated.\nMakefile:63: A has been deprecated.\nDeprecated variable used in an ifdef\nMakefile:70: C has been deprecated.\nDeprecated variable used in a rule\nMakefile:78: C has been deprecated.\necho Done\nDone\n",
     "status": 0
   },
   "deprecated_var.mk:test:ninja": {
@@ -777,7 +777,7 @@
       "bar",
       "foo"
     ],
-    "output": "  BUILD   foo\n  BUILD   test\n./\n  BUILD   test\n./\n  BUILD   test\n./\n  BUILD   test\n\n  BUILD   test\nsrc/ ./\n  BUILD   test\n./ src/\n  BUILD   test\n/\n  BUILD   test\n/\n",
+    "output": "mkdir foo bar\necho ./\n./\necho ./\n./\necho ./\n./\necho \n\necho src/ ./\nsrc/ ./\necho ./ src/\n./ src/\necho /\n/\necho /\n/\n",
     "status": 0
   },
   "dir.mk:test:ninja": {
@@ -791,7 +791,7 @@
   },
   "directive_after_tab.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "directive_after_tab.mk:test:ninja": {
@@ -805,7 +805,7 @@
     "files": [
       "$testfile"
     ],
-    "output": "  BUILD   $testfile\n  BUILD   test\n$testfile\n",
+    "output": "touch \\$testfile\nls *testfile\n$testfile\n",
     "status": 0
   },
   "dollar_in_file.mk:test:ninja": {
@@ -818,7 +818,7 @@
   },
   "dot_rule.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "dot_rule.mk:test:ninja": {
@@ -840,7 +840,7 @@
   },
   "double_colon_rule.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nFOO\n  BUILD   test\nBAR\n",
+    "output": "echo FOO\nFOO\necho BAR\nBAR\n",
     "status": 0
   },
   "double_colon_rule.mk:test:ninja": {
@@ -857,7 +857,7 @@
   },
   "else_if.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "else_if.mk:test:ninja": {
@@ -874,7 +874,7 @@
   },
   "empty_line_in_define.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nfoo\n  BUILD   test\nfoo\n  BUILD   test\nbar\n  BUILD   test\nbar\n  BUILD   test\nbaz\n  BUILD   test\nbaz echo baz\n  BUILD   test\nbaz\n",
+    "output": "echo foo\nfoo\necho foo\nfoo\necho bar\nbar\necho bar\nbar\necho baz\nbaz\necho baz echo baz\nbaz echo baz\necho baz\nbaz\n",
     "status": 0
   },
   "empty_line_in_define.mk:test:ninja": {
@@ -891,7 +891,7 @@
   },
   "empty_output.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "empty_output.mk:test:ninja": {
@@ -906,7 +906,7 @@
       "sample.c",
       "sample.m"
     ],
-    "output": "  BUILD   sample.c\n  BUILD   sample.m\n  BUILD   sample.o\nCOMPILE sample.o from sample.c\n",
+    "output": "touch sample.c\ntouch sample.m\necho COMPILE sample.o from sample.c\nCOMPILE sample.o from sample.c\n",
     "status": 0
   },
   "empty_pattern_rule_suffix_fallback.mk:test:ninja": {
@@ -945,7 +945,7 @@
   },
   "empty_var_cmd.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "empty_var_cmd.mk:test:ninja": {
@@ -957,7 +957,7 @@
   },
   "envvar.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n",
+    "output": "echo /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n",
     "status": 0
   },
   "envvar.mk:test:ninja": {
@@ -969,7 +969,7 @@
   },
   "equal_and_semi_in_rule.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   bar\n  BUILD   foo\nPASS\nPASS=PASS\necho\n",
+    "output": "PASS\nPASS=PASS\necho\necho PASS=PASS\necho echo ; echo PASS\n",
     "status": 0
   },
   "equal_and_semi_in_rule.mk:test:ninja": {
@@ -981,7 +981,7 @@
   },
   "equal_in_target.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   A=B\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "equal_in_target.mk:test:ninja": {
@@ -1343,7 +1343,7 @@
   },
   "err_override.mk:test:direct": {
     "files": [],
-    "output": "Makefile:7: warning: overriding commands for target `foo'\nMakefile:4: warning: ignoring old commands for target `foo'\n  BUILD   foo\nPASS\n",
+    "output": "Makefile:7: warning: overriding commands for target `foo'\nMakefile:4: warning: ignoring old commands for target `foo'\necho PASS\nPASS\n",
     "status": 0
   },
   "err_override.mk:test:ninja": {
@@ -1427,7 +1427,7 @@
     "files": [
       "a.src"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "touch a.src\n",
     "status": 0
   },
   "err_suffixes.mk:test1:ninja": {
@@ -1452,7 +1452,7 @@
     "files": [
       "a.c"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "touch a.c\n",
     "status": 0
   },
   "err_suffixes2.mk:test1:ninja": {
@@ -1535,7 +1535,7 @@
   },
   "escape_for_shell_in_recipe.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n # \n  BUILD   test\n\" # \"\n",
+    "output": "echo \" # \"\n # \necho $(echo \\\"\" # \"\\\")\n\" # \"\n",
     "status": 0
   },
   "escape_for_shell_in_recipe.mk:test:ninja": {
@@ -1547,7 +1547,7 @@
   },
   "escaped_backslash.mk:test:direct": {
     "files": [],
-    "output": "echo \\\\\necho \\\\ foo\necho \\\\\necho \\\\ foo\n  BUILD   test\n\\\n  BUILD   test\n\\ foo\n  BUILD   test\n\\\n  BUILD   test\n\\ foo\n",
+    "output": "echo \\\\\necho \\\\ foo\necho \\\\\necho \\\\ foo\necho \\\\\n\\\necho \\\\ foo\n\\ foo\necho \\\\\n\\\necho \\\\ foo\n\\ foo\n",
     "status": 0
   },
   "escaped_backslash.mk:test:ninja": {
@@ -1559,7 +1559,7 @@
   },
   "escaped_comment.mk:test1:direct": {
     "files": [],
-    "output": "  BUILD   test1\n\n",
+    "output": "echo #PASS\n\n",
     "status": 0
   },
   "escaped_comment.mk:test1:ninja": {
@@ -1571,7 +1571,7 @@
   },
   "escaped_comment.mk:test2:direct": {
     "files": [],
-    "output": "  BUILD   test2\n#\n",
+    "output": "echo \\# #\n#\n",
     "status": 0
   },
   "escaped_comment.mk:test2:ninja": {
@@ -1583,7 +1583,7 @@
   },
   "escaped_comment.mk:test3:direct": {
     "files": [],
-    "output": "  BUILD   test3\n#PASS\n",
+    "output": "echo \\#PASS\n#PASS\n",
     "status": 0
   },
   "escaped_comment.mk:test3:ninja": {
@@ -1614,7 +1614,7 @@
     "files": [
       "foo"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "touch foo\n",
     "status": 0
   },
   "escaped_wildcard.mk:test1:ninja": {
@@ -1627,7 +1627,7 @@
   },
   "escaped_wildcard.mk:test2:direct": {
     "files": [],
-    "output": "  BUILD   test2\n\n",
+    "output": "echo \n\n",
     "status": 0
   },
   "escaped_wildcard.mk:test2:ninja": {
@@ -1646,7 +1646,7 @@
       "server_access.c",
       "server_priv.c"
     ],
-    "output": "  BUILD   test1\n  BUILD   test1\n",
+    "output": "touch server.c server_priv.c server_access.c\ntouch client.c client_api.c client_mem.c\n",
     "status": 0
   },
   "eval.mk:test1:ninja": {
@@ -1674,7 +1674,7 @@
   },
   "eval_assign.mk:test:direct": {
     "files": [],
-    "output": "X Y Z\n  BUILD   test\nPASS\n  BUILD   test\nPASS\n  BUILD   test\nPASS\n  BUILD   test\nPASS\n  BUILD   test\nPASS\n  BUILD   test\n_PASS_\n",
+    "output": "X Y Z\necho PASS\nPASS\necho PASS\nPASS\necho PASS\nPASS\necho PASS\nPASS\necho PASS\nPASS\necho _PASS_\n_PASS_\n",
     "status": 0
   },
   "eval_assign.mk:test:ninja": {
@@ -1701,7 +1701,7 @@
   },
   "eval_starts_with_comment.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "eval_starts_with_comment.mk:test:ninja": {
@@ -1737,7 +1737,7 @@
     "files": [
       "foo.c"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "touch foo.c\n",
     "status": 0
   },
   "explicit_pattern_rule.mk:test1:ninja": {
@@ -1765,7 +1765,7 @@
   },
   "export.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS_FOO\n  BUILD   test\nPASS_FOO2\n  BUILD   test\nPASS_BAR\n  BUILD   test\n\n  BUILD   test\nPASS_X\n  BUILD   test\nPASS_Y\n  BUILD   test\nPASS_Z\n  BUILD   test\nPASS_VAR1\n  BUILD   test\nPASS_VAR2\n  BUILD   test\n\n",
+    "output": "echo $FOO\nPASS_FOO\necho $FOO2\nPASS_FOO2\necho $BAR\nPASS_BAR\necho $BAZ\n\necho $X\nPASS_X\necho $Y\nPASS_Y\necho $Z\nPASS_Z\necho $VAR1\nPASS_VAR1\necho $VAR2\nPASS_VAR2\necho $NOT_EXPORTED\n\n",
     "status": 0
   },
   "export.mk:test:ninja": {
@@ -1789,7 +1789,7 @@
   },
   "export_export.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n\n",
+    "output": "echo ${export}\n\n",
     "status": 0
   },
   "export_export.mk:test:ninja": {
@@ -1818,7 +1818,7 @@
   },
   "fail_ignore_error.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n*** [test] Error 1\n    command: false\n",
+    "output": "false\n*** [test] Error 1\n    command: false\n",
     "status": 1
   },
   "fail_ignore_error.mk:test:ninja": {
@@ -1828,7 +1828,7 @@
   },
   "fail_subshell_in_recipe.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n*** [test] Error 1\n    command: false\n",
+    "output": "false\n*** [test] Error 1\n    command: false\n",
     "status": 1
   },
   "fail_subshell_in_recipe.mk:test:ninja": {
@@ -1846,7 +1846,7 @@
   },
   "filter-out.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nfoo.o bar.o\n",
+    "output": "echo foo.o bar.o\nfoo.o bar.o\n",
     "status": 0
   },
   "filter-out.mk:test:ninja": {
@@ -1858,7 +1858,7 @@
   },
   "filter.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\ncc foo.c bar.c baz.s -o foo\n",
+    "output": "echo cc foo.c bar.c baz.s -o foo\ncc foo.c bar.c baz.s -o foo\n",
     "status": 0
   },
   "filter.mk:test:ninja": {
@@ -1888,7 +1888,7 @@
       "build",
       "testdir"
     ],
-    "output": "  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n  BUILD   test1\ncp: ../../../testcase/tools/findleaves.py: No such file or directory\n*** [test1] Error 1\n    command: cp ../../../testcase/tools/findleaves.py build/tools\n",
+    "output": "mkdir testdir\ntouch testdir/file1\ntouch testdir/file2\nmkdir testdir/dir1\ntouch testdir/dir1/file1\ntouch testdir/dir1/file2\ntouch testdir/dir1/file3\nmkdir testdir/dir2\ntouch testdir/dir2/file1\ntouch testdir/dir2/file2\ntouch testdir/dir2/file3\nln -s ../dir1/file1 testdir/dir2/link1\nln -s ../../testdir/dir1 testdir/dir2/link2\nln -s broken testdir/dir2/link3\nmkdir -p build/tools\ncp ../../../testcase/tools/findleaves.py build/tools\ncp: ../../../testcase/tools/findleaves.py: No such file or directory\n*** [test1] Error 1\n    command: cp ../../../testcase/tools/findleaves.py build/tools\n",
     "status": 1
   },
   "find_command.mk:test1:ninja": {
@@ -1961,7 +1961,7 @@
   },
   "findstring.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\na\n  BUILD   test\nb\n  BUILD   test\nb c\n  BUILD   test\n\n  BUILD   test\na\n",
+    "output": "echo a\na\necho b\nb\necho b c\nb c\necho \n\necho a\na\n",
     "status": 0
   },
   "findstring.mk:test:ninja": {
@@ -1973,7 +1973,7 @@
   },
   "first_rule.mk:default:direct": {
     "files": [],
-    "output": "  BUILD   a\na\n",
+    "output": "echo a\na\n",
     "status": 0
   },
   "first_rule.mk:default:ninja": {
@@ -1985,7 +1985,7 @@
   },
   "firstword.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nfoo\n  BUILD   test\n\n",
+    "output": "echo foo\nfoo\necho \n\n",
     "status": 0
   },
   "firstword.mk:test:ninja": {
@@ -1997,7 +1997,7 @@
   },
   "flavor.mk:default:direct": {
     "files": [],
-    "output": "  BUILD   all\nrecursive simple recursive recursive undefined\n  BUILD   all\nrecursive\n  BUILD   all\nsimple\n  BUILD   all\nrecursive\n  BUILD   all\nrecursive\n",
+    "output": "echo recursive simple recursive recursive undefined\nrecursive simple recursive recursive undefined\necho recursive\nrecursive\necho simple\nsimple\necho recursive\nrecursive\necho recursive\nrecursive\n",
     "status": 0
   },
   "flavor.mk:default:ninja": {
@@ -2009,7 +2009,7 @@
   },
   "foreach.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\na/a/base a/b/base a/c/base a/d/base b/a/base b/b/base b/c/base b/d/base c/a/base c/b/base c/c/base c/d/base d/a/base d/b/base d/c/base d/d/base\n  BUILD   test\na, b, c, d\n",
+    "output": "echo a/a/base a/b/base a/c/base a/d/base b/a/base b/b/base b/c/base b/d/base c/a/base c/b/base c/c/base c/d/base d/a/base d/b/base d/c/base d/d/base\na/a/base a/b/base a/c/base a/d/base b/a/base b/b/base b/c/base b/d/base c/a/base c/b/base c/c/base c/d/base d/a/base d/b/base d/c/base d/d/base\necho \"a\", \"b\", \"c\", \"d\"\na, b, c, d\n",
     "status": 0
   },
   "foreach.mk:test:ninja": {
@@ -2031,7 +2031,7 @@
   },
   "func_nop.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "func_nop.mk:test:ninja": {
@@ -2043,7 +2043,7 @@
   },
   "func_with_backslash.mk:test:direct": {
     "files": [],
-    "output": "PASS\n  BUILD   test\nOK\n",
+    "output": "PASS\necho OK\nOK\n",
     "status": 0
   },
   "func_with_backslash.mk:test:ninja": {
@@ -2055,7 +2055,7 @@
   },
   "function_command_hash.mk:default:direct": {
     "files": [],
-    "output": "  BUILD   out\n/bin/sh: Syntax error: redirection unexpected (expecting word)\n*** [out] Error 2\n    command: echo \\#include <generated> > out\n",
+    "output": "echo \\#include <generated> > out\n/bin/sh: Syntax error: redirection unexpected (expecting word)\n*** [out] Error 2\n    command: echo \\#include <generated> > out\n",
     "status": 1
   },
   "function_command_hash.mk:default:ninja": {
@@ -2065,7 +2065,7 @@
   },
   "generated_include_restart.sh:script": {
     "files": [],
-    "output": "  BUILD   generated.mk\nkati: Nothing to be done for `generated.mk'.\n",
+    "output": "printf 'compiler_kind := %s\\n' \"$(cat compiler.kind)\" > generated.mk\n",
     "status": 0
   },
   "guile_pure.sh:script": {
@@ -2089,7 +2089,7 @@
   },
   "if.mk:test:direct": {
     "files": [],
-    "output": "PASS1\nPASS2\nPASS3\n PASS4\n PASS5, PASS6\n PASS7\n  BUILD   test\nOK\n",
+    "output": "PASS1\nPASS2\nPASS3\n PASS4\n PASS5, PASS6\n PASS7\necho OK\nOK\n",
     "status": 0
   },
   "if.mk:test:ninja": {
@@ -2101,7 +2101,7 @@
   },
   "if_function_command_hash.mk:default:direct": {
     "files": [],
-    "output": "  BUILD   out\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\n*** [out] Error 2\n    command: echo \"/* header */\"; echo \\#define CFG; echo \\#include <configs/sandbox.h> ;\n",
+    "output": "echo \"/* header */\"; echo \\#define CFG; echo \\#include <configs/sandbox.h> ;\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\n*** [out] Error 2\n    command: echo \"/* header */\"; echo \\#define CFG; echo \\#include <configs/sandbox.h> ;\n",
     "status": 1
   },
   "if_function_command_hash.mk:default:ninja": {
@@ -2111,7 +2111,7 @@
   },
   "if_recipe.mk:test1:direct": {
     "files": [],
-    "output": "  BUILD   test1\nTEST\n  BUILD   test1\nPASS\n  BUILD   test1\nDONE\n",
+    "output": "echo TEST\nTEST\necho PASS\nPASS\necho DONE\nDONE\n",
     "status": 0
   },
   "if_recipe.mk:test1:ninja": {
@@ -2123,7 +2123,7 @@
   },
   "if_recipe.mk:test2:direct": {
     "files": [],
-    "output": "  BUILD   test2\nPASS\n  BUILD   test2\nDONE\n",
+    "output": "echo PASS\nPASS\necho DONE\nDONE\n",
     "status": 0
   },
   "if_recipe.mk:test2:ninja": {
@@ -2135,7 +2135,7 @@
   },
   "if_recipe.mk:test3:direct": {
     "files": [],
-    "output": "  BUILD   test3\nPASS\n  BUILD   test3\nDONE\n",
+    "output": "echo PASS\nPASS\necho DONE\nDONE\n",
     "status": 0
   },
   "if_recipe.mk:test3:ninja": {
@@ -2167,7 +2167,7 @@
   },
   "ifdef_with_comments.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS1\n  BUILD   test\nPASS2\n  BUILD   test\nPASS3\n  BUILD   test\nPASS4\n  BUILD   test\nPASS5\n",
+    "output": "echo PASS1\nPASS1\necho PASS2\nPASS2\necho PASS3\nPASS3\necho PASS4\nPASS4\necho PASS5\nPASS5\n",
     "status": 0
   },
   "ifdef_with_comments.mk:test:ninja": {
@@ -2189,7 +2189,7 @@
   },
   "ifeq_without_parens.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS PASS PASS PASS PASS PASS PASS\n",
+    "output": "echo  PASS PASS PASS PASS PASS PASS PASS\nPASS PASS PASS PASS PASS PASS PASS\n",
     "status": 0
   },
   "ifeq_without_parens.mk:test:ninja": {
@@ -2213,7 +2213,7 @@
   },
   "ignore_error.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n[test] Error 1 (ignored)\n",
+    "output": "false\n[test] Error 1 (ignored)\n",
     "status": 0
   },
   "ignore_error.mk:test:ninja": {
@@ -2242,7 +2242,7 @@
     "files": [
       "foo.c"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "touch foo.c\n",
     "status": 0
   },
   "implicit_pattern_rule.mk:test1:ninja": {
@@ -2265,7 +2265,7 @@
   },
   "implicit_pattern_rule_chain.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   foo.c\ngenerate foo.c\n  BUILD   foo.o\ncompile from foo.c to foo.o\n  BUILD   foo\nlink foo\n",
+    "output": "echo generate foo.c\ngenerate foo.c\necho compile from foo.c to foo.o\ncompile from foo.c to foo.o\necho link foo\nlink foo\n",
     "status": 0
   },
   "implicit_pattern_rule_chain.mk:test:ninja": {
@@ -2279,7 +2279,7 @@
     "files": [
       "foo.x"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "touch foo.x\n",
     "status": 0
   },
   "implicit_pattern_rule_chain2.mk:test1:ninja": {
@@ -2319,7 +2319,7 @@
       "foo.c",
       "foo.h"
     ],
-    "output": "  BUILD   foo\n  BUILD   foo.c\n  BUILD   foo.h\n  BUILD   foo.o\ncc -O -o foo foo.o\ncc -g -o foo.o -c foo.c\n",
+    "output": "cc -O -o foo foo.o\ncc -g -o foo.o -c foo.c\necho cc -O -o foo foo.o\necho cc -g -o foo.o -c foo.c\ntouch foo.c\ntouch foo.h\n",
     "status": 0
   },
   "implicit_pattern_rule_for_no_commands.mk:test2:ninja": {
@@ -2336,7 +2336,7 @@
       "foo.c",
       "foo.h"
     ],
-    "output": "  BUILD   foo.c\n  BUILD   foo.h\n",
+    "output": "touch foo.c\ntouch foo.h\n",
     "status": 0
   },
   "implicit_pattern_rule_for_no_commands.mk:test:ninja": {
@@ -2366,7 +2366,7 @@
     "files": [
       "foo.x"
     ],
-    "output": "  BUILD   foo.x\n  BUILD   foo.y\nfoo.y from foo.x\n  BUILD   all\nall from foo.y\n",
+    "output": "touch foo.x\necho foo.y from foo.x\nfoo.y from foo.x\necho all from foo.y\nall from foo.y\n",
     "status": 0
   },
   "implicit_pattern_rule_phony.mk:test2:ninja": {
@@ -2381,7 +2381,7 @@
     "files": [
       "foo.x"
     ],
-    "output": "  BUILD   foo.x\n",
+    "output": "touch foo.x\n",
     "status": 0
   },
   "implicit_pattern_rule_phony.mk:test:ninja": {
@@ -2394,7 +2394,7 @@
   },
   "implicit_pattern_rule_prefix.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   abcd\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "implicit_pattern_rule_prefix.mk:test:ninja": {
@@ -2431,7 +2431,7 @@
     "files": [
       "foo.d"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "echo \"foo: bar\" > foo.d\n",
     "status": 0
   },
   "include.mk:test1:ninja": {
@@ -2456,7 +2456,7 @@
     "files": [
       "foo.d"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "echo \"foo: bar\" > foo.d\n",
     "status": 0
   },
   "include_glob.mk:test1:ninja": {
@@ -2501,7 +2501,7 @@
     "files": [
       "foo.d"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "echo \"foo: bar\" > foo.d\n",
     "status": 0
   },
   "include_var.mk:test1:ninja": {
@@ -2524,7 +2524,7 @@
   },
   "info.mk:test:direct": {
     "files": [],
-    "output": "\"%s:%s\" foo bar\nbaz\n  BUILD   test\nxxx\n",
+    "output": "\"%s:%s\" foo bar\nbaz\necho xxx\nxxx\n",
     "status": 0
   },
   "info.mk:test:ninja": {
@@ -2553,7 +2553,7 @@
   },
   "join.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\na.c b.o\n  BUILD   test\na0 b1 c\n  BUILD   test\na0 b1 2\n",
+    "output": "echo a.c b.o\na.c b.o\necho a0 b1 c\na0 b1 c\necho a0 b1 2\na0 b1 2\n",
     "status": 0
   },
   "join.mk:test:ninja": {
@@ -2565,7 +2565,7 @@
   },
   "kati_cache.sh:script": {
     "files": [],
-    "output": "  BUILD   foo\nfoo\n  BUILD   foo\nfoo\n  BUILD   foo\nfoo\n  BUILD   foo\nbar\n",
+    "output": "echo foo\nfoo\necho foo\nfoo\necho foo\nfoo\necho bar\nbar\n",
     "status": 0
   },
   "keep_going.sh:script": {
@@ -2575,7 +2575,7 @@
   },
   "last_resort.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   foo\nPASS_foo\n  BUILD   test\nPASS_test\n",
+    "output": "echo PASS_foo\nPASS_foo\necho PASS_test\nPASS_test\n",
     "status": 0
   },
   "last_resort.mk:test:ninja": {
@@ -2587,7 +2587,7 @@
   },
   "lastword.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nbaz\n  BUILD   test\n\n",
+    "output": "echo baz\nbaz\necho \n\n",
     "status": 0
   },
   "lastword.mk:test:ninja": {
@@ -2611,7 +2611,7 @@
   },
   "lineno_in_call.mk:test:direct": {
     "files": [],
-    "output": "Makefile:7: foo\n  BUILD   test\nFOO\n",
+    "output": "Makefile:7: foo\necho FOO\nFOO\n",
     "status": 0
   },
   "lineno_in_call.mk:test:ninja": {
@@ -2633,7 +2633,7 @@
   },
   "makecmdgoals.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\ntest\n",
+    "output": "echo test\ntest\n",
     "status": 0
   },
   "makecmdgoals.mk:test:ninja": {
@@ -2647,7 +2647,7 @@
     "files": [
       "foo.mk"
     ],
-    "output": "  BUILD   test1\nMakefile\n  BUILD   test1\n",
+    "output": "echo  Makefile\nMakefile\ntouch foo.mk\n",
     "status": 0
   },
   "makefile_list.mk:test1:ninja": {
@@ -2662,7 +2662,7 @@
     "files": [
       "bar.mk"
     ],
-    "output": "  BUILD   test2\nMakefile\n  BUILD   test2\n",
+    "output": "echo  Makefile\nMakefile\ntouch bar.mk\n",
     "status": 0
   },
   "makefile_list.mk:test2:ninja": {
@@ -2675,7 +2675,7 @@
   },
   "makefile_list.mk:test3:direct": {
     "files": [],
-    "output": "  BUILD   test3\nMakefile\n",
+    "output": "echo  Makefile\nMakefile\n",
     "status": 0
   },
   "makefile_list.mk:test3:ninja": {
@@ -2687,7 +2687,7 @@
   },
   "makefile_list.mk:test4:direct": {
     "files": [],
-    "output": "  BUILD   test4\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "makefile_list.mk:test4:ninja": {
@@ -2702,7 +2702,7 @@
       "bar",
       "baz"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "touch bar baz\n",
     "status": 0
   },
   "merge_inputs.mk:test1:ninja": {
@@ -2730,7 +2730,7 @@
       "foo.h",
       "foo.o"
     ],
-    "output": "  BUILD   foo.h\n  BUILD   foo.c\n  BUILD   foo.o\nfoo.h foo.c\n  BUILD   foo.o\n",
+    "output": "touch foo.h\ntouch foo.c\necho foo.h foo.c\nfoo.h foo.c\ncp foo.h foo.o\n",
     "status": 0
   },
   "merge_output_pattern.mk:test:ninja": {
@@ -2745,7 +2745,7 @@
   },
   "merge_target_specific_vars.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   foo\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "merge_target_specific_vars.mk:test:ninja": {
@@ -2757,7 +2757,7 @@
   },
   "multi_explicit_output_patterns.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   azz\n  BUILD   zza\nazz\nzza\n  BUILD   zzz\nzzz\n",
+    "output": "echo azz\nazz\necho zza\nzza\necho zzz\nzzz\n",
     "status": 0
   },
   "multi_explicit_output_patterns.mk:test:ninja": {
@@ -2769,7 +2769,7 @@
   },
   "multi_explicit_output_patterns_double_colon.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   ayz\n  BUILD   xya\n3 ayz\n3 xya\n  BUILD   xyz\n1 yz\n  BUILD   xyz\n2 yz\n",
+    "output": "echo 3 xya\n3 xya\necho 3 ayz\n3 ayz\necho 1 yz\n1 yz\necho 2 yz\n2 yz\n",
     "status": 0
   },
   "multi_explicit_output_patterns_double_colon.mk:test:ninja": {
@@ -2791,7 +2791,7 @@
   },
   "multi_outputs.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   bar\n  BUILD   foo\nPASS_bar\nPASS_foo\n",
+    "output": "PASS_bar\nPASS_foo\necho PASS_bar\necho PASS_foo\n",
     "status": 0
   },
   "multi_outputs.mk:test:ninja": {
@@ -2806,7 +2806,7 @@
       "exist",
       "foo.c"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "touch foo.c exist\n",
     "status": 0
   },
   "multi_pattern_rule.mk:test1:ninja": {
@@ -2830,7 +2830,7 @@
   },
   "multi_rule.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   foo.c\ngenerating foo.c\n",
+    "output": "echo generating foo.c\ngenerating foo.c\n",
     "status": 0
   },
   "multi_rule.mk:test:ninja": {
@@ -2844,7 +2844,7 @@
     "files": [
       "foo.c"
     ],
-    "output": "  BUILD   bar.a\n  BUILD   foo.a\n  BUILD   foo.c\n  BUILD   foo.o\narchive bar.a\ncompile foo.o from foo.c\narchive foo.a\n",
+    "output": "echo archive bar.a\narchive bar.a\ntouch foo.c\necho compile foo.o from foo.c\ncompile foo.o from foo.c\necho archive foo.a\narchive foo.a\n",
     "status": 0
   },
   "multi_rule_order_only.mk:test2:ninja": {
@@ -2859,7 +2859,7 @@
     "files": [
       "foo.c"
     ],
-    "output": "  BUILD   foo.c\n",
+    "output": "touch foo.c\n",
     "status": 0
   },
   "multi_rule_order_only.mk:test:ninja": {
@@ -2874,7 +2874,7 @@
     "files": [
       "foo.c"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "touch foo.c\n",
     "status": 0
   },
   "multi_suffix_rule.mk:test1:ninja": {
@@ -2897,7 +2897,7 @@
   },
   "multiline_and_leading_space.mk:test:direct": {
     "files": [],
-    "output": "foo bar\n  BUILD   test\nPASS foo bar foo bar\n",
+    "output": "foo bar\necho PASS foo bar foo bar\nPASS foo bar foo bar\n",
     "status": 0
   },
   "multiline_and_leading_space.mk:test:ninja": {
@@ -2909,7 +2909,7 @@
   },
   "multiline_and_lineno.mk:test:direct": {
     "files": [],
-    "output": "Makefile:1: foo\nMakefile:3: bar\n  BUILD   test\nfoo\n",
+    "output": "Makefile:1: foo\nMakefile:3: bar\necho foo\nfoo\n",
     "status": 0
   },
   "multiline_and_lineno.mk:test:ninja": {
@@ -2921,7 +2921,7 @@
   },
   "multiline_arg.mk:test:direct": {
     "files": [],
-    "output": "INFO:  foo\nINFO2: \necho  foo\nINFO:  foo\nINFO:  \\\n  BUILD   test\nfoo\n  BUILD   test\n\\\n",
+    "output": "INFO:  foo\nINFO2: \necho  foo\nINFO:  foo\nINFO:  \\\necho  foo\nfoo\necho  \\\n\\\n",
     "status": 0
   },
   "multiline_arg.mk:test:ninja": {
@@ -2933,7 +2933,7 @@
   },
   "multiline_define.mk:test:direct": {
     "files": [],
-    "output": "A \nB\nA \nB\nA B\n  BUILD   test\nPASS_or1\n  BUILD   test\nPASS_or2\n  BUILD   test\nPASS_or3\n",
+    "output": "A \nB\nA \nB\nA B\necho PASS_or1\nPASS_or1\necho PASS_or2\nPASS_or2\necho PASS_or3\nPASS_or3\n",
     "status": 0
   },
   "multiline_define.mk:test:ninja": {
@@ -2969,7 +2969,7 @@
   },
   "multiline_recipe.mk:test3:direct": {
     "files": [],
-    "output": "  BUILD   test3\nfoo\n  BUILD   test3\nbar\n",
+    "output": "echo foo\nfoo\necho bar\nbar\n",
     "status": 0
   },
   "multiline_recipe.mk:test3:ninja": {
@@ -2981,7 +2981,7 @@
   },
   "multiline_recipe.mk:test4:direct": {
     "files": [],
-    "output": "  BUILD   test4\nfoo\nbar\n",
+    "output": "echo foo ; echo bar\nfoo\nbar\n",
     "status": 0
   },
   "multiline_recipe.mk:test4:ninja": {
@@ -3005,7 +3005,7 @@
   },
   "multiline_recipe.mk:test6:direct": {
     "files": [],
-    "output": "  BUILD   test6\nfoo bar\n",
+    "output": "echo foo\\\n\t${empty}bar\nfoo bar\n",
     "status": 0
   },
   "multiline_recipe.mk:test6:ninja": {
@@ -3039,7 +3039,7 @@
       "foo.h",
       "foo.o"
     ],
-    "output": "  BUILD   foo.h\n  BUILD   foo.c\n  BUILD   bar.o\n  BUILD   foo.o\n",
+    "output": "touch foo.h\ntouch foo.c\ntouch bar.o\ncp foo.h foo.o\n",
     "status": 0
   },
   "multiple_output_patterns.mk:test:ninja": {
@@ -3067,7 +3067,7 @@
   },
   "nested_define.mk:default:direct": {
     "files": [],
-    "output": "  BUILD   foo\n\n  BUILD   foo\nPASS\n",
+    "output": "echo \n\necho PASS\nPASS\n",
     "status": 0
   },
   "nested_define.mk:default:ninja": {
@@ -3079,7 +3079,7 @@
   },
   "nested_function_command_hash.mk:default:direct": {
     "files": [],
-    "output": "  BUILD   out\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\n*** [out] Error 2\n    command: { \techo \"/* header */\"; echo \\#include <generated>; } > out\n",
+    "output": "{ \techo \"/* header */\"; echo \\#include <generated>; } > out\n/bin/sh: Syntax error: \";\" unexpected (expecting word)\n*** [out] Error 2\n    command: { \techo \"/* header */\"; echo \\#include <generated>; } > out\n",
     "status": 1
   },
   "nested_function_command_hash.mk:default:ninja": {
@@ -3141,7 +3141,7 @@
       "a",
       "b"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "mkdir a b\n",
     "status": 0
   },
   "ninja_normalized_path.mk:test1:ninja": {
@@ -3155,7 +3155,7 @@
   },
   "ninja_normalized_path.mk:test2:direct": {
     "files": [],
-    "output": "  BUILD   a/b\ntouch: a/b: No such file or directory\n*** [a/b] Error 1\n    command: touch a/b\n",
+    "output": "touch a/b\ntouch: a/b: No such file or directory\n*** [a/b] Error 1\n    command: touch a/b\n",
     "status": 1
   },
   "ninja_normalized_path.mk:test2:ninja": {
@@ -3300,7 +3300,7 @@
   },
   "no_last_newline.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "no_last_newline.mk:test:ninja": {
@@ -3312,7 +3312,7 @@
   },
   "not_command_with_tab.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   bar\n  BUILD   foo\nPASS_A with_space\nPASS_Bwithout_space\n",
+    "output": "PASS_A with_space\nPASS_Bwithout_space\necho $A\nexport B=PASS_B; echo ${B}\\\nwithout_space\n",
     "status": 0
   },
   "not_command_with_tab.mk:test:ninja": {
@@ -3324,7 +3324,7 @@
   },
   "notdir.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nfoo\n  BUILD   test\nfoo,bar\n  BUILD   test\nfoo bar\n  BUILD   test\n.\n  BUILD   test\n\n  BUILD   test\n\n  BUILD   test\nfoo.c hacks\n  BUILD   test\nhacks foo.c\n  BUILD   test\nhacks foo.c\n",
+    "output": "echo foo\nfoo\necho foo,bar\nfoo,bar\necho foo bar\nfoo bar\necho .\n.\necho \n\necho \n\necho foo.c hacks\nfoo.c hacks\necho hacks foo.c\nhacks foo.c\necho hacks  foo.c\nhacks foo.c\n",
     "status": 0
   },
   "notdir.mk:test:ninja": {
@@ -3349,7 +3349,7 @@
       "first",
       "second"
     ],
-    "output": "  BUILD   .kati_wait_616c6c_0\nnotparallel-target=ok\n",
+    "output": "touch .kati_wait_616c6c_0\nnotparallel-target=ok\n",
     "status": 0
   },
   "notparallel_target.mk:default:ninja": {
@@ -3380,7 +3380,7 @@
   },
   "or.mk:test:direct": {
     "files": [],
-    "output": "PASS_1\nfoo\nPASS\nx \t \n  \ty\nPASS\n  BUILD   test\nOK\n",
+    "output": "PASS_1\nfoo\nPASS\nx \t \n  \ty\nPASS\necho OK\nOK\n",
     "status": 0
   },
   "or.mk:test:ninja": {
@@ -3395,7 +3395,7 @@
       "bar",
       "foo"
     ],
-    "output": "  BUILD   test1\n  BUILD   test1\n",
+    "output": "touch -t 197101010000 foo\ntouch bar\n",
     "status": 0
   },
   "order_only.mk:test1:ninja": {
@@ -3423,7 +3423,7 @@
       "old1",
       "old2"
     ],
-    "output": "  BUILD   test1\n  BUILD   test1\n  BUILD   test1\n",
+    "output": "touch -t 197101010000 old1\ntouch -t 197101010000 old2\ntouch new\n",
     "status": 0
   },
   "order_only2.mk:test1:ninja": {
@@ -3438,7 +3438,7 @@
   },
   "order_only2.mk:test2:direct": {
     "files": [],
-    "output": "  BUILD   new\n  BUILD   old1\n  BUILD   old2\n  BUILD   test2\nDONE\nFAIL\nFAIL_new\nPASS\n",
+    "output": "DONE\nFAIL\nFAIL_new\nPASS\necho DONE\necho FAIL\necho FAIL_new\necho PASS\n",
     "status": 0
   },
   "order_only2.mk:test2:ninja": {
@@ -3450,7 +3450,7 @@
   },
   "origin.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nfile\n  BUILD   test\nundefined\n  BUILD   test\nundefined\n  BUILD   test\nundefined\n  BUILD   test\nenvironment\n  BUILD   test\nfile\n  BUILD   test\ndefault\n  BUILD   test\nfile\n",
+    "output": "echo file\nfile\necho undefined\nundefined\necho undefined\nundefined\necho undefined\nundefined\necho environment\nenvironment\necho file\nfile\necho default\ndefault\necho file\nfile\n",
     "status": 0
   },
   "origin.mk:test:ninja": {
@@ -3467,7 +3467,7 @@
   },
   "override.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   bar\n  BUILD   foo\n  BUILD   test\nMakefile:11: warning: overriding commands for target `foo'\nMakefile:2: warning: ignoring old commands for target `test'\nMakefile:5: warning: overriding commands for target `test'\nMakefile:8: warning: ignoring old commands for target `foo'\nPASS_bar\nPASS_foo\nPASS_test\n",
+    "output": "Makefile:11: warning: overriding commands for target `foo'\nMakefile:2: warning: ignoring old commands for target `test'\nMakefile:5: warning: overriding commands for target `test'\nMakefile:8: warning: ignoring old commands for target `foo'\nPASS_bar\nPASS_foo\nPASS_test\necho PASS_bar\necho PASS_foo\necho PASS_test\n",
     "status": 0
   },
   "override.mk:test:ninja": {
@@ -3479,7 +3479,7 @@
   },
   "override_define.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nCC=gcc simple\n  BUILD   test\nAS=as recursive\n  BUILD   test\ntwo BEGIN echo foo\n  BUILD   test\nxxx END recursive\n  BUILD   test\nthree BEGIN echo 1\n  BUILD   test\n2\n  BUILD   test\n3 END recursive\n  BUILD   test\nfour BEGIN echo I\n  BUILD   test\nII\n  BUILD   test\nIII\n  BUILD   test\nIV END recursive\n",
+    "output": "echo CC=gcc simple\nCC=gcc simple\necho AS=as recursive\nAS=as recursive\necho two BEGIN echo foo\ntwo BEGIN echo foo\necho xxx END recursive\nxxx END recursive\necho three BEGIN echo 1\nthree BEGIN echo 1\necho 2\n2\necho 3 END recursive\n3 END recursive\necho four BEGIN echo I\nfour BEGIN echo I\necho II\nII\necho III\nIII\necho IV END recursive\nIV END recursive\n",
     "status": 0
   },
   "override_define.mk:test:ninja": {
@@ -3491,7 +3491,7 @@
   },
   "override_export.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nmake_A\n  BUILD   test\nmake_B\n  BUILD   test\n\n  BUILD   test\n\n  BUILD   test\n*** [test] Error 1\n    command: env | grep 'override B'\n",
+    "output": "echo $A\nmake_A\necho $B\nmake_B\necho \n\necho \n\nenv | grep 'override B'\n*** [test] Error 1\n    command: env | grep 'override B'\n",
     "status": 1
   },
   "override_export.mk:test:ninja": {
@@ -3501,7 +3501,7 @@
   },
   "override_override.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS_A\n  BUILD   test\noverride\n  BUILD   test\nPASS_B\n  BUILD   test\noverride\n  BUILD   test\nPASS_C\n  BUILD   test\noverride\n",
+    "output": "echo PASS_A\nPASS_A\necho override\noverride\necho PASS_B\nPASS_B\necho override\noverride\necho PASS_C\nPASS_C\necho override\noverride\n",
     "status": 0
   },
   "override_override.mk:test:ninja": {
@@ -3513,7 +3513,7 @@
   },
   "override_rule.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   override\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "override_rule.mk:test:ninja": {
@@ -3542,7 +3542,7 @@
   },
   "patsubst.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nx.c.o bar.o\n",
+    "output": "echo  x.c.o   bar.o \nx.c.o bar.o\n",
     "status": 0
   },
   "patsubst.mk:test:ninja": {
@@ -3558,7 +3558,7 @@
       "baz.cc",
       "foo.c"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "touch foo.c bar.c baz.cc\n",
     "status": 0
   },
   "pattern_rules_priority.mk:test1:ninja": {
@@ -3583,7 +3583,7 @@
   },
   "phony.mk:test1:direct": {
     "files": [],
-    "output": "  BUILD   baz\nbaz\n  BUILD   test1\nPASS test1 from foo bar baz\n",
+    "output": "echo baz\nbaz\necho PASS test1 from foo bar baz\nPASS test1 from foo bar baz\n",
     "status": 0
   },
   "phony.mk:test1:ninja": {
@@ -3597,7 +3597,7 @@
     "files": [
       "test4"
     ],
-    "output": "  BUILD   test3\n",
+    "output": "touch test4\n",
     "status": 0
   },
   "phony.mk:test3:ninja": {
@@ -3610,7 +3610,7 @@
   },
   "phony.mk:test4:direct": {
     "files": [],
-    "output": "  BUILD   test4\nPASS test4\n",
+    "output": "echo PASS test4\nPASS test4\n",
     "status": 0
   },
   "phony.mk:test4:ninja": {
@@ -3622,7 +3622,7 @@
   },
   "phony.mk:test5:direct": {
     "files": [],
-    "output": "  BUILD   foo2\nfoo2\n  BUILD   baz2\nbaz2\n  BUILD   test5\nPASS test5 from foo bar baz\n",
+    "output": "echo foo2\nfoo2\necho baz2\nbaz2\necho PASS test5 from foo bar baz\nPASS test5 from foo bar baz\n",
     "status": 0
   },
   "phony.mk:test5:ninja": {
@@ -3639,12 +3639,12 @@
   },
   "phony_targets.sh:script": {
     "files": [],
-    "output": "===\n  BUILD   b\nb\n---\n  BUILD   a\na\n---\n  BUILD   b\nb\n===\n",
+    "output": "===\necho b\nb\n---\necho a\na\n---\necho b\nb\n===\n",
     "status": 0
   },
   "posix_var.mk:test:direct": {
     "files": [],
-    "output": "foo\n-c echo bar\n-ec echo baz\n  BUILD   test\n-ec foobar\n",
+    "output": "foo\n-c echo bar\n-ec echo baz\nfoobar\n-ec foobar\n",
     "status": 0
   },
   "posix_var.mk:test:ninja": {
@@ -3658,7 +3658,7 @@
     "files": [
       "a"
     ],
-    "output": "  BUILD   a/b\n  BUILD   a/b\n  BUILD   x\na/b\nx\n",
+    "output": "a/b\necho a/b\necho x\nmkdir -p a # for ninja.\nx\n",
     "status": 0
   },
   "preserve_single_dot.mk:test:ninja": {
@@ -3676,7 +3676,7 @@
       "c",
       "d"
     ],
-    "output": "  BUILD   a\n  BUILD   b\n  BUILD   c\n  BUILD   d\n  BUILD   d\na b c\nb\n",
+    "output": "a b c\nb\necho a > a\necho a b c > d\necho b > b\necho b > d\necho c > c\n",
     "status": 0
   },
   "question_mode.sh:script": {
@@ -3740,7 +3740,7 @@
   },
   "realpath.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n/tmp/foo\n  BUILD   test\n\n  BUILD   test\n/tmp/foo /tmp/foo\n  BUILD   test\n/tmp/foo\n",
+    "output": "echo /tmp/foo\n/tmp/foo\necho \n\necho /tmp/foo /tmp/foo\n/tmp/foo /tmp/foo\necho /tmp/foo\n/tmp/foo\n",
     "status": 0
   },
   "realpath.mk:test:ninja": {
@@ -3757,7 +3757,7 @@
   },
   "recipe_in_rule.mk:default:direct": {
     "files": [],
-    "output": "  BUILD   all\nPASS1\n  BUILD   all\nPASS2\n",
+    "output": "echo PASS1\nPASS1\necho PASS2\nPASS2\n",
     "status": 0
   },
   "recipe_in_rule.mk:default:ninja": {
@@ -3769,7 +3769,7 @@
   },
   "recipe_var.mk:default:direct": {
     "files": [],
-    "output": "  BUILD   $\n$\n",
+    "output": "echo \"$\"\n$\n",
     "status": 0
   },
   "recipe_var.mk:default:ninja": {
@@ -3779,7 +3779,7 @@
   },
   "recursive_command_expansion.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n\n",
+    "output": "echo \"${A}\"\n\n",
     "status": 0
   },
   "recursive_command_expansion.mk:test:ninja": {
@@ -3816,7 +3816,7 @@
   },
   "recursive_marker.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "recursive_marker.mk:test:ninja": {
@@ -3858,7 +3858,7 @@
   },
   "rule_in_var.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   foo\nOK\n",
+    "output": "echo OK\nOK\n",
     "status": 0
   },
   "rule_in_var.mk:test:ninja": {
@@ -3870,7 +3870,7 @@
   },
   "rule_with_extra_ws.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   foo\nPASS_foo\n  BUILD   bar\nPASS_foo\n",
+    "output": "echo PASS_foo\nPASS_foo\necho PASS_foo\nPASS_foo\n",
     "status": 0
   },
   "rule_with_extra_ws.mk:test:ninja": {
@@ -3909,7 +3909,7 @@
   },
   "semicolon.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "semicolon.mk:test:ninja": {
@@ -3921,7 +3921,7 @@
   },
   "shell.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n/tmp\n  BUILD   test\n\n  BUILD   test\nna n b n\n  BUILD   test\nna n b n X\n  BUILD   test\nX-e nnY\n  BUILD   test\nX-e annY\n  BUILD   test\nX-e nnbY\n  BUILD   test\nX-e nnbY\n  BUILD   test\nX-e nnnbY\n  BUILD   test\nX-e bY\n  BUILD   test\nX-e b Y\n",
+    "output": "echo /tmp\n/tmp\necho \n\necho -e \\na \\n  b \t\\n \nna n b n\necho -e \\na \\n  b \t\\n X\nna n b n X\necho X-e \\n\\nY\nX-e nnY\necho X-e a\\n\\nY\nX-e annY\necho X-e \\n\\nbY\nX-e nnbY\necho X-e \\n\\nbY\nX-e nnbY\necho X-e \\n\\n\\nbY\nX-e nnnbY\necho X-e    bY\nX-e bY\necho X-e b   Y\nX-e b Y\n",
     "status": 0
   },
   "shell.mk:test:ninja": {
@@ -3933,7 +3933,7 @@
   },
   "shell_arith_in_recipe.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n0\n",
+    "output": "echo 0\n0\n",
     "status": 0
   },
   "shell_arith_in_recipe.mk:test:ninja": {
@@ -3945,7 +3945,7 @@
   },
   "shell_stderr.mk:test:direct": {
     "files": [],
-    "output": "SHOULD_NOT_BE_AFTER_ECHO\n  BUILD   test\n\n",
+    "output": "SHOULD_NOT_BE_AFTER_ECHO\necho \n\n",
     "status": 0
   },
   "shell_stderr.mk:test:ninja": {
@@ -3957,7 +3957,7 @@
   },
   "shell_var.mk:test:direct": {
     "files": [],
-    "output": "/bin/sh\n-c foo\n-c bar\n  BUILD   test\n-c baz\n",
+    "output": "/bin/sh\n-c foo\n-c bar\nbaz\n-c baz\n",
     "status": 0
   },
   "shell_var.mk:test:ninja": {
@@ -3969,7 +3969,7 @@
   },
   "shell_var_with_args.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\ntest skipped\n",
+    "output": "echo test skipped\ntest skipped\n",
     "status": 0
   },
   "shell_var_with_args.mk:test:ninja": {
@@ -3993,7 +3993,7 @@
     "files": [
       "nested.mk"
     ],
-    "output": "3\n  BUILD   test\n0 1 2 simple\n",
+    "output": "3\necho  0 1 2 simple\n0 1 2 simple\n",
     "status": 0
   },
   "shellstatus.mk:test:ninja": {
@@ -4081,7 +4081,7 @@
   },
   "silent_multiline.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nfoo\n  BUILD   test\nbar\nfoo\nbar\n  BUILD   test\nbaz\nfoo\n  BUILD   test\nbar\nbaz\nfoo\nbar\n",
+    "output": "echo foo\nfoo\necho bar\nbar\nfoo\nbar\necho baz\nbaz\nfoo\necho bar\nbar\nbaz\nfoo\nbar\n",
     "status": 0
   },
   "silent_multiline.mk:test:ninja": {
@@ -4105,7 +4105,7 @@
   },
   "simple_subst.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nb\n",
+    "output": "echo b$b\nb\n",
     "status": 0
   },
   "simple_subst.mk:test:ninja": {
@@ -4117,7 +4117,7 @@
   },
   "sort.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nbar foo lose\n  BUILD   test\naaaa bar foo\n  BUILD   test\nbar foo lose\n  BUILD   test\nbar baz\n  BUILD   test\nsingle\n  BUILD   test\nfoo\n  BUILD   test\n\n  BUILD   test\ndevice/asus/deb/AndroidProducts.mk device/asus/flo/AndroidProducts.mk device/asus/fugu/AndroidProducts.mk device/generic/arm64/AndroidProducts.mk device/generic/armv7-a-neon/AndroidProducts.mk device/generic/mini-emulator-arm64/AndroidProducts.mk device/generic/mini-emulator-armv7-a-neon/AndroidProducts.mk device/generic/mini-emulator-mips/AndroidProducts.mk device/generic/mini-emulator-x86/AndroidProducts.mk device/generic/mini-emulator-x86_64/AndroidProducts.mk device/generic/mips/AndroidProducts.mk device/generic/qemu/AndroidProducts.mk device/generic/x86/AndroidProducts.mk device/generic/x86_64/AndroidProducts.mk device/htc/flounder/AndroidProducts.mk device/huawei/angler/AndroidProducts.mk device/lge/bullhead/AndroidProducts.mk device/lge/hammerhead/AndroidProducts.mk device/moto/shamu/AndroidProducts.mk device/sample/products/AndroidProducts.mk\n  BUILD   test\ncpplint-art-phony libart libartd libgabi++ libopenjdkjvm libopenjdkjvmd\n",
+    "output": "echo bar foo lose\nbar foo lose\necho aaaa bar foo\naaaa bar foo\necho bar foo lose\nbar foo lose\necho bar baz\nbar baz\necho single\nsingle\necho foo\nfoo\necho \n\necho device/asus/deb/AndroidProducts.mk device/asus/flo/AndroidProducts.mk device/asus/fugu/AndroidProducts.mk device/generic/arm64/AndroidProducts.mk device/generic/armv7-a-neon/AndroidProducts.mk device/generic/mini-emulator-arm64/AndroidProducts.mk device/generic/mini-emulator-armv7-a-neon/AndroidProducts.mk device/generic/mini-emulator-mips/AndroidProducts.mk device/generic/mini-emulator-x86/AndroidProducts.mk device/generic/mini-emulator-x86_64/AndroidProducts.mk device/generic/mips/AndroidProducts.mk device/generic/qemu/AndroidProducts.mk device/generic/x86/AndroidProducts.mk device/generic/x86_64/AndroidProducts.mk device/htc/flounder/AndroidProducts.mk device/huawei/angler/AndroidProducts.mk device/lge/bullhead/AndroidProducts.mk device/lge/hammerhead/AndroidProducts.mk device/moto/shamu/AndroidProducts.mk device/sample/products/AndroidProducts.mk\ndevice/asus/deb/AndroidProducts.mk device/asus/flo/AndroidProducts.mk device/asus/fugu/AndroidProducts.mk device/generic/arm64/AndroidProducts.mk device/generic/armv7-a-neon/AndroidProducts.mk device/generic/mini-emulator-arm64/AndroidProducts.mk device/generic/mini-emulator-armv7-a-neon/AndroidProducts.mk device/generic/mini-emulator-mips/AndroidProducts.mk device/generic/mini-emulator-x86/AndroidProducts.mk device/generic/mini-emulator-x86_64/AndroidProducts.mk device/generic/mips/AndroidProducts.mk device/generic/qemu/AndroidProducts.mk device/generic/x86/AndroidProducts.mk device/generic/x86_64/AndroidProducts.mk device/htc/flounder/AndroidProducts.mk device/huawei/angler/AndroidProducts.mk device/lge/bullhead/AndroidProducts.mk device/lge/hammerhead/AndroidProducts.mk device/moto/shamu/AndroidProducts.mk device/sample/products/AndroidProducts.mk\necho cpplint-art-phony libart libartd libgabi++ libopenjdkjvm libopenjdkjvmd\ncpplint-art-phony libart libartd libgabi++ libopenjdkjvm libopenjdkjvmd\n",
     "status": 0
   },
   "sort.mk:test:ninja": {
@@ -4139,7 +4139,7 @@
   },
   "stem.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   FAIL3.FAIL4\n  BUILD   PASS2_FAIL2\n  BUILD   PASS_FAIL\nPASS\nPASS2\nPASS3\n",
+    "output": "PASS\nPASS2\nPASS3\necho PASS\necho PASS2\necho PASS3\n",
     "status": 0
   },
   "stem.mk:test:ninja": {
@@ -4168,7 +4168,7 @@
   },
   "strip.mk:test2:direct": {
     "files": [],
-    "output": "  BUILD   test2\nx , y\n",
+    "output": "echo x , y\nx , y\n",
     "status": 0
   },
   "strip.mk:test2:ninja": {
@@ -4180,7 +4180,7 @@
   },
   "strip.mk:test:direct": {
     "files": [],
-    "output": "foo bar\n  BUILD   test\nx\n  BUILD   test\ny\n  BUILD   test\nx\n  BUILD   test\ny\n  BUILD   test\ny,x\n  BUILD   test\nx y\n",
+    "output": "foo bar\necho x \t \nx\necho   \ty\ny\necho x\nx\necho y\ny\necho y,x\ny,x\necho x y\nx y\n",
     "status": 0
   },
   "strip.mk:test:ninja": {
@@ -4192,7 +4192,7 @@
   },
   "strip_and_shell.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n/tmp\n",
+    "output": "echo /tmp\n/tmp\n",
     "status": 0
   },
   "strip_and_shell.mk:test:ninja": {
@@ -4204,19 +4204,19 @@
   },
   "submake_basic.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n  BUILD   all\nPASS\n",
+    "output": "<KATI> -f submake/basic.mk\necho PASS\nPASS\n",
     "status": 0
   },
   "submake_basic.mk:test:ninja": {
     "files": [
       ".ninja_log"
     ],
-    "output": "[1/1] build test\n  BUILD   all\nPASS\n",
+    "output": "[1/1] build test\necho PASS\nPASS\n",
     "status": 0
   },
   "subshell_in_recipe.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n  BUILD   test\nPASS\n",
+    "output": "true\n(echo PASS)\nPASS\n",
     "status": 0
   },
   "subshell_in_recipe.mk:test:ninja": {
@@ -4228,7 +4228,7 @@
   },
   "subst.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\na,b,c\n  BUILD   test\nstrrepl\n",
+    "output": "echo a,b,c\na,b,c\necho strrepl\nstrrepl\n",
     "status": 0
   },
   "subst.mk:test:ninja": {
@@ -4240,7 +4240,7 @@
   },
   "subst2.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n,a\n",
+    "output": "echo ,a$b$c\n,a\n",
     "status": 0
   },
   "subst2.mk:test:ninja": {
@@ -4252,7 +4252,7 @@
   },
   "suffix.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n.c .c\n",
+    "output": "echo .c .c\n.c .c\n",
     "status": 0
   },
   "suffix.mk:test:ninja": {
@@ -4266,7 +4266,7 @@
     "files": [
       "foo.c"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "touch foo.c\n",
     "status": 0
   },
   "suffix_rule.mk:test1:ninja": {
@@ -4294,7 +4294,7 @@
   },
   "suffix_subst.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nhoge.o mgoe.o\n",
+    "output": "echo hoge.o mgoe.o\nhoge.o mgoe.o\n",
     "status": 0
   },
   "suffix_subst.mk:test:ninja": {
@@ -4306,7 +4306,7 @@
   },
   "suffix_subst_pat.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nhoge.o mgoe.o\n",
+    "output": "echo hoge.o mgoe.o\nhoge.o mgoe.o\n",
     "status": 0
   },
   "suffix_subst_pat.mk:test:ninja": {
@@ -4330,7 +4330,7 @@
   },
   "tab_comment.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "tab_comment.mk:test:ninja": {
@@ -4342,7 +4342,7 @@
   },
   "tab_only_line.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "tab_only_line.mk:test:ninja": {
@@ -4383,7 +4383,7 @@
     "files": [
       "prog.c"
     ],
-    "output": "  BUILD   prog.c\n  BUILD   prog.o\ncc -g -o prog.o -c prog.c\n  BUILD   prog\nprog -g\n",
+    "output": "touch prog.c\necho cc -g -o prog.o -c prog.c\ncc -g -o prog.o -c prog.c\necho prog -g\nprog -g\n",
     "status": 0
   },
   "target_specific_var.mk:test:ninja": {
@@ -4396,7 +4396,7 @@
   },
   "target_specific_var_append.mk:default:direct": {
     "files": [],
-    "output": "  BUILD   a\n  BUILD   b\n  BUILD   c\n  BUILD   d\n  BUILD   e\n  BUILD   f\n  BUILD   g\n  BUILD   h\nA=PASS_A A\nB=FAIL_B OK\nC=PASS_C\nD=PASS_D\nE= PASS\nF= PASS\nG=X PASS\nH=X PASS\n",
+    "output": "A=PASS_A A\nB=FAIL_B OK\nC=PASS_C\nD=PASS_D\nE= PASS\nF= PASS\nG=X PASS\nH=X PASS\necho A=PASS_A A\necho B=FAIL_B OK\necho C=PASS_C\necho D=PASS_D\necho E= PASS\necho F= PASS\necho G=X PASS\necho H=X PASS\n",
     "status": 0
   },
   "target_specific_var_append.mk:default:ninja": {
@@ -4408,7 +4408,7 @@
   },
   "target_specific_var_in_var.mk:default:direct": {
     "files": [],
-    "output": "  BUILD   x\necho baz\n",
+    "output": "echo echo baz\necho baz\n",
     "status": 0
   },
   "target_specific_var_in_var.mk:default:ninja": {
@@ -4420,7 +4420,7 @@
   },
   "target_specific_var_ref.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   bar\n  BUILD   foo\nPASS\nPASS\n",
+    "output": "PASS\nPASS\necho PASS\necho PASS\n",
     "status": 0
   },
   "target_specific_var_ref.mk:test:ninja": {
@@ -4432,7 +4432,7 @@
   },
   "target_specific_var_simple.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "target_specific_var_simple.mk:test:ninja": {
@@ -4444,7 +4444,7 @@
   },
   "target_specific_var_timing.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   foo\nPASS PASS\n",
+    "output": "echo PASS  PASS\nPASS PASS\n",
     "status": 0
   },
   "target_specific_var_timing.mk:test:ninja": {
@@ -4456,7 +4456,7 @@
   },
   "target_specific_var_var_name.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n\n",
+    "output": "echo \n\n",
     "status": 0
   },
   "target_specific_var_var_name.mk:test:ninja": {
@@ -4468,7 +4468,7 @@
   },
   "target_specific_var_with_pattern.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   bar.z\n  BUILD   foo.x\nPASS\nX=PASS Y=PASS Z=PASS\n",
+    "output": "PASS\nX=PASS Y=PASS Z=PASS\necho PASS\necho X=PASS Y=PASS Z=PASS\n",
     "status": 0
   },
   "target_specific_var_with_pattern.mk:test:ninja": {
@@ -4480,7 +4480,7 @@
   },
   "target_specific_var_with_semi.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nfoo ; bar\n",
+    "output": "echo 'foo ; bar'\nfoo ; bar\n",
     "status": 0
   },
   "target_specific_var_with_semi.mk:test:ninja": {
@@ -4527,7 +4527,7 @@
       "foo.bar",
       "foo.baz"
     ],
-    "output": "  BUILD   foo.baz\n  BUILD   foo.bar\n",
+    "output": "touch foo.baz\ncp foo.baz foo.bar\n",
     "status": 0
   },
   "trim_leading_curdir.mk:default:ninja": {
@@ -4541,7 +4541,7 @@
   },
   "unmatched_paren.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nOK\n  BUILD   test\nPASS\n",
+    "output": "echo OK\nOK\necho PASS\nPASS\n",
     "status": 0
   },
   "unmatched_paren.mk:test:ninja": {
@@ -4563,7 +4563,7 @@
   },
   "value.mk:test:direct": {
     "files": [],
-    "output": "$(X)\n  BUILD   test\nATH\n  BUILD   test\n/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n  BUILD   test\n\n  BUILD   test\n\n  BUILD   test\n/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n",
+    "output": "$(X)\necho ATH\nATH\necho $PATH\n/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\necho \n\necho \n\necho $PATH\n/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n",
     "status": 0
   },
   "value.mk:test:ninja": {
@@ -4575,7 +4575,7 @@
   },
   "value_at.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n\n  BUILD   test\n\n  BUILD   test\n\n",
+    "output": "echo \n\necho ''\n\necho ''\n\n",
     "status": 0
   },
   "value_at.mk:test:ninja": {
@@ -4599,7 +4599,7 @@
   },
   "var_append.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nsimple FOO \n  BUILD   test\nrecursive FOO BAR\n  BUILD   test\n FOO \n  BUILD   test\n FOO BAR\n  BUILD   test\nFOO BAR\n  BUILD   test\nsimple\n  BUILD   test\nrecursive\n  BUILD   test\nsimple\n  BUILD   test\nrecursive\n  BUILD   test\nrecursive\n",
+    "output": "echo \"simple FOO \"\nsimple FOO \necho \"recursive FOO BAR\"\nrecursive FOO BAR\necho \" FOO \"\n FOO \necho \" FOO BAR\"\n FOO BAR\necho \"FOO BAR\"\nFOO BAR\necho \"simple\"\nsimple\necho \"recursive\"\nrecursive\necho \"simple\"\nsimple\necho \"recursive\"\nrecursive\necho \"recursive\"\nrecursive\n",
     "status": 0
   },
   "var_append.mk:test:ninja": {
@@ -4611,7 +4611,7 @@
   },
   "var_cond_assign.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nFOO BAR\n",
+    "output": "echo \"FOO BAR\"\nFOO BAR\n",
     "status": 0
   },
   "var_cond_assign.mk:test:ninja": {
@@ -4623,7 +4623,7 @@
   },
   "var_eval.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nfoo\n  BUILD   test\n$(bar)\n  BUILD   test\n\n  BUILD   test\n$(bar)\n  BUILD   test\n$(bar)\n",
+    "output": "echo 'foo'\nfoo\necho '$(bar)'\n$(bar)\necho ''\n\necho '$(bar)'\n$(bar)\necho '$(bar)'\n$(bar)\n",
     "status": 0
   },
   "var_eval.mk:test:ninja": {
@@ -4635,7 +4635,7 @@
   },
   "var_target.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nBAZ\n",
+    "output": "echo BAZ\nBAZ\n",
     "status": 0
   },
   "var_target.mk:test:ninja": {
@@ -4657,7 +4657,7 @@
   },
   "var_visibility_prefix_implicit_define.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n\n",
+    "output": "echo ''\n\n",
     "status": 0
   },
   "var_visibility_prefix_implicit_define.mk:test:ninja": {
@@ -4739,7 +4739,7 @@
   },
   "var_with_space.mk:default:direct": {
     "files": [],
-    "output": "  BUILD   all\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "var_with_space.mk:default:ninja": {
@@ -4751,7 +4751,7 @@
   },
   "vardef_in_call.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nPASS\n",
+    "output": "echo PASS\nPASS\n",
     "status": 0
   },
   "vardef_in_call.mk:test:ninja": {
@@ -4785,7 +4785,7 @@
     "files": [
       "dir"
     ],
-    "output": "  BUILD   test1\n  BUILD   test1\n",
+    "output": "mkdir dir\ntouch dir/foo\n",
     "status": 0
   },
   "vpath.mk:test1:ninja": {
@@ -4825,7 +4825,7 @@
     "files": [
       "dir"
     ],
-    "output": "  BUILD   test1\n  BUILD   test1\n",
+    "output": "mkdir dir\ntouch dir/foo.c\n",
     "status": 0
   },
   "vpath_directive.mk:test1:ninja": {
@@ -4868,7 +4868,7 @@
       "second",
       "third"
     ],
-    "output": "  BUILD   .kati_wait_616c6c_0\nwait=ok\n",
+    "output": "touch .kati_wait_616c6c_0\nwait=ok\n",
     "status": 0
   },
   "wait.mk:default:ninja": {
@@ -4904,7 +4904,7 @@
   },
   "warn_output_pattern_mismatch.mk:test:direct": {
     "files": [],
-    "output": "Makefile:4: target `foo' doesn't match the target pattern\nfoo\n  BUILD   foo\nPASS\n",
+    "output": "Makefile:4: target `foo' doesn't match the target pattern\nfoo\necho PASS\nPASS\n",
     "status": 0
   },
   "warn_output_pattern_mismatch.mk:test:ninja": {
@@ -4921,7 +4921,7 @@
   },
   "warning.mk:test:direct": {
     "files": [],
-    "output": "Makefile:1: foo\nMakefile:10: bar'\"\"'\nMakefile:11: b\na\nz\n  BUILD   test\nPASS\n",
+    "output": "Makefile:1: foo\nMakefile:10: bar'\"\"'\nMakefile:11: b\na\nz\necho PASS\nPASS\n",
     "status": 0
   },
   "warning.mk:test:ninja": {
@@ -4933,7 +4933,7 @@
   },
   "warning_in_eval.mk:test:direct": {
     "files": [],
-    "output": "Makefile:3: foo\nMakefile:4: foo\nMakefile:5: bar\n  BUILD   test\ndone\n",
+    "output": "Makefile:3: foo\nMakefile:4: foo\nMakefile:5: bar\necho done\ndone\n",
     "status": 0
   },
   "warning_in_eval.mk:test:ninja": {
@@ -4960,7 +4960,7 @@
   },
   "whitespace_in_cmd.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nfoo\n  BUILD   test\nbar\n",
+    "output": "echo foo  \nfoo\necho bar  \nbar\n",
     "status": 0
   },
   "whitespace_in_cmd.mk:test:ninja": {
@@ -4977,7 +4977,7 @@
       "C",
       "tmp"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "touch A C B\n",
     "status": 0
   },
   "wildcard.mk:test1:ninja": {
@@ -4995,7 +4995,7 @@
     "files": [
       "tmp"
     ],
-    "output": "  BUILD   test2\nMakefile tmp/../Makefile tmp/../Makefile tmp/../Makefile\n",
+    "output": "echo Makefile tmp/../Makefile  tmp/../Makefile tmp/../Makefile\nMakefile tmp/../Makefile tmp/../Makefile tmp/../Makefile\n",
     "status": 0
   },
   "wildcard.mk:test2:ninja": {
@@ -5011,7 +5011,7 @@
       "dir",
       "foo,bar"
     ],
-    "output": "\ndir/file\n  BUILD   foo,bar\n\n  BUILD   foo,bar\n  BUILD   foo,bar\n\n  BUILD   test\nfoo,bar\n  BUILD   test\nfoo,bar\n",
+    "output": "\ndir/file\necho \n\ntouch foo,bar\necho \n\necho foo,bar\nfoo,bar\necho foo,bar\nfoo,bar\n",
     "status": 0
   },
   "wildcard_cache.mk:test:ninja": {
@@ -5020,14 +5020,14 @@
       "dir",
       "foo,bar"
     ],
-    "output": "\ndir/file\n[1/2] build 'foo,bar'\n\n\n[2/2] build test\nfoo,bar\nfoo,bar\n",
+    "output": "\ndir/file\n[1/2] build 'foo,bar'\n\n\n[2/2] build test\necho foo,bar\nfoo,bar\necho foo,bar\nfoo,bar\n",
     "status": 0
   },
   "wildcard_multi.mk:test1:direct": {
     "files": [
       "PASS"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "touch PASS\n",
     "status": 0
   },
   "wildcard_multi.mk:test1:ninja": {
@@ -5040,7 +5040,7 @@
   },
   "wildcard_multi.mk:test2:direct": {
     "files": [],
-    "output": "  BUILD   test2\nMakefile\n",
+    "output": "echo Makefile\nMakefile\n",
     "status": 0
   },
   "wildcard_multi.mk:test2:ninja": {
@@ -5054,7 +5054,7 @@
     "files": [
       "foo.x"
     ],
-    "output": "  BUILD   test1\n",
+    "output": "touch foo.x\n",
     "status": 0
   },
   "wildcard_target.mk:test1:ninja": {
@@ -5079,7 +5079,7 @@
     "files": [
       "foo,bar"
     ],
-    "output": "  BUILD   foo,bar\n  BUILD   test2\nfoo,bar\n",
+    "output": "touch foo,bar\necho foo,bar\nfoo,bar\n",
     "status": 0
   },
   "wildcard_with_commas.mk:test2:ninja": {
@@ -5087,14 +5087,14 @@
       ".ninja_log",
       "foo,bar"
     ],
-    "output": "[1/2] build 'foo,bar'\n[2/2] build test2\nfoo,bar\n",
+    "output": "[1/2] build 'foo,bar'\n[2/2] build test2\necho foo,bar\nfoo,bar\n",
     "status": 0
   },
   "wildcard_with_commas.mk:test:direct": {
     "files": [
       "foo,bar"
     ],
-    "output": "  BUILD   test\n\n  BUILD   test\n",
+    "output": "echo \n\ntouch foo,bar\n",
     "status": 0
   },
   "wildcard_with_commas.mk:test:ninja": {
@@ -5107,7 +5107,7 @@
   },
   "wildcard_with_var.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nMakefile\n",
+    "output": "echo Makefile\nMakefile\n",
     "status": 0
   },
   "wildcard_with_var.mk:test:ninja": {
@@ -5119,7 +5119,7 @@
   },
   "word.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nbar\n  BUILD   test\n\n  BUILD   test\n\n  BUILD   test\nfoo,bar\n  BUILD   test\nbaz\n  BUILD   test\nbar\n",
+    "output": "echo bar\nbar\necho \n\necho \n\necho foo,bar\nfoo,bar\necho baz\nbaz\necho bar\nbar\n",
     "status": 0
   },
   "word.mk:test:ninja": {
@@ -5131,7 +5131,7 @@
   },
   "wordlist.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\nbar baz\n  BUILD   test\nbar baz\n  BUILD   test\n\n  BUILD   test\n\n  BUILD   test\n\n",
+    "output": "echo bar baz\nbar baz\necho bar baz\nbar baz\necho \n\necho \n\necho \n\n",
     "status": 0
   },
   "wordlist.mk:test:ninja": {
@@ -5143,7 +5143,7 @@
   },
   "words.mk:test:direct": {
     "files": [],
-    "output": "  BUILD   test\n3\n  BUILD   test\n0\n",
+    "output": "echo 3\n3\necho 0\n0\n",
     "status": 0
   },
   "words.mk:test:ninja": {

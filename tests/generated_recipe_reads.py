@@ -18,6 +18,53 @@ BINARY = Path(os.environ.get(
 
 
 class GeneratedRecipeReads(unittest.TestCase):
+    def test_deferred_recursion_preserves_implicit_makeflags_reads(self):
+        for profile in ("off", "safe", "aggressive"):
+            with self.subTest(profile=profile), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "includes").mkdir()
+                (root / "includes/common.mk").write_text("build := -f leaf.mk obj\n")
+                (root / "seed").write_text("ready")
+                (root / "Makefile").write_text(
+                    "MAKEFLAGS += --include-dir=includes\n"
+                    "all: result\nresult: seed\n"
+                    "\t@test '$(shell cat seed)' = ready; $(MAKE) -f child.mk\n")
+                (root / "child.mk").write_text(
+                    "include common.mk\nall:\n\t@$(MAKE) $(build)=sub\n")
+                (root / "leaf.mk").write_text(
+                    "all:\n\t@printf '%s' '$(obj):$(origin MARK):$(MARK)' > result\n")
+                result = subprocess.run(
+                    [str(BINARY), "build", "--graph_optimizations=" + profile,
+                     "-j4", "MARK=kept", "all"], cwd=root,
+                    capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual((root / "result").read_text(), "sub:command line:kept")
+
+    def test_long_append_context_preserves_order_and_deferred_values(self):
+        for dynamic in (False, True):
+            with self.subTest(dynamic=dynamic), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "seed").write_text("ready")
+                definitions = "WORD = $(later)\n" + "WORD += x\n" * 3000
+                expression = "$(call $(selected))" if dynamic else "$(reader)"
+                (root / "Makefile").write_text(
+                    definitions + "later = first\nselected = reader\n"
+                    "reader = $(shell cat seed)\nall: result\nresult: seed\n"
+                    "\t@printf '%s' '" + expression + ":$(WORD)' > $@\n")
+                result = subprocess.run([str(BINARY), "build", "-j4", "all"],
+                                        cwd=root, capture_output=True, text=True,
+                                        timeout=30)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual((root / "result").read_text(),
+                                 "ready:first" + " x" * 3000)
+                (root / "seed").write_text("changed")
+                result = subprocess.run([str(BINARY), "build", "-j4", "all"],
+                                        cwd=root, capture_output=True, text=True,
+                                        timeout=30)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual((root / "result").read_text(),
+                                 "changed:first" + " x" * 3000)
+
     def test_shared_context_is_sealed_and_changed_contexts_fall_back(self):
         import fcntl
         import sys

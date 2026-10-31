@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Default to Make's serial execution unless jobs are explicitly configured.
 // Control pattern-variable indexing independently of evaluation memoization.
 // Preserve inherited FIFO authentication without treating it as an explicit -j.
 // Add configurable Ninja graph optimizations and content-preserving output
@@ -244,7 +245,8 @@ void Flags::Parse(int argc, char** argv) {
   }
   executable_path = GetExecutablePath();
   subkati_args.push_back(executable_path.c_str());
-  num_jobs = num_cpus = sysconf(_SC_NPROCESSORS_ONLN);
+  num_cpus = sysconf(_SC_NPROCESSORS_ONLN);
+  num_jobs = 1;
   num_jobs_specified = false;
   ninja_jobserver_fifo.clear();
   if (const char* inherited_level = getenv("MAKELEVEL")) {

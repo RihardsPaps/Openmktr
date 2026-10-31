@@ -17,6 +17,51 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_make_defaults_echo_commands_and_keep_internal_checks_silent(self):
+        self.makefile("Makefile: ;\nall:\n\tprintf '%s\\n' visible\n"
+                      "\t@printf '%s\\n' quiet\n")
+        _, output = self.direct("all")
+        self.assertIn("printf '%s\\n' visible", output)
+        self.assertNotIn("printf '%s\\n' quiet", output)
+        self.assertNotIn("Nothing to be done", output)
+        compact = subprocess.run([str(KATI), "all"], cwd=self.directory,
+                                 env=dict(os.environ, KATI_VERBOSE="0"),
+                                 capture_output=True, text=True, timeout=15)
+        self.assertEqual(compact.returncode, 0, compact.stdout + compact.stderr)
+        self.assertIn("BUILD   all", compact.stdout)
+
+    def test_make_default_job_count_is_serial(self):
+        self.makefile(".PHONY: all first second\nall: first second\n"
+                      "first:\n\t@sleep 0.1; touch first\n"
+                      "second:\n\t@test -f first\n")
+        environment = {key: value for key, value in os.environ.items()
+                       if not key.startswith("KATI_") and
+                       key not in ("MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES")}
+        result = subprocess.run([str(KATI), "all"], cwd=self.directory,
+                                env=environment, capture_output=True,
+                                text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_pattern_commands_can_replace_their_own_target_bindings(self):
+        for profile in ("off", "safe", "aggressive"):
+            for mode in ("direct", "ninja"):
+                with self.subTest(profile=profile, mode=mode):
+                    outputs = [self.directory / f"headers/h{i}" for i in range(32)]
+                    for output in outputs:
+                        output.unlink(missing_ok=True)
+                    self.makefile(
+                        "all: " + " ".join(str(p.relative_to(self.directory))
+                                           for p in outputs) + "\n"
+                        "headers/%: COMMAND = $(eval $@: COMMAND := "
+                        "printf new > $@)mkdir -p headers; printf old > $@\n"
+                        "headers/%:\n\t$(COMMAND)\n\t$(COMMAND)\n")
+                    args = ["--graph_optimizations=" + profile, "-j4", "all"]
+                    if mode == "ninja":
+                        args.insert(0, "build")
+                    self.direct(*args)
+                    for output in outputs:
+                        self.assertEqual(output.read_text(), "new")
+
     def test_one_job_preserves_prerequisite_and_goal_order(self):
         self.makefile(
             ".PHONY: all first second third\nall: first second third\n"

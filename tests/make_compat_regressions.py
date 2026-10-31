@@ -34,6 +34,64 @@ def run(command, directory, environment, stdin=None):
 
 
 class MakeCompatibilityRegressions(unittest.TestCase):
+    def test_explicit_vpath_provider_alias_matches_make_implicit_search(self):
+        # GNU Make 4.3 and 4.4.1 coalesce a VPATH provider named elsewhere
+        # as a prerequisite before searching directory-qualified patterns.
+        # Without that explicit alias, the newer input must still rebuild.
+        for explicit_provider in (False, True):
+            for ninja in (False, True):
+                with self.subTest(explicit_provider=explicit_provider, ninja=ninja), \
+                        tempfile.TemporaryDirectory() as temp:
+                    directory = Path(temp)
+                    source = directory / "src/out/a.gen"
+                    source.parent.mkdir(parents=True)
+                    source.write_text("old\n")
+                    prerequisite = directory / "a.in"
+                    prerequisite.write_text("new\n")
+                    os.utime(source, (1000000000, 1000000000))
+                    os.utime(prerequisite, (1000000200, 1000000200))
+                    (directory / "Makefile").write_text(
+                        "VPATH = src\n.PHONY: all\nall: out/a.gen\n"
+                        "\t@cat $< > result\n" +
+                        ("dist: src/out/a.gen\n" if explicit_provider else "") +
+                        "out/%.gen: %.in\n"
+                        "\t@mkdir -p $(@D); cp $< $@; printf rebuilt > trace\n")
+                    environment = dict(os.environ)
+                    environment.pop("MAKEFLAGS", None)
+                    environment.pop("MFLAGS", None)
+                    command = [str(KATI)] + (["build"] if ninja else []) + ["all"]
+                    status, output = run(command, directory, environment)
+                    self.assertEqual(status, 0, output)
+                    self.assertEqual((directory / "result").read_text(),
+                                     "old\n" if explicit_provider else "new\n")
+                    self.assertEqual((directory / "trace").exists(),
+                                     not explicit_provider)
+                    self.assertEqual(source.read_text(), "old\n")
+
+    def test_released_vpath_documentation_avoids_regeneration_stamp(self):
+        for ninja in (False, True):
+            with self.subTest(ninja=ninja), tempfile.TemporaryDirectory() as temp:
+                directory = Path(temp)
+                source = directory / "src/doc/bfd.texi"
+                source.parent.mkdir(parents=True)
+                source.write_text("released\n")
+                (directory / "Makefile").write_text(
+                    "srcdir = src\nVPATH = $(srcdir)\nall: doc/bfd.info\n"
+                    "doc/bfd.info: doc/bfd.texi\n"
+                    "\t@mkdir -p doc\n\t@cp $< $@\n"
+                    ".PRECIOUS: doc/%.stamp\n"
+                    "doc/%.texi: doc/%.stamp ; @true\n"
+                    "doc/bfd.stamp: $(srcdir)/doc/bfd.texi ; @touch $@\n")
+                environment = dict(os.environ)
+                environment.pop("MAKEFLAGS", None)
+                environment.pop("MFLAGS", None)
+                command = [str(KATI)] + (["build"] if ninja else []) + ["all"]
+                status, output = run(command, directory, environment)
+                self.assertEqual(status, 0, output)
+                self.assertEqual((directory / "doc/bfd.info").read_text(), "released\n")
+                self.assertFalse((directory / "doc/bfd.stamp").exists())
+                self.assertEqual(source.read_text(), "released\n")
+
     def test_ninja_vpath_provider_tracks_later_source_and_prerequisite_changes(self):
         with tempfile.TemporaryDirectory(prefix="kati-vpath-ninja-") as temp:
             directory = Path(temp)

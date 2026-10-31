@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Echo ordinary Make recipes by default; retain opt-in compact progress output.
 // Index lazy variable definitions over immutable buffers and reuse validated
 // sealed contexts within one Ninja invocation, with checked standalone
 // fallback. Decode runtime variable records without copying fields and restore
@@ -394,6 +395,10 @@ bool MakeRuntimeRecipe(const DepNode& node,
     inspection.Expression(value->IncrementalIdentity());
   inspection.Variable("SHELL");
   inspection.Variable(".SHELLFLAGS");
+  // Recursive execution reads this transport variable implicitly after
+  // expanding the recipe. Its include paths and overrides are dependencies
+  // even when the recipe never spells $(MAKEFLAGS).
+  inspection.Variable("MAKEFLAGS");
   for (const auto& entry : ev->exports())
     if (entry.second)
       inspection.Variable(entry.first.str());
@@ -1715,12 +1720,10 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
     }
   }
   found_new_inputs_ = false;
-  // Test harnesses may clear V while checking GNU make's printed recipes.
-  // Keep an invocation-wide command display switch that survives recursive
-  // makes without adding a command-line variable override to MAKEFLAGS.
+  // Makefiles control silence with their command prefixes, including
+  // Automake's V-dependent prefixes. Compact progress is an explicit display
+  // option and must not hide commands from output-inspecting build scripts.
   const char* kati_verbose = std::getenv("KATI_VERBOSE");
-  const bool environment_verbose =
-      kati_verbose != nullptr && std::string_view(kati_verbose) == "1";
   // Silent recipes do not need a display mode. Avoid expanding an otherwise
   // unused V definition for them (it may be recursive or have side effects).
   auto is_verbose = [&](bool echo) {
@@ -1729,7 +1732,7 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
     Var* verbosity = ev_->LookupVar(Intern("V"));
     // V is a display extension, not a make variable used by this recipe.
     // Expanding a deferred definition here can run shell functions or fail.
-    return environment_verbose ||
+    return kati_verbose == nullptr || std::string_view(kati_verbose) != "0" ||
            (verbosity->IsDefined() && verbosity->String() == "1");
   };
   if (n.oneshell) {

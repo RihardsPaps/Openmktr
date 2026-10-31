@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Reuse explicitly named VPATH source providers before implicit regeneration.
 // Reuse immutable lexical prerequisite normalization during graph construction.
 // Retain pattern-variable indexing when evaluation memoization is disabled.
 // Reuse inherited borrowed scopes instead of abandoning a copy on every edge.
@@ -1017,8 +1018,22 @@ class DepBuilder {
       // A matching implicit rule may create this target in the build tree.
       // Replacing it with its source-tree provider would make that rule write
       // back into the source tree and bypass the intended target path.
-      if (!GetImplicitRuleCandidates(implicit_rules_.get(), input).empty())
+      if (!GetImplicitRuleCandidates(implicit_rules_.get(), input).empty()) {
+        // An explicitly named source provider already identifies this file
+        // elsewhere in the graph. GNU make coalesces that VPATH alias before
+        // implicit search. In particular, released documentation must not
+        // regenerate through a stamp which depends on that very source.
+        const std::string provider = ev_->ResolveVpath(input);
+        struct stat provider_stat;
+        if (!provider.empty() &&
+            explicit_prerequisites_.exists(
+                Intern(TrimLeadingCurdir(provider))) &&
+            ObserveFile(provider.c_str(), &provider_stat) &&
+            S_ISREG(provider_stat.st_mode)) {
+          input = Intern(provider);
+        }
         continue;
+      }
       // A directory can be both a VPATH-visible source directory and a
       // recursive output target. Preserve the target-side spelling when Kati
       // already has a rule for it; otherwise VPATH would replace it with the
