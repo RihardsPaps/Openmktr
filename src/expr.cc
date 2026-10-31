@@ -1,6 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
-// Validate serialized runtime expressions before lazily restoring their ASTs.
-// Share immutable serialized expression storage until an AST is needed.
+// Flatten concatenation identities so repeated += does not exhaust runtime AST
+// depth. Validate serialized runtime expressions before lazily restoring their
+// ASTs. Share immutable serialized expression storage until an AST is needed.
 // Preserve the recipe caller's location in restored expressions.
 // Restore unevaluated expressions from checked runtime recipe records.
 // Track and validate incremental evaluation, include proofs and imported Ninja
@@ -102,7 +103,14 @@ class ValueList : public Value {
   }
   bool AppendIncrementalIdentity(std::string* data) const override {
     AppendGraphString("list", data);
-    for (const Value* child : vals_) {
+    std::vector<const Value*> pending(vals_.rbegin(), vals_.rend());
+    while (!pending.empty()) {
+      const Value* child = pending.back();
+      pending.pop_back();
+      if (const auto* list = dynamic_cast<const ValueList*>(child)) {
+        pending.insert(pending.end(), list->vals_.rbegin(), list->vals_.rend());
+        continue;
+      }
       if (child->IncrementalIdentity().empty())
         return false;
       AppendGraphString(child->IncrementalIdentity(), data);

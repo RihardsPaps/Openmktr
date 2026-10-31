@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Allow silent no-op checks while remaking included makefiles.
 // Certify successful computed include-remake recipes for subsequent Ninja use.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
@@ -46,6 +47,7 @@ struct ExecResult {
 ExecResult Exec(const std::vector<NamedDepNode>& roots,
                 Evaluator* ev,
                 bool parallel = true,
-                bool runtime_bootstrap = false);
+                bool runtime_bootstrap = false,
+                bool announce_noop = true);
 
 #endif  // EXEC_H_

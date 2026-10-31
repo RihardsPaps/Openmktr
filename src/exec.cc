@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Keep internal makefile-remake no-op checks out of recipe stdout.
 // Keep one-job execution serial, including dependency traversal and goal order.
 // Retain successful bootstrap runtime reads without relinking live tools.
 // Rank cyclic components independently to retain safe cooperative parallelism.
@@ -1388,7 +1389,8 @@ bool IsRecursiveKatiCommand(const std::string& command) {
 ExecResult Exec(const std::vector<NamedDepNode>& roots,
                 Evaluator* ev,
                 bool parallel,
-                bool runtime_bootstrap) {
+                bool runtime_bootstrap,
+                bool announce_noop) {
   if (g_flags.explain)
     parallel = false;
   ScopedBuildSignals signals;
@@ -1423,7 +1425,8 @@ ExecResult Exec(const std::vector<NamedDepNode>& roots,
       pending.push_back(dep.second);
   }
   const char* kati_verbose = getenv("KATI_VERBOSE");
-  if (executor.Count() == 0 && !g_flags.explain && !g_flags.is_silent_mode &&
+  if (announce_noop && executor.Count() == 0 && !g_flags.explain &&
+      !g_flags.is_silent_mode &&
       !(kati_verbose != nullptr && std::string_view(kati_verbose) == "1")) {
     for (auto const& root : roots) {
       printf("kati: Nothing to be done for `%s'.\n", root.first.c_str());
