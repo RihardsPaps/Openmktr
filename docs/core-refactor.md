@@ -14,6 +14,9 @@ Aligned 64 KiB chunks keep allocation ownership and live-object bitmaps out of
 individual objects; size-class free lists recycle early deletions. Oversized
 objects use separate blocks. Teardown destroys survivors before their backing
 text and services, and sanitizer builds poison unused and released slots.
+Pointer-sized allocation classes avoid padding small language objects; object
+sizes and aligned payload starts preserve their required alignment. Ordinary
+dependency nodes allocate double-colon rule groups only when needed.
 Thread-local service pointers are borrowed caches, invalidated whenever the
 binding changes; the session still owns and publishes each service exactly once.
 Scoped worker bindings share the invocation without sharing
@@ -29,9 +32,14 @@ bindings with LeakSanitizer enabled.
 
 ## Execution and freshness
 
-`ready_queue` has one coordinator for outstanding prerequisites and reverse
-edges. Workers receive only ready tasks. Source leaves, current outputs and
-literal phony no-ops can finish in the coordinator; runnable batches are bounded.
+`ready_queue` has one shared coordinator for outstanding prerequisites and reverse
+edges, protected by a mutex. Completing participants update readiness directly
+without passing through a separate completion queue. The calling
+thread also executes ready tasks. Additional workers start only when runnable
+work can overlap other ready tasks, and total participants stay within the job
+limit. Pure metadata and literal phony no-op graphs create no worker threads.
+Ready prerequisites are read together with their outcomes, and already-observed
+source leaves need no second directory probe.
 The serial traversal remains for `-j1`, explanation and `.NOTPARALLEL`.
 Preparation preserves first-visit target scope, pre-prerequisite target stamps,
 stable cycle removal and edge-specific missing-intermediate decisions.
@@ -137,52 +145,70 @@ No raw recipes or environment values are included. Phases can overlap and must
 not be added into a wall-time total. The build supervisor and generation child
 report separately. Missing records on fatal exits never count as success.
 Existing `--kati_stats` diagnostics remain available, including resolution hits
-and misses. Filesystem timestamps and regeneration checkpoints remain wall-clock
+and misses. Scheduler worker counts describe spawned threads; peak active tasks
+also include the calling thread. Filesystem timestamps and regeneration
+checkpoints remain wall-clock
 observations; elapsed timing uses monotonic clocks.
 
-## Portable validation
+## Portable validation and performance
 
-The pinned cloud Chimera toolchain passed all 28 portable gate commands and all
-19 sanitizer build/test commands at architecture revision `7fdb573`. Both safe
-and aggressive snapshot profiles pass 858/858 scenarios. The full suites include
-187 correctness cases per profile, 45 runtime-recipe cases, 58 graph cases,
-30 workspace cases and 12 jobserver cases. The external GNU incremental campaign
-reports no correctness blocker, unnecessary rebuilding or harness error.
+Runtime revision `fd7573bdd7e0166d3f97fa5d41e29b0e2613ae3f` is compared with the
+original `77a397f` binary using the same pinned cloud Chimera toolchain. Both
+normal and sanitizer binaries embed the recorded runtime revision.
 
-The final runtime revision `62a7200` adds missing immutable environment-object
-revalidation and batches writes before sealing durable objects. Its normal and ASan/UBSan
-rechecks pass 10 architectural contracts, 58 graph cases, 45 runtime-recipe cases
-and 187 correctness cases. Session
-teardown also passes with LeakSanitizer enabled. The ordinary sanitizer suite
-uses its established `detect_leaks=0` setting; an optional broader leak-check
-attempt stopped in the LeakSanitizer tracer itself; an isolated retry passed.
-This does not establish a whole-program leak result. The evidence retains the
-failed attempt, the corrected cancellation-test and sealing order, and successful
-rechecks. The final normal recheck also runs as an unprivileged user.
+All 28 portable checks pass, including 858/858 snapshots in each of the safe
+and aggressive profiles, with zero quarantined crashes. Coverage includes
+14 architecture cases, 187 correctness cases per profile, 45 runtime-recipe
+cases, 58 graph cases, 30 workspace cases and 12 jobserver cases. Both builds
+and all 17 ASan/UBSan checks pass. The session ownership/arena unit also runs
+with LeakSanitizer enabled; the remaining sanitizer suites retain their
+established `detect_leaks=0` setting. Whole-program leak detection is not claimed.
+The external GNU incremental comparison passes all 27 scenarios without
+incorrect outputs, unnecessary rebuilding or harness errors.
 
-The [architecture report](../validation/evidence/core-architecture-2026-10-31.json)
-and [checksummed raw archive](../validation/evidence/core-architecture-2026-10-31.zip)
-record exact revisions, commands, samples and limitations. They supplement the
-historical first delivery; they do not qualify release-project performance.
+The no-regression acceptance checks pass all **60 timing and memory cells**:
 
-Seven alternating cloud pairs at `-j4` retain correct outputs and rebuild sets,
-but do **not** demonstrate speed parity. Ratios below are medians of paired
-candidate/baseline times; values above 1 mean slower:
+- Five scenarios through direct, build and generated-shell entry points: 31
+  alternating pairs per cell at `-j4`, with checked outputs and rebuild sets.
+- Conversion, syntax checking, direct dry runs and no-op regeneration of a
+  10,000-target graph: 101 alternating pairs per cell.
+- Paired controls of the required `tests/bench.py` workloads: 31 pairs per cell,
+  except the short no-op chain and serial recipe dispatch. Their initial
+  near-parity medians led to one fixed extension to 301 pairs, retaining every
+  earlier sample. Both extended cases pass.
 
-| Synthetic workload | Median ratio | Bootstrap 95% interval |
+Each case discards two initial warmup pairs. Every cell requires a paired median
+candidate/baseline ratio at most 1.00 and a bootstrap 95% upper bound at most
+1.05. Thresholds were not relaxed, and a faster case cannot offset a slower one.
+The standalone `tests/bench.py --repeats 7` run is also retained; it measures
+binaries in separate blocks and showed mixed raw medians. Alternating controls
+resolve those differences without deleting the original measurements.
+
+Selected ratios below use values above 1 for slower execution or greater memory:
+
+| Workload | Median ratio | Bootstrap 95% interval |
 | --- | ---: | ---: |
-| Direct clean | 1.069 | 1.035–1.120 |
-| Generated clean | 1.190 | 0.995–1.224 |
-| Generated Makefile change | 1.215 | 1.150–1.333 |
-| Direct no-op | 1.025 | 0.901–1.067 |
-| Generated no-op | 1.272 | 1.118–1.498 |
+| Direct clean | 0.955 | 0.941–1.012 |
+| Build clean | 0.918 | 0.912–0.924 |
+| Generated clean | 0.914 | 0.906–0.932 |
+| Direct no-op | 0.781 | 0.764–0.840 |
+| Build no-op | 0.778 | 0.763–0.804 |
+| Generated no-op | 0.983 | 0.895–1.016 |
+| 10,000-target conversion | 0.904 | 0.890–0.921 |
+| Conversion peak process RSS | 0.974 | 0.973–0.975 |
 
-A separate seven-repeat phase benchmark reduces parallel dispatch of 2,000
-phony no-op recipes from 17.01 to 12.04 ms (29.2%), while conversion of 10,000
-targets rises from 168.77 to 219.92 ms (30.3%). Conversion peak process RSS rises
-from 27,556 to 32,620 KiB. Batching and sealing avoid the earlier repeated-flush
-regression; all preceding measurements remain in the archive. These mixed
-results and the unrun PC campaign keep release performance unqualified.
+These results correct the earlier clean-build, startup, conversion and memory
+regressions in the covered workloads. They are cloud synthetic measurements,
+not real-project performance qualification. The RSS metric is `wait4` peak
+individual-process memory; it is not aggregate tree memory, and small cases can
+be masked by the parent/exec high-water floor.
+
+The [performance report](../validation/evidence/core-performance-2026-10-31.json)
+and [checksummed raw archive](../validation/evidence/core-performance-2026-10-31.zip)
+retain binary hashes, revisions, drivers, individual samples, test logs, failed
+attempts and rejected experiments. The [earlier architecture evidence](../validation/evidence/core-architecture-2026-10-31.json)
+remains historical. In particular, it is not relabeled as passing performance
+qualification.
 
 ## Remaining PC qualification
 

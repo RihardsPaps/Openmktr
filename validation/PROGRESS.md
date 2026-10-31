@@ -9,14 +9,24 @@ The matrix records specific releases and configurations; a passing result does
 not establish compatibility with every version or target. Read the
 [campaign guide](README.md) before using the tools or citing a row.
 
-## Core architecture completion — 31 October 2026
+## Core architecture and performance follow-up — 31 October 2026
 
 The [core overhaul](../docs/core-refactor.md) now implements invocation ownership,
 ready scheduling and unified child-process admission, typed freshness, complete
 generation publication with reader leases, and bounded persistent implicit-rule
-query reuse. The pinned cloud portable and sanitizer gates pass; both snapshot
-profiles pass 858/858 scenarios. Exact revisions and limitations are retained in
-the [architecture evidence](evidence/core-architecture-2026-10-31.json).
+query reuse. Runtime `fd7573b` also removes the measured allocation, publication,
+launcher and scheduler overhead. All 28 cloud portable checks and 17 sanitizer
+checks pass; both snapshot profiles pass 858/858 scenarios with zero quarantined
+crashes. The external GNU incremental comparison passes 27 scenarios.
+
+All 60 paired timing and memory acceptance cells meet the unchanged median
+ratio ≤1.00 and bootstrap 95% upper bound ≤1.05 criteria. The campaign covers
+all three entry points, large graph phases and the standard benchmark workloads.
+Direct clean-build time improves 4.5%, build-mode clean time 8.2%, and
+10,000-target conversion time 9.6%; conversion peak process RSS falls 2.6%.
+These are cloud synthetic results. Exact revisions, raw samples, failed attempts,
+rejected experiments and measurement limits are retained in the
+[performance evidence](evidence/core-performance-2026-10-31.json).
 
 Only the real PC release qualification remains in this refactor's work plan.
 [`qualify_core.py`](qualify_core.py) and its [configuration example](core-qualification.example.json)
