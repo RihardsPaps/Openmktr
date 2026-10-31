@@ -1,4 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
+// Drop process-only headers after separating runtime supervision.
+// Own invocation state and publish coherent generations with typed freshness.
+// Separate runtime services and preserve scoped resource ownership.
 // Preserve owned path strings through filesystem-probe cache lookups.
 // Track and validate incremental evaluation, include proofs and imported Ninja
 // graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
@@ -32,10 +35,8 @@
 #define FILEUTIL_H_
 
 #include <errno.h>
-#include <signal.h>
 
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -98,57 +99,13 @@ class ScopedFilesystemEffect {
   ScopedFilesystemEffect& operator=(const ScopedFilesystemEffect&) = delete;
 };
 bool ReadNinjaRecipeState(const std::string& path, std::string* state);
+std::string NinjaRecipeStateOwner(const std::string& path);
+std::string PublishNinjaRecipeState(const std::string& owner,
+                                    const std::string& state);
 void WriteNinjaRecipeState(const std::string& path, const std::string& state);
 
-// Installed before executor workers start and restored after they stop.
-// The handler only records a signal; recipe waiters forward it and reap jobs.
-class ScopedBuildSignals {
- public:
-  ScopedBuildSignals();
-  ~ScopedBuildSignals();
-  ScopedBuildSignals(const ScopedBuildSignals&) = delete;
-  ScopedBuildSignals& operator=(const ScopedBuildSignals&) = delete;
-
- private:
-  std::vector<struct sigaction> previous_;
-};
-
-int GetBuildSignal();
 std::string GetOutputStamp(std::string_view path);
 void DeleteChangedOutput(std::string_view path, const std::string& previous);
-
-enum struct RedirectStderr {
-  NONE,
-  STDOUT,
-  DEV_NULL,
-};
-
-// A nonempty cleanup_output is stamped after job admission and removed only
-// when interruption changes that regular file. Empty preserves ordinary calls.
-int RunCommand(const std::string& shell,
-               const std::string& shellflag,
-               const std::string& cmd,
-               RedirectStderr redirect_stderr,
-               std::string* out,
-               bool acquire_job_token = true,
-               const std::function<void(std::string_view)>& on_output = {},
-               int make_level = -1,
-               const std::vector<std::string>* extra_env = nullptr,
-               const std::vector<std::string>* unset_env = nullptr,
-               std::string_view cleanup_output = {});
-
-// Check that the inherited jobserver can be opened as a read/write FIFO.
-bool IsKatiJobserverAvailable();
-
-// Acquire and release one slot from the optional inherited Kati jobserver.
-// -1 means no slot; -2 is the inherited slot reserved by a parent recipe.
-int AcquireKatiJobToken();
-void ReleaseKatiJobToken(int fd);
-
-// Hold one per-launcher load slot until close(fd). No FIFO token is held while
-// waiting; fcntl locks release the slot automatically if the helper dies.
-// Returns -1 when admission is disabled or interrupted.
-int AcquireNinjaLoadSlot();
 
 std::string GetExecutablePath();
 

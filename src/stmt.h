@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -28,6 +29,7 @@
 #include <vector>
 
 #include "loc.h"
+#include "session.h"
 #include "symtab.h"
 
 class Evaluator;
@@ -53,7 +55,7 @@ enum struct CondOp {
   IFNDEF,
 };
 
-struct Stmt {
+struct Stmt : public SessionAllocated<Stmt> {
  public:
   virtual ~Stmt();
 

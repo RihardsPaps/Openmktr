@@ -1,3 +1,6 @@
+// FORK MODIFICATION NOTICE (2026)
+// Separate monotonic duration measurements from filesystem wall time.
+// Fork changes are covered by MPL-2.0; see docs/LICENSING.md.
 // Copyright 2015 Google Inc. All rights reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,11 +23,13 @@
 #include <time.h>
 
 #include "log.h"
+#include "stats.h"
 
-double GetTime() {
+double GetWallTime() {
 #if defined(__linux__)
   struct timespec ts;
-  clock_gettime(CLOCK_REALTIME, &ts);
+  if (clock_gettime(CLOCK_REALTIME, &ts) != 0)
+    PERROR("clock_gettime(CLOCK_REALTIME)");
   return ts.tv_sec + ts.tv_nsec * 0.001 * 0.001 * 0.001;
 #else
   struct timeval tv;
@@ -34,10 +39,18 @@ double GetTime() {
 #endif
 }
 
+double GetMonotonicTime() {
+  struct timespec ts;
+  if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+    PERROR("clock_gettime(CLOCK_MONOTONIC)");
+  return ts.tv_sec + ts.tv_nsec * 1e-9;
+}
+
 ScopedTimeReporter::ScopedTimeReporter(const char* name)
-    : name_(name), start_(GetTime()) {}
+    : name_(name), start_(GetMonotonicTime()) {}
 
 ScopedTimeReporter::~ScopedTimeReporter() {
-  double elapsed = GetTime() - start_;
+  double elapsed = GetMonotonicTime() - start_;
   LOG_STAT("%s: %f", name_, elapsed);
+  RecordPhaseTime(name_, elapsed);
 }

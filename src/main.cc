@@ -1,4 +1,11 @@
 // FORK MODIFICATION NOTICE (2026)
+// Retain logical prerequisite metadata in deferred newer-input probes.
+// Share generation pinning and collection-race recovery across launchers.
+// Read optional double-colon metadata through the shared dependency view.
+// Launch checked generation plans without repeated shell/helper startup.
+// Own generated launcher FIFOs and leases in the native supervisor.
+// Own invocation state and publish coherent generations with typed freshness.
+// Report supervisor phases and exclude diagnostic paths from graph identity.
 // Suppress no-op announcements for internal included-makefile updates.
 // Prepare immutable runtime contexts once per known Ninja invocation.
 // Prune missing intermediates only for current consumers and known Ninja goals.
@@ -70,18 +77,24 @@
 #include "fileutil.h"
 #include "find.h"
 #include "flags.h"
+#include "freshness.h"
 #include "func.h"
+#include "generation.h"
 #include "graph_import.h"
 #include "graph_optimization.h"
+#include "jobserver.h"
 #include "log.h"
 #include "monitor.h"
 #include "native_observation.h"
 #include "ninja.h"
+#include "ninja_launcher.h"
 #include "parser.h"
+#include "process.h"
 #include "recursive_cache.h"
 #include "regen.h"
 #include "regen_dump.h"
 #include "rule.h"
+#include "session.h"
 #include "stats.h"
 #include "stmt.h"
 #include "stringprintf.h"
@@ -90,7 +103,10 @@
 #include "timeutil.h"
 #include "var.h"
 
-static char** g_argv;
+struct InvocationArguments {
+  char** value = nullptr;
+};
+#define g_argv (SessionService<InvocationArguments>().value)
 
 static volatile sig_atomic_t build_child = 0;
 static volatile sig_atomic_t build_signal = 0;
@@ -141,6 +157,11 @@ static int BuildSubprocess(std::vector<char*> args, const char* directory) {
     return 128 + build_signal;
   return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
 }
+
+static int RunGeneratedNinja(GenerationReader& generation,
+                             const std::string& launcher,
+                             int argc,
+                             char** argv);
 
 static int HandleBuild(int argc, char** argv) {
   std::string executable = GetExecutablePath();
@@ -207,7 +228,6 @@ static int HandleBuild(int argc, char** argv) {
     status = BuildSubprocess(generation, invocation_dir);
   }
   if (status == 0) {
-    std::string launcher = GetNinjaShellScriptFilename();
     std::string jobs = "-j" + std::to_string(g_flags.num_jobs);
     struct stat jobserver;
     const bool inherit_fifo =
@@ -215,7 +235,7 @@ static int HandleBuild(int argc, char** argv) {
         g_flags.remote_num_jobs <= 0 && !g_flags.ninja_jobserver_fifo.empty() &&
         stat(g_flags.ninja_jobserver_fifo.c_str(), &jobserver) == 0 &&
         S_ISFIFO(jobserver.st_mode);
-    std::vector<char*> ninja = {const_cast<char*>("sh"), launcher.data()};
+    std::vector<char*> ninja;
     if (!inherit_fifo)
       ninja.push_back(jobs.data());
     std::string load_option = g_flags.LoadLimitOption();
@@ -226,9 +246,15 @@ static int HandleBuild(int argc, char** argv) {
     if (g_flags.keep_going)
       ninja.push_back(const_cast<char*>("-k0"));
     ScopedTimeReporter tr("Ninja execution time");
-    status = BuildSubprocess(ninja, nullptr);
+    GenerationReader reader(CurrentGenerationPointer());
+    if (!reader.valid())
+      ERROR("invalid generation; regenerate the Ninja graph");
+    status = RunGeneratedNinja(
+        reader, std::string(Basename(GetNinjaShellScriptFilename())),
+        ninja.size(), ninja.data());
   }
   close(lock_fd);
+  ReportAllStats();
   return status;
 }
 
@@ -245,29 +271,30 @@ bool StatPath(const char* path, struct stat* result) {
 bool IsNewer(const struct stat& input,
              const struct stat& output,
              bool low_resolution) {
-#if defined(__APPLE__)
-  const struct timespec input_time = input.st_mtimespec;
-  const struct timespec output_time = output.st_mtimespec;
-#else
-  const struct timespec input_time = input.st_mtim;
-  const struct timespec output_time = output.st_mtim;
-#endif
-  if (low_resolution)
-    return input_time.tv_sec > output_time.tv_sec;
-  return input_time.tv_sec > output_time.tv_sec ||
-         (input_time.tv_sec == output_time.tv_sec &&
-          input_time.tv_nsec > output_time.tv_nsec);
+  return InputIsNewer(FileStamp::FromStat(input), FileStamp::FromStat(output),
+                      EdgeKind::Normal, low_resolution);
 }
 
-int HandleNewerInputs(int argc, char** argv) {
-  if (argc < 3)
+int HandleNewerInputs(int argc, char** argv, bool typed = false) {
+  if (argc < 3 || (typed && argc % 2 == 0))
     return 2;
 
-  struct stat output_stat;
-  const bool output_exists = StatPath(argv[2], &output_stat);
+  // Saved graphs still use the original filename/low-resolution-list format.
+  // New graphs use kind/resolution pairs: f(ile), l(ogical), or p(hony),
+  // followed by 0 (nanoseconds) or 1 (whole seconds), then the filename.
+  if (typed) {
+    for (int i = 3; i < argc; i += 2) {
+      std::string_view flags(argv[i]);
+      if (flags.size() != 2 ||
+          (flags[0] != 'f' && flags[0] != 'l' && flags[0] != 'p') ||
+          (flags[1] != '0' && flags[1] != '1'))
+        return 2;
+    }
+  }
+  const FileStamp output = FileStamp::Read(argv[2]);
   std::unordered_set<std::string> low_resolution_inputs;
   int separator = argc;
-  for (int i = 3; i < argc; ++i) {
+  for (int i = 3; !typed && i < argc; ++i) {
     if (strcmp(argv[i], "--") == 0) {
       separator = i;
       for (int j = i + 1; j < argc; ++j)
@@ -277,16 +304,19 @@ int HandleNewerInputs(int argc, char** argv) {
   }
 
   bool first = true;
-  for (int i = 3; i < separator; ++i) {
-    struct stat input_stat;
-    if (!StatPath(argv[i], &input_stat) ||
-        (output_exists && !IsNewer(input_stat, output_stat,
-                                   low_resolution_inputs.find(argv[i]) !=
-                                       low_resolution_inputs.end())))
+  for (int i = 3; i < separator; i += typed ? 2 : 1) {
+    const char* name = argv[i + (typed ? 1 : 0)];
+    FileStamp input = FileStamp::Read(name);
+    if (typed && (argv[i][0] == 'p' ||
+                  (argv[i][0] == 'l' && input == FileStamp::Missing())))
+      input = FileStamp::Updated();
+    const bool low_resolution =
+        typed ? argv[i][1] == '1' : low_resolution_inputs.count(name) != 0;
+    if (!InputIsNewer(input, output, EdgeKind::Normal, low_resolution))
       continue;
     if (!first && putchar(' ') == EOF)
       return 1;
-    if (fputs(argv[i], stdout) == EOF)
+    if (fputs(name, stdout) == EOF)
       return 1;
     first = false;
   }
@@ -431,7 +461,8 @@ int HandleIntermediateCurrent(const char* output,
     if (state != states.end()) {
       std::string expected, successful;
       if (!ReadNinjaRecipeState(state->second, &expected) ||
-          !ReadNinjaRecipeState(state->second + ".success", &successful) ||
+          !ReadNinjaRecipeState(
+              NinjaRecipeStateOwner(state->second) + ".success", &successful) ||
           expected != successful)
         return false;
     }
@@ -1010,7 +1041,7 @@ static int Run(const std::vector<Symbol>& targets,
                const std::vector<std::string_view>& cl_vars,
                const std::string& orig_args,
                const std::string& invocation_dir) {
-  double start_time = GetTime();
+  double start_time = GetWallTime();
   LOG_STAT("graph optimization settings: %s",
            g_flags.GraphOptimizationIdentity().c_str());
   if (g_flags.import_root) {
@@ -1280,13 +1311,12 @@ static int Run(const std::vector<Symbol>& targets,
         const DepNode* makefile_node = include.second;
         bool unconditional = false;
         for (size_t group = 0;
-             group < makefile_node->double_colon_group_has_prerequisites.size();
+             group < makefile_node->DoubleColon().has_prerequisites.size();
              ++group) {
-          if (!makefile_node->double_colon_group_has_prerequisites[group] &&
-              std::find(makefile_node->double_colon_group_for_cmd.begin(),
-                        makefile_node->double_colon_group_for_cmd.end(),
-                        group) !=
-                  makefile_node->double_colon_group_for_cmd.end())
+          if (!makefile_node->DoubleColon().has_prerequisites[group] &&
+              std::find(makefile_node->DoubleColon().for_cmd.begin(),
+                        makefile_node->DoubleColon().for_cmd.end(),
+                        group) != makefile_node->DoubleColon().for_cmd.end())
             unconditional = true;
         }
         // Secondary expansion can turn a syntactically nonempty list into
@@ -1399,7 +1429,7 @@ static int Run(const std::vector<Symbol>& targets,
                   !node->is_phony && !node->is_notparallel &&
                   !node->vpath_provider.IsValid() &&
                   node->implicit_outputs.empty() && node->validations.empty() &&
-                  node->double_colon_group_for_cmd.empty() &&
+                  node->DoubleColon().for_cmd.empty() &&
                   node->low_resolution_inputs.empty() &&
                   stat(node->output.c_str(), &st) == 0 && S_ISREG(st.st_mode);
               if (!eligible)
@@ -1632,7 +1662,89 @@ static void FindFirstMakefie() {
     g_flags.makefiles.push_back(g_flags.makefile);
 }
 
-static int HandleRunNinja(int argc, char** argv) {
+namespace {
+// Keep launcher resources in one native parent. Its child closes the lease
+// and FIFO descriptors on exec; cancellation is forwarded before cleanup.
+struct NinjaLaunchResources {
+  int lease = -1;
+  int fifo_fd = -1;
+  std::string fifo, load_state;
+  ~NinjaLaunchResources() {
+    if (lease >= 0)
+      close(lease);
+    if (fifo_fd >= 0)
+      close(fifo_fd);
+    if (!fifo.empty())
+      unlink(fifo.c_str());
+    if (!load_state.empty())
+      unlink(load_state.c_str());
+  }
+  void CreateJobserver() {
+    const char* inherited = getenv("KATI_JOBSERVER_FIFO");
+    if (inherited && *inherited)
+      return;
+    const char* jobs = getenv("KATI_JOBS");
+    char* end = nullptr;
+    errno = 0;
+    unsigned long count = jobs ? strtoul(jobs, &end, 10) : 0;
+    if (!jobs || !*jobs || *end || errno || !count || *jobs == '-')
+      count = 1;
+    const char* temp = getenv("TMPDIR");
+    const std::string base = std::string(temp && *temp ? temp : "/tmp") +
+                             "/kati-jobserver-" + std::to_string(getpid());
+    for (size_t i = 0; i < 1024; ++i) {
+      const std::string path = base + (i ? "-" + std::to_string(i) : "");
+      if (mkfifo(path.c_str(), 0600) == 0) {
+        fifo = path;
+        break;
+      }
+      if (errno != EEXIST)
+        PERROR("cannot create jobserver FIFO %s", path.c_str());
+    }
+    if (fifo.empty())
+      ERROR("cannot create jobserver FIFO: too many name collisions");
+    fifo_fd = open(fifo.c_str(), O_RDWR | O_NONBLOCK | O_CLOEXEC);
+    if (fifo_fd < 0)
+      PERROR("open jobserver FIFO");
+    // A nonblocking fill also bounds oversized job counts to the transport's
+    // capacity instead of hanging before any reader has started.
+    const std::string tokens(1024, 'x');
+    unsigned long written = 0;
+    while (written < count) {
+      const ssize_t n = HANDLE_EINTR(
+          write(fifo_fd, tokens.data(),
+                std::min<unsigned long>(count - written, tokens.size())));
+      if (n < 0 && errno == EAGAIN)
+        break;
+      if (n <= 0)
+        PERROR("initialize jobserver FIFO");
+      written += n;
+    }
+    setenv("KATI_JOBSERVER_FIFO", fifo.c_str(), 1);
+    setenv("KATI_JOBS", std::to_string(written).c_str(), 1);
+  }
+};
+}  // namespace
+
+static int HandleRunNinja(int argc, char** argv, bool supervise = false) {
+  NinjaLaunchResources resources;
+  struct sigaction action = {};
+  action.sa_handler = ForwardBuildSignal;
+  sigemptyset(&action.sa_mask);
+  for (int sig : {SIGHUP, SIGINT, SIGTERM})
+    if (sigaction(sig, &action, nullptr) != 0)
+      PERROR("install Ninja signal handler");
+  if (const char* lease = getenv("OMKTR_GENERATION_LEASE_FD")) {
+    char* end = nullptr;
+    const long fd = strtol(lease, &end, 10);
+    if (*lease && !*end && fd >= 20 && fd <= INT_MAX) {
+      resources.lease = static_cast<int>(fd);
+      if (fcntl(resources.lease, F_SETFD, FD_CLOEXEC) != 0)
+        PERROR("retain generation lease");
+    }
+    unsetenv("OMKTR_GENERATION_LEASE_FD");
+  }
+  resources.CreateJobserver();
   // argv: tool, helper, generation-time limit (empty means disabled), Ninja,
   // then Ninja arguments. Keep targets after -- completely opaque.
   double limit = *argv[2] ? ParseLoadLimit(argv[2]) : -1;
@@ -1711,7 +1823,7 @@ static int HandleRunNinja(int argc, char** argv) {
   if (load_set)
     setenv("MAKEFLAGS", makeflags.c_str(), 1);
 
-  std::string state;
+  std::string& state = resources.load_state;
   if (limit >= 0) {
     const char* temp = getenv("TMPDIR");
     state = std::string(temp && *temp ? temp : "/tmp") + "/omktr-load-XXXXXX";
@@ -1736,10 +1848,12 @@ static int HandleRunNinja(int argc, char** argv) {
       arguments.insert(arguments.begin() + option_end, "-j1");
   }
   if (known_goals)
-    PrepareRuntimeContexts(RuntimeContextManifestPath(ninja_file));
+    PrepareRuntimeContexts(
+        RuntimeContextManifestPath(ResolveGenerationArtifact(ninja_file)));
   else
     unsetenv("KATI_RUNTIME_CONTEXT_FD");
-  if (state.empty()) {
+  if (!supervise && state.empty() && resources.fifo.empty() &&
+      resources.lease < 0) {
     // The ordinary path needs no additional supervisor or process boundary.
     std::vector<char*> child = {argv[3]};
     for (std::string& arg : arguments)
@@ -1748,27 +1862,45 @@ static int HandleRunNinja(int argc, char** argv) {
     execvp(child.front(), child.data());
     PERROR("exec Ninja failed");
   }
-  const auto quote = [](std::string_view word) {
-    std::string result = "'";
-    for (char c : word)
-      result += c == '\'' ? "'\\''" : std::string(1, c);
-    return result + "'";
-  };
-  std::string command = quote(argv[3]);
+  std::vector<char*> child = {argv[3]};
   for (const std::string& arg : arguments)
-    command += " " + quote(arg);
-  ScopedBuildSignals signals;
-  const int status =
-      RunCommand("/bin/sh", "-c", command, RedirectStderr::NONE, nullptr, false,
-                 [](std::string_view output) {
-                   fwrite(output.data(), 1, output.size(), stdout);
-                   fflush(stdout);
-                 });
-  if (!state.empty())
-    unlink(state.c_str());
-  return WIFEXITED(status)     ? WEXITSTATUS(status)
-         : WIFSIGNALED(status) ? 128 + WTERMSIG(status)
-                               : 1;
+    child.push_back(const_cast<char*>(arg.c_str()));
+  return BuildSubprocess(child, nullptr);
+}
+
+static int RunGeneratedNinja(GenerationReader& generation,
+                             const std::string& launcher,
+                             int argc,
+                             char** argv) {
+  std::string bytes;
+  NinjaLaunchPlan plan;
+  if (launcher.empty() || launcher.find('/') != std::string::npos ||
+      !ReadGraphCache(generation.directory() + "/" + launcher + ".launch",
+                      &bytes) ||
+      !plan.Decode(bytes))
+    ERROR("invalid generation launch plan; regenerate the Ninja graph");
+  plan.ApplyEnvironment(argc, argv);
+  std::string graph = generation.directory() + "/" + plan.graph;
+  // Preserve caller-created regular wrappers while pinning generated aliases.
+  struct stat metadata;
+  if (lstat(plan.public_graph.c_str(), &metadata) == 0 &&
+      S_ISREG(metadata.st_mode))
+    graph = plan.public_graph;
+  std::vector<std::string> arguments = {GetExecutablePath(),
+                                        "--internal-run-ninja",
+                                        plan.load,
+                                        plan.ninja,
+                                        "-f",
+                                        graph};
+  if (!plan.remote_jobs.empty())
+    arguments.push_back(plan.remote_jobs);
+  for (int i = 0; i < argc; ++i)
+    arguments.emplace_back(argv[i]);
+  std::vector<char*> pointers;
+  for (auto& argument : arguments)
+    pointers.push_back(argument.data());
+  // The same native parent keeps the reader lease until Ninja has exited.
+  return HandleRunNinja(pointers.size(), pointers.data(), true);
 }
 
 static void HandleRealpath(int argc, char** argv) {
@@ -1827,7 +1959,35 @@ static bool IsWorkspaceAction(const char* argument) {
   return false;
 }
 
-int main(int argc, char* argv[]) {
+static std::unique_ptr<GenerationReader> PinGeneration(const char* directory) {
+  auto generation = std::make_unique<GenerationReader>(directory);
+  if (!generation->valid()) {
+    // Collection can win before a reader acquires its lease. Restore the
+    // previous binding before trying the currently published bundle.
+    const std::string current = std::string(Dirname(directory)) + "/current";
+    generation.reset();
+    generation = std::make_unique<GenerationReader>(current);
+  }
+  if (!generation->valid())
+    ERROR("invalid generation; regenerate the Ninja graph");
+  return generation;
+}
+
+static int Main(int argc, char* argv[]) {
+  if (argc >= 4 && !strcmp(argv[1], "--internal-pin-generation")) {
+    auto generation = PinGeneration(argv[2]);
+    const std::string directory = generation->directory();
+    std::string launcher = directory + "/" + argv[3];
+    setenv("OMKTR_PINNED_GENERATION", directory.c_str(), 1);
+    std::vector<char*> arguments = {const_cast<char*>("/bin/sh"),
+                                    launcher.data()};
+    arguments.insert(arguments.end(), argv + 4, argv + argc);
+    arguments.push_back(nullptr);
+    const std::string lease = std::to_string(generation->InheritLease());
+    setenv("OMKTR_GENERATION_LEASE_FD", lease.c_str(), 1);
+    execv(arguments[0], arguments.data());
+    PERROR("execute pinned generation launcher");
+  }
   if (argc == 3 && !strcmp(argv[1], "--internal-evaluate-recipe"))
     return RunRuntimeRecipe(argv[2]);
   if (argc == 4 && strcmp(argv[1], "--internal-native-find") == 0 &&
@@ -1875,6 +2035,9 @@ int main(int argc, char* argv[]) {
       arguments.push_back(nullptr);
       execvp(arguments.front(), arguments.data());
       PERROR("execute workspace frontend");
+    } else if (!strcmp(argv[1], "--internal-launch-generation") && argc >= 4) {
+      auto generation = PinGeneration(argv[2]);
+      return RunGeneratedNinja(*generation, argv[3], argc - 4, argv + 4);
     } else if (!strcmp(argv[1], "--internal-run-ninja") && argc >= 4) {
       return HandleRunNinja(argc, argv);
     } else if ((!strcmp(argv[1], "--internal-run-recipe") ||
@@ -1898,7 +2061,8 @@ int main(int argc, char* argv[]) {
               "missing or invalid workspace recipe state; regenerate the Ninja "
               "graph");
         std::string previous;
-        const std::string success_file = std::string(argv[6]) + ".success";
+        const std::string owner = NinjaRecipeStateOwner(argv[6]);
+        const std::string success_file = owner + ".success";
         const bool recorded = ReadNinjaRecipeState(success_file, &previous);
         if (!recorded && Exists(success_file))
           ERROR(
@@ -1906,8 +2070,8 @@ int main(int argc, char* argv[]) {
               "workspace");
         setenv("KATI_RECIPE_CHANGED",
                recorded && previous != recipe_state ? "1" : "0", 1);
-        setenv("KATI_RECIPE_STATE_PATH", argv[6], 1);
-        unlink((std::string(argv[6]) + ".reads-pending").c_str());
+        setenv("KATI_RECIPE_STATE_PATH", owner.c_str(), 1);
+        unlink((owner + ".reads-pending").c_str());
       } else {
         unsetenv("KATI_RECIPE_STATE_PATH");
       }
@@ -1925,8 +2089,9 @@ int main(int argc, char* argv[]) {
       if (GetBuildSignal() != 0)
         return 128 + GetBuildSignal();
       if (argc == 7 && WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-        CommitRuntimeRecipeReads(argv[6], recipe_state);
-        WriteNinjaRecipeState(std::string(argv[6]) + ".success", recipe_state);
+        const std::string owner = NinjaRecipeStateOwner(argv[6]);
+        CommitRuntimeRecipeReads(owner, recipe_state);
+        WriteNinjaRecipeState(owner + ".success", recipe_state);
       }
       return WIFEXITED(status)     ? WEXITSTATUS(status)
              : WIFSIGNALED(status) ? 128 + WTERMSIG(status)
@@ -1936,6 +2101,8 @@ int main(int argc, char* argv[]) {
       return 0;
     } else if (!strcmp(argv[1], "--internal-newer-inputs")) {
       return HandleNewerInputs(argc, argv);
+    } else if (!strcmp(argv[1], "--internal-newer-inputs-v2")) {
+      return HandleNewerInputs(argc, argv, true);
     } else if (!strcmp(argv[1], "--internal-output-stamp") && argc == 3) {
       puts(GetOutputStamp(argv[2]).c_str());
       return 0;
@@ -1967,6 +2134,10 @@ int main(int argc, char* argv[]) {
   std::string orig_args;
   for (int i = 0; i < argc; i++) {
     // An explanation checks the same invocation's regeneration stamp.
+    if (std::find(g_flags.diagnostic_arg_indices.begin(),
+                  g_flags.diagnostic_arg_indices.end(),
+                  i) != g_flags.diagnostic_arg_indices.end())
+      continue;
     if (std::find(g_flags.explain_arg_indices.begin(),
                   g_flags.explain_arg_indices.end(),
                   i) != g_flags.explain_arg_indices.end())
@@ -2003,4 +2174,16 @@ int main(int argc, char* argv[]) {
   int r = Run(g_flags.targets, g_flags.cl_vars, orig_args, invocation_dir);
   ReportAllStats();
   return r;
+}
+
+int main(int argc, char* argv[]) {
+  BuildSession session;
+  try {
+    return Main(argc, argv);
+  } catch (const BuildExit& e) {
+    return e.status;
+  } catch (const std::exception& e) {
+    fprintf(stderr, "%s\n", e.what());
+    return 1;
+  }
 }

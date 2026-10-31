@@ -19,9 +19,41 @@
 #include <vector>
 
 #include "fileutil.h"
+#include "jobserver.h"
+#include "log.h"
+#include "process.h"
+#include "session.h"
 
 namespace {
 constexpr size_t kMaxCacheSize = 64 * 1024 * 1024;
+struct ObjectPublication {
+  GraphObjectBatch* batch = nullptr;
+};
+void SyncObjectPath(const std::string& path, bool directory) {
+  int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK |
+                                  (directory ? O_DIRECTORY : 0));
+  struct stat metadata;
+  const bool synced =
+      fd >= 0 && fstat(fd, &metadata) == 0 &&
+      (directory ? S_ISDIR(metadata.st_mode) : S_ISREG(metadata.st_mode)) &&
+      fsync(fd) == 0;
+  if (fd >= 0)
+    close(fd);
+  if (!synced)
+    ERROR("cannot sync immutable graph object: %s", path.c_str());
+}
+std::string ObjectParent(const std::string& path) {
+  const auto slash = path.rfind('/');
+  return slash == std::string::npos ? "." : path.substr(0, slash ? slash : 1);
+}
+void SealObject(const std::string& path) {
+  // Seal only after both bytes and the directory entry are durable. Losing
+  // this permission update after a crash merely repeats the next barrier.
+  // Objects are private immutable cache files; full bytes are still checked
+  // on every reuse. Mutable success/read history never uses this convention.
+  if (chmod(path.c_str(), 0400) != 0)
+    ERROR("cannot seal immutable graph object: %s", path.c_str());
+}
 
 bool StampChecksum(FILE* stream, size_t length, uint64_t* checksum) {
   if (fseek(stream, sizeof(double), SEEK_SET) != 0)
@@ -121,7 +153,11 @@ bool ConsumeGraphStringView(std::string_view* data, std::string_view* value) {
   return true;
 }
 
-bool ReadGraphCache(const std::string& path, std::string* payload) {
+bool ReadGraphCache(const std::string& path,
+                    std::string* payload,
+                    bool* sealed) {
+  if (sealed)
+    *sealed = false;
   int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
   if (fd < 0)
     return false;
@@ -159,6 +195,8 @@ bool ReadGraphCache(const std::string& path, std::string* payload) {
           read_string(&checksum, 64) && read_string(payload, kMaxCacheSize) &&
           remaining == 0 && checksum == GraphDigest(*payload);
   close(fd);
+  if (valid && sealed)
+    *sealed = (st.st_mode & 07777) == 0400;
   return valid;
 }
 
@@ -235,6 +273,140 @@ bool WriteGraphCache(const std::string& path, std::string_view payload) {
     ok = rename(temporary.c_str(), path.c_str()) == 0;
   unlink(temporary.c_str());
   return ok;
+}
+
+GraphObjectBatch::GraphObjectBatch()
+    : previous_(SessionService<ObjectPublication>().batch) {
+  SessionService<ObjectPublication>().batch = this;
+}
+GraphObjectBatch::~GraphObjectBatch() {
+  SessionService<ObjectPublication>().batch = previous_;
+}
+void GraphObjectBatch::Add(const std::string& path) {
+  paths_.insert(path);
+  if (paths_.size() >= 256)
+    Flush();
+}
+void GraphObjectBatch::AddDirectory(const std::string& path) {
+  directories_.insert(path);
+  if (directories_.size() >= 256)
+    Flush();
+}
+void GraphObjectBatch::Flush() {
+  // All writes precede all barriers, letting the filesystem coalesce them.
+  // Unsealed existing objects are included: another writer may just have
+  // linked one, or abandoned a batch before making its objects durable.
+  for (const auto& path : paths_) {
+    SyncObjectPath(path, false);
+    directories_.insert(ObjectParent(path));
+  }
+  for (const auto& path : directories_)
+    SyncObjectPath(path, true);
+  for (const auto& path : paths_)
+    SealObject(path);
+  paths_.clear();
+  directories_.clear();
+}
+
+void SyncPublishedGraphObject(const std::string& path, bool sealed) {
+  if (sealed)
+    return;
+  if (auto* batch = SessionService<ObjectPublication>().batch) {
+    batch->Add(path);
+  } else {
+    SyncObjectPath(path, false);
+    SyncObjectPath(ObjectParent(path), true);
+    SealObject(path);
+  }
+}
+void SyncGraphObjectDirectory(const std::string& path) {
+  if (auto* batch = SessionService<ObjectPublication>().batch)
+    batch->AddDirectory(path);
+  else
+    SyncObjectPath(path, true);
+}
+
+std::string PublishGraphObject(const std::string& base,
+                               std::string_view payload,
+                               bool raw) {
+  std::string temporary;
+  auto finish = [&](const std::string& path, bool sealed = false) {
+    SyncPublishedGraphObject(path, sealed);
+    return path;
+  };
+  bool sealed = false;
+  auto read = [&](const std::string& path, std::string* bytes) {
+    sealed = false;
+    if (!raw)
+      return ReadGraphCache(path, bytes, &sealed);
+    int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC);
+    if (fd < 0)
+      return false;
+    struct stat metadata;
+    bool ok = fstat(fd, &metadata) == 0 && S_ISREG(metadata.st_mode) &&
+              metadata.st_size >= 0 &&
+              metadata.st_size <= static_cast<off_t>(kMaxCacheSize);
+    if (ok) {
+      bytes->resize(metadata.st_size);
+      size_t offset = 0;
+      while (offset < bytes->size()) {
+        ssize_t count = HANDLE_EINTR(
+            ::read(fd, bytes->data() + offset, bytes->size() - offset));
+        if (count <= 0) {
+          ok = false;
+          break;
+        }
+        offset += count;
+      }
+    }
+    close(fd);
+    if (ok)
+      sealed = (metadata.st_mode & 07777) == 0400;
+    return ok;
+  };
+  if (payload.size() > kMaxCacheSize)
+    ERROR("immutable graph object exceeds size budget");
+  for (size_t collision = 0; collision < 1024; ++collision) {
+    const std::string path =
+        base + (collision ? "." + std::to_string(collision) : "");
+    std::string previous;
+    if (read(path, &previous) && previous == payload) {
+      if (!temporary.empty())
+        unlink(temporary.c_str());
+      return finish(path, sealed);
+    }
+    struct stat metadata;
+    if (lstat(path.c_str(), &metadata) == 0)
+      continue;
+    if (errno != ENOENT)
+      break;
+    if (temporary.empty()) {
+      temporary = base + ".object-XXXXXX";
+      int fd = mkstemp(temporary.data());
+      if (fd < 0)
+        break;
+      bool written = !raw || WriteAll(fd, payload);
+      if (close(fd) != 0)
+        written = false;
+      if (!written || (!raw && !WriteGraphCache(temporary, payload)))
+        break;
+    }
+    if (link(temporary.c_str(), path.c_str()) == 0) {
+      unlink(temporary.c_str());
+      return finish(path);
+    }
+    if (errno != EEXIST)
+      break;
+    // A concurrent publisher may have installed these exact bytes.
+    if (read(path, &previous) && previous == payload) {
+      unlink(temporary.c_str());
+      return finish(path, sealed);
+    }
+  }
+  if (!temporary.empty())
+    unlink(temporary.c_str());
+  ERROR("cannot publish immutable graph object: %s", base.c_str());
+  return {};
 }
 
 int WriteIfChanged(int argc, char** argv) {

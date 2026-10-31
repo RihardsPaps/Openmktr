@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -35,6 +36,7 @@
 #include <vector>
 
 #include "func.h"
+#include "generation.h"
 #include "graph_optimization.h"
 #include "io.h"
 #include "log.h"
@@ -93,7 +95,7 @@ int stamp_dump_main(int argc, char* argv[]) {
     dump_files = true;
   }
 
-  FILE* fp = OpenGraphStamp(argv[argc - 1]);
+  FILE* fp = OpenGraphStamp(ResolveGenerationArtifact(argv[argc - 1]));
   if (!fp)
     ERROR("Invalid or incompatible stamp file: %s", argv[argc - 1]);
 

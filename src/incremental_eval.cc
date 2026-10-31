@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "incremental_eval.h"
+#include "observation.h"
 
 #include <limits.h>
 #include <unistd.h>
@@ -150,50 +151,15 @@ void IncrementalEvaluator::Observe(std::string record) {
 
 bool IncrementalEvaluator::CheckObservation(std::string_view record,
                                             std::string* accepted) {
-  const std::string original(record);
-  std::string kind, argument, expected;
-  if (!ConsumeGraphString(&record, &kind))
-    return false;
-  bool valid = false;
-  if (kind == "file") {
-    valid = ConsumeGraphString(&record, &argument) &&
-            ConsumeGraphString(&record, &expected) && record.empty() &&
-            expected != "unreadable" && GetFileIdentity(argument) == expected;
-  } else if (kind == "glob") {
-    if (!ConsumeGraphString(&record, &argument))
-      return false;
-    std::string current;
-    for (const auto& match : Glob(argument))
-      AppendGraphString(match, &current);
-    valid = record == current;
-  } else if (kind == "find") {
-    std::string shell, shellflag, packet, current;
-    std::unique_ptr<FindCommand> descriptor;
-    if (!g_flags.use_find_emulator || !ConsumeGraphString(&record, &shell) ||
-        !ConsumeGraphString(&record, &shellflag) ||
-        !ConsumeGraphString(&record, &argument) ||
-        !ConsumeGraphString(&record, &packet) || !record.empty() ||
-        !DecodeNativeFind(argument, packet, &expected, &descriptor) ||
-        !QueryNativeFind(argument, &packet) ||
-        !DecodeNativeFind(argument, packet, &current, &descriptor))
-      return false;
-    valid = expected == current;
-    if (valid) {
-      accepted->clear();
-      for (std::string_view field :
-           {std::string_view("find"), std::string_view(shell),
-            std::string_view(shellflag), std::string_view(argument),
-            std::string_view(packet)})
-        AppendGraphString(field, accepted);
-    }
-  }
-  if (valid) {
-    if (kind != "find")
-      *accepted = original;
+  ObservationRecord observation;
+  const bool valid = ObservationRecord::Decode(record, &observation) &&
+                     observation.kind != ObservationKind::Intern &&
+                     observation.kind != ObservationKind::Metadata &&
+                     observation.Validate(accepted);
+  if (valid)
     ++observation_hits_;
-  } else {
+  else
     ++observation_misses_;
-  }
   return valid;
 }
 

@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Verify owned, C-string and bounded-view filesystem probes across mutations.
 // Cover conservative depfile inference and reject ambiguous shell commands.
 // Fork modifications are covered by MPL-2.0; see docs/LICENSING.md and NOTICE.
@@ -20,6 +21,7 @@
 // +build ignore
 
 #include "ninja.h"
+#include "session.h"
 
 #include <assert.h>
 #include <fcntl.h>
@@ -144,6 +146,7 @@ void TestGetDepfile() {
 }  // namespace
 
 int main() {
+  BuildSession session;
   g_log_no_exit = true;
   TestGetDepfile();
   TestOwnedFilesystemPaths();

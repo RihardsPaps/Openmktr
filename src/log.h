@@ -1,3 +1,7 @@
+// FORK MODIFICATION NOTICE (2026)
+// Remove the redundant self-include from the diagnostic interface.
+// Own invocation state and publish coherent generations with typed freshness.
+// Fork changes are covered by MPL-2.0; see docs/LICENSING.md and NOTICE.
 // Copyright 2015 Google Inc. All rights reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,12 +24,26 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <memory>
+#include <stdexcept>
 #include "flags.h"
-#include "log.h"
+#include "session.h"
 #include "stringprintf.h"
 
-extern bool g_log_no_exit;
-extern std::string* g_last_error;
+struct DiagnosticState {
+  bool capture = false;
+  std::unique_ptr<std::string> last_error;
+};
+#define g_log_no_exit (SessionService<DiagnosticState>().capture)
+#define g_last_error (SessionService<DiagnosticState>().last_error)
+struct BuildExit {
+  int status;
+};
+class BuildError : public std::runtime_error {
+ public:
+  using std::runtime_error::runtime_error;
+};
+void ReportError(std::string message);
 
 #define SPF(s) static_cast<int>((s).size()), (s).data()
 
@@ -53,11 +71,9 @@ extern std::string* g_last_error;
             strerror(errno));                                      \
   } while (0)
 
-#define PERROR(...)    \
-  do {                 \
-    PLOG(__VA_ARGS__); \
-    exit(1);           \
-  } while (0)
+#define PERROR(...)                                                     \
+  ReportError(StringPrintf("%s: %s", StringPrintf(__VA_ARGS__).c_str(), \
+                           strerror(errno)))
 
 #define WARN(...)                                               \
   do {                                                          \
@@ -70,14 +86,7 @@ extern std::string* g_last_error;
       fprintf(stderr, "%s\n", StringPrintf(__VA_ARGS__).c_str()); \
   } while (0)
 
-#define ERROR(...)                                                \
-  do {                                                            \
-    if (!g_log_no_exit) {                                         \
-      fprintf(stderr, "%s\n", StringPrintf(__VA_ARGS__).c_str()); \
-      exit(1);                                                    \
-    }                                                             \
-    g_last_error = new std::string(StringPrintf(__VA_ARGS__));    \
-  } while (0)
+#define ERROR(...) ReportError(StringPrintf(__VA_ARGS__))
 
 #define CHECK(c) \
   if (!(c))      \

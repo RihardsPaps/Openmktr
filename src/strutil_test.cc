@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Updated regression coverage, including overlapping patterns and empty stems.
@@ -23,6 +24,7 @@
 // +build ignore
 
 #include "strutil.h"
+#include "session.h"
 
 #include <assert.h>
 #include <sys/mman.h>
@@ -283,6 +285,7 @@ void TestCommandSubstitution() {
 }  // namespace
 
 int main() {
+  BuildSession session;
   TestWordScanner();
   TestHasPrefix();
   TestHasSuffix();

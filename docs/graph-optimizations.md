@@ -6,7 +6,7 @@ considers recursive graph import, general statement replay, and an
 already-running filesystem monitor. All profiles retain dependency validation.
 
 Use repeatable `--disable_graph_optimization=FEATURE` options for comparisons.
-Features are `evaluation`, `pattern_index`, `includes`, `recursive`, `compact`,
+Features are `evaluation`, `pattern_index`, `resolution`, `includes`, `recursive`, `compact`,
 and `monitor`.
 Pattern-variable indexing remains enabled when evaluation memoization is disabled.
 Evaluation recording checks admission at expression and statement boundaries.

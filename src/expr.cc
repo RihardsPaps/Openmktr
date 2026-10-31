@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Flatten concatenation identities so repeated += does not exhaust runtime AST
 // depth. Validate serialized runtime expressions before lazily restoring their
 // ASTs. Share immutable serialized expression storage until an AST is needed.
@@ -138,6 +139,8 @@ class ValueList : public Value {
   }
 
   virtual ~ValueList() {
+    if (DrainingSession())
+      return;
     for (Value* v : vals_) {
       delete v;
     }
@@ -230,7 +233,11 @@ class VarRef : public Value {
     return true;
   }
   explicit VarRef(const Loc& loc, Value* n) : Value(loc), name_(n) {}
-  virtual ~VarRef() { delete name_; }
+  virtual ~VarRef() {
+    if (DrainingSession())
+      return;
+    delete name_;
+  }
 
   virtual bool IsFunc(Evaluator*) const override {
     // This is the unhandled edge case as described in expr.h.
@@ -287,6 +294,8 @@ class VarSubst : public Value {
   VarSubst(const Loc& loc, Value* n, Value* p, Value* s)
       : Value(loc), name_(n), pat_(p), subst_(s) {}
   virtual ~VarSubst() {
+    if (DrainingSession())
+      return;
     delete name_;
     delete pat_;
     delete subst_;
@@ -356,6 +365,8 @@ class Func : public Value {
   Func(const Loc& loc, const FuncInfo* fi) : Value(loc), fi_(fi) {}
 
   ~Func() {
+    if (DrainingSession())
+      return;
     for (Value* a : args_)
       delete a;
   }
@@ -416,6 +427,12 @@ class RuntimeTargetAppend : public Value {
  public:
   RuntimeTargetAppend(Value* prefix, Value* suffix, const Loc& loc)
       : Value(loc), prefix_(prefix), suffix_(suffix) {}
+  ~RuntimeTargetAppend() override {
+    if (DrainingSession()) {
+      prefix_.release();
+      suffix_.release();
+    }
+  }
   bool IsFunc(Evaluator* ev) const override {
     return prefix_->IsFunc(ev) || suffix_->IsFunc(ev);
   }
@@ -469,6 +486,10 @@ class LazyRuntimeExpression : public Value {
   LazyRuntimeExpression(std::string_view record,
                         std::shared_ptr<const void> storage)
       : Value(Loc()), storage_(std::move(storage)), record_(record) {}
+  ~LazyRuntimeExpression() override {
+    if (DrainingSession())
+      decoded_.release();
+  }
   void Eval(Evaluator* ev, std::string* out) const override {
     Decode()->Eval(ev, out);
   }

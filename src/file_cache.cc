@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -26,6 +27,7 @@
 
 #include "file.h"
 #include "file_cache.h"
+#include "session.h"
 
 const Makefile& MakefileCacheManager::ReadMakefile(
     const std::string& filename) {
@@ -55,6 +57,5 @@ void MakefileCacheManager::AddExtraFileDep(std::string_view dep) {
 }
 
 MakefileCacheManager& MakefileCacheManager::Get() {
-  static MakefileCacheManager instance;
-  return instance;
+  return SessionService<MakefileCacheManager>();
 }

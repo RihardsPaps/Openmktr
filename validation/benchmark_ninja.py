@@ -48,7 +48,7 @@ def effective_settings(options):
             disabled.add(option.split("=", 1)[1])
     features = {feature: profile != "off" and feature not in disabled and
                 (profile == "aggressive" or feature not in ("recursive", "monitor"))
-                for feature in ("evaluation", "includes", "recursive", "compact", "monitor")}
+                for feature in ("evaluation", "pattern_index", "resolution", "includes", "recursive", "compact", "monitor")}
     return dict(profile=profile, enabled=features,
                 general_state_replay=profile == "aggressive" and features["evaluation"],
                 monitor_policy="already-running-only")
@@ -82,6 +82,54 @@ def paired_summary(rows):
                            candidate_median_seconds=statistics.median(
                                p["candidate"]["total_seconds"] for p in complete)))
     return result
+
+
+def invocation_commands(tool, entrypoint, jobs, common, options=(), kind="omktr"):
+    """The timed invocation includes every graph validation/generation step."""
+    arguments = [f"-j{jobs}", *common, "all"]
+    if kind == "make" or entrypoint == "direct":
+        return [("invocation", [tool, *arguments, *options])]
+    if entrypoint == "build":
+        return [("invocation", [tool, "build", *arguments, *options])]
+    return [("generation", [tool, "--ninja", "--regen", *arguments, *options]),
+            ("execution", ["sh", "./ninja.sh", f"-j{jobs}"])]
+
+
+def parity_summary(rows):
+    """Incomplete, failed or under-sampled cells can never qualify parity."""
+    results = []
+    for cell in paired_summary(rows):
+        gains = cell["paired_improvement_percent"]
+        ratios = [1 - gain / 100 for gain in gains]
+        upper = 1 - cell["bootstrap_95_percent"][0] / 100
+        results.append({**cell, "median_ratio": statistics.median(ratios),
+                        "ratio_upper_95": upper,
+                        "parity_passed": cell["pairs"] >= 7 and
+                        statistics.median(ratios) <= 1 and upper <= 1.05})
+    return results
+
+
+def memory_summary(rows):
+    """Per-command wait4 peak process RSS, paired separately from wall time."""
+    converted = []
+    for row in rows:
+        peak = row.get("peak_rss_kib", 0)
+        if peak > 0:
+            converted.append({**row, "total_seconds": peak})
+    results = parity_summary(converted)
+    for cell in results:
+        cell["metric"] = "wait4_peak_process_rss_kib"
+        cell["baseline_median_rss_kib"] = cell.pop("baseline_median_seconds")
+        cell["candidate_median_rss_kib"] = cell.pop("candidate_median_seconds")
+    return results
+
+
+def no_regression_passed(timing, memory, expected_cells, samples):
+    """Every requested cell must have complete timing and memory evidence."""
+    return expected_cells > 0 and samples >= 7 and all(
+        len(cells) == expected_cells and
+        all(cell["pairs"] == samples and cell["parity_passed"] for cell in cells)
+        for cells in (timing, memory))
 
 
 def run(command, cwd, log, env, journal):
@@ -120,20 +168,30 @@ def main():
                         help="explicitly start a candidate monitor; include startup in clean timing")
     parser.add_argument("--retained", action="store_true",
                         help="reuse separately initialized build trees for incremental-only ablations; never reports clean timings")
+    parser.add_argument("--baseline-kind", choices=("omktr", "make"), default="omktr",
+                        help="use external GNU Make as the baseline for parity qualification")
+    parser.add_argument("--release-version",
+                        help="archive directory/version; must occur in dependency-campaign.json")
     parser.add_argument("--baseline-revision", required=True)
     parser.add_argument("--candidate-revision", required=True)
     parser.add_argument("--project", choices=("ffmpeg", "linux", "synthetic"), required=True)
     parser.add_argument("--llvm-version", type=int,
                         help="optional version suffix for historical LLVM tools; default: distribution clang")
-    parser.add_argument("--entrypoints", nargs="+", choices=("build", "legacy"),
+    parser.add_argument("--entrypoints", nargs="+", choices=("build", "legacy", "direct"),
                         default=["build", "legacy"])
     parser.add_argument("--jobs", type=int, nargs="+", default=[8, 16])
     parser.add_argument("--samples", type=int, default=7)
     parser.add_argument("--warmups", type=int, default=2)
+    parser.add_argument("--require-no-regression", action="store_true",
+                        help="exit 3 unless every timing and memory cell passes against the supplied baseline")
     args = parser.parse_args()
     if (args.samples < 1 or args.warmups < 0 or min(args.jobs) < 1 or
             (args.llvm_version is not None and args.llvm_version < 1)):
         parser.error("positive samples/jobs and nonnegative warmups required")
+    if args.baseline_kind == "make" and args.baseline_option:
+        parser.error("--baseline-option is reserved for Openmktr comparisons")
+    if args.monitor and "direct" in args.entrypoints:
+        parser.error("--monitor cannot be used with direct execution")
     if args.monitor and not effective_settings(args.candidate_option)["enabled"]["monitor"]:
         parser.error("--monitor requires candidate aggressive mode with monitoring enabled")
     root = args.root.resolve()
@@ -154,7 +212,7 @@ def main():
     versions = {name: subprocess.check_output(command, env=env, text=True)
                 for name, command in {"clang": [f"clang{suffix}", "--version"],
                                       "ninja": ["ninja", "--version"]}.items()}
-    metadata = dict(project=args.project, jobs=args.jobs, samples=args.samples,
+    metadata = dict(project=args.project, baseline_kind=args.baseline_kind, jobs=args.jobs, samples=args.samples,
                     build_state="retained incremental only" if args.retained else "fresh clean per pair",
                     candidate_options=args.candidate_option,
                     baseline_options=args.baseline_option,
@@ -199,8 +257,21 @@ def main():
         if args.archives is None:
             parser.error("--archives is required for release builds")
         version = "ffmpeg-7.1.1" if args.project == "ffmpeg" else "linux-6.12"
+        expected_digest = None
+        if args.release_version:
+            campaign = json.loads(Path(__file__).with_name("dependency-campaign.json").read_text())
+            selected = next((item for item in campaign["components"]
+                             if item["id"] == args.project and
+                             item["version"] == args.release_version), None)
+            if selected is None:
+                parser.error("--release-version must match the reviewed campaign manifest")
+            version = selected.get("directory", args.project + "-" + args.release_version)
+            expected_digest = selected["sha256"]
         archive = args.archives.resolve() / (version + ".tar.xz")
         metadata["archive_sha256"] = digest(archive)
+        if expected_digest and metadata["archive_sha256"] != expected_digest:
+            parser.error("release archive checksum differs from the campaign manifest")
+        metadata["release_directory"] = version
         with tarfile.open(archive) as release:
             release.extractall(root / "sources", filter="data")
         source = root / "sources" / version
@@ -227,6 +298,7 @@ def main():
                         logs = build / ".benchmark-logs" / str(sample) if args.retained else build
                         logs.mkdir(parents=True, exist_ok=True)
                         tool = str(tools[variant])
+                        kind = args.baseline_kind if variant == "baseline" else "omktr"
                         common = []
                         if args.project == "ffmpeg":
                             configure = [str(source / "configure"), f"--cc=clang{suffix}",
@@ -272,14 +344,10 @@ def main():
                                     run([tool, "monitor", "start"], build,
                                         logs / "setup-monitor-start.log", env, journal)
                                     monitors.append((tool, build))
-                                if entrypoint == "build":
-                                    run([tool, "build", f"-j{jobs}", *common, "all", *extra_options],
-                                        build, logs / "setup-clean.log", env, journal)
-                                else:
-                                    run([tool, "--ninja", "--regen", f"-j{jobs}", *common, "all", *extra_options],
-                                        build, logs / "setup-generation.log", env, journal)
-                                    run(["sh", "./ninja.sh", f"-j{jobs}"], build,
-                                        logs / "setup-clean.log", env, journal)
+                                for phase, command in invocation_commands(
+                                        tool, entrypoint, jobs, common, extra_options, kind):
+                                    log_name = "setup-generation.log" if phase == "generation" else "setup-clean.log"
+                                    run(command, build, logs / log_name, env, journal)
                             setup_hashes = {p: digest(build / p) for p in artifacts}
                             if hashes.get("clean", setup_hashes) != setup_hashes:
                                 raise RuntimeError("Retained baseline/candidate setup artifacts differ")
@@ -307,17 +375,13 @@ def main():
                                         [tool, "monitor", "start"], build,
                                         logs / "monitor-start.log", env, journal)
                                     monitors.append((tool, build))
-                                if entrypoint == "build":
-                                    phases["invocation"] = run(
-                                        [tool, "build", f"-j{jobs}", *common, "all", *extra_options], build,
-                                        logs / f"{scenario}.log", env, journal)
-                                else:
-                                    phases["generation" if scenario == "clean" else "regeneration"] = run(
-                                        [tool, "--ninja", "--regen", f"-j{jobs}", *common, "all", *extra_options],
-                                        build, logs / f"{scenario}-regen.log", env, journal)
-                                    phases["execution"] = run(
-                                        ["sh", "./ninja.sh", f"-j{jobs}"], build,
-                                        logs / f"{scenario}.log", env, journal)
+                                for phase, command in invocation_commands(
+                                        tool, entrypoint, jobs, common, extra_options, kind):
+                                    if phase == "generation" and scenario != "clean":
+                                        phase = "regeneration"
+                                    log_name = f"{scenario}-regen.log" if phase in ("generation", "regeneration") else f"{scenario}.log"
+                                    phases[phase] = run(command, build,
+                                        logs / log_name, env, journal)
                                 elapsed = time.perf_counter() - start
                             finally:
                                 if scenario == "source":
@@ -349,9 +413,10 @@ def main():
                             row = dict(project=args.project, entrypoint=entrypoint, jobs=jobs,
                                        sample=sample, warmup=sample < args.warmups, variant=variant,
                                        scenario=scenario, total_seconds=elapsed, phases=phases,
+                                       peak_rss_kib=max((phase.get("peak_rss_kib", 0) for phase in phases.values()), default=0),
                                        configuration=configuration, config_sha256=config_hash,
                                        artifacts=output_hashes, changed_objects=changed,
-                                       graph_bytes=graph.stat().st_size)
+                                       graph_bytes=graph.stat().st_size if graph.exists() else 0)
                             rows.append(row)
                             with (root / "samples.jsonl").open("a") as output:
                                 output.write(json.dumps(row) + "\n")
@@ -381,14 +446,27 @@ def main():
         after_source = source_manifest(source) if source else {}
         changed = sorted(p for p in before_source.keys() | after_source.keys()
                          if before_source.get(p) != after_source.get(p))
+        timing = parity_summary(rows)
         report = dict(metadata=metadata, failure=failure or ("monitor cleanup failed" if cleanup_errors else None),
                       monitor_cleanup_errors=cleanup_errors, source_changes=changed,
-                      summary=paired_summary(rows))
+                      summary=paired_summary(rows),
+                      parity=timing if args.baseline_kind == "make" else None,
+                      memory=memory_summary(rows))
+        expected_cells = len(args.jobs) * len(args.entrypoints) * (4 if args.retained else 5)
+        report["no_regression"] = timing
+        report["no_regression_passed"] = (
+            failure is None and not cleanup_errors and not changed and
+            no_regression_passed(report["no_regression"], report["memory"],
+                                 expected_cells, args.samples))
+        report["parity_passed"] = (args.baseline_kind == "make" and
+                                   report["no_regression_passed"])
         (root / "report.json").write_text(json.dumps(report, indent=2) + "\n")
         if changed:
             raise RuntimeError(f"Release source contents changed: {changed[:10]}")
         if cleanup_errors and failure is None:
             raise RuntimeError("Monitor cleanup failed; see retained report")
+    if args.require_no_regression and not report["no_regression_passed"]:
+        raise SystemExit(3)
 
 
 if __name__ == "__main__":

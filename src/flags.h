@@ -1,4 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
+// Track structured timing diagnostics independently of build identity.
 // Distinguish explicit job counts from an inherited Ninja FIFO jobserver.
 // Add configurable Ninja graph optimizations and content-preserving output
 // generation. Changed by the Openmktr fork, maintained by Rihards Paps and
@@ -54,6 +56,8 @@ struct Flags {
   bool enable_debug;
   bool enable_kati_warnings;
   bool enable_stat_logs;
+  const char* stats_json = nullptr;
+  std::vector<int> diagnostic_arg_indices;
   bool gen_all_targets;
   bool generate_ninja;
   bool ninja_stats;
@@ -132,7 +136,8 @@ struct Flags {
   std::string LoadLimitOption() const;
 };
 
-extern Flags g_flags;
+Flags& SessionFlags();
+#define g_flags (SessionFlags())
 
 // Accept finite nonnegative limits, including representable subnormal values.
 double ParseLoadLimit(const char* value);

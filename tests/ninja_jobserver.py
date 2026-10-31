@@ -21,6 +21,113 @@ from correctness import KATI
 
 
 class NinjaJobserver(unittest.TestCase):
+    def test_output_spool_failure_reaps_child_and_returns_token(self):
+        with tempfile.TemporaryDirectory(prefix="omktr-output-failure-") as temp:
+            cwd = Path(temp)
+            fifo = cwd / "fifo"
+            os.mkfifo(fifo)
+            fd = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+            self.addCleanup(os.close, fd)
+            os.write(fd, b"x")
+            env = {k: v for k, v in os.environ.items() if not k.startswith("KATI_")
+                   and k not in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL", "MAKEOVERRIDES")}
+            env["KATI_JOBSERVER_FIFO"] = str(fifo)
+            (cwd / "worker.py").write_text(
+                "import os,time\nfrom pathlib import Path\n"
+                "Path('pid').write_text(str(os.getpid()))\n"
+                "Path('bad').write_text('partial')\n"
+                "os.write(1,b'x'*(2*1024*1024))\n"
+                "time.sleep(60)\n")
+            (cwd / "Makefile").write_text(
+                "all: bad good\nbad:\n\t@exec python3 worker.py\n"
+                "good:\n\t@printf ok > good\n")
+
+            def stop_worker():
+                if (cwd / "pid").exists():
+                    try:
+                        os.kill(int((cwd / "pid").read_text()), signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+
+            def restrict_output():
+                signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+                resource.setrlimit(resource.RLIMIT_FSIZE, (4096, 4096))
+
+            try:
+                result = subprocess.run(
+                    [str(KATI), "-j2", "-k", "--output-sync=target", "all"], cwd=cwd, env=env,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=10,
+                    preexec_fn=restrict_output, restore_signals=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(b"spool write failed", result.stderr)
+                self.assertEqual((cwd / "good").read_text(), "ok")
+                self.assertFalse((cwd / "bad").exists())
+                self.assertEqual(os.read(fd, 1), b"x")
+                with self.assertRaises(ProcessLookupError):
+                    os.kill(int((cwd / "pid").read_text()), 0)
+            finally:
+                stop_worker()
+
+    def test_failed_spawn_returns_fifo_token(self):
+        with tempfile.TemporaryDirectory(prefix="omktr-spawn-failure-") as temp:
+            cwd = Path(temp)
+            fifo = cwd / "fifo"
+            os.mkfifo(fifo)
+            fd = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+            self.addCleanup(os.close, fd)
+            os.write(fd, b"x")
+            env = {k: v for k, v in os.environ.items() if not k.startswith("KATI_")}
+            env["KATI_JOBSERVER_FIFO"] = str(fifo)
+            for _ in range(3):
+                result = subprocess.run(
+                    [str(KATI), "--internal-run-recipe", "/nonexistent/omktr-shell", "-c", "exit 0"],
+                    cwd=cwd, env=env, capture_output=True, timeout=5)
+                self.assertEqual(result.returncode, 127, result.stderr)
+                self.assertEqual(os.read(fd, 1), b"x")
+                os.write(fd, b"x")
+
+    def test_descriptor_exhaustion_returns_fifo_token(self):
+        with tempfile.TemporaryDirectory(prefix="omktr-descriptor-failure-") as temp:
+            cwd = Path(temp)
+            fifo = cwd / "fifo"
+            os.mkfifo(fifo)
+            fd = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+            self.addCleanup(os.close, fd)
+            os.write(fd, b"x")
+            env = {k: v for k, v in os.environ.items() if not k.startswith("KATI_")}
+            env["KATI_JOBSERVER_FIFO"] = str(fifo)
+            result = subprocess.run(
+                [str(KATI), "--internal-run-recipe", "/bin/sh", "-c", "touch ran"],
+                cwd=cwd, env=env, capture_output=True, timeout=5,
+                preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_NOFILE, (5, 5)))
+            self.assertEqual(result.returncode, 126, result.stderr)
+            self.assertEqual(os.read(fd, 1), b"x")
+            self.assertFalse((cwd / "ran").exists())
+
+    def test_keep_going_after_failed_spawn(self):
+        with tempfile.TemporaryDirectory(prefix="omktr-spawn-keep-going-") as temp:
+            cwd = Path(temp)
+            (cwd / "Makefile").write_text(
+                "all: bad good\nbad: SHELL := /nonexistent/omktr-shell\n"
+                "bad:\n\t@echo bad\ngood:\n\t@printf ok > good\n")
+            for mode in ([], ["build"]):
+                (cwd / "good").unlink(missing_ok=True)
+                result = subprocess.run([str(KATI), *mode, "-j1", "-k", "all"],
+                                        cwd=cwd, capture_output=True, timeout=10)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual((cwd / "good").read_text(), "ok")
+
+    def test_nonregular_recipe_state_does_not_block(self):
+        with tempfile.TemporaryDirectory(prefix="omktr-state-type-") as temp:
+            cwd = Path(temp)
+            os.mkfifo(cwd / "state")
+            result = subprocess.run(
+                [str(KATI), "--internal-run-recipe", "/bin/sh", "-c", "touch ran", "out", "state"],
+                cwd=cwd, capture_output=True, timeout=5)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse((cwd / "ran").exists())
+            self.assertIn(b"invalid workspace recipe state", result.stderr)
+
     def test_idle_inherited_reservation_wakes_waiting_recipes(self):
         with tempfile.TemporaryDirectory(prefix="omktr-reserved-wakeup-") as temp:
             cwd = Path(temp)

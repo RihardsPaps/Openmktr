@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Allow evaluator-owned retirement of target variables retained by recipes.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
@@ -34,6 +35,7 @@
 #include "expr.h"
 #include "loc.h"
 #include "log.h"
+#include "session.h"
 #include "stmt.h"
 #include "symtab.h"
 
@@ -53,7 +55,7 @@ enum struct VarOrigin : char {
 
 const char* GetOriginStr(VarOrigin origin);
 
-class Var : public Evaluable {
+class Var : public Evaluable, public SessionAllocated<Var> {
  public:
   virtual ~Var();
 
@@ -119,8 +121,6 @@ class Var : public Evaluable {
   bool self_referential_ : 1;
 
   const char* diagnostic_message_text() const;
-
-  static std::unordered_map<const Var*, std::string> diagnostic_messages_;
 
   std::vector<std::string> visibility_prefix_;
 };
@@ -235,12 +235,10 @@ class ShellStatusVar : public Var {
   virtual std::string DebugString() const override;
 
  private:
-  static bool is_set_;
-  static int shell_status_;
-  static std::string shell_status_string_;
 };
 
-class Vars : public std::unordered_map<Symbol, Var*> {
+class Vars : public std::unordered_map<Symbol, Var*>,
+             public SessionAllocated<Vars> {
  public:
   ~Vars();
 
@@ -276,10 +274,9 @@ class Vars : public std::unordered_map<Symbol, Var*> {
 
   static void add_used_env_vars(Symbol v);
 
-  static const SymbolSet used_env_vars() { return used_env_vars_; }
+  static const SymbolSet& used_env_vars();
 
  private:
-  static SymbolSet used_env_vars_;
   SymbolSet exported_;
   SymbolSet unexported_;
 };
