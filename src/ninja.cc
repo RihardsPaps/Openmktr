@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Elide shell launches for silent, side-effect-free phony no-op recipes.
 // Read optional double-colon metadata through the shared dependency view.
 // Cache command prefixes and source local environment objects after chdir.
 // Reuse output metadata within an emitted edge until an effect invalidates it.
@@ -950,6 +951,18 @@ class NinjaGenerator {
     // gives parent recipes a usable logical filename. The link follows later
     // source updates without copying stale contents into the build tree.
     std::vector<Command> commands = nn.commands;
+    // A silent ':' in the default shell has no observable recipe effect.
+    // Keep its phony dependency edge (including the always-dirty input), but
+    // avoid starting a shell. Deferred evaluation, exports, explicit recursive
+    // recipes, custom interpreters and visible commands still execute.
+    if (node->is_phony && commands.size() == 1) {
+      const Command& command = commands.front();
+      if (!command.echo && !command.force_run && command.cmd == ":" &&
+          command.shell == "/bin/sh" && command.shellflag == "-c" &&
+          command.environment.empty() && command.unset_environment.empty() &&
+          command.runtime_sidecar.empty())
+        commands.clear();
+    }
     // A no-recipe VPATH target is an alias for an existing source file, not
     // a request to copy that file into the build tree.  Materializing a local
     // symlink changes include lookup for headers with sibling includes (the

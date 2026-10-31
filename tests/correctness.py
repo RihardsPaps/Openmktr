@@ -18,6 +18,43 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_ninja_silent_phony_noops_preserve_freshness_and_recipe_effects(self):
+        root = self.directory
+        for mode in ("direct", "build", "legacy"):
+            with self.subTest(mode=mode):
+                self.directory = root / mode
+                self.directory.mkdir()
+                shell = self.directory / "custom-shell"
+                shell.write_text('#!/bin/sh\nprintf custom >> custom-runs\nexec /bin/sh "$@"\n')
+                shell.chmod(0o755)
+                self.makefile(
+                    ".PHONY: all noop custom flagged exported echoed\n"
+                    "all: result custom flagged exported echoed\n"
+                    "seed:\n\t@touch $@\nnoop: seed\n\t@:\n"
+                    "result: noop\n\t@test -f seed; printf x >> $@\n"
+                    f"custom: SHELL := {shell}\ncustom:\n\t@:\n"
+                    "flagged: .SHELLFLAGS := -xc\nflagged:\n\t@:\n"
+                    "exported: export VALUE = $(file >>exports,$@)\n"
+                    "exported: seed\n\t@:\nechoed:\n\t:\n")
+                (self.directory / "noop").write_text("keep")
+                if mode == "legacy":
+                    self.direct("--ninja", "all")
+                for repeat in (1, 2):
+                    if mode == "legacy":
+                        _, output = self.run_command("sh", "./ninja.sh", "-j4", "all")
+                    else:
+                        _, output = self.direct(*(("build",) if mode == "build" else ()),
+                                                "-j4", "all")
+                    self.assertIn("+ :", output)
+                    self.assertEqual((self.directory / "result").read_text(), "x" * repeat)
+                    self.assertEqual((self.directory / "noop").read_text(), "keep")
+                    self.assertEqual((self.directory / "custom-runs").read_text(), "custom" * repeat)
+                    self.assertEqual((self.directory / "exports").read_text(), "seed\n" + "exported\n" * repeat)
+                if mode != "direct":
+                    graph = ".openmktr/build.ninja" if mode == "build" else "build.ninja"
+                    _, commands = self.run_command("ninja", "-f", graph, "-t", "commands", "echoed")
+                    self.assertIn(":", commands)
+
     def test_phony_noop_preparation_preserves_exports_shells_and_failures(self):
         shell = self.directory / "custom-shell"
         shell.write_text('#!/bin/sh\nprintf "%s\\n" "$MARK" >> shells\nexec /bin/sh "$@"\n')
