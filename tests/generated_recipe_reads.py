@@ -660,7 +660,8 @@ else:
                 cwd=root, capture_output=True, text=True, timeout=20)
             self.assertEqual(generated.returncode, 0,
                              generated.stdout + generated.stderr)
-            states = list((root / ".openmktr/.kati_recipes").iterdir())
+            states = {path.with_name(path.name.split(".version-", 1)[0])
+                      for path in (root / ".openmktr/.kati_recipes").iterdir()}
             self.assertTrue(states)
             for path in states:
                 Path(str(path) + ".reads-pending").mkdir()

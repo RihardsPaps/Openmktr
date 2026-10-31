@@ -319,13 +319,11 @@ std::string NinjaRecipeStateOwner(const std::string& path) {
 }
 std::string PublishNinjaRecipeState(const std::string& owner,
                                     const std::string& state) {
-  const auto path =
-      PublishGraphObject(owner + ".version-" + GraphDigest(state), state, true);
-  // The legacy owner is only a migration aid. New readers name the immutable
-  // expected version; success and read observations continue to use the owner.
-  if (!Exists(owner))
-    WriteNinjaRecipeState(owner, state);
-  return path;
+  // Existing legacy expected files stay intact for old graphs. A new graph
+  // only needs its immutable version; success/read history uses the owner as
+  // a name prefix, so creating a second copy of the expected bytes is wasteful.
+  return PublishGraphObject(owner + ".version-" + GraphDigest(state), state,
+                            true);
 }
 
 void WriteNinjaRecipeState(const std::string& path, const std::string& state) {
