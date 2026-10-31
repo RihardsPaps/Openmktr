@@ -286,7 +286,8 @@ class Executor {
                   const char* needed_by,
                   std::shared_ptr<const Ancestry> parent = nullptr,
                   const DepNode* parent_node = nullptr,
-                  const double* initial_timestamp = nullptr) {
+                  const double* initial_timestamp = nullptr,
+                  std::vector<Command>* prepared_commands = nullptr) {
     for (auto path = parent; path != nullptr; path = path->parent) {
       if (path->output == n.output) {
         WARN("Circular %s <- %s dependency dropped.",
@@ -541,7 +542,9 @@ class Executor {
     // runs. Expansion itself can invoke $(shell), $(file), or $(error).
     std::vector<Command> commands;
     std::string bootstrap_owner, bootstrap_identity;
-    {
+    if (prepared_commands) {
+      commands = std::move(*prepared_commands);
+    } else {
       std::lock_guard<std::mutex> lock(eval_mu_);
       std::unique_ptr<RuntimeRecipeReadCapture> capture;
       if (runtime_bootstrap_ && !g_flags.is_dry_run && !g_flags.is_question &&
@@ -941,6 +944,37 @@ class Executor {
   }
 
  private:
+  bool CanPrepareInlineCommands(const DepNode& node) {
+    // Kbuild-style phony ':' recipes still need normal expansion (including
+    // exported values and target-specific shells). Prepare them once after
+    // successful prerequisites, then dispatch only if they require a shell.
+    if (runtime_bootstrap_ || !node.is_phony || node.cmds.size() != 1 ||
+        !node.cmds.front()->IsLiteral() ||
+        !node.double_colon_group_inputs.empty() || g_flags.is_touch ||
+        g_flags.is_question ||
+        cancel_requested_.load(std::memory_order_relaxed) || GetBuildSignal())
+      return false;
+    std::string_view literal =
+        TrimLeftSpace(node.cmds.front()->GetLiteralValueUnsafe());
+    while (!literal.empty() &&
+           (literal.front() == '@' || literal.front() == '-' ||
+            literal.front() == '+')) {
+      literal.remove_prefix(1);
+      literal = TrimLeftSpace(literal);
+    }
+    if (literal != ":")
+      return false;
+    std::lock_guard<std::mutex> lock(state_mu_);
+    for (const auto* edges : {&node.deps, &node.order_onlys})
+      for (const auto& edge : *edges) {
+        const auto input = done_.find(edge.second->output);
+        if (input == done_.end() || input->second.processing ||
+            input->second.failed)
+          return false;
+      }
+    return true;
+  }
+
   bool CanFinishInline(const DepNode& node, double timestamp) {
     if (cancel_requested_.load(std::memory_order_relaxed) || GetBuildSignal())
       return true;
@@ -1044,16 +1078,36 @@ class Executor {
       }
     }
     RecordStatCounter("scheduler_nodes", nodes.size());
+    std::vector<std::unique_ptr<std::vector<Command>>> prepared(nodes.size());
     const ReadyQueueStats stats = RunReadyQueue(
         // One preparation slot overlaps recipe expansion/output bookkeeping
         // with the admitted recipes. AcquireJob remains the authority for the
         // -j limit; no extra shell or recursive reservation is admitted.
         tasks, static_cast<size_t>(job_limit_) + 1,
         [&](size_t id) {
-          ExecNode(*nodes[id], needed_by[id], nullptr, nullptr,
-                   &timestamps[id]);
+          ExecNode(*nodes[id], needed_by[id], nullptr, nullptr, &timestamps[id],
+                   prepared[id] ? &*prepared[id] : nullptr);
         },
-        [&](size_t id) { return CanFinishInline(*nodes[id], timestamps[id]); });
+        [&](size_t id) {
+          if (CanFinishInline(*nodes[id], timestamps[id]))
+            return true;
+          if (!prepared[id] && CanPrepareInlineCommands(*nodes[id])) {
+            std::lock_guard<std::mutex> lock(eval_mu_);
+            prepared[id] = std::make_unique<std::vector<Command>>(
+                ce_.Eval(*nodes[id], timestamps[id]));
+          }
+          return prepared[id] &&
+                 std::all_of(prepared[id]->begin(), prepared[id]->end(),
+                             [&](const Command& command) {
+                               return command.cmd == ":" &&
+                                      (command.shell.empty()
+                                           ? shell_
+                                           : command.shell) == "/bin/sh" &&
+                                      (command.shellflag.empty()
+                                           ? shellflag_
+                                           : command.shellflag) == "-c";
+                             });
+        });
     RecordStatCounter("scheduler_workers", stats.workers);
     RecordStatCounter("scheduler_inline_tasks", stats.inline_tasks);
     RecordStatMaximum("scheduler_peak_active", stats.peak_active);

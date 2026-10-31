@@ -25,6 +25,10 @@ or completion of the complete architectural plan.
   tasks and never wait on another task's dependencies. Source leaves, empty
   rules and already-current outputs can finish in the coordinator. A bounded
   batch keeps workers supplied between short recipes without adding threads.
+  Literal phony no-op recipes use the normal command expansion once in the
+  coordinator; custom shells still go to workers, and failed prerequisites
+  prevent expansion. This preserves export effects without dispatching dummy
+  commands that the process runner can finish immediately.
 
 The executor retains a separate serial traversal for `-j1`, explanation and
 `.NOTPARALLEL`. Parallel graph preparation preserves first-visit target scope,

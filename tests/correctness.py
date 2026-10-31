@@ -18,6 +18,25 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_phony_noop_preparation_preserves_exports_shells_and_failures(self):
+        shell = self.directory / "custom-shell"
+        shell.write_text('#!/bin/sh\nprintf "%s\\n" "$MARK" >> shells\nexec /bin/sh "$@"\n')
+        shell.chmod(0o755)
+        self.makefile(
+            ".PHONY: all plain custom blocked fail\nall: plain custom blocked\n"
+            "plain custom blocked: export MARK = $(file >>exports,$@)$@\n"
+            f"custom: SHELL := {shell}\n"
+            "plain custom blocked:\n\t@:\nblocked: fail\nfail:\n\t@false\n")
+        for jobs in (1, 4):
+            for name in ("exports", "shells"):
+                (self.directory / name).unlink(missing_ok=True)
+            self.direct(f"-j{jobs}", "-k", "all", success=False)
+            # Target-specific exports reach prerequisites too; the failed
+            # prerequisite expands its value, while blocked never expands.
+            self.assertEqual(sorted((self.directory / "exports").read_text().splitlines()),
+                             ["custom", "fail", "plain"])
+            self.assertEqual((self.directory / "shells").read_text(), "custom\n")
+
     def test_ready_queue_shared_dependencies_execute_exactly_once(self):
         rng = random.Random(431)
         lines = ["all: " + " ".join(f"node{i}" for i in range(48))]
