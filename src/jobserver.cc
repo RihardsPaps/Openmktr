@@ -96,6 +96,7 @@ int ReservedKatiWakeupFd(JobserverState& state) {
   }
   return state.wakeup_fd.load(std::memory_order_relaxed);
 #else
+  (void)state;
   return -1;
 #endif
 }

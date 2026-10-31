@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Remove the unused timestamp field and empty out-of-line destructor.
 // Own invocation state and publish coherent generations with typed freshness.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
@@ -33,10 +34,9 @@
 #include "fileutil.h"
 #include "log.h"
 #include "parser.h"
-#include "stmt.h"
 
 Makefile::Makefile(const std::string& filename, bool from_stdin)
-    : mtime_(0), filename_(filename), exists_(false) {
+    : filename_(filename), exists_(false) {
   int fd = from_stdin ? dup(STDIN_FILENO) : open(filename.c_str(), O_RDONLY);
   if (fd < 0) {
     return;
@@ -47,7 +47,6 @@ Makefile::Makefile(const std::string& filename, bool from_stdin)
     PERROR("fstat failed for %s", filename.c_str());
   }
 
-  mtime_ = st.st_mtime;
   exists_ = true;
   if (from_stdin) {
     // Automake pipes filtered Makefiles to `make -f - am--depfiles`.
@@ -83,8 +82,4 @@ Makefile::Makefile(const std::string& filename, bool from_stdin)
   }
 
   Parse(this);
-}
-
-Makefile::~Makefile() {
-  // Statements and their borrowed expressions belong to the invocation arena.
 }
