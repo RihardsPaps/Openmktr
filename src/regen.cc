@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Separate runtime services and preserve scoped resource ownership.
 // Track and validate incremental evaluation, include proofs and imported Ninja
 // graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
 // Paps. Check stamp integrity before accepting regeneration state.
@@ -44,6 +45,7 @@
 #include "monitor.h"
 #include "native_observation.h"
 #include "ninja.h"
+#include "process.h"
 #include "stats.h"
 #include "strutil.h"
 

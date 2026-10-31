@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Separate runtime services and preserve scoped resource ownership.
 // Emit deferred diagnostics with a fixed POSIX printf format.
 // Queue recipe file writes as effects while preserving their empty Make value.
 // Track file identities and derived call/foreach bindings for state replay.
@@ -55,6 +56,7 @@
 #include "log.h"
 #include "native_observation.h"
 #include "parser.h"
+#include "process.h"
 #include "stats.h"
 #include "stmt.h"
 #include "strutil.h"

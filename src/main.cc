@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Report supervisor phases and exclude diagnostic paths from graph identity.
 // Suppress no-op announcements for internal included-makefile updates.
 // Prepare immutable runtime contexts once per known Ninja invocation.
 // Prune missing intermediates only for current consumers and known Ninja goals.
@@ -73,11 +74,13 @@
 #include "func.h"
 #include "graph_import.h"
 #include "graph_optimization.h"
+#include "jobserver.h"
 #include "log.h"
 #include "monitor.h"
 #include "native_observation.h"
 #include "ninja.h"
 #include "parser.h"
+#include "process.h"
 #include "recursive_cache.h"
 #include "regen.h"
 #include "regen_dump.h"
@@ -229,6 +232,7 @@ static int HandleBuild(int argc, char** argv) {
     status = BuildSubprocess(ninja, nullptr);
   }
   close(lock_fd);
+  ReportAllStats();
   return status;
 }
 
@@ -1010,7 +1014,7 @@ static int Run(const std::vector<Symbol>& targets,
                const std::vector<std::string_view>& cl_vars,
                const std::string& orig_args,
                const std::string& invocation_dir) {
-  double start_time = GetTime();
+  double start_time = GetWallTime();
   LOG_STAT("graph optimization settings: %s",
            g_flags.GraphOptimizationIdentity().c_str());
   if (g_flags.import_root) {
@@ -1967,6 +1971,10 @@ int main(int argc, char* argv[]) {
   std::string orig_args;
   for (int i = 0; i < argc; i++) {
     // An explanation checks the same invocation's regeneration stamp.
+    if (std::find(g_flags.diagnostic_arg_indices.begin(),
+                  g_flags.diagnostic_arg_indices.end(),
+                  i) != g_flags.diagnostic_arg_indices.end())
+      continue;
     if (std::find(g_flags.explain_arg_indices.begin(),
                   g_flags.explain_arg_indices.end(),
                   i) != g_flags.explain_arg_indices.end())

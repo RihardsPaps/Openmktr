@@ -1,3 +1,6 @@
+// FORK MODIFICATION NOTICE (2026)
+// Refactor runtime service ownership and diagnostic timing for Openmktr.
+// Fork changes are covered by MPL-2.0; see docs/LICENSING.md and NOTICE.
 // Copyright 2015 Google Inc. All rights reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,6 +33,7 @@ class Stats {
   explicit Stats(const char* name);
 
   void DumpTop() const;
+  std::string Json() const;
   std::string String() const;
 
   void MarkInteresting(const std::string& msg);
@@ -60,6 +64,9 @@ class ScopedStatsRecorder {
 };
 
 void ReportAllStats();
+void RecordPhaseTime(const char* name, double seconds);
+void RecordStatCounter(const char* name, size_t count = 1);
+void RecordStatMaximum(const char* name, size_t value);
 
 #define COLLECT_STATS(name) \
   static Stats stats(name); \

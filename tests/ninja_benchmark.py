@@ -23,6 +23,27 @@ spec.loader.exec_module(benchmark)
 
 
 class Evidence(unittest.TestCase):
+    def test_direct_and_make_lanes_include_no_generation(self):
+        for kind, entrypoint in (("make", "build"), ("make", "legacy"),
+                                 ("omktr", "direct")):
+            self.assertEqual(benchmark.invocation_commands(
+                "/tool", entrypoint, 8, ["MODE=release"], kind=kind),
+                [("invocation", ["/tool", "-j8", "MODE=release", "all"])])
+        commands = benchmark.invocation_commands("/tool", "legacy", 8, [])
+        self.assertEqual(len(commands), 2)
+        self.assertIn("--regen", commands[0][1])
+
+    def test_parity_requires_enough_pairs_and_no_median_regression(self):
+        def rows(count, ratio):
+            return [dict(project="synthetic", entrypoint="direct", jobs=8,
+                         scenario="noop", sample=sample, variant=variant,
+                         total_seconds=seconds, warmup=False)
+                    for sample in range(count)
+                    for variant, seconds in (("baseline", 1), ("candidate", ratio))]
+        self.assertFalse(benchmark.parity_summary(rows(6, .5))[0]["parity_passed"])
+        self.assertFalse(benchmark.parity_summary(rows(7, 1.01))[0]["parity_passed"])
+        self.assertTrue(benchmark.parity_summary(rows(7, .99))[0]["parity_passed"])
+
     def test_dependency_budget_survives_failure_and_reopen(self):
         spec = importlib.util.spec_from_file_location(
             "qualify_dependencies", Path(benchmark.__file__).with_name("qualify_dependencies.py"))

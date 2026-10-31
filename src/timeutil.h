@@ -1,3 +1,6 @@
+// FORK MODIFICATION NOTICE (2026)
+// Refactor runtime service ownership and diagnostic timing for Openmktr.
+// Fork changes are covered by MPL-2.0; see docs/LICENSING.md and NOTICE.
 // Copyright 2015 Google Inc. All rights reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +18,10 @@
 #ifndef TIMEUTIL_H_
 #define TIMEUTIL_H_
 
-double GetTime();
+// Wall time is used only when comparing with filesystem timestamps.
+double GetWallTime();
+// Elapsed durations must not change when the system clock is corrected.
+double GetMonotonicTime();
 
 struct ScopedTimeReporter {
  public:

@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Separate runtime services and preserve scoped resource ownership.
 // Echo ordinary Make recipes by default; retain opt-in compact progress output.
 // Index lazy variable definitions over immutable buffers and reuse validated
 // sealed contexts within one Ninja invocation, with checked standalone
@@ -71,6 +72,7 @@
 #include "func.h"
 #include "graph_optimization.h"
 #include "log.h"
+#include "process.h"
 #include "strutil.h"
 #include "var.h"
 

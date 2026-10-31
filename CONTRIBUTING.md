@@ -47,7 +47,7 @@ with the listed build requirements:
 
 ```sh
 ninja -f build.ninja -j4 omktr tests
-out/find_test && out/ninja_test && out/strutil_test && out/load_limit_test
+out/ready_queue_test && out/timeutil_test && out/find_test && out/ninja_test && out/strutil_test && out/load_limit_test
 python tests/version_generator.py
 python tests/correctness.py
 python tests/generated_recipe_reads.py
@@ -136,6 +136,8 @@ as CI from the repository root inside Chimera:
 ```sh
 python tools/gen_sanitizer_build.py
 ninja -f build.sanitizer.ninja -j4 omktr-sanitized tests
+ASAN_OPTIONS=detect_leaks=0 out/sanitized/ready_queue_test
+ASAN_OPTIONS=detect_leaks=0 out/sanitized/timeutil_test
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/find_test
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/ninja_test
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/strutil_test
@@ -155,6 +157,9 @@ The generator creates an isolated ASan/UBSan graph and output directory.
 The normal build remains available for comparison.
 
 ## Measure performance
+
+See [core runtime refactor](docs/core-refactor.md) for the ready scheduler,
+structured timing output, new benchmark lanes, and remaining overhaul gates.
 
 Build baseline and candidate binaries with the same toolchain. On Linux, run:
 

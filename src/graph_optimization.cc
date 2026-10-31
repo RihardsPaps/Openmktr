@@ -19,6 +19,8 @@
 #include <vector>
 
 #include "fileutil.h"
+#include "jobserver.h"
+#include "process.h"
 
 namespace {
 constexpr size_t kMaxCacheSize = 64 * 1024 * 1024;

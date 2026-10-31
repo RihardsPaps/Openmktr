@@ -1,3 +1,6 @@
+// FORK MODIFICATION NOTICE (2026)
+// Use monotonic durations and retain the registry across repeated reports.
+// Fork changes are covered by MPL-2.0; see docs/LICENSING.md.
 // Copyright 2015 Google Inc. All rights reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +19,11 @@
 
 #include "stats.h"
 
+#include <fcntl.h>
+#include <sys/resource.h>
+#include <unistd.h>
 #include <algorithm>
+#include <map>
 #include <mutex>
 #include <vector>
 
@@ -29,15 +36,33 @@
 namespace {
 
 std::mutex g_mu;
-std::vector<Stats*>* g_stats;
+std::map<std::string, double> phase_times;
+std::map<std::string, size_t> counters;
+
+std::string JsonString(const std::string& value) {
+  std::string result = "\"";
+  for (unsigned char c : value) {
+    if (c == '"' || c == '\\') {
+      result += '\\';
+      result += c;
+    } else if (c < 32) {
+      result += StringPrintf("\\u%04x", c);
+    } else {
+      result += c;
+    }
+  }
+  return result + '"';
+}
+std::vector<Stats*>& Registry() {
+  static std::vector<Stats*> registry;
+  return registry;
+}
 
 }  // namespace
 
 Stats::Stats(const char* name) : name_(name), elapsed_(0), cnt_(0) {
   std::unique_lock<std::mutex> lock(g_mu);
-  if (g_stats == NULL)
-    g_stats = new std::vector<Stats*>;
-  g_stats->push_back(this);
+  Registry().push_back(this);
 }
 
 void Stats::DumpTop() const {
@@ -92,15 +117,43 @@ std::string Stats::String() const {
   return StringPrintf("%s: %f / %d", name_, elapsed_, cnt_);
 }
 
+std::string Stats::Json() const {
+  std::lock_guard<std::mutex> lock(mu_);
+  return "{\"name\":" + JsonString(name_) +
+         StringPrintf(",\"count\":%d,\"seconds\":%.9f,\"unique\":%zu}", cnt_,
+                      elapsed_, detailed_.size());
+}
+
+void RecordPhaseTime(const char* name, double seconds) {
+  if (!g_flags.stats_json)
+    return;
+  std::lock_guard<std::mutex> lock(g_mu);
+  phase_times[name] += seconds;
+}
+
+void RecordStatCounter(const char* name, size_t count) {
+  if (!g_flags.stats_json)
+    return;
+  std::lock_guard<std::mutex> lock(g_mu);
+  counters[name] += count;
+}
+
+void RecordStatMaximum(const char* name, size_t value) {
+  if (!g_flags.stats_json)
+    return;
+  std::lock_guard<std::mutex> lock(g_mu);
+  counters[name] = std::max(counters[name], value);
+}
+
 double Stats::Start() {
-  double start = GetTime();
+  double start = GetMonotonicTime();
   std::unique_lock<std::mutex> lock(mu_);
   cnt_++;
   return start;
 }
 
 double Stats::End(double start, const char* msg) {
-  double e = GetTime() - start;
+  double e = GetMonotonicTime() - start;
   std::unique_lock<std::mutex> lock(mu_);
   elapsed_ += e;
   if (msg != 0) {
@@ -133,13 +186,65 @@ ScopedStatsRecorder::~ScopedStatsRecorder() {
 }
 
 void ReportAllStats() {
-  if (!g_stats)
-    return;
-  for (Stats* st : *g_stats) {
+  std::vector<Stats*> snapshot;
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    snapshot = Registry();
+  }
+  for (Stats* st : snapshot) {
     LOG_STAT("%s", st->String().c_str());
     st->DumpTop();
   }
-  delete g_stats;
-
   LOG_STAT("%u find nodes", FindEmulator::GetNodeCount());
+  if (!g_flags.stats_json)
+    return;
+  struct rusage usage = {};
+  getrusage(RUSAGE_SELF, &usage);
+  std::string json = StringPrintf(
+      "{\"schema\":1,\"pid\":%ld,\"clock\":\"CLOCK_MONOTONIC\","
+      "\"peak_rss_kib\":%ld,\"phases\":{",
+      static_cast<long>(getpid()), usage.ru_maxrss);
+  {
+    std::lock_guard<std::mutex> lock(g_mu);
+    bool first = true;
+    for (const auto& phase : phase_times) {
+      if (!first)
+        json += ',';
+      first = false;
+      json += JsonString(phase.first) + StringPrintf(":%.9f", phase.second);
+    }
+    json += "},\"counters\":{";
+    first = true;
+    for (const auto& counter : counters) {
+      if (!first)
+        json += ',';
+      first = false;
+      json += JsonString(counter.first) + StringPrintf(":%zu", counter.second);
+    }
+  }
+  json += "},\"statistics\":[";
+  std::vector<std::string> records;
+  for (Stats* stat : snapshot)
+    records.push_back(stat->Json());
+  std::sort(records.begin(), records.end());
+  for (size_t i = 0; i < records.size(); ++i) {
+    if (i)
+      json += ',';
+    json += records[i];
+  }
+  json += "]}\n";
+  const int fd =
+      open(g_flags.stats_json, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
+  if (fd < 0) {
+    WARN("cannot open statistics file %s: %s", g_flags.stats_json,
+         strerror(errno));
+    return;
+  }
+  ssize_t written;
+  do {
+    written = write(fd, json.data(), json.size());
+  } while (written < 0 && errno == EINTR);
+  if (written < 0 || static_cast<size_t>(written) != json.size())
+    WARN("cannot append complete statistics record to %s", g_flags.stats_json);
+  close(fd);
 }

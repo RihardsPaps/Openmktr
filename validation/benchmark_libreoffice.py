@@ -36,22 +36,35 @@ def main():
     parser.add_argument('--workspace', type=Path, required=True)
     parser.add_argument('--omktr', type=Path, required=True)
     parser.add_argument('--report', type=Path, required=True)
+    parser.add_argument('--archive', type=Path, required=True)
+    parser.add_argument('--configuration', type=Path, required=True,
+                        help='JSON containing the recorded configure_options list')
+    parser.add_argument('--make', default='make')
+    parser.add_argument('--cc', default='clang')
+    parser.add_argument('--cxx', default='clang++')
+    parser.add_argument('--ninja-dir', type=Path)
     parser.add_argument('--jobs', type=int, default=32)
-    parser.add_argument('--lanes', nargs='+', default=['gnu', 'aggressive'])
+    parser.add_argument('--lanes', nargs='+', choices=['gnu', 'direct', 'safe', 'aggressive'], default=['gnu', 'direct', 'safe'])
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--resume', action='store_true')
     parser.add_argument('--pdf-module-path', type=Path)
     args = parser.parse_args()
-    if args.repeats < 1:
-        parser.error("--repeats must be positive")
-    root = args.workspace
+    if args.repeats < 1 or args.jobs < 1:
+        parser.error("--repeats and --jobs must be positive")
+    root = args.workspace.resolve()
     root.mkdir(parents=True, exist_ok=True)
+    args.report = args.report.resolve()
     args.report.mkdir(parents=True, exist_ok=True)
-    campaign = Path('/root/universal-tool-campaign-20260927')
-    archive = campaign / 'sources/libreoffice-25.2.7.2.tar.xz'
-    old = json.loads(Path('/mnt/c/Users/Harry/Documents/ChatGPT/Universal Tool/validation/libreoffice-benchmark-results.json').read_text())
+    archive = args.archive.resolve()
+    args.omktr = args.omktr.resolve()
+    old = json.loads(args.configuration.read_text())
     options = [re.sub(r'--with-parallelism=\d+', '--with-parallelism=' + str(args.jobs), s) for s in old['configure_options']]
-    env = dict(os.environ, PATH='/root/omktr-graph-optimizations/ninja-1.13.2:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', CC='/usr/bin/clang-18', CXX='/usr/bin/clang++-18', CCACHE_DISABLE='1', LC_ALL='C', TZ='UTC')
+    env = dict(os.environ, CC=args.cc, CXX=args.cxx, CCACHE_DISABLE='1', LC_ALL='C', TZ='UTC')
+    if args.ninja_dir:
+        env['PATH'] = str(args.ninja_dir.resolve()) + os.pathsep + env.get('PATH', os.defpath)
+    make = shutil.which(args.make, path=env.get('PATH', os.defpath))
+    if not make:
+        parser.error('external GNU Make executable not found')
     for key in list(env):
         if key.startswith(('KATI_', 'OMKTR_', 'MAKEFLAGS', 'MFLAGS', 'MAKELEVEL')) or key == 'MAKE':
             env.pop(key)
@@ -60,9 +73,11 @@ def main():
                   archive_sha256=digest(archive), binary_sha256=digest(args.omktr), runs={}, lanes={})
     assert report['archive_sha256'] == '21b38b7f429d305b229fb70f3294dd6ccd803f52dad0463d0923cdf143e9c8bd'
     if args.resume:
-        report = json.loads((root / 'report.json').read_text())
-        if report['jobs'] != args.jobs or report['configure_options'] != options:
-            raise RuntimeError('Resume configuration differs from recorded campaign')
+        previous = json.loads((root / 'report.json').read_text())
+        for field in ('jobs', 'configure_options', 'archive_sha256', 'binary_sha256', 'environment'):
+            if previous[field] != report[field]:
+                raise RuntimeError('Resume identity differs from recorded campaign: ' + field)
+        report = previous
     pdf_extract = ('import sys; from pathlib import Path; '
                    + ('sys.path.insert(0,' + repr(str(args.pdf_module_path)) + '); '
                       if args.pdf_module_path else '')
@@ -155,7 +170,7 @@ def main():
             raise RuntimeError('Clock discontinuities invalidate phase: ' + label)
         return result
 
-    report['versions'] = {name: subprocess.check_output(cmd, env=env, text=True, stderr=subprocess.STDOUT) for name, cmd in {'omktr':[str(args.omktr),'--version'], 'make':['/usr/bin/make','--version'], 'clang':['clang-18','--version'], 'ninja':['ninja','--version'], 'kernel':['uname','-a'], 'cpu':['lscpu']}.items()}
+    report['versions'] = {name: subprocess.check_output(cmd, env=env, text=True, stderr=subprocess.STDOUT) for name, cmd in {'omktr':[str(args.omktr),'--version'], 'make':[make,'--version'], 'clang':[args.cc,'--version'], 'ninja':['ninja','--version'], 'kernel':['uname','-a'], 'cpu':['lscpu']}.items()}
     save()
     for lane in args.lanes:
         assert shutil.disk_usage(root).free > 60*1024**3, 'Insufficient free disk'
@@ -164,7 +179,7 @@ def main():
             if not args.resume or lane not in report['lanes']:
                 raise RuntimeError('Existing lane requires recorded resume state')
             data = report['lanes'][lane]
-            expected = digest(args.omktr) if lane != 'gnu' else digest('/usr/bin/make')
+            expected = digest(args.omktr) if lane != 'gnu' else digest(make)
             if data['binary_sha256'] != expected or lane+'-build' not in report['runs']:
                 raise RuntimeError('Existing lane is incomplete or binary changed')
         else:
@@ -173,7 +188,7 @@ def main():
             with tarfile.open(archive) as tar:
                 tar.extractall(base, filter='data')
             data = report['lanes'][lane] = dict(extract_seconds=elapsed_clock()-start,
-                                              binary_sha256=digest(args.omktr) if lane != 'gnu' else digest('/usr/bin/make'))
+                                              binary_sha256=digest(args.omktr) if lane != 'gnu' else digest(make))
         source = base/'libreoffice-25.2.7.2'
         build = base/'build'
         build.mkdir(exist_ok=args.resume)
@@ -188,11 +203,11 @@ def main():
             raise RuntimeError('Recorded lane configuration changed')
         data['normalized_config_sha256'] = normalized_digest
         langs = re.search(r'^ALL_LANGS=(.*)$', (build/'config_host_lang.mk').read_text(), re.M).group(1)
-        tool = '/usr/bin/make' if lane=='gnu' else str(args.omktr)
+        tool = make if lane=='gnu' else str(args.omktr)
         prepared = run(lane+'-bootstrap', [tool, '-j'+str(args.jobs), 'MAKE='+tool, 'ALL_LANGS='+langs, 'bootstrap', 'fetch', 'install-gdb-printers'], build)
         if prepared['exit_code']:
             continue
-        command = [tool]+([] if lane=='gnu' else ['build','--graph_optimizations=aggressive'])+['-j'+str(args.jobs),'-rs','-f',str(source/'Makefile.gbuild'),'MAKE='+tool,'ALL_LANGS='+langs,'build']
+        command = [tool]+([] if lane in ('gnu', 'direct') else ['build','--graph_optimizations='+lane])+['-j'+str(args.jobs),'-rs','-f',str(source/'Makefile.gbuild'),'MAKE='+tool,'ALL_LANGS='+langs,'build']
         extra = dict(SRCDIR=str(source),BUILDDIR=str(build),WORKDIR=str(build/'workdir'))
         built = run(lane+'-build', command, build, extra)
         if 'configure_through_build_seconds' not in data:

@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Exclude structured timing diagnostics from propagated build options.
 // Default to Make's serial execution unless jobs are explicitly configured.
 // Control pattern-variable indexing independently of evaluation memoization.
 // Preserve inherited FIFO authentication without treating it as an explicit -j.
@@ -580,6 +581,17 @@ void Flags::Parse(int argc, char** argv) {
       output_sync = ParseOutputSync(arg + strlen("--output-sync="));
     } else if (!strcmp(arg, "-d")) {
       enable_debug = true;
+    } else if (HasPrefix(arg, "--stats_json=") ||
+               !strcmp(arg, "--stats_json")) {
+      const int first = i;
+      if (!ParseCommandLineOptionWithArg("--stats_json", argv, &i,
+                                         &stats_json) ||
+          !stats_json || !*stats_json)
+        ERROR("--stats_json requires a nonempty filename");
+      for (int index = first; index <= i; ++index)
+        diagnostic_arg_indices.push_back(index);
+      enable_stat_logs = true;
+      should_propagate = false;
     } else if (!strcmp(arg, "--kati_stats")) {
       enable_stat_logs = true;
     } else if (HasPrefix(arg, "--graph_optimizations=")) {

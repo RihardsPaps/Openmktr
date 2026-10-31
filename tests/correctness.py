@@ -4,6 +4,7 @@
 import json
 import os
 import signal
+import random
 from pathlib import Path
 import subprocess
 import tempfile
@@ -17,6 +18,44 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_ready_queue_shared_dependencies_execute_exactly_once(self):
+        rng = random.Random(431)
+        lines = ["all: " + " ".join(f"node{i}" for i in range(48))]
+        for i in range(48):
+            dependencies = sorted(rng.sample(range(i), min(i, 3)))
+            names = " ".join(f"node{j}" for j in dependencies)
+            checks = "".join(f"test -f node{j} && " for j in dependencies)
+            lines.append(f"node{i}: {names}\n\t@{checks}printf '%s\\n' '$@' >> calls; touch $@")
+        self.makefile("\n".join(lines) + "\n")
+        for jobs in (1, 2, 8):
+            with self.subTest(jobs=jobs):
+                for path in self.directory.glob("node*"):
+                    path.unlink()
+                (self.directory / "calls").unlink(missing_ok=True)
+                self.direct(f"-j{jobs}", "all")
+                calls = (self.directory / "calls").read_text().splitlines()
+                self.assertEqual(len(calls), 48)
+                self.assertEqual(set(calls), {f"node{i}" for i in range(48)})
+                self.direct(f"-j{jobs}", "all")
+                self.assertEqual((self.directory / "calls").read_text().splitlines(), calls)
+
+    def test_structured_statistics_do_not_invalidate_graph(self):
+        self.makefile("all: result\nresult:\n\t@printf ok > result\n")
+        self.direct("build", "all")
+        graph = self.directory / ".openmktr/build.ninja"
+        before = graph.stat().st_mtime_ns
+        trace = self.directory / "stats.jsonl"
+        self.direct("build", "--stats_json", str(trace), "all")
+        self.assertEqual(graph.stat().st_mtime_ns, before)
+        records = [json.loads(line) for line in trace.read_text().splitlines()]
+        self.assertGreaterEqual(len(records), 2)
+        self.assertTrue(any("Ninja execution time" in r["phases"] for r in records))
+        for record in records:
+            self.assertEqual(record["schema"], 1)
+            self.assertEqual(record["clock"], "CLOCK_MONOTONIC")
+            self.assertTrue(all(seconds >= 0 for seconds in record["phases"].values()))
+            self.assertTrue(all(stat["seconds"] >= 0 for stat in record["statistics"]))
+
     def test_make_defaults_echo_commands_and_keep_internal_checks_silent(self):
         self.makefile("Makefile: ;\nall:\n\tprintf '%s\\n' visible\n"
                       "\t@printf '%s\\n' quiet\n")
