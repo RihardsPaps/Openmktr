@@ -147,6 +147,7 @@ else:
             (root / "probe.py").write_text(script)
             for mode in ("unchanged", "changed", "corrupt", "unsealed"):
                 with self.subTest(mode=mode):
+                    context.chmod(0o600)  # Fault injection into a sealed object.
                     context.write_bytes(original)
                     (root / "result").unlink(missing_ok=True)
                     result = subprocess.run(
@@ -962,8 +963,8 @@ else:
                 sidecars = list(root.glob(".kati_runtime-*"))
                 self.assertTrue(sidecars)
                 for sidecar in sidecars:
-                sidecar.chmod(0o600)  # Deliberately break an immutable object.
-                sidecar.write_bytes(b"corrupt")
+                    sidecar.chmod(0o600)  # Deliberately break an immutable object.
+                    sidecar.write_bytes(b"corrupt")
                 (root / "result").unlink()
                 failed = subprocess.run(
                     ["sh", "./ninja.sh", "-j2"], cwd=root,
@@ -1097,6 +1098,7 @@ else:
                     break
             else:
                 self.fail("Unused definition missing from full runtime context")
+            context.chmod(0o600)  # Fault injection into a sealed object.
             for broken in (original[:-1], original + b"trailing",
                            b"\xff" * 8 + original[8:], cache(pack(definitions))):
                 context.write_bytes(broken)
