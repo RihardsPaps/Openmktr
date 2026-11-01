@@ -211,6 +211,26 @@ class Architecture(unittest.TestCase):
                         self.run_tool(*(["build"] if mode == "build" else []), "-j4", "all")
                     self.assertEqual((self.root / "trace").read_text(), "run:||||\n")
 
+    def test_double_colon_automatic_inputs_keep_vpath_providers(self):
+        (self.root / "sources").mkdir()
+        for name in ("first", "second", "order"):
+            (self.root / "sources" / name).write_text(name)
+        self.write("VPATH := sources\nall: output\n"
+                   "output:: first first | order\n\t@printf '%s\\n' '$?|$<|$^|$+|$|' >> trace\n"
+                   "output:: second\n\t@printf '%s\\n' '$?|$<|$^|$+|$|' >> trace\n")
+        self.run_tool("--ninja", "all")
+        expected = ("sources/first|sources/first|sources/first|sources/first sources/first|sources/order\n"
+                    "sources/second|sources/second|sources/second|sources/second|\n")
+        for mode in ("direct", "build", "legacy"):
+            with self.subTest(mode=mode):
+                (self.root / "trace").unlink(missing_ok=True)
+                if mode == "legacy":
+                    subprocess.run(["sh", "ninja.sh", "-j4", "all"], cwd=self.root,
+                                   check=True, capture_output=True, timeout=20)
+                else:
+                    self.run_tool(*(["build"] if mode == "build" else []), "-j4", "all")
+                self.assertEqual((self.root / "trace").read_text(), expected)
+
     def test_expansion_failure_cancels_and_reaps_active_siblings(self):
         self.write(".PHONY: all fail ready\nall: output fail\noutput:\n"
                    "\t@echo $$$$ > child; printf partial > output; touch started; sleep 30\n"

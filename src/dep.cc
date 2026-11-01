@@ -2624,8 +2624,12 @@ class DepBuilder {
         const std::string provider = ev_->ResolveVpath(input);
         if (!provider.empty() && c->output == Intern(provider)) {
           graph_input = canonical_symbol(c->output);
-          if (g_flags.generate_ninja)
+          if (g_flags.generate_ninja) {
+            if (n->double_colon)
+              for (auto& group : n->double_colon->order_only_inputs)
+                std::replace(group.begin(), group.end(), input, c->output);
             input = c->output;
+          }
         }
       }
       inherit_rule_vars(c, n);
