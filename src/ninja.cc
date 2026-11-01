@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Skip native freshness probes for missing ordinary outputs.
 // Preserve explicit Ninja metadata when eliding phony no-op commands.
 // Elide shell launches for silent, side-effect-free phony no-op recipes.
 // Read optional double-colon metadata through the shared dependency view.
@@ -1209,8 +1210,15 @@ class NinjaGenerator {
       } else if (make_freshness_guard && !vpath_output && !node->is_phony &&
                  !node->deps.empty() && !has_phony_input &&
                  node->validations.empty()) {
+        // A missing ordinary output cannot be current. Reject it in the
+        // existing shell before starting the native timestamp probe. Missing
+        // intermediate consumers may still have a reusable closure proof.
+        const std::string exists =
+            consumer_proof.empty()
+                ? "[ -e " + ShellQuote(node->output.str()) + " ] && "
+                : "";
         const std::string current =
-            "if " + recipe_unchanged + inputs_current(node->output);
+            "if " + recipe_unchanged + exists + inputs_current(node->output);
         cmd_buf = current + "; then :; else " + cmd_buf + "; fi";
       }
       // Recursive sub-builds remain serialized; recipe exports are prepared by

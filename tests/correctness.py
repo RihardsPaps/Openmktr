@@ -2056,6 +2056,9 @@ class BuildCorrectness(unittest.TestCase):
         os.utime(self.directory / "source", (300, 300))
         self.run_command("sh", "./ninja.sh", "-j2")
         self.assertEqual((self.directory / "generated").read_text(), "rebuilt")
+        (self.directory / "generated").unlink()
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "generated").read_text(), "rebuilt")
 
     def test_existing_file_with_rule_has_one_ninja_output_for_path_aliases(self):
         self.makefile(
