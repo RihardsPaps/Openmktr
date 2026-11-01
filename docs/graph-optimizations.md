@@ -137,6 +137,14 @@ ordinary recursion. Children producing discovery diagnostics use ordinary
 recursion so speculative parsing cannot duplicate their messages. No generic transitive dependency reduction
 is performed.
 
+Deferred recipes that reference `MAKE`, a known executable alias, or computed
+command references retain the same serial Ninja pool as ordinary opaque recursive
+calls. This prevents sibling sub-builds from concurrently rebuilding shared
+outputs on incremental runs. Classification does not expand recipe effects before
+prerequisites finish. Bounded ordinary deferred recipes still run in parallel;
+computed references conservatively retain serialization. This applies in every
+graph profile, including `off`.
+
 The direct executor also lets dependency waiters run queued work when shared
 prerequisites occupy other workers. Borrowed tasks have a lower dependency rank
 than every active task and owned node on that thread. This prevents an acyclic
