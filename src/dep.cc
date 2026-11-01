@@ -2412,8 +2412,10 @@ class DepBuilder {
     ResolveVpathInputs(&n->actual_inputs);
     ResolveVpathInputs(&n->actual_order_only_inputs);
     if (n->double_colon)
-      for (auto& group : n->double_colon->inputs)
-        ResolveVpathInputs(&group);
+      for (auto* groups :
+           {&n->double_colon->inputs, &n->double_colon->order_only_inputs})
+        for (auto& group : *groups)
+          ResolveVpathInputs(&group);
 
     if (g_flags.warn_phony_looks_real && n->is_phony &&
         output.str().find('/') != std::string::npos) {

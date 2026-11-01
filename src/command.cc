@@ -1059,11 +1059,9 @@ int RunRuntimeRecipe(const char* path) {
       target = target.LowResolution();
     // Select every group against the same pre-recipe timestamp. Expanding a
     // skipped group can itself have effects, so expand only selected recipes.
-    const char* changed = getenv("KATI_RECIPE_CHANGED");
-    const bool recipe_changed = changed && std::string_view(changed) == "1";
     std::vector<bool> dirty;
     for (size_t group = 0; group < node.DoubleColon().inputs.size(); ++group) {
-      bool run = recipe_changed || node.is_phony || !target.exists() ||
+      bool run = node.is_phony || !target.exists() ||
                  !node.DoubleColon().has_prerequisites[group];
       for (Symbol input : node.DoubleColon().inputs[group]) {
         FileStamp timestamp = FileStamp::Read(input.str());

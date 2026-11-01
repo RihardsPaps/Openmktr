@@ -22,9 +22,12 @@ class Architecture(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
 
     def run_tool(self, *args, check=True):
-        return subprocess.run([str(BINARY), *args], cwd=self.root, text=True,
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                              check=check, timeout=20)
+        result = subprocess.run([str(BINARY), *args], cwd=self.root, text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                timeout=20)
+        if check:
+            self.assertEqual(result.returncode, 0, result.stdout)
+        return result
 
     def write(self, text):
         (self.root / "Makefile").write_text(text)
