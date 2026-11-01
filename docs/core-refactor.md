@@ -2,7 +2,7 @@
 
 This overhaul starts at `77a397ffd7a1cc5f48e406f8cf9052a50cc0d150`.
 Implementation and portable checks do not replace performance qualification.
-The paired PC campaign described below remains unrun; the latest cleanup and
+The paired PC campaign described below remains unrun; the latest review and
 cloud validation are recorded separately from historical results. Historical
 project results do not qualify this revision.
 
@@ -150,6 +150,101 @@ and misses. Scheduler worker counts describe spawned threads; peak active tasks
 also include the calling thread. Filesystem timestamps and regeneration
 checkpoints remain wall-clock
 observations; elapsed timing uses monotonic clocks.
+
+## Second full review
+
+Runtime `97b6788c4cd5b38af93b691b361af58c67f6d8c9` follows a further review of
+ownership, scheduling, process admission, caches, freshness, graph publication,
+runtime recipe decoding, dependency resolution and workspace recovery. It fixes
+the following reproducible defects:
+
+- Capturing `$(shell ...)` output could silently lose data when the caller had
+  closed standard descriptors. Capture pipes now move only colliding descriptors
+  above the standard descriptor range before installing spawn actions.
+- `.LOW_RESOLUTION_TIME` was applied to prerequisite timestamps instead of the
+  marked output. Output comparison now includes the end of its timestamp second;
+  prerequisites retain their raw timestamps. Direct execution, generated guards,
+  automatic `$?`, and independent rule groups share this rule. Existing helper
+  formats retain their saved-graph wire behavior; new graphs use the new output
+  mode. Obsolete per-node low-resolution input lists and redundant guards are gone.
+- Generated double-colon recipes previously merged independent rule groups.
+  Versioned runtime metadata now selects each group against the same pre-recipe
+  output timestamp and expands only selected recipes. Normal and order-only
+  automatic inputs retain each group's order, providers, aliases and logical kind.
+  Unconditional groups remain unconditional, and context-only regeneration does
+  not evaluate current groups. Recipes newly deferred for group selection retain
+  their prior quiet display; existing runtime recipes retain their verbosity.
+- Opening a FIFO in the owned build-graph path could hang before validation.
+  Nonblocking descriptor opening and a regular-file check now reject it promptly.
+- Missing paths below a regular-file parent produced `ENOTDIR` observations that
+  could never validate. Negative metadata witnesses now accept both absence
+  forms and invalidate when the formerly impossible child appears.
+- Special-target sets stored normalized names but were queried with lexical
+  names. An existing file could therefore hide `.PHONY: dir/../force`. Lookup now
+  uses the normalized name while recipes retain lexical automatic variables.
+
+Codex found two provider/alias omissions in the first double-colon revision.
+Both were reproduced and fixed, including recipe-less VPATH source aliases.
+[Its final runtime review](https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6557128402)
+completed with no findings or unresolved findings. GNU reference checks agree
+with the timestamp and independent-group expectations; the portable suites
+themselves remain GNU-free. The old snapshot expectations remain unchanged.
+
+All 28 portable groups and all 17 ASan/UBSan groups pass on this runtime,
+including 22 architecture tests, 192 correctness cases in each profile and
+858/858 snapshots in each profile with zero quarantined crashes. Session
+ownership also passes with LeakSanitizer; the other sanitizer groups retain
+`detect_leaks=0`. The two earlier display attempts failed snapshot checks and
+remain separately recorded; their failures were not accepted as expectations.
+
+All 27 external GNU incremental scenarios pass without incorrect output,
+unnecessary rebuilds or harness errors. The main and release CI workflows pass
+for this code commit; external Gentoo validation is still running.
+
+**57 of 60 timing/memory gates pass** the unchanged median ratio ≤1.00 and
+bootstrap 95% upper bound ≤1.05 criteria. All 30 memory gates and 27 timing gates
+pass. Three timing controls miss the median limit, so this campaign **does not
+certify the zero-regression requirement**. Each of their confidence intervals
+spans parity; none establishes a statistically supported slowdown:
+
+| Control | Paired median time increase | Bootstrap 95% interval | Pairs |
+| --- | ---: | ---: | ---: |
+| Parallel execution | 0.015% | -0.027% to 0.068% | 1,001 |
+| Nested parallel execution | 0.012% | -0.030% to 0.053% | 1,001 |
+| Small end-to-end graph change | 0.565% | -0.116% to 1.139% | 1,001 |
+
+These completed results were retained without relaxing thresholds or rerunning
+until a passing result appeared. The required seven-repeat standard comparison
+also completed. Selected paired time reductions against original baseline
+`77a397f`, using the same cloud Chimera toolchain and CPUs 0–3:
+
+| Workload | Median reduction | Bootstrap 95% interval | Pairs |
+| --- | ---: | ---: | ---: |
+| Direct clean, 512 targets | 4.8% | 2.6% to 7.5% | 101 |
+| Build-mode clean, 512 targets | 29.5% | 25.6% to 32.7% | 101 |
+| Build-mode no-op, 512 targets | 16.1% | 14.0% to 17.8% | 101 |
+| Saved-graph clean, 512 targets | 26.8% | 23.2% to 30.3% | 101 |
+| Clean end-to-end, 32 targets | 6.7% | 6.0% to 7.2% | 1,001 |
+| Convert a 10,000-target graph | 12.8% | 11.1% to 14.5% | 101 |
+
+Large-graph conversion uses 2.5% less peak process RSS. RSS is the maximum for an
+individual process, not aggregate process-tree memory; the parent/exec high-water
+floor can mask small workloads. These measurements compare the full current
+refactor with the original baseline, not the preceding review's binary.
+
+The first main matrix exhausted the workspace's inodes during saved-graph sample
+58. Its report, raw samples and command logs are retained as incomplete evidence.
+The complete 30-cell matrix was restarted with identical counts and thresholds,
+retiring only rebuildable fixtures between entry points. The already completed
+small clean gate was retained, not repeated. This recovery changed no source.
+
+The [results](../validation/evidence/core-second-review-2026-11-01.json),
+[raw evidence](../validation/evidence/core-second-review-2026-11-01.zip) and
+[checksum](../validation/evidence/core-second-review-2026-11-01.zip.sha256)
+retain source/binary identities, plans, complete samples, test logs, review
+receipts and earlier failures. The implementation review is complete, but
+performance qualification remains open. Real PC release qualification is unrun;
+no absolute optimality or universal no-regression claim follows from this matrix.
 
 ## Cleanup and independent PR review
 

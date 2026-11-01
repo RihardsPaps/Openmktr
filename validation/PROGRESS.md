@@ -9,7 +9,36 @@ The matrix records specific releases and configurations; a passing result does
 not establish compatibility with every version or target. Read the
 [campaign guide](README.md) before using the tools or citing a row.
 
-## Core cleanup and independent review — 1 November 2026
+## Second full core review — 1 November 2026
+
+The [second full review](../docs/core-refactor.md#second-full-review) fixes closed
+standard-descriptor capture, low-resolution output freshness, independent
+double-colon groups and their VPATH/lexical metadata, nonregular graph startup
+hangs, negative cache witnesses and normalized special-target lookup. Redundant
+low-resolution input metadata and generated guards are removed. Existing
+snapshot expectations and the static/runtime display distinction are preserved.
+Codex's review of runtime `97b6788` completed without findings.
+
+All 28 portable groups, 17 sanitizer groups and 27 external GNU incremental
+scenarios pass on this source. Both snapshot profiles pass 858/858 with zero
+quarantined crashes. Main and release CI pass; the external Gentoo job is still
+running at the recorded checkpoint.
+
+**57/60 performance gates pass; the zero-regression requirement is not
+certified.** Parallel, nested-parallel and small graph-change controls miss the
+strict median limit by 0.015%, 0.012% and 0.565%; all three 95% intervals span
+parity. All memory gates pass. The 512-target build-mode clean/no-op cases improve
+29.5%/16.1%; 10,000-target conversion improves 12.8% with 2.5% lower peak process
+RSS. These comparisons use original baseline `77a397f`, not the previous review.
+
+The [report and evidence](evidence/core-second-review-2026-11-01.json) retain all
+results, including failed display candidates and an inode-exhausted matrix. The
+complete matrix was restarted with unchanged counts and thresholds and fixture
+cleanup between entry points. Completed failing controls were not replaced.
+Real PC release and performance qualification remain unrun. Earlier reports
+below qualify only their explicitly named runtime.
+
+## Historical core cleanup and independent review — 1 November 2026
 
 The [cleanup and Codex review](../docs/core-refactor.md#cleanup-and-independent-pr-review)
 remove redundant scheduler/jobserver bookkeeping, unused metadata, duplicate
