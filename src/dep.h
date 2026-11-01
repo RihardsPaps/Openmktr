@@ -114,6 +114,11 @@ struct DepNode {
   struct RuntimeInputs {
     std::vector<Symbol> phony;
     std::vector<Symbol> logical;
+    struct Resolution {
+      Symbol path;
+      bool substitute;
+    };
+    std::unordered_map<Symbol, Resolution> resolved;
   };
   std::unique_ptr<RuntimeInputs> runtime_inputs;
   std::vector<std::vector<Symbol>> wait_groups;

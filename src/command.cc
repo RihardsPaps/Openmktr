@@ -87,6 +87,18 @@
 extern char** environ;
 
 namespace {
+static bool IsVpathSourceAlias(const DepNode* node);
+
+FileStamp RuntimeInputTimestamp(const DepNode& node, Symbol input) {
+  FileStamp timestamp = FileStamp::Read(input.str());
+  if (timestamp == FileStamp::Missing() && node.runtime_inputs) {
+    const auto found = node.runtime_inputs->resolved.find(input);
+    if (found != node.runtime_inputs->resolved.end())
+      timestamp = FileStamp::Read(found->second.path.str());
+  }
+  return timestamp;
+}
+
 // Structural inspection never evaluates a variable or a function. Literal
 // names also cover call's macro operand. Computed references require a full
 // environment snapshot because their eventual names depend on runtime input.
@@ -302,7 +314,7 @@ RuntimeRecipeReadCapture::RuntimeRecipeReadCapture(const Command& command,
     if (!ConsumeGraphString(&data, &fields.back()))
       ERROR("invalid bootstrap runtime metadata");
   }
-  if (fields.size() != 17 || fields[0] != "runtime-recipe-v8")
+  if (fields.size() != 18 || fields[0] != "runtime-recipe-v8")
     ERROR("incompatible bootstrap runtime metadata");
   impl_->observation = fields[10];
   if (impl_->observation.empty())
@@ -612,14 +624,39 @@ bool MakeRuntimeRecipe(const DepNode& node,
   AppendGraphString(environment_names, &structural);
   if (!inspection.dynamic)
     AppendGraphString(environment_definitions, &identity);
-  std::string phony_inputs, logical_inputs;
+  std::string phony_inputs, logical_inputs, resolutions;
+  std::unordered_set<Symbol> resolved_names;
   for (const auto& input : node.deps) {
-    if (input.second->is_phony)
-      AppendGraphString(input.first.str(), &phony_inputs);
-    if (input.second->has_rule && !input.second->intermediate)
-      AppendGraphString(input.first.str(), &logical_inputs);
+    const Symbol names[] = {input.first, input.second->output,
+                            input.second->lexical_output};
+    for (size_t i = 0; i < 3; ++i) {
+      const Symbol name = names[i];
+      if (std::find(names, names + i, name) != names + i)
+        continue;
+      if (input.second->is_phony)
+        AppendGraphString(name.str(), &phony_inputs);
+      if (input.second->has_rule && !input.second->intermediate)
+        AppendGraphString(name.str(), &logical_inputs);
+    }
   }
-  for (const auto& metadata : {phony_inputs, logical_inputs}) {
+  for (const auto* edges : {&node.deps, &node.order_onlys}) {
+    for (const auto& input : *edges) {
+      const DepNode& child = *input.second;
+      const bool provider = !child.is_phony && IsVpathSourceAlias(&child) &&
+                            child.vpath_provider.IsValid();
+      const Symbol path = provider ? child.vpath_provider : child.output;
+      for (Symbol name : {input.first, child.output, child.lexical_output}) {
+        if (name == path || !resolved_names.insert(name).second)
+          continue;
+        std::string record;
+        AppendGraphString(name.str(), &record);
+        AppendGraphString(path.str(), &record);
+        AppendGraphString(provider || !child.has_rule ? "1" : "0", &record);
+        AppendGraphString(record, &resolutions);
+      }
+    }
+  }
+  for (const auto& metadata : {phony_inputs, logical_inputs, resolutions}) {
     AppendGraphString(metadata, &identity);
     AppendGraphString(metadata, &structural);
   }
@@ -669,6 +706,7 @@ bool MakeRuntimeRecipe(const DepNode& node,
   AppendGraphString(phony_inputs, &payload);
   AppendGraphString(logical_inputs, &payload);
   AppendGraphString(double_colon, &payload);
+  AppendGraphString(resolutions, &payload);
   ev->set_current_scope(nullptr);
   const std::string path = PublishGraphObject(
       directory + "/.kati_runtime-" + GraphDigest(payload), payload);
@@ -1036,6 +1074,22 @@ int RunRuntimeRecipe(const char* path) {
     if (!metadata.empty() || groups.for_cmd.size() != node.cmds.size())
       ERROR("invalid runtime rule groups; regenerate the Ninja graph");
   }
+  const std::string resolutions = take(&data);
+  std::string_view resolved(resolutions);
+  while (!resolved.empty()) {
+    const std::string record = take(&resolved);
+    std::string_view fields(record);
+    const Symbol name = Intern(take(&fields));
+    const Symbol path = Intern(take(&fields));
+    const std::string substitute = take(&fields);
+    if (!fields.empty() || (substitute != "0" && substitute != "1") ||
+        !node.runtime_inputs->resolved
+             .emplace(
+                 name,
+                 DepNode::RuntimeInputs::Resolution{path, substitute == "1"})
+             .second)
+      ERROR("invalid runtime input resolution; regenerate the Ninja graph");
+  }
   const char* owner_env = getenv("KATI_RECIPE_STATE_PATH");
   const std::string owner = owner_env ? owner_env : "";
   const bool observe = !observation.empty() && !owner.empty();
@@ -1064,7 +1118,7 @@ int RunRuntimeRecipe(const char* path) {
       bool run = node.is_phony || !target.exists() ||
                  !node.DoubleColon().has_prerequisites[group];
       for (Symbol input : node.DoubleColon().inputs[group]) {
-        FileStamp timestamp = FileStamp::Read(input.str());
+        FileStamp timestamp = RuntimeInputTimestamp(node, input);
         const auto& phony = node.runtime_inputs->phony;
         const auto& logical = node.runtime_inputs->logical;
         if (std::find(phony.begin(), phony.end(), input) != phony.end() ||
@@ -1583,6 +1637,12 @@ static Symbol EffectivePrerequisite(Evaluator* ev,
   }
   if (Exists(input.str()))
     return input;
+  if (node->runtime_inputs) {
+    const auto found = node->runtime_inputs->resolved.find(input);
+    if (found != node->runtime_inputs->resolved.end() &&
+        found->second.substitute)
+      return found->second.path;
+  }
   auto find_provider = [ev,
                         input](const std::vector<NamedDepNode>& dependencies) {
     for (const NamedDepNode& dependency : dependencies) {
@@ -1709,7 +1769,7 @@ void AutoQuestionVar::Eval(Evaluator* ev, std::string* s) const {
     FileStamp target_age = ce_->target_age();
     for (Symbol ai : ce_->actual_inputs()) {
       ai = EffectivePrerequisite(ev, n, ai);
-      FileStamp input_age = FileStamp::Read(ai.str());
+      FileStamp input_age = RuntimeInputTimestamp(*n, ai);
       for (const auto& dependency : n->deps) {
         if (dependency.first == ai || dependency.second->output == ai ||
             dependency.second->lexical_output == ai) {

@@ -1997,31 +1997,39 @@ class DepBuilder {
       return found->second;
     }
 
+    // Special-target sets use normalized names, while rule selection and
+    // automatic variables retain the caller's spelling.
+    std::string normalized_output = output.str();
+    NormalizeMakePath(&normalized_output);
+    const Symbol special_output =
+        normalized_output.empty() && IsCurrentDirectoryPath(output.str())
+            ? Intern(".")
+        : normalized_output.empty() || normalized_output == output.str()
+            ? output
+            : Intern(normalized_output);
     DepNode* n = (*storage_)
                      .emplace_back(std::make_unique<DepNode>(
-                         output, phony_.exists(output), restat_.exists(output)))
+                         output, phony_.exists(special_output),
+                         restat_.exists(special_output)))
                      .get();
 
     done_[output] = n;
     n->is_notparallel = notparallel_;
     n->delete_on_error = delete_on_error_;
-    n->precious = precious_.exists(n->lexical_output);
-    n->low_resolution = low_resolution_.exists(n->lexical_output);
-    n->intermediate = intermediate_.exists(n->lexical_output) &&
-                      !secondary_all_ &&
-                      !secondary_.exists(n->lexical_output) && !n->precious;
+    n->precious = precious_.exists(special_output);
+    n->low_resolution = low_resolution_.exists(special_output);
+    n->intermediate = intermediate_.exists(special_output) && !secondary_all_ &&
+                      !secondary_.exists(special_output) && !n->precious;
     n->oneshell = oneshell_;
-    n->ignore_errors = ignore_all_ || ignored_.exists(n->lexical_output);
-    n->silent = silent_all_ || silent_.exists(n->lexical_output);
+    n->ignore_errors = ignore_all_ || ignored_.exists(special_output);
+    n->silent = silent_all_ || silent_.exists(special_output);
     n->export_all_variables = export_all_variables_;
 
     // GNU make permits lexical path components such as "dir/../file" in
     // target names. Resolve the graph through one canonical provider while
     // retaining the requested spelling as an alias.
-    std::string normalized_output = output.str();
-    NormalizeMakePath(&normalized_output);
     if (!normalized_output.empty() && normalized_output != output.str()) {
-      Symbol canonical = Intern(normalized_output);
+      Symbol canonical = special_output;
       const RuleMerger* lexical_merger = nullptr;
       std::shared_ptr<Rule> lexical_pattern;
       Vars* lexical_vars = nullptr;
@@ -2607,8 +2615,7 @@ class DepBuilder {
     // ordering effect as inserting .WAIT between that target's prerequisites.
     // Keep unrelated targets parallel and preserve automatic variables by
     // changing only the graph edges, not actual_inputs.
-    if (notparallel_targets_.exists(n->lexical_output) &&
-        n->wait_groups.empty()) {
+    if (notparallel_targets_.exists(special_output) && n->wait_groups.empty()) {
       for (Symbol input : n->actual_inputs)
         n->wait_groups.push_back({input});
       if (!n->actual_order_only_inputs.empty())

@@ -234,6 +234,48 @@ class Architecture(unittest.TestCase):
                     self.run_tool(*(["build"] if mode == "build" else []), "-j4", "all")
                 self.assertEqual((self.root / "trace").read_text(), expected)
 
+    def test_runtime_groups_keep_recipe_less_vpath_aliases(self):
+        (self.root / "sources").mkdir()
+        (self.root / "sources/input").write_text("provider")
+        (self.root / "sources/order").write_text("order")
+        self.write("VPATH := sources\nall: output\ninput:\norder:\n"
+                   "output:: input | order\n\t@cat $< > $@; printf '%s' '$?|$|' > trace\n")
+        self.run_tool("--ninja", "all")
+        for mode in ("direct", "build", "legacy"):
+            with self.subTest(mode=mode):
+                (self.root / "output").unlink(missing_ok=True)
+                if mode == "legacy":
+                    subprocess.run(["sh", "ninja.sh", "-j4", "all"], cwd=self.root,
+                                   check=True, capture_output=True, timeout=20)
+                else:
+                    self.run_tool(*(["build"] if mode == "build" else []), "-j4", "all")
+                self.assertEqual((self.root / "output").read_text(), "provider")
+                self.assertEqual((self.root / "trace").read_text(), "sources/input|sources/order")
+                self.assertFalse((self.root / "input").exists())
+
+    def test_runtime_groups_keep_lexical_phony_and_logical_metadata(self):
+        root = self.root
+        for kind in ("phony", "phony-file", "logical"):
+            for mode in ("direct", "build", "legacy"):
+                with self.subTest(kind=kind, mode=mode):
+                    self.root = root / (kind + "-" + mode)
+                    self.root.mkdir()
+                    (self.root / "dir").mkdir()
+                    self.write((".PHONY: dir/../force\n" if kind.startswith("phony") else "") +
+                               "all: output\ndir/../force:; @:\n"
+                               "output:: dir/../force\n\t@printf '%s' '$?' > $@\n")
+                    if kind == "phony-file":
+                        (self.root / "force").write_text("existing")
+                    (self.root / "output").write_text("old")
+                    if mode == "legacy":
+                        self.run_tool("--ninja", "all")
+                        subprocess.run(["sh", "ninja.sh", "-j4", "all"], cwd=self.root,
+                                       check=True, capture_output=True, timeout=20)
+                    else:
+                        self.run_tool(*(["build"] if mode == "build" else []), "-j4", "all")
+                    self.assertEqual((self.root / "output").read_text(), "dir/../force")
+        self.root = root
+
     def test_expansion_failure_cancels_and_reaps_active_siblings(self):
         self.write(".PHONY: all fail ready\nall: output fail\noutput:\n"
                    "\t@echo $$$$ > child; printf partial > output; touch started; sleep 30\n"
