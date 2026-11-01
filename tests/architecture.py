@@ -268,12 +268,19 @@ class Architecture(unittest.TestCase):
     def test_legacy_files_migrate_without_manual_cache_removal(self):
         self.write("all: output\noutput:\n\t@printf stable > output\n")
         self.run_tool("--ninja", "all")
+        generation_root = self.current().parent
+        previous_graph = (self.root / "build.ninja").read_bytes()
         for name in ("build.ninja", "env.sh", "ninja.sh", ".kati_stamp"):
             path = self.root / name
             content = path.read_bytes()
             path.unlink()
             path.write_bytes(content)
+        # Exercise first migration from standalone files, not merely repair
+        # aliases while an existing generation remains published.
+        (generation_root / "current").unlink()
         self.run_tool("--ninja", "--regen", "all")
+        self.assertEqual((generation_root / "legacy/build.ninja").read_bytes(),
+                         previous_graph)
         self.assertTrue((self.root / "build.ninja").is_symlink())
         subprocess.run(["sh", "ninja.sh"], cwd=self.root, check=True, capture_output=True, timeout=10)
         self.assertEqual((self.root / "output").read_text(), "stable")

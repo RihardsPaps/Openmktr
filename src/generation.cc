@@ -7,7 +7,6 @@
 #include <unistd.h>
 #include <algorithm>
 #include <filesystem>
-#include <fstream>
 
 #include "fileutil.h"
 #include "flags.h"
@@ -87,6 +86,14 @@ bool PointsTo(const std::string& path, const std::string& target) {
          std::string_view(value, length) == target;
 }
 void Point(const std::string& path, const std::string& destination) {
+  // Public aliases already point through "current" on regeneration. Keep
+  // those links, and create new links directly when no prior entry exists.
+  // Replacing a different entry still uses an atomic rename.
+  if (PointsTo(path, destination) ||
+      symlink(destination.c_str(), path.c_str()) == 0)
+    return;
+  if (errno != EEXIST)
+    PERROR("create generation link %s", path.c_str());
   const std::string temporary = path + ".link-" + std::to_string(getpid());
   unlink(temporary.c_str());
   if (symlink(destination.c_str(), temporary.c_str()) != 0)
@@ -273,20 +280,29 @@ void GenerationTransaction::Commit() {
   // replacing any old entry point. A crash midway still resolves old contents.
   if (Resolve(root_ + "/current").empty()) {
     const std::string legacy = root_ + "/legacy";
-    fs::create_directories(legacy);
+    bool copied_legacy = false;
     for (const auto& name : artifacts) {
       if (!PublicArtifact(name))
         continue;
       const auto source = OutputDirectory() + "/" + name;
       std::error_code error;
       if (fs::is_regular_file(source, error)) {
+        if (!copied_legacy) {
+          fs::create_directories(legacy);
+          copied_legacy = true;
+        }
         const auto target = legacy + "/" + name;
         fs::copy_file(source, target, fs::copy_options::overwrite_existing);
         SyncFile(target);
       }
     }
-    SyncDirectory(legacy);
-    Point(root_ + "/current", "legacy");
+    // A fresh graph has no old entry points to preserve. Publish a legacy
+    // snapshot only when there was something to migrate; retain the directory
+    // barriers that make the new generation tree durable in either case.
+    if (copied_legacy) {
+      SyncDirectory(legacy);
+      Point(root_ + "/current", "legacy");
+    }
     SyncDirectory(root_);
     SyncDirectory(fs::path(root_).parent_path().string());
   }
