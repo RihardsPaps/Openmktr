@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Track and validate incremental evaluation, include proofs and imported Ninja
 // graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
 // Paps. Changed build execution, evaluation, or portability for this fork.
@@ -57,8 +58,9 @@ class MakefileCacheManager {
 
   static MakefileCacheManager& Get();
 
- private:
   MakefileCacheManager() = default;
+
+ private:
   MakefileCacheManager(const MakefileCacheManager&) = delete;
   MakefileCacheManager(MakefileCacheManager&&) = delete;
   std::unordered_map<std::string, Makefile> cache_;

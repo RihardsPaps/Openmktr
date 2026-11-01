@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Replay normalized statement programs through ordinary state mutations.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
@@ -104,6 +105,8 @@ std::string CommandStmt::DebugString() const {
 }
 
 VpathStmt::~VpathStmt() {
+  if (DrainingSession())
+    return;
   delete expr;
 }
 
@@ -153,6 +156,8 @@ std::string ParseErrorStmt::DebugString() const {
 }
 
 RuleStmt::~RuleStmt() {
+  if (DrainingSession())
+    return;
   delete lhs;
   delete rhs;
 }
@@ -162,11 +167,15 @@ void RuleStmt::EvalStatement(Evaluator* ev) const {
 }
 
 AssignStmt::~AssignStmt() {
+  if (DrainingSession())
+    return;
   delete lhs;
   delete rhs;
 }
 
 UndefineStmt::~UndefineStmt() {
+  if (DrainingSession())
+    return;
   delete lhs;
 }
 
@@ -183,6 +192,8 @@ void AssignStmt::EvalStatement(Evaluator* ev) const {
 }
 
 CommandStmt::~CommandStmt() {
+  if (DrainingSession())
+    return;
   delete expr;
 }
 
@@ -191,6 +202,8 @@ void CommandStmt::EvalStatement(Evaluator* ev) const {
 }
 
 IfStmt::~IfStmt() {
+  if (DrainingSession())
+    return;
   delete lhs;
   delete rhs;
 }
@@ -200,6 +213,8 @@ void IfStmt::EvalStatement(Evaluator* ev) const {
 }
 
 IncludeStmt::~IncludeStmt() {
+  if (DrainingSession())
+    return;
   delete expr;
 }
 
@@ -208,6 +223,8 @@ void IncludeStmt::EvalStatement(Evaluator* ev) const {
 }
 
 ExportStmt::~ExportStmt() {
+  if (DrainingSession())
+    return;
   delete expr;
 }
 

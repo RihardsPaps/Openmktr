@@ -1,0 +1,2013 @@
+{
+  "schema": 1,
+  "date": "2026-11-01",
+  "generated_at_utc": "2026-11-01T12:07:06.125131+00:00",
+  "identities": {
+    "runtime_revision": "97b6788c4cd5b38af93b691b361af58c67f6d8c9",
+    "binaries": {
+      "/workspace/Openmktr/omktr": "72a0d113912faccaba1651acde7be425ee01c1f9f47fad482a026081cdb125dc",
+      "/workspace/Openmktr/omktr-sanitized": "c8d912f459f5016c7bd91f79ae6981e7d8471d21d113c39441d453d7509e94e4",
+      "/workspace/openmktr-baseline/omktr": "96654a8ec0b6a1dbff04af49ea778ef792182a65005daeba43fd9b98e63345a4",
+      "/workspace/review2-evidence/before-omktr": "d7a107042f87010f7c1330f0246d7da7526df968c66b880a40117513d3cf8f23"
+    }
+  },
+  "environment": {
+    "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+    "logical_cpus": 5,
+    "memory_bytes": 18882662400,
+    "container_network": "none",
+    "toolchain_image": "sha256:6cfc9578e451296d6d699dff8d6cc9bbbd18cd05906e6a3d7defe679d94aabc2",
+    "external_image": "sha256:46ee6c75beb340c8524090e83306c34fb0f17e398568be896489545a8325f713",
+    "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+    "tools": {
+      "clang++": "clang version 22.1.8\nTarget: x86_64-chimera-linux-musl\nThread model: posix\nInstalledDir: /usr/bin",
+      "python": "Python 3.14.6",
+      "ninja": "1.13.2"
+    }
+  },
+  "review": [
+    {
+      "id": 6549628887,
+      "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6549628887",
+      "body": "<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 {\"code_review\":{\"commit_sha\":\"97b6788c4cd5b38af93b691b361af58c67f6d8c9\",\"has_any_findings\":false,\"has_unresolved_findings\":false,\"status\":\"completed\"},\"security_review\":{\"commit_sha\":null,\"has_any_findings\":null,\"has_unresolved_findings\":null,\"status\":null}} -->\n\n## Codex Review Summary\n\nThis comment shows the latest Codex review activity on this pull request.\n\n| Review | Status | Commit | Review trigger |\n| --- | --- | --- | --- |\n| \ud83d\udcdd **Code Review** | \u2705 **Completed** <relative-time datetime=\"2026-11-01T11:09:22.092792Z\">2026-11-01T11:09:22.092792Z</relative-time> | `97b6788` | Manual request |\n\n\n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\" or \"@codex security review\".\n\nCodex reacts with \ud83d\udc40 while any review is running, comments if it has suggestions, and reacts with \ud83d\udc4d once all reviews finish with no findings.\n\n</details>",
+      "created_at": "2026-10-31T21:53:54Z",
+      "updated_at": "2026-11-01T11:09:22Z",
+      "review": null,
+      "path": null,
+      "line": null,
+      "in_reply_to_id": null
+    },
+    {
+      "id": 4435296877,
+      "url": "https://github.com/RihardsPaps/Openmktr/pull/65#discussion_r4435296877",
+      "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Preserve recipe-less VPATH providers in runtime group inputs**\n\nWhen a VPATH prerequisite has an explicit recipe-less rule, this replacement never runs because the child has a rule and retains its lexical output name. For example, with `VPATH := sources`, an existing `sources/input`, `input:`, and `output:: input` whose recipe is `cat $< > $@`, generated execution passes `input` rather than `sources/input` and fails when creating the missing output. `src/ninja.cc` deliberately emits these source aliases without materializing a local file, while the previous generation-time expansion used `EffectivePrerequisite()` to recover their provider. Serialize that provider mapping for runtime automatic variables and group freshness as well; handling only unruled VPATH inputs leaves this supported case broken.\n\nUseful? React with \ud83d\udc4d\u00a0/ \ud83d\udc4e.\n\n<!-- codex-code-review-finding:v1 -->",
+      "created_at": "2026-11-01T10:47:15Z",
+      "updated_at": "2026-11-01T10:47:16Z",
+      "review": null,
+      "path": "src/dep.cc",
+      "line": 2572,
+      "in_reply_to_id": null
+    },
+    {
+      "id": 4435296886,
+      "url": "https://github.com/RihardsPaps/Openmktr/pull/65#discussion_r4435296886",
+      "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Match lexical group prerequisites to their logical metadata**\n\nFor a prerequisite spelled with parent-directory components, group inputs retain the lexical name while `MakeRuntimeRecipe()` serializes phony/logical metadata using canonical `node.deps` keys. These exact-symbol lookups therefore miss the prerequisite's kind. With an existing output, `.PHONY: dir/../force`, and `output:: dir/../force`, the generated edge is scheduled but its runtime recipe group is skipped because the nonexistent lexical path is treated as an ordinary missing file. Direct execution recognizes the dependency through `lexical_output` and runs it. Preserve a lexical-to-canonical mapping or serialize the kind alongside each group input so aliases cannot suppress required builds.\n\nUseful? React with \ud83d\udc4d\u00a0/ \ud83d\udc4e.\n\n<!-- codex-code-review-finding:v1 -->",
+      "created_at": "2026-11-01T10:47:15Z",
+      "updated_at": "2026-11-01T10:47:16Z",
+      "review": null,
+      "path": "src/command.cc",
+      "line": 1134,
+      "in_reply_to_id": null
+    },
+    {
+      "id": 5727649627,
+      "url": "https://github.com/RihardsPaps/Openmktr/pull/65#pullrequestreview-5727649627",
+      "body": "<!-- codex-review-receipt:v1 -->\n\n\n### \ud83d\udca1 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** `f6b161798e`\n    \n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\".\n\nIf Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.\n\n\n\n\nCodex can also answer questions or update the PR. Try commenting \"@codex address that feedback\".\n            \n</details>",
+      "created_at": "2026-11-01T10:47:15Z",
+      "updated_at": null,
+      "review": "COMMENTED",
+      "path": null,
+      "line": null,
+      "in_reply_to_id": null
+    },
+    {
+      "id": 4435315398,
+      "url": "https://github.com/RihardsPaps/Openmktr/pull/65#discussion_r4435315398",
+      "body": "Confirmed with a regression that fails on the reviewed head in build and saved-Ninja modes. Fixed in 68946f5: runtime metadata now preserves source-provider mappings for recipe-less/no-op VPATH aliases, including order-only automatic inputs, and uses the mapping in group freshness checks. The source alias remains unmaterialized. All 21 architecture tests and all 192 correctness cases pass on the revised source; full qualification is pending.",
+      "created_at": "2026-11-01T10:54:12Z",
+      "updated_at": "2026-11-01T10:54:12Z",
+      "review": null,
+      "path": "src/dep.cc",
+      "line": 2572,
+      "in_reply_to_id": 4435296877
+    },
+    {
+      "id": 5727672619,
+      "url": "https://github.com/RihardsPaps/Openmktr/pull/65#pullrequestreview-5727672619",
+      "body": "",
+      "created_at": "2026-11-01T10:54:12Z",
+      "updated_at": null,
+      "review": "COMMENTED",
+      "path": null,
+      "line": null,
+      "in_reply_to_id": null
+    },
+    {
+      "id": 4435315530,
+      "url": "https://github.com/RihardsPaps/Openmktr/pull/65#discussion_r4435315530",
+      "body": "Confirmed and fixed in 68946f5. Runtime prerequisite metadata now retains canonical and lexical names plus physical resolution mappings. The new regression covers phony, existing-file phony, and fileless logical prerequisites spelled with ../ across direct/build/saved-Ninja modes. It also exposed an older direct-execution bug: normalized special-target sets were queried with the lexical output name; those lookups now use the normalized name while automatic variables retain their spelling. Architecture and correctness checks pass; full qualification is pending.",
+      "created_at": "2026-11-01T10:54:14Z",
+      "updated_at": "2026-11-01T10:54:14Z",
+      "review": null,
+      "path": "src/command.cc",
+      "line": 1134,
+      "in_reply_to_id": 4435296886
+    },
+    {
+      "id": 5727672849,
+      "url": "https://github.com/RihardsPaps/Openmktr/pull/65#pullrequestreview-5727672849",
+      "body": "",
+      "created_at": "2026-11-01T10:54:14Z",
+      "updated_at": null,
+      "review": "COMMENTED",
+      "path": null,
+      "line": null,
+      "in_reply_to_id": null
+    },
+    {
+      "id": 6556982502,
+      "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6556982502",
+      "body": "@codex review\n\nPlease review updated head `68946f507155def3f4967281619e14a7b9a78b61`, including fixes for discussion_r4435296877 and discussion_r4435296886. Runtime metadata now preserves prerequisite providers/aliases; special-target lookups normalize names; independent groups remain lazy when invocation context changes. Regression tests reproduce both review findings and pass after the fixes. All 21 architecture tests and 192 correctness cases pass. The new timestamp/group/provider expectations also pass against external GNU make (six test methods, including the 96-case timestamp/mode/job matrix).\n\nFull portable/sanitizer/incremental and strict 60-cell performance qualification is pending for this head. Please check the new metadata's validation and the direct/generated behavior again; the PR remains draft.",
+      "created_at": "2026-11-01T10:54:38Z",
+      "updated_at": "2026-11-01T10:54:38Z",
+      "review": null,
+      "path": null,
+      "line": null,
+      "in_reply_to_id": null
+    },
+    {
+      "id": 6556999420,
+      "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6556999420",
+      "body": "<!-- codex-review-receipt:v1 -->\n\nCodex Review: Didn't find any major issues. :tada:\n\n**Reviewed commit:** `68946f5071`\n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\".\n\nIf Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.\n\n\n\n\nCodex can also answer questions or update the PR. Try commenting \"@codex address that feedback\".\n            \n</details>",
+      "created_at": "2026-11-01T10:56:25Z",
+      "updated_at": "2026-11-01T10:56:25Z",
+      "review": null,
+      "path": null,
+      "line": null,
+      "in_reply_to_id": null
+    },
+    {
+      "id": 6557050447,
+      "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6557050447",
+      "body": "@codex review\n\nPlease check the final display fix in `8070519`: deferred Ninja recipes retain Ninja's default progress display; explicit KATI_VERBOSE/V verbosity and silent prefixes are preserved. The two existing snapshot expectations remain unchanged. The 22 architecture tests and the four double-colon snapshot scenarios pass. Your review of `68946f5` completed without findings; both earlier provider/alias findings are fixed.\n\nThe full normal run on `68946f5` passed 26/28 groups and failed only these two output snapshots in both profiles, matching CI. That attempt is retained as failed evidence. Final-source normal/sanitizer/incremental and the unchanged 60-cell performance plan will run after the final build. No performance result is yet claimed for this review's changes.",
+      "created_at": "2026-11-01T11:01:33Z",
+      "updated_at": "2026-11-01T11:01:33Z",
+      "review": null,
+      "path": null,
+      "line": null,
+      "in_reply_to_id": null
+    },
+    {
+      "id": 6557060250,
+      "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6557060250",
+      "body": "<!-- codex-review-receipt:v1 -->\n\nCodex Review: Didn't find any major issues. Delightful!\n\n**Reviewed commit:** `8070519f46`\n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\".\n\nIf Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.\n\n\n\n\nCodex can also answer questions or update the PR. Try commenting \"@codex address that feedback\".\n            \n</details>",
+      "created_at": "2026-11-01T11:02:32Z",
+      "updated_at": "2026-11-01T11:02:32Z",
+      "review": null,
+      "path": null,
+      "line": null,
+      "in_reply_to_id": null
+    },
+    {
+      "id": 6557115055,
+      "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6557115055",
+      "body": "@codex review\n\nPlease review `97b6788c4cd5b38af93b691b361af58c67f6d8c9`. Full snapshots exposed that the prior display fix was too broad: existing runtime-expanded recipes intentionally echo commands. The revised fix retains the pre-existing runtime/static distinction using the same expansion predicate, and reuses the serialized silent flag only for groups newly deferred for freshness selection. No new metadata field or snapshot expectation is introduced. Coverage includes static groups, dynamic groups with and without prerequisites, existing dynamic single-colon recipes, explicit verbosity, and silent prefixes. The narrowed implementation passed all 858 existing snapshots; the final source is now receiving complete qualification. Both earlier failed display attempts remain in the evidence; no performance measurement has started.",
+      "created_at": "2026-11-01T11:08:04Z",
+      "updated_at": "2026-11-01T11:08:04Z",
+      "review": null,
+      "path": null,
+      "line": null,
+      "in_reply_to_id": null
+    },
+    {
+      "id": 6557128402,
+      "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6557128402",
+      "body": "<!-- codex-review-receipt:v1 -->\n\nCodex Review: Didn't find any major issues. :+1:\n\n**Reviewed commit:** `97b6788c4c`\n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\".\n\nIf Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.\n\n\n\n\nCodex can also answer questions or update the PR. Try commenting \"@codex address that feedback\".\n            \n</details>",
+      "created_at": "2026-11-01T11:09:20Z",
+      "updated_at": "2026-11-01T11:09:20Z",
+      "review": null,
+      "path": null,
+      "line": null,
+      "in_reply_to_id": null
+    }
+  ],
+  "ci": {
+    "commit_sha": "97b6788c4cd5b38af93b691b361af58c67f6d8c9",
+    "observed_at_utc": "2026-11-01 12:04:17 UTC",
+    "workflow_runs": [
+      {
+        "id": 41300493600,
+        "name": "Optional external compatibility and benchmarks",
+        "status": "in_progress",
+        "conclusion": null,
+        "run_number": 56,
+        "jobs_url": "https://api.github.com/repos/RihardsPaps/Openmktr/actions/runs/41300493600/jobs",
+        "logs_url": "https://api.github.com/repos/RihardsPaps/Openmktr/actions/runs/41300493600/logs",
+        "workflow_id": 394622524
+      },
+      {
+        "id": 41300493597,
+        "name": "Chimera release",
+        "status": "completed",
+        "conclusion": "success",
+        "run_number": 52,
+        "jobs_url": "https://api.github.com/repos/RihardsPaps/Openmktr/actions/runs/41300493597/jobs",
+        "logs_url": "https://api.github.com/repos/RihardsPaps/Openmktr/actions/runs/41300493597/logs",
+        "workflow_id": 382433811
+      },
+      {
+        "id": 41300493625,
+        "name": "Openmktr build and test",
+        "status": "completed",
+        "conclusion": "success",
+        "run_number": 181,
+        "jobs_url": "https://api.github.com/repos/RihardsPaps/Openmktr/actions/runs/41300493625/jobs",
+        "logs_url": "https://api.github.com/repos/RihardsPaps/Openmktr/actions/runs/41300493625/logs",
+        "workflow_id": 363679582
+      }
+    ],
+    "jobs": [
+      {
+        "run_id": 41300493600,
+        "jobs": [
+          {
+            "id": 124830213428,
+            "name": "environments (gentoo)",
+            "status": "in_progress",
+            "conclusion": null,
+            "run_id": 41300493600,
+            "logs_url": null,
+            "steps": [
+              {
+                "name": "Set up job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 1
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 2
+              },
+              {
+                "name": "Build independent toolchain image",
+                "status": "in_progress",
+                "conclusion": null,
+                "number": 3
+              },
+              {
+                "name": "Test direct, generated, recursive and Ninja FIFO scheduling",
+                "status": "pending",
+                "conclusion": null,
+                "number": 4
+              },
+              {
+                "name": "Publish phase and end-to-end benchmark samples",
+                "status": "pending",
+                "conclusion": null,
+                "number": 5
+              },
+              {
+                "name": "Test opt-in Portage lifecycle and local overlay",
+                "status": "pending",
+                "conclusion": null,
+                "number": 6
+              },
+              {
+                "name": "Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+                "status": "pending",
+                "conclusion": null,
+                "number": 7
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "status": "pending",
+                "conclusion": null,
+                "number": 14
+              }
+            ]
+          },
+          {
+            "id": 124830213603,
+            "name": "environments (alpine)",
+            "status": "completed",
+            "conclusion": "success",
+            "run_id": 41300493600,
+            "logs_url": null,
+            "steps": [
+              {
+                "name": "Set up job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 1
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 2
+              },
+              {
+                "name": "Build independent toolchain image",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 3
+              },
+              {
+                "name": "Test direct, generated, recursive and Ninja FIFO scheduling",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 4
+              },
+              {
+                "name": "Publish phase and end-to-end benchmark samples",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 5
+              },
+              {
+                "name": "Test opt-in Portage lifecycle and local overlay",
+                "status": "completed",
+                "conclusion": "skipped",
+                "number": 6
+              },
+              {
+                "name": "Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 7
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 14
+              },
+              {
+                "name": "Complete job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 15
+              }
+            ]
+          },
+          {
+            "id": 124830213674,
+            "name": "gnu-reference",
+            "status": "completed",
+            "conclusion": "success",
+            "run_id": 41300493600,
+            "logs_url": null,
+            "steps": [
+              {
+                "name": "Set up job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 1
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 2
+              },
+              {
+                "name": "Run docker build -t openmktr-test .",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 3
+              },
+              {
+                "name": "Run docker build -f validation/incremental/Dockerfile -t openmktr-reference .",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 4
+              },
+              {
+                "name": "Compare serial and parallel incremental builds",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 5
+              },
+              {
+                "name": "Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 6
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 12
+              },
+              {
+                "name": "Complete job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 13
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "run_id": 41300493597,
+        "jobs": [
+          {
+            "id": 124830213609,
+            "name": "build",
+            "status": "completed",
+            "conclusion": "success",
+            "run_id": 41300493597,
+            "logs_url": null,
+            "steps": [
+              {
+                "name": "Set up job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 1
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 2
+              },
+              {
+                "name": "Validate release version",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 3
+              },
+              {
+                "name": "Validate release commit against the default branch",
+                "status": "completed",
+                "conclusion": "skipped",
+                "number": 4
+              },
+              {
+                "name": "Build in pinned Chimera image",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 5
+              },
+              {
+                "name": "Run unit, direct, Ninja, and regression tests",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 6
+              },
+              {
+                "name": "Check release packaging",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 7
+              },
+              {
+                "name": "Check incremental campaign harness",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 8
+              },
+              {
+                "name": "Gate release on differential incremental correctness",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 9
+              },
+              {
+                "name": "Retain differential incremental evidence",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 10
+              },
+              {
+                "name": "Run sanitizer checks",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 11
+              },
+              {
+                "name": "Archive exact source and package tested binary",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 12
+              },
+              {
+                "name": "Retain release artifacts",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 13
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 26
+              },
+              {
+                "name": "Complete job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 27
+              }
+            ]
+          },
+          {
+            "id": 124833231264,
+            "name": "publish",
+            "status": "completed",
+            "conclusion": "skipped",
+            "run_id": 41300493597,
+            "logs_url": null,
+            "steps": null
+          }
+        ]
+      },
+      {
+        "run_id": 41300493625,
+        "jobs": [
+          {
+            "id": 124830213522,
+            "name": "chimera",
+            "status": "completed",
+            "conclusion": "success",
+            "run_id": 41300493625,
+            "logs_url": null,
+            "steps": [
+              {
+                "name": "Set up job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 1
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 2
+              },
+              {
+                "name": "Build Openmktr test image",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 3
+              },
+              {
+                "name": "Check changed C++ formatting",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 4
+              },
+              {
+                "name": "Run tests in Chimera",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 5
+              },
+              {
+                "name": "Build and test graphical manager in Chimera",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 6
+              },
+              {
+                "name": "Check incremental campaign harness without GNU dependencies",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 7
+              },
+              {
+                "name": "Compare incremental builds with external GNU Make",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 8
+              },
+              {
+                "name": "Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 9
+              },
+              {
+                "name": "Run sanitizer checks in Chimera",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 10
+              },
+              {
+                "name": "Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+                "status": "completed",
+                "conclusion": "skipped",
+                "number": 11
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 22
+              },
+              {
+                "name": "Complete job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 23
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "source_review": "review-ledger.md and source-review.patch inside the raw archive",
+  "portable": {
+    "passed": true,
+    "groups": [
+      {
+        "name": "session_unit",
+        "command": [
+          "out/session_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.05828626099992107
+      },
+      {
+        "name": "ready_queue_unit",
+        "command": [
+          "out/ready_queue_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.017980622999857587
+      },
+      {
+        "name": "timeutil_unit",
+        "command": [
+          "out/timeutil_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.0023332870000558614
+      },
+      {
+        "name": "find_unit",
+        "command": [
+          "out/find_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.00795989100015504
+      },
+      {
+        "name": "ninja_unit",
+        "command": [
+          "out/ninja_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.0013899270002184494
+      },
+      {
+        "name": "strutil_unit",
+        "command": [
+          "out/strutil_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.0010926340000878554
+      },
+      {
+        "name": "load_limit_unit",
+        "command": [
+          "out/load_limit_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.0004776390001097752
+      },
+      {
+        "name": "version_generator",
+        "command": [
+          "python",
+          "tests/version_generator.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.20138780899969788
+      },
+      {
+        "name": "architecture",
+        "command": [
+          "python",
+          "tests/architecture.py"
+        ],
+        "exit_code": 0,
+        "seconds": 2.837548526000319
+      },
+      {
+        "name": "correctness",
+        "command": [
+          "python",
+          "tests/correctness.py"
+        ],
+        "exit_code": 0,
+        "seconds": 15.636594773999605
+      },
+      {
+        "name": "generated_recipe_reads",
+        "command": [
+          "python",
+          "tests/generated_recipe_reads.py"
+        ],
+        "exit_code": 0,
+        "seconds": 12.09213380500023
+      },
+      {
+        "name": "graph_optimizations",
+        "command": [
+          "python",
+          "tests/graph_optimizations.py"
+        ],
+        "exit_code": 0,
+        "seconds": 18.085663187000137
+      },
+      {
+        "name": "make_compat_regressions",
+        "command": [
+          "python",
+          "tests/make_compat_regressions.py"
+        ],
+        "exit_code": 0,
+        "seconds": 1.8117305030000352
+      },
+      {
+        "name": "portage",
+        "command": [
+          "python",
+          "tests/portage.py"
+        ],
+        "exit_code": 0,
+        "seconds": 6.342486915999871
+      },
+      {
+        "name": "manager",
+        "command": [
+          "python",
+          "tests/manager.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.3548870409999836
+      },
+      {
+        "name": "manager_terminal",
+        "command": [
+          "python",
+          "tests/manager_terminal.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.5388297630001944
+      },
+      {
+        "name": "load_limits",
+        "command": [
+          "python",
+          "tests/load_limits.py"
+        ],
+        "exit_code": 0,
+        "seconds": 36.55558019099999
+      },
+      {
+        "name": "portage_validation",
+        "command": [
+          "python",
+          "tests/portage_validation.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.8095181220000995
+      },
+      {
+        "name": "cross_version_cache",
+        "command": [
+          "python",
+          "tests/cross_version_cache.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.13499014099988926
+      },
+      {
+        "name": "ninja_benchmark",
+        "command": [
+          "python",
+          "tests/ninja_benchmark.py"
+        ],
+        "exit_code": 0,
+        "seconds": 7.094023034000202
+      },
+      {
+        "name": "workspace",
+        "command": [
+          "python",
+          "tests/workspace.py"
+        ],
+        "exit_code": 0,
+        "seconds": 21.169573392000075
+      },
+      {
+        "name": "ninja_jobserver",
+        "command": [
+          "python",
+          "tests/ninja_jobserver.py"
+        ],
+        "exit_code": 0,
+        "seconds": 9.425343665999662
+      },
+      {
+        "name": "release_packaging",
+        "command": [
+          "python",
+          "tests/release_packaging.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.11359127600007923
+      },
+      {
+        "name": "incremental_campaign",
+        "command": [
+          "python",
+          "tests/incremental_campaign.py"
+        ],
+        "exit_code": 0,
+        "seconds": 8.934885828999995
+      },
+      {
+        "name": "correctness_aggressive",
+        "command": [
+          "python",
+          "tests/correctness.py"
+        ],
+        "exit_code": 0,
+        "seconds": 15.52851871699977
+      },
+      {
+        "name": "regression",
+        "command": [
+          "python",
+          "tests/regression.py"
+        ],
+        "exit_code": 0,
+        "seconds": 30.39937501700024
+      },
+      {
+        "name": "regression_aggressive",
+        "command": [
+          "python",
+          "tests/regression.py"
+        ],
+        "exit_code": 0,
+        "seconds": 30.727719925999736
+      },
+      {
+        "name": "dump",
+        "command": [
+          "sh",
+          "testcase/dump/run.sh"
+        ],
+        "exit_code": 0,
+        "seconds": 0.02511924700002055
+      }
+    ],
+    "correctness_cases_per_profile": 192,
+    "architecture_tests": 22,
+    "snapshots_per_profile": 858,
+    "quarantined_crashes": 0
+  },
+  "sanitizers": {
+    "passed": true,
+    "groups": [
+      {
+        "name": "session_unit",
+        "command": [
+          "out/sanitized/session_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.17807054200011407
+      },
+      {
+        "name": "ready_queue_unit",
+        "command": [
+          "out/sanitized/ready_queue_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.07010413199986942
+      },
+      {
+        "name": "timeutil_unit",
+        "command": [
+          "out/sanitized/timeutil_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.0039397489999828395
+      },
+      {
+        "name": "find_unit",
+        "command": [
+          "out/sanitized/find_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.0046916619999137765
+      },
+      {
+        "name": "ninja_unit",
+        "command": [
+          "out/sanitized/ninja_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.004588536000028398
+      },
+      {
+        "name": "strutil_unit",
+        "command": [
+          "out/sanitized/strutil_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.004458810999949492
+      },
+      {
+        "name": "load_limit_unit",
+        "command": [
+          "out/sanitized/load_limit_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.002634124999985943
+      },
+      {
+        "name": "architecture",
+        "command": [
+          "python",
+          "tests/architecture.py"
+        ],
+        "exit_code": 0,
+        "seconds": 7.409810817000107
+      },
+      {
+        "name": "portage",
+        "command": [
+          "python",
+          "tests/portage.py"
+        ],
+        "exit_code": 0,
+        "seconds": 6.914089392999813
+      },
+      {
+        "name": "load_limits",
+        "command": [
+          "python",
+          "tests/load_limits.py"
+        ],
+        "exit_code": 0,
+        "seconds": 37.507005258999925
+      },
+      {
+        "name": "correctness",
+        "command": [
+          "python",
+          "tests/correctness.py"
+        ],
+        "exit_code": 0,
+        "seconds": 22.28790494299983
+      },
+      {
+        "name": "generated_recipe_reads",
+        "command": [
+          "python",
+          "tests/generated_recipe_reads.py"
+        ],
+        "exit_code": 0,
+        "seconds": 25.097735560000274
+      },
+      {
+        "name": "graph_optimizations",
+        "command": [
+          "python",
+          "tests/graph_optimizations.py"
+        ],
+        "exit_code": 0,
+        "seconds": 27.632688647000123
+      },
+      {
+        "name": "workspace",
+        "command": [
+          "python",
+          "tests/workspace.py"
+        ],
+        "exit_code": 0,
+        "seconds": 21.716453252000065
+      },
+      {
+        "name": "ninja_jobserver",
+        "command": [
+          "python",
+          "tests/ninja_jobserver.py"
+        ],
+        "exit_code": 0,
+        "seconds": 9.86872029199958
+      },
+      {
+        "name": "make_compat_regressions",
+        "command": [
+          "python",
+          "tests/make_compat_regressions.py"
+        ],
+        "exit_code": 0,
+        "seconds": 4.193413815999975
+      },
+      {
+        "name": "correctness_aggressive",
+        "command": [
+          "python",
+          "tests/correctness.py"
+        ],
+        "exit_code": 0,
+        "seconds": 23.48477045499976
+      }
+    ],
+    "leak_detection": "session unit enabled; remaining groups disabled"
+  },
+  "external_incremental": {
+    "scenarios": 27,
+    "release_blocked": false,
+    "performance_defects": false,
+    "errors": []
+  },
+  "performance": {
+    "plan": {
+      "declared_at_utc": "2026-11-01T11:07:46.105834+00:00",
+      "baseline_revision": "77a397ffd7a1cc5f48e406f8cf9052a50cc0d150",
+      "runtime_revision": "97b6788c4cd5b38af93b691b361af58c67f6d8c9",
+      "paired_matrix_measured_pairs": 101,
+      "large_graph_measured_pairs": 101,
+      "standard_controls_measured_pairs": 101,
+      "standard_short_cases_measured_pairs": 301,
+      "standard_short_cases": [
+        "incremental_noop",
+        "direct_recipe_launch_j1"
+      ],
+      "warmup_pairs": 2,
+      "median_ratio_limit": 1.0,
+      "bootstrap_95_upper_limit": 1.05,
+      "bootstrap_resamples": 10000,
+      "required_unpaired_standard_repeats": 7,
+      "timing_and_memory_cells": 60,
+      "concurrent_local_builds_or_tests": false,
+      "exclusions": "Only the two predeclared warmup pairs.",
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "reason": "Fresh qualification after review fixes. Preserve all 60 independent wall-time and peak-RSS gates and predeclared sample counts from the preceding final campaign. No timing work runs concurrently with correctness or sanitizer checks.",
+      "standard_parallel_exec_measured_pairs": 1001,
+      "standard_nested_parallel_measured_pairs": 1001,
+      "standard_end_to_end_clean_measured_pairs": 1001,
+      "standard_end_to_end_graph_change_measured_pairs": 1001,
+      "stage_order": [
+        "clean-gate",
+        "paired-matrix",
+        "phases",
+        "phase-analysis",
+        "standard-benchmark",
+        "paired-standard"
+      ],
+      "maintenance": "Archive completed fixture command logs and retire synthetic sample trees only between measured stages; retain all raw samples and summaries."
+    },
+    "recovery": {
+      "declared_at_utc": "2026-11-01T11:29:31.376153+00:00",
+      "reason": "Workspace inode exhaustion stopped legacy sample 58. Only 7 free inodes remained; no disk-byte exhaustion. All original logs, samples and report retained. The incomplete 30-cell matrix is unqualified.",
+      "action": "Restart all three entry-point matrices with the same 101 measured pairs, two warmups and strict thresholds. Retire only reconstructible fixtures between entry points, retaining logs and raw data. The completed 1001-pair clean gate remains valid and is not repeated. Remaining unstarted stages unchanged.",
+      "runtime_revision": "97b6788c4cd5b38af93b691b361af58c67f6d8c9",
+      "free_inodes_after_cleanup": 964629
+    },
+    "passed": false,
+    "passed_cells": 57,
+    "cells": [
+      {
+        "suite": "paired-matrix",
+        "case": "direct/clean",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9523326776879122,
+        "interval": [
+          0.9246777052278405,
+          0.9736278962044036
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "direct/graph",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.980415976785463,
+        "interval": [
+          0.9669424389288651,
+          0.9901423051129302
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "direct/missing",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9511574250525967,
+        "interval": [
+          0.9321733528883193,
+          0.9951234436169584
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "direct/noop",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8737145488974617,
+        "interval": [
+          0.8538546942607419,
+          0.8978349279712138
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "direct/source",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9377468714143735,
+        "interval": [
+          0.9112449077044619,
+          0.9801245773286584
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "build/clean",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.7050249175347179,
+        "interval": [
+          0.6729298201779235,
+          0.7440268902187956
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "build/graph",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9085117234233488,
+        "interval": [
+          0.8845143841716141,
+          0.9303503610575528
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "build/missing",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.831386541408585,
+        "interval": [
+          0.8082261316858518,
+          0.8566822383971782
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "build/noop",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8387292421481618,
+        "interval": [
+          0.8223846474581814,
+          0.8596097813717518
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "build/source",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8795701047956564,
+        "interval": [
+          0.8588714464552795,
+          0.9085013613900994
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "legacy/clean",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.732259225785822,
+        "interval": [
+          0.696987973140518,
+          0.7677336222333232
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "legacy/graph",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9109508822786253,
+        "interval": [
+          0.8738569997928265,
+          0.9496304532415751
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "legacy/missing",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8660460092335913,
+        "interval": [
+          0.8472477350206429,
+          0.8956183983578428
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "legacy/noop",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9421515768415559,
+        "interval": [
+          0.9207627606011695,
+          0.9659796585805316
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "legacy/source",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9535684986668584,
+        "interval": [
+          0.9265840629009119,
+          0.9815288057264212
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "direct/clean",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "direct/graph",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "direct/missing",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "direct/noop",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "direct/source",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "build/clean",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "build/graph",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "build/missing",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "build/noop",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          0.999873593730249,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "build/source",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "legacy/clean",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "legacy/graph",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "legacy/missing",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "legacy/noop",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "paired-matrix",
+        "case": "legacy/source",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "clean",
+        "case": "end_to_end_clean",
+        "metric": "wall",
+        "pairs": 1001,
+        "median_ratio": 0.9331896648438914,
+        "interval": [
+          0.9283967606314516,
+          0.9400653606504625
+        ],
+        "passed": true
+      },
+      {
+        "suite": "clean",
+        "case": "end_to_end_clean",
+        "metric": "rss",
+        "pairs": 1001,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "phases",
+        "case": "convert",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8723427740726115,
+        "interval": [
+          0.8545640372295483,
+          0.8887824536464096
+        ],
+        "passed": true
+      },
+      {
+        "suite": "phases",
+        "case": "convert",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 0.9752815562381162,
+        "interval": [
+          0.9746705710102489,
+          0.97662868828513
+        ],
+        "passed": true
+      },
+      {
+        "suite": "phases",
+        "case": "syntax",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8650052051040786,
+        "interval": [
+          0.8398209661510193,
+          0.8782128968062071
+        ],
+        "passed": true
+      },
+      {
+        "suite": "phases",
+        "case": "syntax",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 0.9611864941621963,
+        "interval": [
+          0.959778305621536,
+          0.9621987714600725
+        ],
+        "passed": true
+      },
+      {
+        "suite": "phases",
+        "case": "direct_dry",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8879422389423061,
+        "interval": [
+          0.8554542799730375,
+          0.9055741326803036
+        ],
+        "passed": true
+      },
+      {
+        "suite": "phases",
+        "case": "direct_dry",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 0.9638989169675091,
+        "interval": [
+          0.9631776872453777,
+          0.9653115680426935
+        ],
+        "passed": true
+      },
+      {
+        "suite": "phases",
+        "case": "noop_regen",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9756208513364519,
+        "interval": [
+          0.963965826423049,
+          0.9919442201845646
+        ],
+        "passed": true
+      },
+      {
+        "suite": "phases",
+        "case": "noop_regen",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "incremental_noop",
+        "metric": "wall",
+        "pairs": 301,
+        "median_ratio": 0.9948242454501751,
+        "interval": [
+          0.9772909995894523,
+          1.0147589698966233
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "incremental_noop",
+        "metric": "rss",
+        "pairs": 301,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "parallel_exec",
+        "metric": "wall",
+        "pairs": 1001,
+        "median_ratio": 1.000149633460549,
+        "interval": [
+          0.9997267906731787,
+          1.0006827025896852
+        ],
+        "passed": false
+      },
+      {
+        "suite": "standard-paired",
+        "case": "parallel_exec",
+        "metric": "rss",
+        "pairs": 1001,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "nested_parallel_exec",
+        "metric": "wall",
+        "pairs": 1001,
+        "median_ratio": 1.0001193633465453,
+        "interval": [
+          0.9996960877012644,
+          1.0005258060956914
+        ],
+        "passed": false
+      },
+      {
+        "suite": "standard-paired",
+        "case": "nested_parallel_exec",
+        "metric": "rss",
+        "pairs": 1001,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "direct_recipe_launch_j1",
+        "metric": "wall",
+        "pairs": 301,
+        "median_ratio": 0.9627915467935646,
+        "interval": [
+          0.9454433242012217,
+          0.9849658743905909
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "direct_recipe_launch_j1",
+        "metric": "rss",
+        "pairs": 301,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "direct_recipe_launch_j4",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8563329486879366,
+        "interval": [
+          0.815526045141513,
+          0.8811121186752104
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "direct_recipe_launch_j4",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "ninja_recipe_launch_j1",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.007361181254839321,
+        "interval": [
+          0.007114850881953024,
+          0.007558624985193273
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "ninja_recipe_launch_j1",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "ninja_recipe_launch_j4",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.019553656886128257,
+        "interval": [
+          0.018873829794203677,
+          0.020117128708969968
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "ninja_recipe_launch_j4",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "end_to_end_noop",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.798110835720943,
+        "interval": [
+          0.7830050374292549,
+          0.8309342572519907
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "end_to_end_noop",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "end_to_end_single_file_change",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8606444736829817,
+        "interval": [
+          0.8445838580083928,
+          0.8794669839367639
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "end_to_end_single_file_change",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      },
+      {
+        "suite": "standard-paired",
+        "case": "end_to_end_graph_change",
+        "metric": "wall",
+        "pairs": 1001,
+        "median_ratio": 1.0056542116486826,
+        "interval": [
+          0.9988368252313143,
+          1.0113940490023843
+        ],
+        "passed": false
+      },
+      {
+        "suite": "standard-paired",
+        "case": "end_to_end_graph_change",
+        "metric": "rss",
+        "pairs": 1001,
+        "median_ratio": 1.0,
+        "interval": [
+          1.0,
+          1.0
+        ],
+        "passed": true
+      }
+    ],
+    "standard_benchmark_repeats": 7,
+    "commands": [
+      {
+        "name": "clean",
+        "command": [
+          "python",
+          "/evidence/clean-gate.py"
+        ],
+        "exit_code": 0,
+        "seconds": 129.7687714799995
+      },
+      {
+        "name": "paired-matrix",
+        "command": [
+          "python",
+          "validation/benchmark_ninja.py",
+          "--project",
+          "synthetic",
+          "--root",
+          "/evidence/performance/paired",
+          "--baseline",
+          "/baseline/omktr",
+          "--baseline-revision",
+          "77a397ffd7a1cc5f48e406f8cf9052a50cc0d150",
+          "--candidate",
+          "/workspace/omktr",
+          "--candidate-revision",
+          "97b6788c4cd5b38af93b691b361af58c67f6d8c9",
+          "--entrypoints",
+          "direct",
+          "build",
+          "legacy",
+          "--jobs",
+          "4",
+          "--samples",
+          "101",
+          "--warmups",
+          "2",
+          "--require-no-regression"
+        ],
+        "exit_code": 1,
+        "seconds": 447.8932442920004
+      },
+      {
+        "name": "paired-direct",
+        "command": [
+          "python",
+          "validation/benchmark_ninja.py",
+          "--project",
+          "synthetic",
+          "--root",
+          "/evidence/performance/paired/direct",
+          "--baseline",
+          "/baseline/omktr",
+          "--baseline-revision",
+          "77a397ffd7a1cc5f48e406f8cf9052a50cc0d150",
+          "--candidate",
+          "/workspace/omktr",
+          "--candidate-revision",
+          "97b6788c4cd5b38af93b691b361af58c67f6d8c9",
+          "--entrypoints",
+          "direct",
+          "--jobs",
+          "4",
+          "--samples",
+          "101",
+          "--warmups",
+          "2",
+          "--require-no-regression"
+        ],
+        "exit_code": 0,
+        "seconds": 110.31198759299969
+      },
+      {
+        "name": "paired-build",
+        "command": [
+          "python",
+          "validation/benchmark_ninja.py",
+          "--project",
+          "synthetic",
+          "--root",
+          "/evidence/performance/paired/build",
+          "--baseline",
+          "/baseline/omktr",
+          "--baseline-revision",
+          "77a397ffd7a1cc5f48e406f8cf9052a50cc0d150",
+          "--candidate",
+          "/workspace/omktr",
+          "--candidate-revision",
+          "97b6788c4cd5b38af93b691b361af58c67f6d8c9",
+          "--entrypoints",
+          "build",
+          "--jobs",
+          "4",
+          "--samples",
+          "101",
+          "--warmups",
+          "2",
+          "--require-no-regression"
+        ],
+        "exit_code": 0,
+        "seconds": 243.66729910199956
+      },
+      {
+        "name": "paired-legacy",
+        "command": [
+          "python",
+          "validation/benchmark_ninja.py",
+          "--project",
+          "synthetic",
+          "--root",
+          "/evidence/performance/paired/legacy",
+          "--baseline",
+          "/baseline/omktr",
+          "--baseline-revision",
+          "77a397ffd7a1cc5f48e406f8cf9052a50cc0d150",
+          "--candidate",
+          "/workspace/omktr",
+          "--candidate-revision",
+          "97b6788c4cd5b38af93b691b361af58c67f6d8c9",
+          "--entrypoints",
+          "legacy",
+          "--jobs",
+          "4",
+          "--samples",
+          "101",
+          "--warmups",
+          "2",
+          "--require-no-regression"
+        ],
+        "exit_code": 0,
+        "seconds": 253.61389419199986
+      },
+      {
+        "name": "phases",
+        "command": [
+          "python",
+          "/evidence/phases.py",
+          "performance/phases"
+        ],
+        "exit_code": 0,
+        "seconds": 69.67864211300002
+      },
+      {
+        "name": "phase-analysis",
+        "command": [
+          "python",
+          "/evidence/analyze-phases.py",
+          "/evidence/performance/phases"
+        ],
+        "exit_code": 0,
+        "seconds": 1.2087213679997149
+      },
+      {
+        "name": "standard",
+        "command": [
+          "python",
+          "tests/bench.py",
+          "/workspace/omktr",
+          "--baseline",
+          "/baseline/omktr",
+          "--repeats",
+          "7"
+        ],
+        "exit_code": 0,
+        "seconds": 68.72373437500028
+      },
+      {
+        "name": "paired-standard",
+        "command": [
+          "python",
+          "/evidence/paired-standard.py"
+        ],
+        "exit_code": 0,
+        "seconds": 1257.8526373949999
+      }
+    ]
+  },
+  "earlier_attempts": [
+    {
+      "revision": "68946f507155def3f4967281619e14a7b9a78b61",
+      "result": "26/28 portable groups pass; two extra command echoes fail both snapshot profiles.",
+      "resolution": "97b6788 preserves the prior static/runtime display distinction; snapshots unchanged.",
+      "path": "attempt-68946f5"
+    },
+    {
+      "revision": "8070519f46da4f7cd93320a374f1ac8b5185afb9",
+      "result": "26/28 portable groups pass; suppressing all deferred command echoes fails three snapshots per profile.",
+      "resolution": "97b6788 narrows suppression to groups newly deferred for freshness.",
+      "path": "attempt-8070519"
+    },
+    {
+      "result": "Development reproductions and rejected low-resolution input rounding retained.",
+      "note": "Focused intermediate build logs do not qualify the final binary."
+    },
+    {
+      "result": "Initial main performance matrix stopped at saved-graph sample 58 with exhausted inodes.",
+      "path": "performance/paired-inode-failure",
+      "resolution": "Repeat the entire 30-cell matrix with identical sample counts and thresholds, retiring fixtures between entry points. Completed clean gate retained."
+    }
+  ],
+  "archive": {
+    "path": "core-second-review-2026-11-01.zip",
+    "sha256": "a2884301568c2577dfc35a06a574fcd898e5ceb462f040ff8b88ea8cd1a90166",
+    "bytes": 6746648,
+    "entries": 8093
+  },
+  "limits": [
+    "Synthetic cloud results compare this runtime with original baseline 77a397f, not GNU Make.",
+    "Real PC release qualification for Linux 7.3, FFmpeg 9.0.2 and LibreOffice 26.8.2.2 remains unrun.",
+    "Peak RSS is per-process high water, not aggregate process-tree memory; the parent/exec floor can mask small workloads.",
+    "Finite tests and code review do not establish absolute optimality or universal absence of regressions."
+  ]
+}

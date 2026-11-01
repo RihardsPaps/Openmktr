@@ -1,4 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
+// Retain whether a target has a truncated whole-second timestamp.
+// Allocate double-colon rule groups only for targets that use them.
+// Store only the logical execution flag needed by recipe expansion.
 // Return dependency storage to the graph's caller for bounded lifetimes.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
@@ -32,6 +35,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "freshness.h"
 #include "loc.h"
 #include "symtab.h"
 
@@ -70,6 +74,7 @@ struct DepNode {
   bool is_notparallel;
   bool is_phony;
   bool is_restat;
+  bool low_resolution = false;
   bool delete_on_error;
   bool precious;
   bool intermediate;
@@ -77,6 +82,7 @@ struct DepNode {
   bool ignore_errors;
   bool silent;
   bool export_all_variables;
+  mutable bool execution_updated = false;
   std::vector<Symbol> implicit_outputs;
   // Prerequisites contributed by the selected implicit rule. These are
   // distinct from explicit prerequisites merged onto the target and are
@@ -86,10 +92,35 @@ struct DepNode {
   std::vector<Symbol> actual_order_only_inputs;
   // Double-colon rules retain independent prerequisite freshness and recipe
   // groups. Their recipes must not be merged into one always-run sequence.
-  std::vector<std::vector<Symbol>> double_colon_group_inputs;
-  std::vector<bool> double_colon_group_has_prerequisites;
-  std::vector<size_t> double_colon_group_for_cmd;
-  std::vector<Symbol> low_resolution_inputs;
+  struct DoubleColonGroups {
+    std::vector<std::vector<Symbol>> inputs;
+    std::vector<std::vector<Symbol>> order_only_inputs;
+    std::vector<bool> has_prerequisites;
+    std::vector<size_t> for_cmd;
+  };
+  const DoubleColonGroups& DoubleColon() const {
+    return double_colon ? *double_colon : empty_double_colon;
+  }
+  DoubleColonGroups& MutableDoubleColon() {
+    if (!double_colon)
+      double_colon = std::make_unique<DoubleColonGroups>();
+    return *double_colon;
+  }
+  std::unique_ptr<DoubleColonGroups> double_colon;
+  inline static const DoubleColonGroups empty_double_colon{};
+  // Shared automatic-variable contract: completed direct prerequisites retain
+  // logical updates; serialized Ninja recipes retain phony prerequisite names.
+  // Only decoded runtime recipes need serialized logical input lists.
+  struct RuntimeInputs {
+    std::vector<Symbol> phony;
+    std::vector<Symbol> logical;
+    struct Resolution {
+      Symbol path;
+      bool substitute;
+    };
+    std::unordered_map<Symbol, Resolution> resolved;
+  };
+  std::unique_ptr<RuntimeInputs> runtime_inputs;
   std::vector<std::vector<Symbol>> wait_groups;
   std::vector<Symbol> actual_validations;
   Vars* rule_vars;

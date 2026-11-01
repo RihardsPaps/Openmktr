@@ -1,4 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
+// Skip symlink interpretation when no VPATH search is configured.
+// Own invocation state and publish coherent generations with typed freshness.
 // Observe runtime recipe variable lookups without evaluating extra expressions.
 // Preserve recipe snapshots and expose recipe-time target assignments.
 // Track and validate incremental evaluation, include proofs and imported Ninja
@@ -25,6 +27,11 @@
 // +build ignore
 
 #include "eval.h"
+#include "session.h"
+struct UndefinedVariables {
+  SymbolSet symbols;
+};
+#define used_undefined_vars_ (SessionService<UndefinedVariables>().symbols)
 #include "incremental_eval.h"
 
 #include <ctype.h>
@@ -262,10 +269,7 @@ Evaluator::~Evaluator() {
     fclose(assignment_tracefile_);
   }
 
-  // delete vars_;
-  // for (auto p : rule_vars) {
-  //   delete p.second;
-  // }
+  delete stack_.front();
 }
 
 bool Evaluator::Start() {
@@ -1095,6 +1099,8 @@ void Evaluator::RefreshVpath() {
 
 std::string Evaluator::ResolveVpath(Symbol target) const {
   const bool local_exists = Exists(target.str());
+  if (vpaths_.empty())
+    return local_exists ? target.str() : std::string();
   char link[PATH_MAX];
   const ssize_t link_size = readlink(target.c_str(), link, sizeof(link));
   std::string link_path;
@@ -1434,4 +1440,6 @@ void Evaluator::SetEvaluatingCommand(bool evaluating_command) {
   is_evaluating_command_ = evaluating_command;
 }
 
-SymbolSet Evaluator::used_undefined_vars_;
+const SymbolSet& Evaluator::used_undefined_vars() {
+  return used_undefined_vars_;
+}

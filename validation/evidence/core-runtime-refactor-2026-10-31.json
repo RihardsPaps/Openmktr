@@ -1,0 +1,585 @@
+{
+  "schema": 1,
+  "date": "2026-10-31",
+  "scope": "First staged core runtime delivery; full architectural plan and release qualification incomplete",
+  "baseline_revision": "77a397ffd7a1cc5f48e406f8cf9052a50cc0d150",
+  "runtime_revision": "e21e75c2c23422f94b313708e7c98627586677db",
+  "toolchain_image": "sha256:6cfc9578e451296d6d699dff8d6cc9bbbd18cd05906e6a3d7defe679d94aabc2",
+  "toolchain_lock_sha256": "3cc54323cbb65c5b554d7bf210873a17993936213e92fbfd1a20e88e9067becf",
+  "environment": {
+    "project": "synthetic",
+    "baseline_kind": "omktr",
+    "jobs": [
+      4
+    ],
+    "samples": 7,
+    "build_state": "fresh clean per pair",
+    "candidate_options": [],
+    "baseline_options": [],
+    "candidate_effective_settings": {
+      "profile": "safe",
+      "enabled": {
+        "evaluation": true,
+        "includes": true,
+        "recursive": false,
+        "compact": true,
+        "monitor": false
+      },
+      "general_state_replay": false,
+      "monitor_policy": "already-running-only"
+    },
+    "baseline_effective_settings": "starting revision defaults",
+    "monitor_explicitly_started": false,
+    "monitor_startup_timing": null,
+    "ninja_directory": null,
+    "ninja_bundle_sha256": null,
+    "ninja_executable": {
+      "path": "/usr/bin/ninja",
+      "sha256": "f110cba507ba0f0f34b6535720c5ed3739becf629e91b679756bf6cafbd476f0"
+    },
+    "llvm_version": null,
+    "toolchain_directory": null,
+    "toolchain_executable_sha256": null,
+    "toolchain_manifest_sha256": null,
+    "execution_image": null,
+    "stack_limit_bytes": [
+      8388608,
+      -1
+    ],
+    "platform": [
+      "Linux",
+      "2d36c5b38615",
+      "6.18.57",
+      "#1 SMP Tue Oct 20 21:56:04 UTC 2026",
+      "x86_64"
+    ],
+    "warmups": 2,
+    "entrypoints": [
+      "direct",
+      "build"
+    ],
+    "harness_sha256": "b182521f3e91c14a18bdc82fa5052122f8248c8d50b36087f73de6501c8637e8",
+    "cpu_affinity": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "versions": {
+      "clang": "clang version 22.1.8\nTarget: x86_64-chimera-linux-musl\nThread model: posix\nInstalledDir: /usr/bin\n",
+      "ninja": "1.13.2\n"
+    },
+    "binaries": {
+      "baseline": {
+        "path": "/baseline/omktr",
+        "sha256": "96654a8ec0b6a1dbff04af49ea778ef792182a65005daeba43fd9b98e63345a4",
+        "revision": "77a397ffd7a1cc5f48e406f8cf9052a50cc0d150",
+        "version": "GNU Make 4.2.1\nomktr 77a397ffd7a1cc5f48e406f8cf9052a50cc0d150\n"
+      },
+      "candidate": {
+        "path": "/workspace/omktr",
+        "sha256": "12e878e4e93599a461010228555b73cd0dacb67ed859bd64ba44b7937b36b6b3",
+        "revision": "e21e75c2c23422f94b313708e7c98627586677db",
+        "version": "GNU Make 4.2.1\nomktr e21e75c2c23422f94b313708e7c98627586677db\n"
+      }
+    },
+    "environment": {
+      "PATH": "/usr/bin:/bin",
+      "CCACHE_DISABLE": "1",
+      "LC_ALL": "C",
+      "TZ": "UTC",
+      "SOURCE_DATE_EPOCH": "1731888000",
+      "KBUILD_BUILD_USER": "benchmark",
+      "KBUILD_BUILD_HOST": "benchmark",
+      "KBUILD_BUILD_VERSION": "1",
+      "KBUILD_BUILD_TIMESTAMP": "Mon Nov 18 00:00:00 UTC 2024"
+    }
+  },
+  "validation": {
+    "portable_functional": "Passed, including 187 correctness tests in both profiles and 12 jobserver tests after no-op preparation",
+    "sanitizer_steps": [
+      {
+        "name": "configure",
+        "command": [
+          "python",
+          "tools/gen_sanitizer_build.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.026461233000190987
+      },
+      {
+        "name": "build",
+        "command": [
+          "ninja",
+          "-f",
+          "build.sanitizer.ninja",
+          "-j4",
+          "omktr-sanitized",
+          "tests"
+        ],
+        "exit_code": 0,
+        "seconds": 9.289050952000252
+      },
+      {
+        "name": "ready_queue_unit",
+        "command": [
+          "out/sanitized/ready_queue_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.09778343500056508
+      },
+      {
+        "name": "timeutil_unit",
+        "command": [
+          "out/sanitized/timeutil_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.005138876999808417
+      },
+      {
+        "name": "find_unit",
+        "command": [
+          "out/sanitized/find_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.037523560000408906
+      },
+      {
+        "name": "ninja_unit",
+        "command": [
+          "out/sanitized/ninja_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.005357398000342073
+      },
+      {
+        "name": "strutil_unit",
+        "command": [
+          "out/sanitized/strutil_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.004473971000152233
+      },
+      {
+        "name": "load_limit_unit",
+        "command": [
+          "out/sanitized/load_limit_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.0032650530001774314
+      },
+      {
+        "name": "portage",
+        "command": [
+          "python",
+          "tests/portage.py"
+        ],
+        "exit_code": 0,
+        "seconds": 6.875353815000381
+      },
+      {
+        "name": "load_limits",
+        "command": [
+          "python",
+          "tests/load_limits.py"
+        ],
+        "exit_code": 0,
+        "seconds": 37.64401252300013
+      },
+      {
+        "name": "correctness",
+        "command": [
+          "python",
+          "tests/correctness.py"
+        ],
+        "exit_code": 0,
+        "seconds": 22.42831580500024
+      },
+      {
+        "name": "generated_recipe_reads",
+        "command": [
+          "python",
+          "tests/generated_recipe_reads.py"
+        ],
+        "exit_code": 0,
+        "seconds": 27.907838834999893
+      },
+      {
+        "name": "graph_optimizations",
+        "command": [
+          "python",
+          "tests/graph_optimizations.py"
+        ],
+        "exit_code": 0,
+        "seconds": 27.925170073000118
+      },
+      {
+        "name": "workspace",
+        "command": [
+          "python",
+          "tests/workspace.py"
+        ],
+        "exit_code": 0,
+        "seconds": 23.674020401000234
+      },
+      {
+        "name": "ninja_jobserver",
+        "command": [
+          "python",
+          "tests/ninja_jobserver.py"
+        ],
+        "exit_code": 0,
+        "seconds": 9.90428247499949
+      },
+      {
+        "name": "make_compat_regressions",
+        "command": [
+          "python",
+          "tests/make_compat_regressions.py"
+        ],
+        "exit_code": 0,
+        "seconds": 3.619191763999879
+      },
+      {
+        "name": "correctness_aggressive",
+        "command": [
+          "python",
+          "tests/correctness.py"
+        ],
+        "exit_code": 0,
+        "seconds": 22.871579165000185
+      }
+    ],
+    "local_snapshots": {
+      "matched": 856,
+      "total": 858,
+      "profiles": [
+        "safe",
+        "aggressive"
+      ],
+      "unexpected_crashes": 0,
+      "baseline_identical_differences": [
+        "find_command.mk:test2:direct",
+        "find_command.mk:test2:ninja"
+      ]
+    },
+    "benchmark_harness": "9 passed after restoring setup log names",
+    "external_incremental": {
+      "release_blocked": false,
+      "performance_defects": false,
+      "errors": []
+    },
+    "baseline_failures_reproduced": [
+      "spawn token loss",
+      "descriptor exhaustion",
+      "keep-going spawn failure",
+      "FIFO recipe state hang",
+      "output spool failure"
+    ],
+    "github_core_workflow": "https://github.com/RihardsPaps/Openmktr/actions/runs/41207784733",
+    "previous_runtime_ci_pass": "https://github.com/RihardsPaps/Openmktr/actions/runs/41206455953"
+  },
+  "paired_synthetic": [
+    {
+      "project": "synthetic",
+      "entrypoint": "build",
+      "jobs": 4,
+      "scenario": "clean",
+      "pairs": 7,
+      "paired_improvement_percent": [
+        -0.08513906289779882,
+        8.297370354163835,
+        -2.7367378503915907,
+        1.2167256823533368,
+        1.8432779333883986,
+        -1.3363736157326223,
+        -2.9559434632986825
+      ],
+      "median_improvement_percent": -0.08513906289779882,
+      "bootstrap_95_percent": [
+        -2.7367378503915907,
+        1.8432779333883986
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 0.680194075000145,
+      "candidate_median_seconds": 0.6757196640000984
+    },
+    {
+      "project": "synthetic",
+      "entrypoint": "build",
+      "jobs": 4,
+      "scenario": "graph",
+      "pairs": 7,
+      "paired_improvement_percent": [
+        3.142090328550451,
+        -14.65163715955724,
+        -5.678777655332645,
+        -0.85915727839454,
+        1.3086514722697173,
+        -15.002038765544047,
+        -15.471455148840318
+      ],
+      "median_improvement_percent": -5.678777655332645,
+      "bootstrap_95_percent": [
+        -15.002038765544047,
+        1.3086514722697173
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 0.5521252990001813,
+      "candidate_median_seconds": 0.5784105419998014
+    },
+    {
+      "project": "synthetic",
+      "entrypoint": "build",
+      "jobs": 4,
+      "scenario": "missing",
+      "pairs": 7,
+      "paired_improvement_percent": [
+        4.631867667626787,
+        -8.829496757927746,
+        -1.9415905807821376,
+        1.9538769426912572,
+        -6.1827229558906405,
+        -35.0812190468309,
+        -6.372597566113591
+      ],
+      "median_improvement_percent": -6.1827229558906405,
+      "bootstrap_95_percent": [
+        -8.829496757927746,
+        1.9538769426912572
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 0.014116614000158734,
+      "candidate_median_seconds": 0.014906432000316272
+    },
+    {
+      "project": "synthetic",
+      "entrypoint": "build",
+      "jobs": 4,
+      "scenario": "noop",
+      "pairs": 7,
+      "paired_improvement_percent": [
+        -6.850773128845367,
+        2.7882143059663522,
+        -3.185044113416491,
+        7.457046951542889,
+        10.43301626949027,
+        -20.84449869326781,
+        5.2454164070868785
+      ],
+      "median_improvement_percent": 2.7882143059663522,
+      "bootstrap_95_percent": [
+        -6.850773128845367,
+        7.457046951542889
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 0.011237520999202388,
+      "candidate_median_seconds": 0.011243613000260666
+    },
+    {
+      "project": "synthetic",
+      "entrypoint": "build",
+      "jobs": 4,
+      "scenario": "source",
+      "pairs": 7,
+      "paired_improvement_percent": [
+        10.47725732719128,
+        0.22049148995706425,
+        0.5364864059882235,
+        -5.1888981422169245,
+        -1.5445524482581074,
+        -12.409360124033286,
+        -27.10656396031519
+      ],
+      "median_improvement_percent": -1.5445524482581074,
+      "bootstrap_95_percent": [
+        -12.409360124033286,
+        0.5364864059882235
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 0.014784938000047987,
+      "candidate_median_seconds": 0.015293162000489247
+    },
+    {
+      "project": "synthetic",
+      "entrypoint": "direct",
+      "jobs": 4,
+      "scenario": "clean",
+      "pairs": 7,
+      "paired_improvement_percent": [
+        -4.455681337291506,
+        -10.291462960359032,
+        9.446219619591167,
+        -15.40429871920075,
+        -5.570610227458128,
+        -12.092852018169985,
+        -2.187651767474308
+      ],
+      "median_improvement_percent": -5.570610227458128,
+      "bootstrap_95_percent": [
+        -12.092852018169985,
+        -2.187651767474308
+      ],
+      "supported_improvement": false,
+      "supported_regression": true,
+      "baseline_median_seconds": 0.14805153399993287,
+      "candidate_median_seconds": 0.15650499500043225
+    },
+    {
+      "project": "synthetic",
+      "entrypoint": "direct",
+      "jobs": 4,
+      "scenario": "graph",
+      "pairs": 7,
+      "paired_improvement_percent": [
+        -7.3024846103237895,
+        -0.8500816544756207,
+        1.0434395030716637,
+        3.1351466986100474,
+        4.988569874620263,
+        -3.1822030322942174,
+        -0.3828056480324582
+      ],
+      "median_improvement_percent": -0.3828056480324582,
+      "bootstrap_95_percent": [
+        -3.1822030322942174,
+        3.1351466986100474
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 0.17465447500035225,
+      "candidate_median_seconds": 0.17828646300040418
+    },
+    {
+      "project": "synthetic",
+      "entrypoint": "direct",
+      "jobs": 4,
+      "scenario": "missing",
+      "pairs": 7,
+      "paired_improvement_percent": [
+        4.049626786069471,
+        6.186583920917199,
+        7.077272340166896,
+        1.1516779168704416,
+        6.038600942599759,
+        11.903862129083409,
+        6.379365149661731
+      ],
+      "median_improvement_percent": 6.186583920917199,
+      "bootstrap_95_percent": [
+        4.049626786069471,
+        7.077272340166896
+      ],
+      "supported_improvement": true,
+      "supported_regression": false,
+      "baseline_median_seconds": 0.010851448999346758,
+      "candidate_median_seconds": 0.01018011500036664
+    },
+    {
+      "project": "synthetic",
+      "entrypoint": "direct",
+      "jobs": 4,
+      "scenario": "noop",
+      "pairs": 7,
+      "paired_improvement_percent": [
+        13.883799143057429,
+        13.671178122452776,
+        10.052009159191865,
+        16.942408191209402,
+        15.97143206373236,
+        14.154055269314735,
+        26.875542204297698
+      ],
+      "median_improvement_percent": 14.154055269314735,
+      "bootstrap_95_percent": [
+        13.671178122452776,
+        16.942408191209402
+      ],
+      "supported_improvement": true,
+      "supported_regression": false,
+      "baseline_median_seconds": 0.010597469999993336,
+      "candidate_median_seconds": 0.009148670999820752
+    },
+    {
+      "project": "synthetic",
+      "entrypoint": "direct",
+      "jobs": 4,
+      "scenario": "source",
+      "pairs": 7,
+      "paired_improvement_percent": [
+        -11.209930174497096,
+        2.5808073827664813,
+        0.32785795468279755,
+        4.238335686898809,
+        5.4728665068328075,
+        -5.91107291846511,
+        13.2085883412421
+      ],
+      "median_improvement_percent": 2.5808073827664813,
+      "bootstrap_95_percent": [
+        -5.91107291846511,
+        5.4728665068328075
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 0.01063499999963824,
+      "candidate_median_seconds": 0.01015922100032185
+    }
+  ],
+  "paired_noop_recipes": [
+    {
+      "project": "synthetic",
+      "entrypoint": "direct",
+      "jobs": 4,
+      "scenario": "2000_phony_noops",
+      "pairs": 21,
+      "paired_improvement_percent": [
+        38.052732916185484,
+        43.089274663855505,
+        26.490508129795387,
+        17.224080780500195,
+        32.79378600098257,
+        32.06527539938904,
+        23.004705806484715,
+        26.925045394418635,
+        15.692772294828972,
+        28.982092190306574,
+        28.609853341276736,
+        25.177565748187437,
+        25.03636137269175,
+        23.51395513732406,
+        23.486959378845295,
+        28.636160026624434,
+        35.64977734369646,
+        13.976371864685955,
+        32.003728362736375,
+        25.582871636944514,
+        23.332873888849047
+      ],
+      "median_improvement_percent": 26.490508129795387,
+      "bootstrap_95_percent": [
+        23.51395513732406,
+        28.982092190306574
+      ],
+      "supported_improvement": true,
+      "supported_regression": false,
+      "baseline_median_seconds": 0.015778524999404908,
+      "candidate_median_seconds": 0.011366022999936831
+    }
+  ],
+  "performance_qualified": false,
+  "limitations": [
+    "Latest clean direct synthetic cell regressed 5.57 percent; Ninja missing-output regressions also occurred in earlier paired runs. Retain all results; do not claim overall speed parity.",
+    "tests/bench.py in the evidence archive covers the preceding 5a425b4 runtime revision. Its no-op dispatch regression prompted the e21e75c preparation change; final no-op measurements are paired separately.",
+    "Independent memory nonregression and the pinned LibreOffice/Linux/FFmpeg matrix in both modes remain unqualified on the user PC.",
+    "Invocation ownership, shared typed freshness, unified evaluation/recipe admission, generation-wide publication and selective persistent graph reuse remain outstanding."
+  ],
+  "evidence_archive": "core-runtime-refactor-2026-10-31.zip",
+  "evidence_sha256": "ed7aeb8b05a2f10529844f7d9ae3fd0e8d719de7496b0c1fc59da74dc155f00e"
+}

@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Remove unused cached timestamps; document borrowed invocation-owned ASTs.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -23,8 +24,6 @@
 #ifndef FILE_H_
 #define FILE_H_
 
-#include <stdint.h>
-
 #include <string>
 #include <vector>
 
@@ -33,7 +32,7 @@ struct Stmt;
 class Makefile {
  public:
   explicit Makefile(const std::string& filename, bool from_stdin = false);
-  ~Makefile();
+  ~Makefile() = default;
 
   const std::string& buf() const { return buf_; }
   const std::string& filename() const { return filename_; }
@@ -45,8 +44,8 @@ class Makefile {
 
  private:
   std::string buf_;
-  uint64_t mtime_;
   std::string filename_;
+  // Statements and their borrowed expressions belong to the invocation arena.
   std::vector<Stmt*> stmts_;
   bool exists_;
 };

@@ -32,8 +32,8 @@ class GraphOptimizations(unittest.TestCase):
         self.run_tool("--ninja", "-j32", "--graph_optimizations=aggressive",
                       "dir/", "all")
         graph = (self.root / "build.ninja").read_text()
-        self.assertRegex(graph, r"(?m)^build a: \S+$")
-        self.assertRegex(graph, r"(?m)^build b: \S+ dir/$")
+        self.assertRegex(graph, r"(?m)^build a: \S+ \|\| \S+/.omktr-objects/env-\d+$")
+        self.assertRegex(graph, r"(?m)^build b: \S+ dir/ \|\| \S+/.omktr-objects/env-\d+$")
         subprocess.run(["ninja", "-j32"], cwd=self.root, check=True,
                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                        timeout=30)
@@ -375,7 +375,10 @@ print(sys.argv[1])
         plain = subprocess.check_output(["ninja", "-t", "commands"], cwd=self.root)
         self.run_tool("--ninja", "--graph_optimizations=safe")
         compact = subprocess.check_output(["ninja", "-t", "commands"], cwd=self.root)
-        self.assertEqual(plain, compact)
+        # Profiles are carried by immutable environment snapshots. The
+        # serialization comparison excludes only that content-selected path.
+        normalize = lambda value: re.sub(rb"/env-[0-9]+(?:\.[0-9]+)?", b"/env-SNAPSHOT", value)
+        self.assertEqual(normalize(plain), normalize(compact))
         graph = (self.root / "build.ninja").read_text()
         self.assertEqual(graph.count("\nrule "), 1)
         self.assertEqual(graph.count(" --internal-run-recipe "), 1)
@@ -919,7 +922,7 @@ print(sys.argv[1])
         self.run_tool("build", "--graph_optimizations=aggressive",
                       "--disable_graph_optimization=compact")
         self.assertIn("subninja ", (self.root / ".openmktr/build.ninja").read_text())
-        graphs = list((self.root / ".openmktr/.imports").rglob("build.ninja"))
+        graphs = list({path.resolve() for path in (self.root / ".openmktr/.imports").rglob("build.ninja")})
         self.assertEqual(len(graphs), 1)
         self.assertNotIn("omktr_command", graphs[0].read_text())
 
@@ -1144,7 +1147,8 @@ print(sys.argv[1])
         stamp.symlink_to(sentinel)
         self.run_tool("build")
         self.assertEqual(sentinel.read_text(), "preserved")
-        self.assertFalse(stamp.is_symlink())
+        self.assertNotEqual(stamp.resolve(), sentinel)
+        self.assertIn(".omktr-generations", str(stamp.resolve()))
 
     def test_monitor_tracks_include_rename_delete_recreate_and_symlinks(self):
         if not Path("/dev/shm").is_dir():
@@ -1234,21 +1238,23 @@ print(sys.argv[1])
     def test_ninja_fifo_creation_reports_errors_and_preserves_collisions(self):
         self.makefile(".PHONY: all\nall:\n\t@:\n")
         self.run_tool("--ninja", "-j1")
-        tools = self.root / "tools"
-        tools.mkdir()
         temporary = self.root / "temporary"
         temporary.mkdir()
-        shim = tools / "mkfifo"
-        shim.write_text("#!/bin/sh\nprintf 'deliberate FIFO setup failure\\n' >&2\nexit 1\n")
-        shim.chmod(0o755)
-        env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ["PATH"],
-                   TMPDIR=str(temporary), KATI_JOBS="1")
+        blocked = self.root / "not-a-directory"
+        blocked.write_text("keep")
+        env = dict(os.environ, TMPDIR=str(blocked), KATI_JOBS="1")
         env.pop("KATI_JOBSERVER_FIFO", None)
 
-        def launch():
+        def launch(collide=False):
+            def occupy_name():
+                if collide:
+                    path = temporary / f"kati-jobserver-{os.getpid()}"
+                    path.symlink_to("missing-collision-target")
+                    (self.root / "fifo-collision").write_text(str(path))
             child = subprocess.Popen(["sh", "./ninja.sh", "-j1"], cwd=self.root,
                                      env=env, stdout=subprocess.PIPE,
-                                     stderr=subprocess.STDOUT, text=True, start_new_session=True)
+                                     stderr=subprocess.STDOUT, text=True, start_new_session=True,
+                                     preexec_fn=occupy_name)
             try:
                 output, _ = child.communicate(timeout=5)
             except subprocess.TimeoutExpired:
@@ -1260,18 +1266,10 @@ print(sys.argv[1])
         status, output = launch()
         self.assertNotEqual(status, 0)
         self.assertIn("cannot create jobserver FIFO", output)
-        self.assertIn("deliberate FIFO setup failure", output)
+        self.assertEqual(blocked.read_text(), "keep")
         self.assertEqual(list(temporary.iterdir()), [])
-        shim.write_text(f"#!{sys.executable}\n"
-                        "from pathlib import Path\nimport os,sys\n"
-                        "marker=Path('fifo-collision')\n"
-                        "path=Path(sys.argv[-1])\n"
-                        "if not marker.exists():\n"
-                        " path.symlink_to('missing-collision-target')\n"
-                        " marker.write_text(str(path))\n"
-                        " sys.exit(1)\n"
-                        "os.mkfifo(path,0o600)\n")
-        status, output = launch()
+        env["TMPDIR"] = str(temporary)
+        status, output = launch(collide=True)
         self.assertEqual(status, 0, output)
         collision = Path((self.root / "fifo-collision").read_text())
         self.assertTrue(collision.is_symlink())
@@ -1290,16 +1288,19 @@ print(sys.argv[1])
             "'$(origin KATI_GRAPH_SETTINGS)' '$(MAKE)' > result\n")
         cases = [
             (["--graph_optimizations=off"], "v1:off",
-             "evaluation=0 includes=0 recursive=0 compact=0 monitor=0 full=0 pattern_index=0"),
+             "evaluation=0 includes=0 recursive=0 compact=0 monitor=0 full=0 pattern_index=0 resolution=0"),
             (["--graph_optimizations=safe"], "v1:safe",
-             "evaluation=1 includes=1 recursive=0 compact=1 monitor=0 full=0 pattern_index=1"),
+             "evaluation=1 includes=1 recursive=0 compact=1 monitor=0 full=0 pattern_index=1 resolution=1"),
             (["--graph_optimizations=aggressive", "--disable_graph_optimization=evaluation",
               "--disable_graph_optimization=compact"], "v1:aggressive:evaluation:compact",
-             "evaluation=0 includes=1 recursive=1 compact=0 monitor=1 full=1 pattern_index=1"),
+             "evaluation=0 includes=1 recursive=1 compact=0 monitor=1 full=1 pattern_index=1 resolution=1"),
             (["--graph_optimizations=aggressive", "--disable_graph_optimization=pattern_index"],
              "v1:aggressive:pattern_index",
-             "evaluation=1 includes=1 recursive=1 compact=1 monitor=1 full=1 pattern_index=0"),
+             "evaluation=1 includes=1 recursive=1 compact=1 monitor=1 full=1 pattern_index=0 resolution=1"),
         ]
+        cases.append((["--graph_optimizations=safe", "--disable_graph_optimization=resolution"],
+                      "v1:safe:resolution",
+                      "evaluation=1 includes=1 recursive=0 compact=1 monitor=0 full=0 pattern_index=1 resolution=0"))
         for jobs in (1, 8, 16):
             for options, transport, settings in cases:
                 for ninja in (False, True):

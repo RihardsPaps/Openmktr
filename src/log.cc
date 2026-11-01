@@ -1,3 +1,6 @@
+// FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
+// Fork changes are covered by MPL-2.0; see docs/LICENSING.md and NOTICE.
 // Copyright 2015 Google Inc. All rights reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,5 +61,10 @@ void ColorWarnLog(const char* file, int line, const char* msg) {
   }
 }
 
-bool g_log_no_exit;
-std::string* g_last_error;
+void ReportError(std::string message) {
+  if (g_log_no_exit) {
+    g_last_error = std::make_unique<std::string>(std::move(message));
+    return;
+  }
+  throw BuildError(message);
+}

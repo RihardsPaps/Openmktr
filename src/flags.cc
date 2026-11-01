@@ -1,4 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
+// Exclude structured timing diagnostics from propagated build options.
 // Default to Make's serial execution unless jobs are explicitly configured.
 // Control pattern-variable indexing independently of evaluation memoization.
 // Preserve inherited FIFO authentication without treating it as an explicit -j.
@@ -32,6 +34,7 @@
 
 #include "flags.h"
 #include "fileutil.h"
+#include "session.h"
 
 #include <limits.h>
 #include <stdlib.h>
@@ -45,12 +48,14 @@
 #include "strutil.h"
 #include "version.h"
 
-Flags g_flags;
+Flags& SessionFlags() {
+  return SessionService<Flags>();
+}
 
 static bool IsGraphOptimizationFeature(std::string_view feature) {
-  return feature == "evaluation" || feature == "pattern_index" ||
-         feature == "includes" || feature == "recursive" ||
-         feature == "compact" || feature == "monitor";
+  return feature == "resolution" || feature == "evaluation" ||
+         feature == "pattern_index" || feature == "includes" ||
+         feature == "recursive" || feature == "compact" || feature == "monitor";
 }
 
 static bool ReadInheritedGraphOptimizations(const char* value, Flags* flags) {
@@ -84,8 +89,8 @@ std::string Flags::GraphOptimizationTransport() const {
       graph_optimizations == GraphOptimizations::kOff    ? "v1:off"
       : graph_optimizations == GraphOptimizations::kSafe ? "v1:safe"
                                                          : "v1:aggressive";
-  for (const char* feature : {"evaluation", "pattern_index", "includes",
-                              "recursive", "compact", "monitor"})
+  for (const char* feature : {"resolution", "evaluation", "pattern_index",
+                              "includes", "recursive", "compact", "monitor"})
     if (std::find(disabled_graph_optimizations.begin(),
                   disabled_graph_optimizations.end(),
                   feature) != disabled_graph_optimizations.end()) {
@@ -117,6 +122,8 @@ std::string Flags::GraphOptimizationIdentity() const {
                                                                    : " full=0";
   result += GraphOptimizationEnabled("pattern_index") ? " pattern_index=1"
                                                       : " pattern_index=0";
+  result += GraphOptimizationEnabled("resolution") ? " resolution=1"
+                                                   : " resolution=0";
   return result;
 }
 
@@ -420,7 +427,7 @@ void Flags::Parse(int argc, char** argv) {
     const char* arg = argv[i];
     if (strcmp(arg, "--version") == 0 || strcmp(arg, "-v") == 0) {
       printf("GNU Make 4.2.1\nomktr %s\n", kGitVersion);
-      exit(0);
+      throw BuildExit{0};
     }
     bool should_propagate = true;
     int pi = i;
@@ -580,6 +587,17 @@ void Flags::Parse(int argc, char** argv) {
       output_sync = ParseOutputSync(arg + strlen("--output-sync="));
     } else if (!strcmp(arg, "-d")) {
       enable_debug = true;
+    } else if (HasPrefix(arg, "--stats_json=") ||
+               !strcmp(arg, "--stats_json")) {
+      const int first = i;
+      if (!ParseCommandLineOptionWithArg("--stats_json", argv, &i,
+                                         &stats_json) ||
+          !stats_json || !*stats_json)
+        ERROR("--stats_json requires a nonempty filename");
+      for (int index = first; index <= i; ++index)
+        diagnostic_arg_indices.push_back(index);
+      enable_stat_logs = true;
+      should_propagate = false;
     } else if (!strcmp(arg, "--kati_stats")) {
       enable_stat_logs = true;
     } else if (HasPrefix(arg, "--graph_optimizations=")) {

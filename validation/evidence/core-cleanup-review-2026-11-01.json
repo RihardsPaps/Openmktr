@@ -1,0 +1,4006 @@
+{
+  "schema": 1,
+  "date": "2026-11-01",
+  "campaign_start_date": "2026-10-31",
+  "generated_at_utc": "2026-11-01T01:25:22.373034+00:00",
+  "identities": {
+    "runtime_revision": "fdff3e56aecf8dbfbde1cc55253347b101c0db42",
+    "baseline_revision": "77a397ffd7a1cc5f48e406f8cf9052a50cc0d150",
+    "prior_pr_head": "edfae3604b7eb610b1f3aa8a1507fa39d98ca40f",
+    "prior_runtime_revision": "fd7573bdd7e0166d3f97fa5d41e29b0e2613ae3f",
+    "binaries": {
+      "/workspace/Openmktr/omktr": {
+        "sha256": "d7a107042f87010f7c1330f0246d7da7526df968c66b880a40117513d3cf8f23",
+        "bytes": 1942080
+      },
+      "/workspace/Openmktr/omktr-sanitized": {
+        "sha256": "d8747c1823342d5e1e5cdcdc48e3a60f7a98c5eb416457465b8b2ac102c714dc",
+        "bytes": 31964400
+      },
+      "/workspace/openmktr-baseline/omktr": {
+        "sha256": "96654a8ec0b6a1dbff04af49ea778ef792182a65005daeba43fd9b98e63345a4",
+        "bytes": 1620912
+      },
+      "/workspace/performance-fix-evidence/cleanup-review/before-omktr": {
+        "sha256": "2a090252f556be7b6659c64a827ddb8446e3275cc95543abd534f6aa21a2db98",
+        "bytes": 1940208
+      }
+    },
+    "source_status": " M docs/core-refactor.md\n M validation/PROGRESS.md\n",
+    "previous_cleanup_runtime": "88602d27260c33b6efa0c6b8acf5d708b6c80bc8",
+    "previous_fixed_runtime": "20580cd3819e83b86a2be576b0f9798d2aad0f79",
+    "previous_noop_runtime": "5302d4f989608f090b0eb32ca4cbbb5e6a50d16f",
+    "previous_metadata_runtime": "f1ee1a23eb7da8e4f34696c1d5f1aca19a25e04b",
+    "previous_publication_runtime": "d4dca5fd9a282a596d867e16781863fbc2665471"
+  },
+  "review": {
+    "pr_url": "https://github.com/RihardsPaps/Openmktr/pull/65",
+    "earlier_reviews": [
+      {
+        "commit": "88602d27260c33b6efa0c6b8acf5d708b6c80bc8",
+        "finding_url": "https://github.com/RihardsPaps/Openmktr/pull/65#discussion_r4433451269",
+        "fix_commit": "20580cd3819e83b86a2be576b0f9798d2aad0f79",
+        "reply_url": "https://github.com/RihardsPaps/Openmktr/pull/65#discussion_r4433473607"
+      },
+      {
+        "commit_sha": "20580cd3819e83b86a2be576b0f9798d2aad0f79",
+        "has_any_findings": false,
+        "has_unresolved_findings": false,
+        "status": "completed",
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6549822093",
+        "summary_url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6549628887"
+      },
+      {
+        "commit_sha": "5302d4f989608f090b0eb32ca4cbbb5e6a50d16f",
+        "has_any_findings": false,
+        "has_unresolved_findings": false,
+        "status": "completed",
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6550275605",
+        "summary_url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6549628887"
+      },
+      {
+        "commit_sha": "f1ee1a23eb7da8e4f34696c1d5f1aca19a25e04b",
+        "has_any_findings": false,
+        "has_unresolved_findings": false,
+        "status": "completed",
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6550539874",
+        "summary_url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6549628887"
+      },
+      {
+        "commit_sha": "d4dca5fd9a282a596d867e16781863fbc2665471",
+        "has_any_findings": false,
+        "has_unresolved_findings": false,
+        "status": "completed",
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6551135830",
+        "summary_url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6549628887"
+      }
+    ],
+    "latest_review": {
+      "commit_sha": "fdff3e56aecf8dbfbde1cc55253347b101c0db42",
+      "has_any_findings": false,
+      "has_unresolved_findings": false,
+      "status": "completed",
+      "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6551227449",
+      "summary_url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6549628887"
+    },
+    "comments": [
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6549625495",
+        "body": "@codex review\n\nPlease review the full refactor in this PR, including the cleanup at `88602d27260c33b6efa0c6b8acf5d708b6c80bc8`. Focus on correctness, unnecessary complexity, invocation/AST ownership, scheduler cancellation and joining, jobserver token/descriptor lifetime, freshness semantics, generation leases and immutable-object publication, and potential performance regressions.\n\nThe cleanup passes all 28 normal checks, all 17 ASan/UBSan checks (session ownership also with LeakSanitizer), both 858-case snapshot profiles, and all 27 external GNU incremental scenarios. The fresh paired performance campaign is running; the first attempt hit the workspace inode limit and is retained as incomplete evidence. Previous performance evidence is explicitly tied to the earlier runtime. Real PC qualification remains unrun, and the PR remains draft.",
+        "user": {
+          "login": "HarryMidnight",
+          "name": "HarryMidnight",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/u/26147842?v=4",
+          "id": 26147842
+        },
+        "id": 6549625495,
+        "pull_request_review_id": null,
+        "in_reply_to_id": null,
+        "created_at": "2026-10-31T21:53:35Z",
+        "updated_at": "2026-10-31T21:53:35Z",
+        "review": null,
+        "side": null,
+        "line": null,
+        "start_line": null,
+        "path": null,
+        "body_html": "<p dir=\"auto\"><a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> review</p>\n<p dir=\"auto\">Please review the full refactor in this PR, including the cleanup at <code class=\"notranslate\">88602d27260c33b6efa0c6b8acf5d708b6c80bc8</code>. Focus on correctness, unnecessary complexity, invocation/AST ownership, scheduler cancellation and joining, jobserver token/descriptor lifetime, freshness semantics, generation leases and immutable-object publication, and potential performance regressions.</p>\n<p dir=\"auto\">The cleanup passes all 28 normal checks, all 17 ASan/UBSan checks (session ownership also with LeakSanitizer), both 858-case snapshot profiles, and all 27 external GNU incremental scenarios. The fresh paired performance campaign is running; the first attempt hit the workspace inode limit and is retained as incomplete evidence. Previous performance evidence is explicitly tied to the earlier runtime. Real PC qualification remains unrun, and the PR remains draft.</p>"
+      },
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6549628887",
+        "body": "<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 {\"code_review\":{\"commit_sha\":\"fdff3e56aecf8dbfbde1cc55253347b101c0db42\",\"has_any_findings\":false,\"has_unresolved_findings\":false,\"status\":\"completed\"},\"security_review\":{\"commit_sha\":null,\"has_any_findings\":null,\"has_unresolved_findings\":null,\"status\":null}} -->\n\n## Codex Review Summary\n\nThis comment shows the latest Codex review activity on this pull request.\n\n| Review | Status | Commit | Review trigger |\n| --- | --- | --- | --- |\n| \ud83d\udcdd **Code Review** | \u2705 **Completed** <relative-time datetime=\"2026-11-01T00:33:57.199035Z\">2026-11-01T00:33:57.199035Z</relative-time> | `fdff3e5` | Manual request |\n\n\n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\" or \"@codex security review\".\n\nCodex reacts with \ud83d\udc40 while any review is running, comments if it has suggestions, and reacts with \ud83d\udc4d once all reviews finish with no findings.\n\n</details>",
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "name": "chatgpt-codex-connector[bot]",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/in/1144995?v=4",
+          "id": 199175422
+        },
+        "id": 6549628887,
+        "pull_request_review_id": null,
+        "in_reply_to_id": null,
+        "created_at": "2026-10-31T21:53:54Z",
+        "updated_at": "2026-11-01T00:33:57Z",
+        "review": null,
+        "side": null,
+        "line": null,
+        "start_line": null,
+        "path": null,
+        "body_html": "\n\n<h2 dir=\"auto\">Codex Review Summary</h2>\n<p dir=\"auto\">This comment shows the latest Codex review activity on this pull request.</p>\n<markdown-accessiblity-table><table role=\"table\">\n<thead>\n<tr>\n<th>Review</th>\n<th>Status</th>\n<th>Commit</th>\n<th>Review trigger</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>\ud83d\udcdd <strong>Code Review</strong></td>\n<td>\u2705 <strong>Completed</strong> <relative-time datetime=\"2026-11-01T00:33:57.199035Z\">2026-11-01T00:33:57.199035Z</relative-time></td>\n<td><code class=\"notranslate\">fdff3e5</code></td>\n<td>Manual request</td>\n</tr>\n</tbody>\n</table></markdown-accessiblity-table>\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br>\n<p dir=\"auto\"><a href=\"https://chatgpt.com/codex/cloud/settings/general\" rel=\"nofollow\">Your team has set up Codex to review pull requests in this repo</a>. Reviews are triggered when you</p>\n<ul dir=\"auto\">\n<li>Open a pull request for review</li>\n<li>Mark a draft as ready</li>\n<li>Comment \"<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> review\" or \"<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> security review\".</li>\n</ul>\n<p dir=\"auto\">Codex reacts with \ud83d\udc40 while any review is running, comments if it has suggestions, and reacts with \ud83d\udc4d once all reviews finish with no findings.</p>\n</details>"
+      },
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#discussion_r4433451269",
+        "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Preserve logical newer inputs in the double-colon fallback**\n\nIn generated Ninja mode, a target with multiple double-colon groups still falls back to deferred `$?` expansion, whose `--internal-newer-inputs` helper drops nonexistent prerequisites. With the missing-output workaround also removed by this refactor, this now misses builds that previously worked: declare `.PHONY: force`, give `output:: force` the recipe `if test -n \"$?\"; then printf built > $@; fi`, and add `output::; @:`. Starting without `output`, the generated build succeeds without creating it; direct execution and the baseline generated build create it. Preserve logical/phony prerequisite handling in this fallback before removing its existing missing-output protection.\n\nAGENTS.md reference: [AGENTS.md:L27-L28](https://github.com/RihardsPaps/Openmktr/blob/88602d27260c33b6efa0c6b8acf5d708b6c80bc8/AGENTS.md#L27-L28)\n\nUseful? React with \ud83d\udc4d\u00a0/ \ud83d\udc4e.\n\n<!-- codex-code-review-finding:v1 -->",
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "name": "chatgpt-codex-connector[bot]",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/in/1144995?v=4",
+          "id": 199175422
+        },
+        "id": 4433451269,
+        "pull_request_review_id": 5725130560,
+        "in_reply_to_id": null,
+        "created_at": "2026-10-31T22:00:15Z",
+        "updated_at": "2026-10-31T22:00:15Z",
+        "review": null,
+        "side": "RIGHT",
+        "line": 428,
+        "start_line": 426,
+        "path": "src/command.cc",
+        "body_html": "<p dir=\"auto\"><strong><sub><sub><a target=\"_blank\" rel=\"noopener noreferrer nofollow\" href=\"https://camo.githubusercontent.com/f2c1aacb361ddd3a0e9f9cacdb84fab050de434017f6747bb916e31e29bdf03d/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f50322d79656c6c6f773f7374796c653d666c6174\"><img src=\"https://camo.githubusercontent.com/f2c1aacb361ddd3a0e9f9cacdb84fab050de434017f6747bb916e31e29bdf03d/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f50322d79656c6c6f773f7374796c653d666c6174\" alt=\"P2 Badge\" data-canonical-src=\"https://img.shields.io/badge/P2-yellow?style=flat\" style=\"max-width: 100%;\"></a></sub></sub>  Preserve logical newer inputs in the double-colon fallback</strong></p>\n<p dir=\"auto\">In generated Ninja mode, a target with multiple double-colon groups still falls back to deferred <code class=\"notranslate\">$?</code> expansion, whose <code class=\"notranslate\">--internal-newer-inputs</code> helper drops nonexistent prerequisites. With the missing-output workaround also removed by this refactor, this now misses builds that previously worked: declare <code class=\"notranslate\">.PHONY: force</code>, give <code class=\"notranslate\">output:: force</code> the recipe <code class=\"notranslate\">if test -n \"$?\"; then printf built &gt; $@; fi</code>, and add <code class=\"notranslate\">output::; @:</code>. Starting without <code class=\"notranslate\">output</code>, the generated build succeeds without creating it; direct execution and the baseline generated build create it. Preserve logical/phony prerequisite handling in this fallback before removing its existing missing-output protection.</p>\n<p dir=\"auto\">AGENTS.md reference: <a href=\"https://github.com/RihardsPaps/Openmktr/blob/88602d27260c33b6efa0c6b8acf5d708b6c80bc8/AGENTS.md#L27-L28\">AGENTS.md:L27-L28</a></p>\n<p dir=\"auto\">Useful? React with \ud83d\udc4d\u00a0/ \ud83d\udc4e.</p>\n"
+      },
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#pullrequestreview-5725130560",
+        "body": "<!-- codex-review-receipt:v1 -->\n\n\n### \ud83d\udca1 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** `88602d2726`\n    \n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\".\n\nIf Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.\n\n\n\n\nCodex can also answer questions or update the PR. Try commenting \"@codex address that feedback\".\n            \n</details>",
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "name": "chatgpt-codex-connector[bot]",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/in/1144995?v=4",
+          "id": 199175422
+        },
+        "id": 5725130560,
+        "pull_request_review_id": null,
+        "in_reply_to_id": null,
+        "created_at": "2026-10-31T22:00:15Z",
+        "updated_at": null,
+        "review": "COMMENTED",
+        "side": null,
+        "line": null,
+        "start_line": null,
+        "path": null,
+        "body_html": "\n<h3 dir=\"auto\">\ud83d\udca1 Codex Review</h3>\n<p dir=\"auto\">Here are some automated review suggestions for this pull request.</p>\n<p dir=\"auto\"><strong>Reviewed commit:</strong> <code class=\"notranslate\">88602d2726</code></p>\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br>\n<p dir=\"auto\"><a href=\"https://chatgpt.com/codex/cloud/settings/general\" rel=\"nofollow\">Your team has set up Codex to review pull requests in this repo</a>. Reviews are triggered when you</p>\n<ul dir=\"auto\">\n<li>Open a pull request for review</li>\n<li>Mark a draft as ready</li>\n<li>Comment \"<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> review\".</li>\n</ul>\n<p dir=\"auto\">If Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.</p>\n<p dir=\"auto\">Codex can also answer questions or update the PR. Try commenting \"<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> address that feedback\".</p>\n</details>"
+      },
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#discussion_r4433473607",
+        "body": "Confirmed: the new regression test fails on 88602d2 in both generated modes while direct execution passes. Fixed in 20580cd3819e83b86a2be576b0f9798d2aad0f79: deferred probes now carry each prerequisite's phony/logical/file kind and timestamp resolution, using the shared FileStamp comparison. Saved graphs retain their original helper format. The focused tests pass for direct/build/legacy modes at -j1/-j4, missing logical inputs, existing files marked phony, repeated builds, duplicate and order-only inputs, low-resolution timestamps, and malformed helper metadata. Full normal and sanitizer validation is running.",
+        "user": {
+          "login": "HarryMidnight",
+          "name": "HarryMidnight",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/u/26147842?v=4",
+          "id": 26147842
+        },
+        "id": 4433473607,
+        "pull_request_review_id": 5725177287,
+        "in_reply_to_id": 4433451269,
+        "created_at": "2026-10-31T22:08:54Z",
+        "updated_at": "2026-10-31T22:08:55Z",
+        "review": null,
+        "side": "RIGHT",
+        "line": 428,
+        "start_line": 426,
+        "path": "src/command.cc",
+        "body_html": "<p dir=\"auto\">Confirmed: the new regression test fails on <a class=\"commit-link\" data-hovercard-type=\"commit\" data-hovercard-url=\"https://github.com/RihardsPaps/Openmktr/commit/88602d27260c33b6efa0c6b8acf5d708b6c80bc8/hovercard\" href=\"https://github.com/RihardsPaps/Openmktr/commit/88602d27260c33b6efa0c6b8acf5d708b6c80bc8\"><tt>88602d2</tt></a> in both generated modes while direct execution passes. Fixed in <a class=\"commit-link\" data-hovercard-type=\"commit\" data-hovercard-url=\"https://github.com/RihardsPaps/Openmktr/commit/20580cd3819e83b86a2be576b0f9798d2aad0f79/hovercard\" href=\"https://github.com/RihardsPaps/Openmktr/commit/20580cd3819e83b86a2be576b0f9798d2aad0f79\"><tt>20580cd</tt></a>: deferred probes now carry each prerequisite's phony/logical/file kind and timestamp resolution, using the shared FileStamp comparison. Saved graphs retain their original helper format. The focused tests pass for direct/build/legacy modes at -j1/-j4, missing logical inputs, existing files marked phony, repeated builds, duplicate and order-only inputs, low-resolution timestamps, and malformed helper metadata. Full normal and sanitizer validation is running.</p>"
+      },
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#pullrequestreview-5725177287",
+        "body": "",
+        "user": {
+          "login": "HarryMidnight",
+          "name": "HarryMidnight",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/u/26147842?v=4",
+          "id": 26147842
+        },
+        "id": 5725177287,
+        "pull_request_review_id": null,
+        "in_reply_to_id": null,
+        "created_at": "2026-10-31T22:08:54Z",
+        "updated_at": null,
+        "review": "COMMENTED",
+        "side": null,
+        "line": null,
+        "start_line": null,
+        "path": null,
+        "body_html": ""
+      },
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6549797814",
+        "body": "@codex review\n\nPlease review the updated head `20580cd3819e83b86a2be576b0f9798d2aad0f79`, including the fix for discussion_r4433451269. The deferred double-colon `$?` probe now preserves phony/logical prerequisites and low-resolution timestamps while retaining the saved-graph helper format. The new direct/build/legacy regression tests and full correctness suite pass; the remaining portable and sanitizer checks are running.\n\nPerformance remains explicitly unqualified for the cleanup head: the retained 88602d2 campaign passed 55/60 cells, with five timing failures. A same-environment fd7573b-to-88602d2 control found no statistically supported regression but wide intervals. A larger, predeclared fixed-head campaign with explicit CPU affinity will run after correctness validation. Real PC qualification remains unrun, and this PR stays draft.",
+        "user": {
+          "login": "HarryMidnight",
+          "name": "HarryMidnight",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/u/26147842?v=4",
+          "id": 26147842
+        },
+        "id": 6549797814,
+        "pull_request_review_id": null,
+        "in_reply_to_id": null,
+        "created_at": "2026-10-31T22:10:08Z",
+        "updated_at": "2026-10-31T22:10:08Z",
+        "review": null,
+        "side": null,
+        "line": null,
+        "start_line": null,
+        "path": null,
+        "body_html": "<p dir=\"auto\"><a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> review</p>\n<p dir=\"auto\">Please review the updated head <code class=\"notranslate\">20580cd3819e83b86a2be576b0f9798d2aad0f79</code>, including the fix for discussion_r4433451269. The deferred double-colon <code class=\"notranslate\">$?</code> probe now preserves phony/logical prerequisites and low-resolution timestamps while retaining the saved-graph helper format. The new direct/build/legacy regression tests and full correctness suite pass; the remaining portable and sanitizer checks are running.</p>\n<p dir=\"auto\">Performance remains explicitly unqualified for the cleanup head: the retained <a class=\"commit-link\" data-hovercard-type=\"commit\" data-hovercard-url=\"https://github.com/RihardsPaps/Openmktr/commit/88602d27260c33b6efa0c6b8acf5d708b6c80bc8/hovercard\" href=\"https://github.com/RihardsPaps/Openmktr/commit/88602d27260c33b6efa0c6b8acf5d708b6c80bc8\"><tt>88602d2</tt></a> campaign passed 55/60 cells, with five timing failures. A same-environment <a class=\"commit-link\" data-hovercard-type=\"commit\" data-hovercard-url=\"https://github.com/RihardsPaps/Openmktr/commit/fd7573bdd7e0166d3f97fa5d41e29b0e2613ae3f/hovercard\" href=\"https://github.com/RihardsPaps/Openmktr/commit/fd7573bdd7e0166d3f97fa5d41e29b0e2613ae3f\"><tt>fd7573b</tt></a>-to-88602d2 control found no statistically supported regression but wide intervals. A larger, predeclared fixed-head campaign with explicit CPU affinity will run after correctness validation. Real PC qualification remains unrun, and this PR stays draft.</p>"
+      },
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6549822093",
+        "body": "<!-- codex-review-receipt:v1 -->\n\nCodex Review: Didn't find any major issues. Nice work!\n\n**Reviewed commit:** `20580cd381`\n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\".\n\nIf Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.\n\n\n\n\nCodex can also answer questions or update the PR. Try commenting \"@codex address that feedback\".\n            \n</details>",
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "name": "chatgpt-codex-connector[bot]",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/in/1144995?v=4",
+          "id": 199175422
+        },
+        "id": 6549822093,
+        "pull_request_review_id": null,
+        "in_reply_to_id": null,
+        "created_at": "2026-10-31T22:12:27Z",
+        "updated_at": "2026-10-31T22:12:27Z",
+        "review": null,
+        "side": null,
+        "line": null,
+        "start_line": null,
+        "path": null,
+        "body_html": "\n<p dir=\"auto\">Codex Review: Didn't find any major issues. Nice work!</p>\n<p dir=\"auto\"><strong>Reviewed commit:</strong> <code class=\"notranslate\">20580cd381</code></p>\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br>\n<p dir=\"auto\"><a href=\"https://chatgpt.com/codex/cloud/settings/general\" rel=\"nofollow\">Your team has set up Codex to review pull requests in this repo</a>. Reviews are triggered when you</p>\n<ul dir=\"auto\">\n<li>Open a pull request for review</li>\n<li>Mark a draft as ready</li>\n<li>Comment \"<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> review\".</li>\n</ul>\n<p dir=\"auto\">If Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.</p>\n<p dir=\"auto\">Codex can also answer questions or update the PR. Try commenting \"<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> address that feedback\".</p>\n</details>"
+      },
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6550264352",
+        "body": "@codex review\n\nPlease review `5302d4f989608f090b0eb32ca4cbbb5e6a50d16f`, especially the final cleanup in Ninja emission. Silent phony `@:` recipes with the default `/bin/sh -c`, no command environment changes, no deferred runtime evaluation and no explicit recursive prefix now retain their phony dependency edges without launching a shell. Echoed commands, custom shells/flags, exports and deferred evaluation still execute. The new regression test passes before and after the change and checks repeated rebuilds through an existing phony file, prerequisites, inherited export effects, custom shells/flags and visible commands. Both builds pass; full normal/sanitizer validation is running.\n\nThe prior `20580cd` code passed all correctness checks and all three CI workflows, but its strict performance campaign passed 57/60 cells. Main and large-graph cells all passed; remaining failures were near-parity parallel execution and 0.7\u20130.9% slower 2,000-recipe generated launch cases. A shorter shell environment guard was tested and rejected because it did not improve performance. The final runtime will receive a fresh predeclared campaign with unchanged thresholds. The PR stays draft; real PC qualification remains unrun.",
+        "user": {
+          "login": "HarryMidnight",
+          "name": "HarryMidnight",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/u/26147842?v=4",
+          "id": 26147842
+        },
+        "id": 6550264352,
+        "pull_request_review_id": null,
+        "in_reply_to_id": null,
+        "created_at": "2026-10-31T22:56:56Z",
+        "updated_at": "2026-10-31T22:56:56Z",
+        "review": null,
+        "side": null,
+        "line": null,
+        "start_line": null,
+        "path": null,
+        "body_html": "<p dir=\"auto\"><a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> review</p>\n<p dir=\"auto\">Please review <code class=\"notranslate\">5302d4f989608f090b0eb32ca4cbbb5e6a50d16f</code>, especially the final cleanup in Ninja emission. Silent phony <code class=\"notranslate\">@:</code> recipes with the default <code class=\"notranslate\">/bin/sh -c</code>, no command environment changes, no deferred runtime evaluation and no explicit recursive prefix now retain their phony dependency edges without launching a shell. Echoed commands, custom shells/flags, exports and deferred evaluation still execute. The new regression test passes before and after the change and checks repeated rebuilds through an existing phony file, prerequisites, inherited export effects, custom shells/flags and visible commands. Both builds pass; full normal/sanitizer validation is running.</p>\n<p dir=\"auto\">The prior <code class=\"notranslate\">20580cd</code> code passed all correctness checks and all three CI workflows, but its strict performance campaign passed 57/60 cells. Main and large-graph cells all passed; remaining failures were near-parity parallel execution and 0.7\u20130.9% slower 2,000-recipe generated launch cases. A shorter shell environment guard was tested and rejected because it did not improve performance. The final runtime will receive a fresh predeclared campaign with unchanged thresholds. The PR stays draft; real PC qualification remains unrun.</p>"
+      },
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6550275605",
+        "body": "<!-- codex-review-receipt:v1 -->\n\nCodex Review: Didn't find any major issues. Keep them coming!\n\n**Reviewed commit:** `5302d4f989`\n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\".\n\nIf Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.\n\n\n\n\nCodex can also answer questions or update the PR. Try commenting \"@codex address that feedback\".\n            \n</details>",
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "name": "chatgpt-codex-connector[bot]",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/in/1144995?v=4",
+          "id": 199175422
+        },
+        "id": 6550275605,
+        "pull_request_review_id": null,
+        "in_reply_to_id": null,
+        "created_at": "2026-10-31T22:58:02Z",
+        "updated_at": "2026-10-31T22:58:02Z",
+        "review": null,
+        "side": null,
+        "line": null,
+        "start_line": null,
+        "path": null,
+        "body_html": "\n<p dir=\"auto\">Codex Review: Didn't find any major issues. Keep them coming!</p>\n<p dir=\"auto\"><strong>Reviewed commit:</strong> <code class=\"notranslate\">5302d4f989</code></p>\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br>\n<p dir=\"auto\"><a href=\"https://chatgpt.com/codex/cloud/settings/general\" rel=\"nofollow\">Your team has set up Codex to review pull requests in this repo</a>. Reviews are triggered when you</p>\n<ul dir=\"auto\">\n<li>Open a pull request for review</li>\n<li>Mark a draft as ready</li>\n<li>Comment \"<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> review\".</li>\n</ul>\n<p dir=\"auto\">If Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.</p>\n<p dir=\"auto\">Codex can also answer questions or update the PR. Try commenting \"<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> address that feedback\".</p>\n</details>"
+      },
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6550527274",
+        "body": "@codex review\n\nPlease review current head f1ee1a23eb7da8e4f34696c1d5f1aca19a25e04b. During follow-up inspection I reproduced two metadata regressions in the silent phony no-op optimization: dropping depfile inputs and bypassing explicit restat suppression. This commit preserves actual commands when explicit Ninja metadata is present. The new tests pass on pre-optimization 20580cd, fail on 5302d4f, and pass on this head. The original double-colon finding remains fixed. Full portable/sanitizer, external incremental and unchanged performance gates are being rerun.",
+        "user": {
+          "login": "HarryMidnight",
+          "name": "HarryMidnight",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/u/26147842?v=4",
+          "id": 26147842
+        },
+        "id": 6550527274,
+        "pull_request_review_id": null,
+        "in_reply_to_id": null,
+        "created_at": "2026-10-31T23:22:36Z",
+        "updated_at": "2026-10-31T23:22:36Z",
+        "review": null,
+        "side": null,
+        "line": null,
+        "start_line": null,
+        "path": null,
+        "body_html": "<p dir=\"auto\"><a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> review</p>\n<p dir=\"auto\">Please review current head <a class=\"commit-link\" data-hovercard-type=\"commit\" data-hovercard-url=\"https://github.com/RihardsPaps/Openmktr/commit/f1ee1a23eb7da8e4f34696c1d5f1aca19a25e04b/hovercard\" href=\"https://github.com/RihardsPaps/Openmktr/commit/f1ee1a23eb7da8e4f34696c1d5f1aca19a25e04b\"><tt>f1ee1a2</tt></a>. During follow-up inspection I reproduced two metadata regressions in the silent phony no-op optimization: dropping depfile inputs and bypassing explicit restat suppression. This commit preserves actual commands when explicit Ninja metadata is present. The new tests pass on pre-optimization <a class=\"commit-link\" data-hovercard-type=\"commit\" data-hovercard-url=\"https://github.com/RihardsPaps/Openmktr/commit/20580cd3819e83b86a2be576b0f9798d2aad0f79/hovercard\" href=\"https://github.com/RihardsPaps/Openmktr/commit/20580cd3819e83b86a2be576b0f9798d2aad0f79\"><tt>20580cd</tt></a>, fail on <a class=\"commit-link\" data-hovercard-type=\"commit\" data-hovercard-url=\"https://github.com/RihardsPaps/Openmktr/commit/5302d4f989608f090b0eb32ca4cbbb5e6a50d16f/hovercard\" href=\"https://github.com/RihardsPaps/Openmktr/commit/5302d4f989608f090b0eb32ca4cbbb5e6a50d16f\"><tt>5302d4f</tt></a>, and pass on this head. The original double-colon finding remains fixed. Full portable/sanitizer, external incremental and unchanged performance gates are being rerun.</p>"
+      },
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6550539874",
+        "body": "<!-- codex-review-receipt:v1 -->\n\nCodex Review: Didn't find any major issues. What shall we delve into next?\n\n**Reviewed commit:** `f1ee1a23eb`\n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\".\n\nIf Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.\n\n\n\n\nCodex can also answer questions or update the PR. Try commenting \"@codex address that feedback\".\n            \n</details>",
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "name": "chatgpt-codex-connector[bot]",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/in/1144995?v=4",
+          "id": 199175422
+        },
+        "id": 6550539874,
+        "pull_request_review_id": null,
+        "in_reply_to_id": null,
+        "created_at": "2026-10-31T23:23:55Z",
+        "updated_at": "2026-10-31T23:23:55Z",
+        "review": null,
+        "side": null,
+        "line": null,
+        "start_line": null,
+        "path": null,
+        "body_html": "\n<p dir=\"auto\">Codex Review: Didn't find any major issues. What shall we delve into next?</p>\n<p dir=\"auto\"><strong>Reviewed commit:</strong> <code class=\"notranslate\">f1ee1a23eb</code></p>\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br>\n<p dir=\"auto\"><a href=\"https://chatgpt.com/codex/cloud/settings/general\" rel=\"nofollow\">Your team has set up Codex to review pull requests in this repo</a>. Reviews are triggered when you</p>\n<ul dir=\"auto\">\n<li>Open a pull request for review</li>\n<li>Mark a draft as ready</li>\n<li>Comment \"<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> review\".</li>\n</ul>\n<p dir=\"auto\">If Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.</p>\n<p dir=\"auto\">Codex can also answer questions or update the PR. Try commenting \"<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> address that feedback\".</p>\n</details>"
+      },
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6551124247",
+        "body": "@codex review\n\nPlease review d4dca5fd9a282a596d867e16781863fbc2665471, particularly generation publication. Fresh graphs no longer create/sync an empty legacy snapshot when no standalone artifacts exist. Existing public aliases with the exact desired target remain unchanged; new aliases use atomic creation, and replacement of different entries still uses atomic rename. The root/parent/artifact durability barriers are retained. The legacy migration test now removes the current pointer so it exercises first migration, and passes before and after the change. All 14 architecture tests pass on the exact new binary.\n\nThis addresses unnecessary publication work found after the prior runtime's fixed precision extension confirmed a 3.3% small end-to-end clean regression (59/60 cells passed). The new binary receives a fresh predeclared campaign, checking that clean case first at 1,001 pairs. No thresholds were relaxed, and earlier failures remain retained. Full validation is pending for this new runtime; the PR remains draft.",
+        "user": {
+          "login": "HarryMidnight",
+          "name": "HarryMidnight",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/u/26147842?v=4",
+          "id": 26147842
+        },
+        "id": 6551124247,
+        "pull_request_review_id": null,
+        "in_reply_to_id": null,
+        "created_at": "2026-11-01T00:23:33Z",
+        "updated_at": "2026-11-01T00:23:33Z",
+        "review": null,
+        "side": null,
+        "line": null,
+        "start_line": null,
+        "path": null,
+        "body_html": "<p dir=\"auto\"><a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> review</p>\n<p dir=\"auto\">Please review <a class=\"commit-link\" data-hovercard-type=\"commit\" data-hovercard-url=\"https://github.com/RihardsPaps/Openmktr/commit/d4dca5fd9a282a596d867e16781863fbc2665471/hovercard\" href=\"https://github.com/RihardsPaps/Openmktr/commit/d4dca5fd9a282a596d867e16781863fbc2665471\"><tt>d4dca5f</tt></a>, particularly generation publication. Fresh graphs no longer create/sync an empty legacy snapshot when no standalone artifacts exist. Existing public aliases with the exact desired target remain unchanged; new aliases use atomic creation, and replacement of different entries still uses atomic rename. The root/parent/artifact durability barriers are retained. The legacy migration test now removes the current pointer so it exercises first migration, and passes before and after the change. All 14 architecture tests pass on the exact new binary.</p>\n<p dir=\"auto\">This addresses unnecessary publication work found after the prior runtime's fixed precision extension confirmed a 3.3% small end-to-end clean regression (59/60 cells passed). The new binary receives a fresh predeclared campaign, checking that clean case first at 1,001 pairs. No thresholds were relaxed, and earlier failures remain retained. Full validation is pending for this new runtime; the PR remains draft.</p>"
+      },
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6551135830",
+        "body": "<!-- codex-review-receipt:v1 -->\n\nCodex Review: Didn't find any major issues. Hooray!\n\n**Reviewed commit:** `d4dca5fd9a`\n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\".\n\nIf Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.\n\n\n\n\nCodex can also answer questions or update the PR. Try commenting \"@codex address that feedback\".\n            \n</details>",
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "name": "chatgpt-codex-connector[bot]",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/in/1144995?v=4",
+          "id": 199175422
+        },
+        "id": 6551135830,
+        "pull_request_review_id": null,
+        "in_reply_to_id": null,
+        "created_at": "2026-11-01T00:24:41Z",
+        "updated_at": "2026-11-01T00:24:41Z",
+        "review": null,
+        "side": null,
+        "line": null,
+        "start_line": null,
+        "path": null,
+        "body_html": "\n<p dir=\"auto\">Codex Review: Didn't find any major issues. Hooray!</p>\n<p dir=\"auto\"><strong>Reviewed commit:</strong> <code class=\"notranslate\">d4dca5fd9a</code></p>\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br>\n<p dir=\"auto\"><a href=\"https://chatgpt.com/codex/cloud/settings/general\" rel=\"nofollow\">Your team has set up Codex to review pull requests in this repo</a>. Reviews are triggered when you</p>\n<ul dir=\"auto\">\n<li>Open a pull request for review</li>\n<li>Mark a draft as ready</li>\n<li>Comment \"<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> review\".</li>\n</ul>\n<p dir=\"auto\">If Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.</p>\n<p dir=\"auto\">Codex can also answer questions or update the PR. Try commenting \"<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> address that feedback\".</p>\n</details>"
+      },
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6551213270",
+        "body": "@codex review\n\nPlease review fdff3e56aecf8dbfbde1cc55253347b101c0db42. The ordinary Ninja freshness guard now checks output existence in its existing shell before spawning the native timestamp helper. A missing output cannot be current; existing outputs still use the native probe, and a nonempty intermediate-consumer proof retains the original path. The guard remains stable across first and later builds. The existing current/stale-output regression test now also checks rebuilding a deleted output.\n\nThe diagnostic binary passes all 192 correctness cases in both profiles and the Make compatibility suite. A syscall trace confirms 32\u21920 freshness-probe processes in the 32-output clean fixture, with correct outputs. The preceding publication-only commit still failed its 1,001-pair clean gate at +2.1%; it remains recorded as failed. This new runtime receives the same predeclared full qualification and unchanged thresholds. The PR remains draft while validation runs.",
+        "user": {
+          "login": "HarryMidnight",
+          "name": "HarryMidnight",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/u/26147842?v=4",
+          "id": 26147842
+        },
+        "id": 6551213270,
+        "pull_request_review_id": null,
+        "in_reply_to_id": null,
+        "created_at": "2026-11-01T00:32:26Z",
+        "updated_at": "2026-11-01T00:32:26Z",
+        "review": null,
+        "side": null,
+        "line": null,
+        "start_line": null,
+        "path": null,
+        "body_html": "<p dir=\"auto\"><a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> review</p>\n<p dir=\"auto\">Please review <a class=\"commit-link\" data-hovercard-type=\"commit\" data-hovercard-url=\"https://github.com/RihardsPaps/Openmktr/commit/fdff3e56aecf8dbfbde1cc55253347b101c0db42/hovercard\" href=\"https://github.com/RihardsPaps/Openmktr/commit/fdff3e56aecf8dbfbde1cc55253347b101c0db42\"><tt>fdff3e5</tt></a>. The ordinary Ninja freshness guard now checks output existence in its existing shell before spawning the native timestamp helper. A missing output cannot be current; existing outputs still use the native probe, and a nonempty intermediate-consumer proof retains the original path. The guard remains stable across first and later builds. The existing current/stale-output regression test now also checks rebuilding a deleted output.</p>\n<p dir=\"auto\">The diagnostic binary passes all 192 correctness cases in both profiles and the Make compatibility suite. A syscall trace confirms 32\u21920 freshness-probe processes in the 32-output clean fixture, with correct outputs. The preceding publication-only commit still failed its 1,001-pair clean gate at +2.1%; it remains recorded as failed. This new runtime receives the same predeclared full qualification and unchanged thresholds. The PR remains draft while validation runs.</p>"
+      },
+      {
+        "url": "https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6551227449",
+        "body": "<!-- codex-review-receipt:v1 -->\n\nCodex Review: Didn't find any major issues. Bravo.\n\n**Reviewed commit:** `fdff3e56ae`\n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\".\n\nIf Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.\n\n\n\n\nCodex can also answer questions or update the PR. Try commenting \"@codex address that feedback\".\n            \n</details>",
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "name": "chatgpt-codex-connector[bot]",
+          "email": null,
+          "avatar_url": "https://avatars.githubusercontent.com/in/1144995?v=4",
+          "id": 199175422
+        },
+        "id": 6551227449,
+        "pull_request_review_id": null,
+        "in_reply_to_id": null,
+        "created_at": "2026-11-01T00:33:56Z",
+        "updated_at": "2026-11-01T00:33:56Z",
+        "review": null,
+        "side": null,
+        "line": null,
+        "start_line": null,
+        "path": null,
+        "body_html": "\n<p dir=\"auto\">Codex Review: Didn't find any major issues. Bravo.</p>\n<p dir=\"auto\"><strong>Reviewed commit:</strong> <code class=\"notranslate\">fdff3e56ae</code></p>\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br>\n<p dir=\"auto\"><a href=\"https://chatgpt.com/codex/cloud/settings/general\" rel=\"nofollow\">Your team has set up Codex to review pull requests in this repo</a>. Reviews are triggered when you</p>\n<ul dir=\"auto\">\n<li>Open a pull request for review</li>\n<li>Mark a draft as ready</li>\n<li>Comment \"<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> review\".</li>\n</ul>\n<p dir=\"auto\">If Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.</p>\n<p dir=\"auto\">Codex can also answer questions or update the PR. Try commenting \"<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/codex/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/codex\">@codex</a> address that feedback\".</p>\n</details>"
+      }
+    ]
+  },
+  "source_review": "Detailed analysis and retained contracts: review.md inside the raw archive.",
+  "changes": [
+    "Consolidated completed-node bookkeeping and removed the one-iteration scheduler loop and unused headers.",
+    "Removed repeated jobserver connection lookups, an unnecessary mutex and per-connection heap allocation.",
+    "Centralized spawn error checks and removed duplicate temporary recipe unlinks.",
+    "Removed temporary launch-plan string copies without changing its wire format.",
+    "Shared generation pinning/retry logic while preserving the saved-graph launcher.",
+    "Removed unused Makefile timestamps, empty out-of-line destruction, obsolete includes and a self-include.",
+    "Fixed the Codex-reported double-colon deferred $? bug, with logical/phony metadata and saved-graph compatibility.",
+    "Elided silent phony no-op shell launches while retaining dependency freshness, exports, custom shells/flags, visible commands and explicit Ninja metadata.",
+    "Removed empty first-generation legacy migration and redundant alias replacement while retaining all required durability barriers and atomic replacement of changed aliases.",
+    "Skipped native freshness probes for missing ordinary outputs in the existing recipe shell, preserving native checks for existing outputs and intermediate-consumer proof handling."
+  ],
+  "portable": {
+    "passed": true,
+    "commands": [
+      {
+        "name": "session_unit",
+        "command": [
+          "out/session_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.0814246199952322
+      },
+      {
+        "name": "ready_queue_unit",
+        "command": [
+          "out/ready_queue_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.021978451004542876
+      },
+      {
+        "name": "timeutil_unit",
+        "command": [
+          "out/timeutil_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.00160060800408246
+      },
+      {
+        "name": "find_unit",
+        "command": [
+          "out/find_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.0026861339938477613
+      },
+      {
+        "name": "ninja_unit",
+        "command": [
+          "out/ninja_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.0016853310007718392
+      },
+      {
+        "name": "strutil_unit",
+        "command": [
+          "out/strutil_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.002389604000200052
+      },
+      {
+        "name": "load_limit_unit",
+        "command": [
+          "out/load_limit_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.0006807219979236834
+      },
+      {
+        "name": "version_generator",
+        "command": [
+          "python",
+          "tests/version_generator.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.2426654199953191
+      },
+      {
+        "name": "architecture",
+        "command": [
+          "python",
+          "tests/architecture.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.8326205249977647
+      },
+      {
+        "name": "correctness",
+        "command": [
+          "python",
+          "tests/correctness.py"
+        ],
+        "exit_code": 0,
+        "seconds": 16.732443472996238
+      },
+      {
+        "name": "generated_recipe_reads",
+        "command": [
+          "python",
+          "tests/generated_recipe_reads.py"
+        ],
+        "exit_code": 0,
+        "seconds": 13.009008168999571
+      },
+      {
+        "name": "graph_optimizations",
+        "command": [
+          "python",
+          "tests/graph_optimizations.py"
+        ],
+        "exit_code": 0,
+        "seconds": 19.375139515999763
+      },
+      {
+        "name": "make_compat_regressions",
+        "command": [
+          "python",
+          "tests/make_compat_regressions.py"
+        ],
+        "exit_code": 0,
+        "seconds": 2.260546161996899
+      },
+      {
+        "name": "portage",
+        "command": [
+          "python",
+          "tests/portage.py"
+        ],
+        "exit_code": 0,
+        "seconds": 6.535331839004357
+      },
+      {
+        "name": "manager",
+        "command": [
+          "python",
+          "tests/manager.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.3734521689984831
+      },
+      {
+        "name": "manager_terminal",
+        "command": [
+          "python",
+          "tests/manager_terminal.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.5607621520030079
+      },
+      {
+        "name": "load_limits",
+        "command": [
+          "python",
+          "tests/load_limits.py"
+        ],
+        "exit_code": 0,
+        "seconds": 36.428777357999934
+      },
+      {
+        "name": "portage_validation",
+        "command": [
+          "python",
+          "tests/portage_validation.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.7740271160000702
+      },
+      {
+        "name": "cross_version_cache",
+        "command": [
+          "python",
+          "tests/cross_version_cache.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.13678526599687757
+      },
+      {
+        "name": "ninja_benchmark",
+        "command": [
+          "python",
+          "tests/ninja_benchmark.py"
+        ],
+        "exit_code": 0,
+        "seconds": 8.51513117900322
+      },
+      {
+        "name": "workspace",
+        "command": [
+          "python",
+          "tests/workspace.py"
+        ],
+        "exit_code": 0,
+        "seconds": 21.95761299899459
+      },
+      {
+        "name": "ninja_jobserver",
+        "command": [
+          "python",
+          "tests/ninja_jobserver.py"
+        ],
+        "exit_code": 0,
+        "seconds": 9.597390696995717
+      },
+      {
+        "name": "release_packaging",
+        "command": [
+          "python",
+          "tests/release_packaging.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.16090231999987736
+      },
+      {
+        "name": "incremental_campaign",
+        "command": [
+          "python",
+          "tests/incremental_campaign.py"
+        ],
+        "exit_code": 0,
+        "seconds": 8.944573992994265
+      },
+      {
+        "name": "correctness_aggressive",
+        "command": [
+          "python",
+          "tests/correctness.py"
+        ],
+        "exit_code": 0,
+        "seconds": 16.713699965999695
+      },
+      {
+        "name": "regression",
+        "command": [
+          "python",
+          "tests/regression.py"
+        ],
+        "exit_code": 0,
+        "seconds": 31.62847370700183
+      },
+      {
+        "name": "regression_aggressive",
+        "command": [
+          "python",
+          "tests/regression.py"
+        ],
+        "exit_code": 0,
+        "seconds": 31.973176710998814
+      },
+      {
+        "name": "dump",
+        "command": [
+          "sh",
+          "testcase/dump/run.sh"
+        ],
+        "exit_code": 0,
+        "seconds": 0.027510703999723773
+      }
+    ],
+    "snapshots": {
+      "safe": "858/858",
+      "aggressive": "858/858",
+      "quarantined_crashes": 0
+    }
+  },
+  "sanitizers": {
+    "passed": true,
+    "commands": [
+      {
+        "name": "session_unit",
+        "command": [
+          "out/sanitized/session_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.27823863999947207
+      },
+      {
+        "name": "ready_queue_unit",
+        "command": [
+          "out/sanitized/ready_queue_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.08791668599587865
+      },
+      {
+        "name": "timeutil_unit",
+        "command": [
+          "out/sanitized/timeutil_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.00814008300221758
+      },
+      {
+        "name": "find_unit",
+        "command": [
+          "out/sanitized/find_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.00922005700704176
+      },
+      {
+        "name": "ninja_unit",
+        "command": [
+          "out/sanitized/ninja_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.008762951998505741
+      },
+      {
+        "name": "strutil_unit",
+        "command": [
+          "out/sanitized/strutil_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.007891617999121081
+      },
+      {
+        "name": "load_limit_unit",
+        "command": [
+          "out/sanitized/load_limit_test"
+        ],
+        "exit_code": 0,
+        "seconds": 0.006095795994042419
+      },
+      {
+        "name": "architecture",
+        "command": [
+          "python",
+          "tests/architecture.py"
+        ],
+        "exit_code": 0,
+        "seconds": 1.57277287299803
+      },
+      {
+        "name": "portage",
+        "command": [
+          "python",
+          "tests/portage.py"
+        ],
+        "exit_code": 0,
+        "seconds": 7.289767246998963
+      },
+      {
+        "name": "load_limits",
+        "command": [
+          "python",
+          "tests/load_limits.py"
+        ],
+        "exit_code": 0,
+        "seconds": 37.82907434200024
+      },
+      {
+        "name": "correctness",
+        "command": [
+          "python",
+          "tests/correctness.py"
+        ],
+        "exit_code": 0,
+        "seconds": 24.495715894998284
+      },
+      {
+        "name": "generated_recipe_reads",
+        "command": [
+          "python",
+          "tests/generated_recipe_reads.py"
+        ],
+        "exit_code": 0,
+        "seconds": 31.28382677499758
+      },
+      {
+        "name": "graph_optimizations",
+        "command": [
+          "python",
+          "tests/graph_optimizations.py"
+        ],
+        "exit_code": 0,
+        "seconds": 31.699275555001805
+      },
+      {
+        "name": "workspace",
+        "command": [
+          "python",
+          "tests/workspace.py"
+        ],
+        "exit_code": 0,
+        "seconds": 24.18251058000169
+      },
+      {
+        "name": "ninja_jobserver",
+        "command": [
+          "python",
+          "tests/ninja_jobserver.py"
+        ],
+        "exit_code": 0,
+        "seconds": 10.107605775003321
+      },
+      {
+        "name": "make_compat_regressions",
+        "command": [
+          "python",
+          "tests/make_compat_regressions.py"
+        ],
+        "exit_code": 0,
+        "seconds": 4.099796304006304
+      },
+      {
+        "name": "correctness_aggressive",
+        "command": [
+          "python",
+          "tests/correctness.py"
+        ],
+        "exit_code": 0,
+        "seconds": 24.625676697003655
+      }
+    ],
+    "leak_detection": "Session ownership unit uses detect_leaks=1; other suites use detect_leaks=0."
+  },
+  "external_incremental": {
+    "scenarios": 27,
+    "release_blocked": false,
+    "performance_defects": false,
+    "errors": []
+  },
+  "ci": {
+    "runtime_revision": "fdff3e56aecf8dbfbde1cc55253347b101c0db42",
+    "workflow_runs": [
+      {
+        "id": 41257176377,
+        "name": "Openmktr build and test",
+        "status": "completed",
+        "conclusion": "success",
+        "run_number": 176,
+        "jobs_url": "https://api.github.com/repos/RihardsPaps/Openmktr/actions/runs/41257176377/jobs",
+        "logs_url": "https://api.github.com/repos/RihardsPaps/Openmktr/actions/runs/41257176377/logs",
+        "workflow_id": 363679582
+      },
+      {
+        "id": 41257176396,
+        "name": "Optional external compatibility and benchmarks",
+        "status": "completed",
+        "conclusion": "success",
+        "run_number": 51,
+        "jobs_url": "https://api.github.com/repos/RihardsPaps/Openmktr/actions/runs/41257176396/jobs",
+        "logs_url": "https://api.github.com/repos/RihardsPaps/Openmktr/actions/runs/41257176396/logs",
+        "workflow_id": 394622524
+      },
+      {
+        "id": 41257176435,
+        "name": "Chimera release",
+        "status": "completed",
+        "conclusion": "success",
+        "run_number": 47,
+        "jobs_url": "https://api.github.com/repos/RihardsPaps/Openmktr/actions/runs/41257176435/jobs",
+        "logs_url": "https://api.github.com/repos/RihardsPaps/Openmktr/actions/runs/41257176435/logs",
+        "workflow_id": 382433811
+      }
+    ]
+  },
+  "performance": {
+    "passed": true,
+    "plan": {
+      "declared_at_utc": "2026-11-01T00:32:05.981403+00:00",
+      "baseline_revision": "77a397ffd7a1cc5f48e406f8cf9052a50cc0d150",
+      "runtime_revision": "fdff3e56aecf8dbfbde1cc55253347b101c0db42",
+      "paired_matrix_measured_pairs": 101,
+      "large_graph_measured_pairs": 101,
+      "standard_controls_measured_pairs": 101,
+      "standard_short_cases_measured_pairs": 301,
+      "standard_short_cases": [
+        "incremental_noop",
+        "direct_recipe_launch_j1"
+      ],
+      "warmup_pairs": 2,
+      "median_ratio_limit": 1.0,
+      "bootstrap_95_upper_limit": 1.05,
+      "bootstrap_resamples": 10000,
+      "required_unpaired_standard_repeats": 7,
+      "timing_and_memory_cells": 60,
+      "concurrent_local_builds_or_tests": false,
+      "exclusions": "Only the two predeclared warmup pairs.",
+      "cpu_affinity": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "reason": "Requalification after skipping native freshness probes for missing ordinary outputs, while retaining intermediate-consumer proofs. Prior publication cleanup d4dca5f reduced filesystem work but its 1001-pair clean gate still failed at ratio 1.0210. The new guard removes 32 helper processes from that fixture; diagnostic execution improves. Counts, thresholds, stage order and maintenance controls remain unchanged from the publication plan. All prior failures remain retained.",
+      "standard_parallel_exec_measured_pairs": 1001,
+      "standard_nested_parallel_measured_pairs": 1001,
+      "standard_end_to_end_clean_measured_pairs": 1001,
+      "standard_end_to_end_graph_change_measured_pairs": 1001,
+      "stage_order": [
+        "clean-gate",
+        "paired-matrix",
+        "phases",
+        "phase-analysis",
+        "standard-benchmark",
+        "paired-standard"
+      ],
+      "maintenance": "Retire completed main-matrix synthetic fixtures between stages, retaining verified copies of all command logs, outside measured pairs."
+    },
+    "cells": [
+      {
+        "suite": "entrypoints",
+        "case": "build/clean",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.6797435739022084,
+        "upper_95": 0.6833904392827822,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "build/graph",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8849549320370391,
+        "upper_95": 0.9036551759251782,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "build/missing",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.7652186972621744,
+        "upper_95": 0.782601461194085,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "build/noop",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8244747775072793,
+        "upper_95": 0.8542304902794765,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "build/source",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.853966308588819,
+        "upper_95": 0.8862857345054539,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "direct/clean",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9908733045320958,
+        "upper_95": 1.0204170153014605,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "direct/graph",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9683702852601825,
+        "upper_95": 0.9830014821839634,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "direct/missing",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9284206789254935,
+        "upper_95": 0.9591719706112398,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "direct/noop",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8062410746407125,
+        "upper_95": 0.8327174928108305,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "direct/source",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9625911307556946,
+        "upper_95": 0.9981739596528358,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "legacy/clean",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.6893486742983794,
+        "upper_95": 0.6976347806658793,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "legacy/graph",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8913436441838429,
+        "upper_95": 0.9010993430121356,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "legacy/missing",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8641192579216785,
+        "upper_95": 0.8850708760310039,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "legacy/noop",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9554532075857076,
+        "upper_95": 0.9869842666829501,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "legacy/source",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9295554653118342,
+        "upper_95": 0.9818770324468074,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "build/clean",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "build/graph",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "build/missing",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "build/noop",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "build/source",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "direct/clean",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "upper_95": 1.0005749880210828,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "direct/graph",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "upper_95": 1.0002546797402267,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "direct/missing",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "upper_95": 1.0002546797402267,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "direct/noop",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "upper_95": 1.0003727865796832,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "direct/source",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "upper_95": 1.0016,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "legacy/clean",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "legacy/graph",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "legacy/missing",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "legacy/noop",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "entrypoints",
+        "case": "legacy/source",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "large_graph",
+        "case": "convert",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9101666284278277,
+        "lower_95": 0.8987535122327143,
+        "upper_95": 0.923342223867722,
+        "passed": true
+      },
+      {
+        "suite": "large_graph",
+        "case": "convert",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 0.9787296464720552,
+        "lower_95": 0.9779961860055743,
+        "upper_95": 0.9797653958944281,
+        "passed": true
+      },
+      {
+        "suite": "large_graph",
+        "case": "syntax",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.959866776791141,
+        "lower_95": 0.9346935516582079,
+        "upper_95": 0.9813205843635517,
+        "passed": true
+      },
+      {
+        "suite": "large_graph",
+        "case": "syntax",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 0.9599303135888502,
+        "lower_95": 0.9588542490900459,
+        "upper_95": 0.9612403100775194,
+        "passed": true
+      },
+      {
+        "suite": "large_graph",
+        "case": "direct_dry",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9701050453393963,
+        "lower_95": 0.9597648569723247,
+        "upper_95": 0.9856794012541847,
+        "passed": true
+      },
+      {
+        "suite": "large_graph",
+        "case": "direct_dry",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 0.9607535321821036,
+        "lower_95": 0.9590909090909091,
+        "upper_95": 0.9625786163522012,
+        "passed": true
+      },
+      {
+        "suite": "large_graph",
+        "case": "noop_regen",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.9720834420902271,
+        "lower_95": 0.937813834147295,
+        "upper_95": 1.0037221294575278,
+        "passed": true
+      },
+      {
+        "suite": "large_graph",
+        "case": "noop_regen",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "lower_95": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "incremental_noop",
+        "metric": "wall",
+        "pairs": 301,
+        "median_ratio": 0.9929882895423003,
+        "lower_95": 0.9822891056408155,
+        "upper_95": 1.0083514967273886,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "incremental_noop",
+        "metric": "rss",
+        "pairs": 301,
+        "median_ratio": 1.0,
+        "lower_95": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "parallel_exec",
+        "metric": "wall",
+        "pairs": 1001,
+        "median_ratio": 0.9999161525018487,
+        "lower_95": 0.9996019469250998,
+        "upper_95": 1.0002235679967995,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "parallel_exec",
+        "metric": "rss",
+        "pairs": 1001,
+        "median_ratio": 1.0,
+        "lower_95": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "nested_parallel_exec",
+        "metric": "wall",
+        "pairs": 1001,
+        "median_ratio": 0.9996881839306457,
+        "lower_95": 0.9992708967848899,
+        "upper_95": 1.000063805974433,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "nested_parallel_exec",
+        "metric": "rss",
+        "pairs": 1001,
+        "median_ratio": 1.0,
+        "lower_95": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "direct_recipe_launch_j1",
+        "metric": "wall",
+        "pairs": 301,
+        "median_ratio": 0.971547532831732,
+        "lower_95": 0.9648144371296495,
+        "upper_95": 0.9851158797034029,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "direct_recipe_launch_j1",
+        "metric": "rss",
+        "pairs": 301,
+        "median_ratio": 1.0,
+        "lower_95": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "direct_recipe_launch_j4",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.7067411908562055,
+        "lower_95": 0.6881215052958545,
+        "upper_95": 0.7316032825439408,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "direct_recipe_launch_j4",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "lower_95": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "ninja_recipe_launch_j1",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.007209658248883528,
+        "lower_95": 0.00705453278756266,
+        "upper_95": 0.007445117710053912,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "ninja_recipe_launch_j1",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "lower_95": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "ninja_recipe_launch_j4",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.017540181249098005,
+        "lower_95": 0.017333294800188633,
+        "upper_95": 0.01840432767579369,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "ninja_recipe_launch_j4",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "lower_95": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "end_to_end_noop",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8015922655704659,
+        "lower_95": 0.7907588416076076,
+        "upper_95": 0.8239289620289786,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "end_to_end_noop",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "lower_95": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "end_to_end_single_file_change",
+        "metric": "wall",
+        "pairs": 101,
+        "median_ratio": 0.8465375019418293,
+        "lower_95": 0.833346780905403,
+        "upper_95": 0.8788620128616362,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "end_to_end_single_file_change",
+        "metric": "rss",
+        "pairs": 101,
+        "median_ratio": 1.0,
+        "lower_95": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "end_to_end_graph_change",
+        "metric": "wall",
+        "pairs": 1001,
+        "median_ratio": 0.9892800687011283,
+        "lower_95": 0.9840851561019249,
+        "upper_95": 0.9952609129804425,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "end_to_end_graph_change",
+        "metric": "rss",
+        "pairs": 1001,
+        "median_ratio": 1.0,
+        "lower_95": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "end_to_end_clean",
+        "metric": "wall",
+        "pairs": 1001,
+        "median_ratio": 0.9057470793180924,
+        "lower_95": 0.8999483926499776,
+        "upper_95": 0.909960852499854,
+        "passed": true
+      },
+      {
+        "suite": "standard",
+        "case": "end_to_end_clean",
+        "metric": "rss",
+        "pairs": 1001,
+        "median_ratio": 1.0,
+        "lower_95": 1.0,
+        "upper_95": 1.0,
+        "passed": true
+      }
+    ],
+    "required_standard_command": {
+      "name": "standard-benchmark",
+      "command": [
+        "python",
+        "tests/bench.py",
+        "/workspace/omktr",
+        "--baseline",
+        "/baseline/omktr",
+        "--repeats",
+        "7"
+      ],
+      "exit_code": 0,
+      "seconds": 79.12412822299666
+    },
+    "previous_metadata_run": {
+      "runtime": "f1ee1a23eb7da8e4f34696c1d5f1aca19a25e04b",
+      "passed": false,
+      "initial_cells": [
+        {
+          "suite": "entrypoints",
+          "case": "build/clean",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9040030181837796,
+          "upper_95": 0.9138238736523253,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/graph",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8803557136720976,
+          "upper_95": 0.8949517366445932,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/missing",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8238362043722254,
+          "upper_95": 0.8441224839218894,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/noop",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8029988119467592,
+          "upper_95": 0.8253020933099423,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/source",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8307916279214229,
+          "upper_95": 0.8467290786452843,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/clean",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9718960384251746,
+          "upper_95": 0.987807659310639,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/graph",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9750168927809194,
+          "upper_95": 0.9858868683006261,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/missing",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9471480331240412,
+          "upper_95": 0.998612831053797,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/noop",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.7905101834426645,
+          "upper_95": 0.8242227935967499,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/source",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9635817063200035,
+          "upper_95": 0.980620175254462,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/clean",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9174032887181701,
+          "upper_95": 0.9261469908479292,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/graph",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8893865656635607,
+          "upper_95": 0.8984790568715495,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/missing",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9151488748339381,
+          "upper_95": 0.9360983862855677,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/noop",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.957477587968087,
+          "upper_95": 0.9841933687007647,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/source",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9361036200540273,
+          "upper_95": 0.9546493200144398,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/clean",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/graph",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/missing",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/noop",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/source",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/clean",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0001389467833819,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/graph",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0001389467833819,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/missing",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0003604902667629,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/noop",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0002738725579696,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/source",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.001190605043836,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/clean",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/graph",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/missing",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/noop",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/source",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "convert",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9162029189792132,
+          "lower_95": 0.8969845974104086,
+          "upper_95": 0.9228787850393033,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "convert",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 0.979295154185022,
+          "lower_95": 0.9782418224299065,
+          "upper_95": 0.9805882352941176,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "syntax",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9677831694399625,
+          "lower_95": 0.9513543199141956,
+          "upper_95": 0.982999120323951,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "syntax",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 0.9612770665402245,
+          "lower_95": 0.9595448798988622,
+          "upper_95": 0.9624190746881415,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "direct_dry",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9676458518267529,
+          "lower_95": 0.957955909518491,
+          "upper_95": 0.9790834120033634,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "direct_dry",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 0.9605633802816902,
+          "lower_95": 0.9593852908891328,
+          "upper_95": 0.9626666666666667,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "noop_regen",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9868066957310753,
+          "lower_95": 0.953280191022011,
+          "upper_95": 1.0156805454365905,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "noop_regen",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "incremental_noop",
+          "metric": "wall",
+          "pairs": 301,
+          "median_ratio": 0.9886081565897927,
+          "lower_95": 0.9762082536855686,
+          "upper_95": 0.997591704881114,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "incremental_noop",
+          "metric": "rss",
+          "pairs": 301,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "parallel_exec",
+          "metric": "wall",
+          "pairs": 1001,
+          "median_ratio": 0.9995750631639393,
+          "lower_95": 0.9991581658908442,
+          "upper_95": 1.0000472374344367,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "parallel_exec",
+          "metric": "rss",
+          "pairs": 1001,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "nested_parallel_exec",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 1.0001454661279452,
+          "lower_95": 0.9987725333851025,
+          "upper_95": 1.0013527594397338,
+          "passed": false
+        },
+        {
+          "suite": "standard",
+          "case": "nested_parallel_exec",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j1",
+          "metric": "wall",
+          "pairs": 301,
+          "median_ratio": 0.980545022476565,
+          "lower_95": 0.9703590249631582,
+          "upper_95": 0.9937143290802612,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j1",
+          "metric": "rss",
+          "pairs": 301,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j4",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.7190048859192757,
+          "lower_95": 0.6996236592490951,
+          "upper_95": 0.7403182970119863,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j4",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j1",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.007252749821340768,
+          "lower_95": 0.007143497951200409,
+          "upper_95": 0.00751644332852022,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j1",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j4",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.01704715755644243,
+          "lower_95": 0.016675048126318256,
+          "upper_95": 0.017509488340627027,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j4",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_clean",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 1.000005671582951,
+          "lower_95": 0.9845110403064814,
+          "upper_95": 1.0193898154952168,
+          "passed": false
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_clean",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_noop",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8069471575296726,
+          "lower_95": 0.7924931769142023,
+          "upper_95": 0.8173192521070256,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_noop",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_single_file_change",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8442389614032919,
+          "lower_95": 0.8239012377245037,
+          "upper_95": 0.8703673386693391,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_single_file_change",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_graph_change",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9991563990847768,
+          "lower_95": 0.9863275667286043,
+          "upper_95": 1.017358375905459,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_graph_change",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        }
+      ],
+      "cells": [
+        {
+          "suite": "entrypoints",
+          "case": "build/clean",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9040030181837796,
+          "upper_95": 0.9138238736523253,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/graph",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8803557136720976,
+          "upper_95": 0.8949517366445932,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/missing",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8238362043722254,
+          "upper_95": 0.8441224839218894,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/noop",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8029988119467592,
+          "upper_95": 0.8253020933099423,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/source",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8307916279214229,
+          "upper_95": 0.8467290786452843,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/clean",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9718960384251746,
+          "upper_95": 0.987807659310639,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/graph",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9750168927809194,
+          "upper_95": 0.9858868683006261,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/missing",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9471480331240412,
+          "upper_95": 0.998612831053797,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/noop",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.7905101834426645,
+          "upper_95": 0.8242227935967499,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/source",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9635817063200035,
+          "upper_95": 0.980620175254462,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/clean",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9174032887181701,
+          "upper_95": 0.9261469908479292,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/graph",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8893865656635607,
+          "upper_95": 0.8984790568715495,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/missing",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9151488748339381,
+          "upper_95": 0.9360983862855677,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/noop",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.957477587968087,
+          "upper_95": 0.9841933687007647,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/source",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9361036200540273,
+          "upper_95": 0.9546493200144398,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/clean",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/graph",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/missing",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/noop",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/source",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/clean",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0001389467833819,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/graph",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0001389467833819,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/missing",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0003604902667629,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/noop",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0002738725579696,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/source",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.001190605043836,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/clean",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/graph",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/missing",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/noop",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/source",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "convert",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9162029189792132,
+          "lower_95": 0.8969845974104086,
+          "upper_95": 0.9228787850393033,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "convert",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 0.979295154185022,
+          "lower_95": 0.9782418224299065,
+          "upper_95": 0.9805882352941176,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "syntax",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9677831694399625,
+          "lower_95": 0.9513543199141956,
+          "upper_95": 0.982999120323951,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "syntax",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 0.9612770665402245,
+          "lower_95": 0.9595448798988622,
+          "upper_95": 0.9624190746881415,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "direct_dry",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9676458518267529,
+          "lower_95": 0.957955909518491,
+          "upper_95": 0.9790834120033634,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "direct_dry",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 0.9605633802816902,
+          "lower_95": 0.9593852908891328,
+          "upper_95": 0.9626666666666667,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "noop_regen",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9868066957310753,
+          "lower_95": 0.953280191022011,
+          "upper_95": 1.0156805454365905,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "noop_regen",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "incremental_noop",
+          "metric": "wall",
+          "pairs": 301,
+          "median_ratio": 0.9886081565897927,
+          "lower_95": 0.9762082536855686,
+          "upper_95": 0.997591704881114,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "incremental_noop",
+          "metric": "rss",
+          "pairs": 301,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "parallel_exec",
+          "metric": "wall",
+          "pairs": 1001,
+          "median_ratio": 0.9995750631639393,
+          "lower_95": 0.9991581658908442,
+          "upper_95": 1.0000472374344367,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "parallel_exec",
+          "metric": "rss",
+          "pairs": 1001,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "nested_parallel_exec",
+          "metric": "wall",
+          "pairs": 1001,
+          "median_ratio": 0.9997994886895691,
+          "lower_95": 0.9993587052716667,
+          "upper_95": 1.0001639414920913,
+          "passed": true,
+          "evidence_source": "All original 101 pairs plus the one fixed 900-pair precision extension."
+        },
+        {
+          "suite": "standard",
+          "case": "nested_parallel_exec",
+          "metric": "rss",
+          "pairs": 1001,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true,
+          "evidence_source": "All original 101 pairs plus the one fixed 900-pair precision extension."
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j1",
+          "metric": "wall",
+          "pairs": 301,
+          "median_ratio": 0.980545022476565,
+          "lower_95": 0.9703590249631582,
+          "upper_95": 0.9937143290802612,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j1",
+          "metric": "rss",
+          "pairs": 301,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j4",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.7190048859192757,
+          "lower_95": 0.6996236592490951,
+          "upper_95": 0.7403182970119863,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j4",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j1",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.007252749821340768,
+          "lower_95": 0.007143497951200409,
+          "upper_95": 0.00751644332852022,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j1",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j4",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.01704715755644243,
+          "lower_95": 0.016675048126318256,
+          "upper_95": 0.017509488340627027,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j4",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_clean",
+          "metric": "wall",
+          "pairs": 1001,
+          "median_ratio": 1.0327743571922054,
+          "lower_95": 1.0261529954174573,
+          "upper_95": 1.0394445776384196,
+          "passed": false,
+          "evidence_source": "All original 101 pairs plus the one fixed 900-pair precision extension."
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_clean",
+          "metric": "rss",
+          "pairs": 1001,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true,
+          "evidence_source": "All original 101 pairs plus the one fixed 900-pair precision extension."
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_noop",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8069471575296726,
+          "lower_95": 0.7924931769142023,
+          "upper_95": 0.8173192521070256,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_noop",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_single_file_change",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8442389614032919,
+          "lower_95": 0.8239012377245037,
+          "upper_95": 0.8703673386693391,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_single_file_change",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_graph_change",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9991563990847768,
+          "lower_95": 0.9863275667286043,
+          "upper_95": 1.017358375905459,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_graph_change",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        }
+      ],
+      "precision_plan": {
+        "declared_at_utc": "2026-11-01T00:01:21.815685+00:00",
+        "runtime_revision": "f1ee1a23eb7da8e4f34696c1d5f1aca19a25e04b",
+        "baseline_revision": "77a397ffd7a1cc5f48e406f8cf9052a50cc0d150",
+        "cases": [
+          "nested_parallel_exec",
+          "end_to_end_clean"
+        ],
+        "reason": "The original completed campaign passes 58/60 cells. These timing medians narrowly exceed parity while both confidence intervals cross 1. This one fixed extension increases precision without changing code or thresholds. No additional extension will be used to seek a passing result.",
+        "original_measured_pairs": 101,
+        "additional_measured_pairs": 900,
+        "pooled_measured_pairs": 1001,
+        "additional_warmup_pairs": 2,
+        "order": "Alternating b/c and c/b, as in the original campaign",
+        "median_ratio_limit": 1.0,
+        "bootstrap_95_upper_limit": 1.05,
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "cpu_affinity": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "exclusions": "Only each stage's two predeclared warmup pairs. All 101 original measured pairs remain in the pooled estimate.",
+        "initial_failed_cells": [
+          {
+            "case": "nested_parallel_exec",
+            "metric": "wall",
+            "pairs": 101,
+            "baseline": 0.21034340600454016,
+            "candidate": 0.21046448899869574,
+            "median_ratio": 1.0001454661279452,
+            "interval": [
+              0.9987725333851025,
+              1.0013527594397338
+            ],
+            "passed": false
+          },
+          {
+            "case": "end_to_end_clean",
+            "metric": "wall",
+            "pairs": 101,
+            "baseline": 0.08224904799862998,
+            "candidate": 0.08209087899740553,
+            "median_ratio": 1.000005671582951,
+            "interval": [
+              0.9845110403064814,
+              1.0193898154952168
+            ],
+            "passed": false
+          }
+        ],
+        "binary_sha256": {
+          "/workspace/Openmktr/omktr": "fc229d0d581e1b0f1d31f781db86b32a1e91c7b255dcacb0eacf3a1d7ae7df70",
+          "/workspace/openmktr-baseline/omktr": "96654a8ec0b6a1dbff04af49ea778ef792182a65005daeba43fd9b98e63345a4"
+        },
+        "between_stage_maintenance": "After nested sampling completes, pause only during the clean-stage warmups to retire completed main-matrix fixtures with verified log copies. No measured clean pair may span maintenance. The plan, maintenance script and record are retained."
+      },
+      "precision_maintenance": {
+        "pid": 802162,
+        "nested_rows": 1804,
+        "clean_rows": 0,
+        "clean_measured_rows": 0,
+        "reason": "Release completed synthetic main fixtures between precision stages; retain and verify their command logs. Only clean-stage warmup timing can include the pause.",
+        "maintenance_seconds": 20.03273464799713
+      }
+    },
+    "previous_publication_clean_gate": {
+      "runtime": "d4dca5fd9a282a596d867e16781863fbc2665471",
+      "passed": false,
+      "cells": [
+        {
+          "case": "end_to_end_clean",
+          "metric": "wall",
+          "pairs": 1001,
+          "baseline": 0.09276828599831788,
+          "candidate": 0.09442008400219493,
+          "median_ratio": 1.0210348772206828,
+          "interval": [
+            1.0140703174533876,
+            1.0260201588055942
+          ],
+          "passed": false
+        },
+        {
+          "case": "end_to_end_clean",
+          "metric": "rss",
+          "pairs": 1001,
+          "baseline": 20936,
+          "candidate": 20936,
+          "median_ratio": 1.0,
+          "interval": [
+            1.0,
+            1.0
+          ],
+          "passed": true
+        }
+      ],
+      "remaining_stages": "Not run after the first clean gate failed."
+    },
+    "previous_fixed_run": {
+      "runtime": "20580cd3819e83b86a2be576b0f9798d2aad0f79",
+      "passed": false,
+      "cells": [
+        {
+          "suite": "entrypoints",
+          "case": "build/clean",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9102208233222979,
+          "upper_95": 0.9160401098093656,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/graph",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8923449689239418,
+          "upper_95": 0.9054327910174237,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/missing",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8379356931126226,
+          "upper_95": 0.8565020306646255,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/noop",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8174177675100812,
+          "upper_95": 0.8369622697710599,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/source",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8582118909357062,
+          "upper_95": 0.8703051559444454,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/clean",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9754781007482279,
+          "upper_95": 0.9944222500896831,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/graph",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9695013433650533,
+          "upper_95": 0.9748893108294269,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/missing",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9128121454680165,
+          "upper_95": 0.9636953431877152,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/noop",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8034477622619042,
+          "upper_95": 0.8311651987101809,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/source",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9832646348494931,
+          "upper_95": 1.0017035668344718,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/clean",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9184240942877896,
+          "upper_95": 0.9252875420404153,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/graph",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8923322482479232,
+          "upper_95": 0.9062587497570713,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/missing",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9453603003155704,
+          "upper_95": 0.9692841066820926,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/noop",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9473926484288868,
+          "upper_95": 0.9713030640949813,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/source",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.92663078009112,
+          "upper_95": 0.9537818441563112,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/clean",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/graph",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/missing",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/noop",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/source",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/clean",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0008060182697474,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/graph",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0005623506256152,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/missing",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0005623506256152,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/noop",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0005623506256152,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/source",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.000640341515475,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/clean",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/graph",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/missing",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/noop",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/source",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "convert",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9070601366217395,
+          "lower_95": 0.8950704453018559,
+          "upper_95": 0.9214486776199978,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "convert",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 0.9765169194865811,
+          "lower_95": 0.9756204379562043,
+          "upper_95": 0.9774787949692892,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "syntax",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9718437006283812,
+          "lower_95": 0.9467520422702878,
+          "upper_95": 0.98753638750803,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "syntax",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 0.9606759317751106,
+          "lower_95": 0.9593380614657211,
+          "upper_95": 0.9621092516577202,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "direct_dry",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9664241138916095,
+          "lower_95": 0.9529923024815986,
+          "upper_95": 0.9880798961174823,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "direct_dry",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 0.9605757196495619,
+          "lower_95": 0.9590973201692524,
+          "upper_95": 0.9618033813400125,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "noop_regen",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9669529165675029,
+          "lower_95": 0.9451032271018758,
+          "upper_95": 0.9905231373114785,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "noop_regen",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "incremental_noop",
+          "metric": "wall",
+          "pairs": 301,
+          "median_ratio": 0.9881769012386077,
+          "lower_95": 0.9710822395612102,
+          "upper_95": 1.0007273967994887,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "incremental_noop",
+          "metric": "rss",
+          "pairs": 301,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "parallel_exec",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 1.0001262068326402,
+          "lower_95": 0.9995014785515636,
+          "upper_95": 1.0011274061513924,
+          "passed": false
+        },
+        {
+          "suite": "standard",
+          "case": "parallel_exec",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "nested_parallel_exec",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9984666518085791,
+          "lower_95": 0.9975885781856868,
+          "upper_95": 0.9999987783145562,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "nested_parallel_exec",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j1",
+          "metric": "wall",
+          "pairs": 301,
+          "median_ratio": 0.9701574060983396,
+          "lower_95": 0.9578956643844312,
+          "upper_95": 0.9830207161989646,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j1",
+          "metric": "rss",
+          "pairs": 301,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j4",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.706319062503749,
+          "lower_95": 0.6926293761078147,
+          "upper_95": 0.7233708135579996,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j4",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j1",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 1.0070484503318167,
+          "lower_95": 1.0003200992132324,
+          "upper_95": 1.0144988819805107,
+          "passed": false
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j1",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j4",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 1.0093782607238777,
+          "lower_95": 1.002938758901953,
+          "upper_95": 1.0163500106967918,
+          "passed": false
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j4",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_clean",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9877653047308148,
+          "lower_95": 0.9704028942166372,
+          "upper_95": 1.007309873016414,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_clean",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_noop",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8194070150076456,
+          "lower_95": 0.8026560710923151,
+          "upper_95": 0.8392237690811367,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_noop",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_single_file_change",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.8593713559011968,
+          "lower_95": 0.8380317435933033,
+          "upper_95": 0.8703300059520042,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_single_file_change",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_graph_change",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9687938115688652,
+          "lower_95": 0.9519688348164363,
+          "upper_95": 0.9856871008965548,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_graph_change",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        }
+      ]
+    },
+    "rejected_guard_experiment": [
+      {
+        "jobs": 1,
+        "pairs": 31,
+        "median_ratio": 1.0091087088771726,
+        "interval": [
+          0.9961696069453576,
+          1.0185672229422362
+        ]
+      },
+      {
+        "jobs": 4,
+        "pairs": 31,
+        "median_ratio": 1.0121460394446415,
+        "interval": [
+          0.9998471727083621,
+          1.0199148158760158
+        ]
+      }
+    ],
+    "previous_cleanup_run": {
+      "runtime": "88602d27260c33b6efa0c6b8acf5d708b6c80bc8",
+      "passed": false,
+      "cells": [
+        {
+          "suite": "entrypoints",
+          "case": "build/clean",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.9990688337116216,
+          "upper_95": 1.0953744941832289,
+          "passed": false
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/graph",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 1.041994814840246,
+          "upper_95": 1.0737703556640676,
+          "passed": false
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/missing",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.8596876355512808,
+          "upper_95": 0.8995164848562158,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/noop",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.8219131602566299,
+          "upper_95": 0.8365281188094053,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/source",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.8444092177061595,
+          "upper_95": 0.8792276759129767,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/clean",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.9889265111994747,
+          "upper_95": 1.0778746575331744,
+          "passed": false
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/graph",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.9510120703117191,
+          "upper_95": 0.9990525475664371,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/missing",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.8691905236973321,
+          "upper_95": 0.9198942533508694,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/noop",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.8041617057083834,
+          "upper_95": 0.8463013297644498,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/source",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.9482817417383412,
+          "upper_95": 1.0085051403170269,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/clean",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.9179824578706821,
+          "upper_95": 1.0165130286552466,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/graph",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.9991699326287296,
+          "upper_95": 1.0279195033454096,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/missing",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.9315069175386002,
+          "upper_95": 0.9683636072315706,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/noop",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.9642854506113262,
+          "upper_95": 0.9900150557087013,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/source",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.9355540853410081,
+          "upper_95": 1.016082553785556,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/clean",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/graph",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/missing",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/noop",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "build/source",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/clean",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "upper_95": 1.002129258517034,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/graph",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/missing",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/noop",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "direct/source",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/clean",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/graph",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/missing",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/noop",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "entrypoints",
+          "case": "legacy/source",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "convert",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9270993304635103,
+          "lower_95": 0.9158685675717901,
+          "upper_95": 0.9313046380342294,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "convert",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 0.9806338028169014,
+          "lower_95": 0.9795738427626745,
+          "upper_95": 0.9819700967458224,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "syntax",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9646761710352931,
+          "lower_95": 0.9415008975311365,
+          "upper_95": 0.980363057898002,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "syntax",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 0.9615445232466509,
+          "lower_95": 0.96066089693155,
+          "upper_95": 0.9627054361567636,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "direct_dry",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.971972623418772,
+          "lower_95": 0.9629218758703539,
+          "upper_95": 0.986777512898636,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "direct_dry",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 0.9620193810565801,
+          "lower_95": 0.9598808964112208,
+          "upper_95": 0.9633896165377939,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "noop_regen",
+          "metric": "wall",
+          "pairs": 101,
+          "median_ratio": 0.9713110832753508,
+          "lower_95": 0.929156700025951,
+          "upper_95": 1.0172542324604164,
+          "passed": true
+        },
+        {
+          "suite": "large_graph",
+          "case": "noop_regen",
+          "metric": "rss",
+          "pairs": 101,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "incremental_noop",
+          "metric": "wall",
+          "pairs": 301,
+          "median_ratio": 0.99326559897602,
+          "lower_95": 0.9815081428119583,
+          "upper_95": 1.002720301369,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "incremental_noop",
+          "metric": "rss",
+          "pairs": 301,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "parallel_exec",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.9991174165849415,
+          "lower_95": 0.9964035200959436,
+          "upper_95": 1.0016639058032153,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "parallel_exec",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "nested_parallel_exec",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.9982693641523707,
+          "lower_95": 0.9955576618757199,
+          "upper_95": 1.0005727379119718,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "nested_parallel_exec",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j1",
+          "metric": "wall",
+          "pairs": 301,
+          "median_ratio": 0.9599438835233842,
+          "lower_95": 0.9457322528428285,
+          "upper_95": 0.9785568213542826,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j1",
+          "metric": "rss",
+          "pairs": 301,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j4",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.7071823979255298,
+          "lower_95": 0.6860669563798111,
+          "upper_95": 0.7547551612940645,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "direct_recipe_launch_j4",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j1",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.9851149888352082,
+          "lower_95": 0.9218999998523112,
+          "upper_95": 1.0373421234965667,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j1",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j4",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 1.0114872141958953,
+          "lower_95": 0.7990977627800139,
+          "upper_95": 1.104889087598867,
+          "passed": false
+        },
+        {
+          "suite": "standard",
+          "case": "ninja_recipe_launch_j4",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_clean",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 1.0137801390015793,
+          "lower_95": 0.9686960219045606,
+          "upper_95": 1.1436798009045666,
+          "passed": false
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_clean",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_noop",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.785729985399256,
+          "lower_95": 0.7563601060234275,
+          "upper_95": 0.8503364959744074,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_noop",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_single_file_change",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.858177669172014,
+          "lower_95": 0.8387661424237572,
+          "upper_95": 0.9312574215078854,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_single_file_change",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_graph_change",
+          "metric": "wall",
+          "pairs": 31,
+          "median_ratio": 0.9783423824808487,
+          "lower_95": 0.9461015983171642,
+          "upper_95": 1.0201860693995906,
+          "passed": true
+        },
+        {
+          "suite": "standard",
+          "case": "end_to_end_graph_change",
+          "metric": "rss",
+          "pairs": 31,
+          "median_ratio": 1.0,
+          "lower_95": 1.0,
+          "upper_95": 1.0,
+          "passed": true
+        }
+      ]
+    },
+    "cleanup_control": {
+      "baseline": "fd7573bdd7e0166d3f97fa5d41e29b0e2613ae3f",
+      "candidate": "88602d27260c33b6efa0c6b8acf5d708b6c80bc8",
+      "supported_regressions": [],
+      "interpretation": "No supported timing regression in the same-environment control; wide intervals prevent using it as strict acceptance."
+    },
+    "incomplete_noop_run": {
+      "runtime": "5302d4f989608f090b0eb32ca4cbbb5e6a50d16f",
+      "main_matrix_passed": true,
+      "interruption": {
+        "pid": 1725862,
+        "state": "T (stopped)",
+        "children": [
+          1725868
+        ],
+        "reason": "Paused before any later performance stage. Finish the active main matrix, then stop this campaign to validate explicit Ninja metadata eligibility. No tests or source rebuild overlap its active measurements.",
+        "stopped_after": "completed main matrix, all 30 cells pass",
+        "remaining_stages": "not run; metadata regression coverage required a source correction",
+        "final_controller_status": "terminated intentionally after child completion",
+        "controller_exit_code": 137
+      }
+    },
+    "incomplete_attempt": {
+      "reason": "Filesystem inode exhaustion invalidated the first performance attempt; reports could not be completed. Restart the full unchanged plan after removing reproducible historical fixtures.",
+      "prior_attempt_retained": "inode-exhausted-paired",
+      "prior_command_log": "inode-exhausted-paired-matrix.log",
+      "prior_runner_log": "inode-exhausted-performance.log",
+      "bootstrap_removed_fixture": "paired/direct-j4-r0-baseline",
+      "source_changes": false,
+      "criteria_changes": false,
+      "available_inodes_before_restart": 1370176
+    }
+  },
+  "archive": {
+    "file": "core-cleanup-review-2026-11-01.zip",
+    "sha256": "41903856ab71138d8628b7d7e2ec98e03c29e6942046b88e6a48cd5852e02270",
+    "bytes": 17425068,
+    "entries": 21852
+  },
+  "limits": [
+    "Synthetic cloud measurements against original baseline 77a397f; real PC qualification remains unrun.",
+    "RSS is peak individual-process memory, not simultaneous process-tree memory; small cases can be masked by the parent/exec high-water floor.",
+    "The first benchmark attempt exhausted workspace inodes and is retained as incomplete evidence. Emergency inode recovery removed one warmup fixture and its per-fixture logs; its recorded samples and command journal remain. Subsequent fixture retirement preserved samples, reports and surviving command logs.",
+    "The initial external-container startup for the fixed runtime used the wrong entrypoint and failed before any test ran; its log is retained alongside the completed explicit-entrypoint campaign.",
+    "The first no-op test draft omitted the inherited export expansion on its prerequisite. The corrected expectation was verified against the pre-optimization binary before testing the change.",
+    "The first depfile test draft incorrectly expected evaluation-time file I/O during Ninja generation. The corrected dependency-log test passes before optimization, fails on 5302d4f and passes after the metadata fix. Its original and corrected reproduction logs are retained.",
+    "The 5302d4f performance campaign completed its 30-cell main matrix and was intentionally stopped before remaining stages after manual review reproduced metadata regressions; it does not qualify the final runtime.",
+    "Prior runtime f1ee1a2 initially passed 58/60 cells. Its one fixed precision extension retained the original samples and confirmed a 3.3% small clean regression, leaving 59/60 passing cells. Publication-only runtime d4dca5f still failed its clean gate at +2.1%; both failures remain retained. The final runtime receives a fresh predeclared campaign after removing missing-output probe processes.",
+    "Completed synthetic main-matrix fixtures were retired between precision stages with verified command-log copies. Only clean-stage warmup timing can include the maintenance pause; no measured pair spans it.",
+    "Earlier runtime results remain historical and do not qualify subsequent code. No per-cell threshold was relaxed."
+  ]
+}

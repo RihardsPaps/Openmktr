@@ -1,0 +1,22 @@
+{
+  "root": "/disposable/openmktr-core-qualification",
+  "candidate": "/absolute/path/to/omktr",
+  "candidate_revision": "REPLACE_WITH_COMMIT_SHA",
+  "make": "/absolute/path/to/gmake",
+  "make_revision": "REPLACE_WITH_GNU_MAKE_VERSION",
+  "archives": "/absolute/path/to/verified-release-archives",
+  "cc": "/absolute/path/to/clang",
+  "cxx": "/absolute/path/to/clang++",
+  "toolchain_dir": "/absolute/path/to/llvm/bin",
+  "ninja_dir": "/absolute/path/to/ninja/bin",
+  "jobs": [8, 16],
+  "entrypoints": ["direct", "build"],
+  "libreoffice": {
+    "version": "26.8.2.2",
+    "archive": "libreoffice-26.8.2.2.tar.xz",
+    "configuration": "/absolute/path/to/libreoffice-configure-options.json",
+    "source_probe": "sal/osl/unx/file.cxx",
+    "output_probe": "workdir/CxxObject/sal/osl/unx/file.o",
+    "unrelated_probe": "workdir/CxxObject/sal/osl/unx/thread.o"
+  }
+}

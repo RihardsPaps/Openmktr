@@ -9,6 +9,87 @@ The matrix records specific releases and configurations; a passing result does
 not establish compatibility with every version or target. Read the
 [campaign guide](README.md) before using the tools or citing a row.
 
+## Second full core review — 1 November 2026
+
+The [second full review](../docs/core-refactor.md#second-full-review) fixes closed
+standard-descriptor capture, low-resolution output freshness, independent
+double-colon groups and their VPATH/lexical metadata, nonregular graph startup
+hangs, negative cache witnesses and normalized special-target lookup. Redundant
+low-resolution input metadata and generated guards are removed. Existing
+snapshot expectations and the static/runtime display distinction are preserved.
+Codex's review of runtime `97b6788` completed without findings.
+
+All 28 portable groups, 17 sanitizer groups and 27 external GNU incremental
+scenarios pass on this source. Both snapshot profiles pass 858/858 with zero
+quarantined crashes. Main and release CI pass; the external Gentoo job is still
+running at the recorded checkpoint.
+
+**57/60 performance gates pass; the zero-regression requirement is not
+certified.** Parallel, nested-parallel and small graph-change controls miss the
+strict median limit by 0.015%, 0.012% and 0.565%; all three 95% intervals span
+parity. All memory gates pass. The 512-target build-mode clean/no-op cases improve
+29.5%/16.1%; 10,000-target conversion improves 12.8% with 2.5% lower peak process
+RSS. These comparisons use original baseline `77a397f`, not the previous review.
+
+The [report and evidence](evidence/core-second-review-2026-11-01.json) retain all
+results, including failed display candidates and an inode-exhausted matrix. The
+complete matrix was restarted with unchanged counts and thresholds and fixture
+cleanup between entry points. Completed failing controls were not replaced.
+Real PC release and performance qualification remain unrun. Earlier reports
+below qualify only their explicitly named runtime.
+
+## Historical core cleanup and independent review — 1 November 2026
+
+The [cleanup and Codex review](../docs/core-refactor.md#cleanup-and-independent-pr-review)
+remove redundant scheduler/jobserver bookkeeping, unused metadata, duplicate
+resource handling and serialization copies. Runtime `fdff3e5` also fixes the
+Codex-reported double-colon `$?` regression, avoids silent phony no-op shell
+launches while preserving explicit Ninja metadata, removes redundant generation
+publication work, and skips timestamp-helper processes for missing ordinary
+outputs. Codex's review of this code commit completed with no findings or
+unresolved findings.
+
+All 28 portable checks, 17 sanitizer checks and 27 external GNU incremental
+scenarios pass; both snapshot profiles pass 858/858 with zero quarantined crashes.
+All three CI workflows pass for this code commit. All 60 paired timing and
+memory acceptance cells pass the unchanged median ratio ≤1.00 and bootstrap
+95% upper bound ≤1.05 criteria.
+
+Against original baseline `77a397f`, the 512-target build-mode clean fixture is
+32.0% faster and its no-op build is 17.6% faster. The 32-target end-to-end clean
+fixture is 9.4% faster; 10,000-target conversion is 9.0% faster with 2.1% lower
+peak process RSS. Direct clean execution and parallel sleep controls are near
+parity. These are synthetic cloud measurements. The
+[results and evidence](evidence/core-cleanup-review-2026-11-01.json) preserve
+all samples, earlier failed candidates, review receipts and measurement limits.
+Real PC release qualification remains unrun.
+
+## Historical core architecture and performance follow-up — 31 October 2026
+
+The [core overhaul](../docs/core-refactor.md) now implements invocation ownership,
+ready scheduling and unified child-process admission, typed freshness, complete
+generation publication with reader leases, and bounded persistent implicit-rule
+query reuse. Runtime `fd7573b` also removes the measured allocation, publication,
+launcher and scheduler overhead. All 28 cloud portable checks and 17 sanitizer
+checks pass; both snapshot profiles pass 858/858 scenarios with zero quarantined
+crashes. The external GNU incremental comparison passes 27 scenarios.
+
+All 60 paired timing and memory acceptance cells meet the unchanged median
+ratio ≤1.00 and bootstrap 95% upper bound ≤1.05 criteria. The campaign covers
+all three entry points, large graph phases and the standard benchmark workloads.
+Direct clean-build time improves 4.5%, build-mode clean time 8.2%, and
+10,000-target conversion time 9.6%; conversion peak process RSS falls 2.6%.
+These are cloud synthetic results. Exact revisions, raw samples, failed attempts,
+rejected experiments and measurement limits are retained in the
+[performance evidence](evidence/core-performance-2026-10-31.json).
+
+At `fd7573b`, only real PC release qualification remained in the work plan.
+[`qualify_core.py`](qualify_core.py) and its [configuration example](core-qualification.example.json)
+cover Linux 7.3, FFmpeg 9.0.2 and LibreOffice 26.8.2.2 in direct and build modes,
+with alternating pairs, correctness checks, timing and memory gates. That matrix
+has been generated but **not executed**. Historical project passes below and
+cloud synthetic measurements do not qualify this new runtime revision.
+
 ## Evidence boundary
 
 A project pass requires a real build using this repository's `omktr` for

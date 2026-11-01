@@ -1,7 +1,7 @@
 #!/bin/sh
 
-# .LOW_RESOLUTION_TIME compares listed prerequisites at whole-second
-# precision, while ordinary prerequisites retain normal timestamp behavior.
+# Low-resolution prerequisites retain their observed timestamps when compared
+# with their consumer. Exercise native helpers without an external stat.
 set -u
 
 mk=$(realpath "$1")

@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Validate serialized runtime expressions before lazily restoring their ASTs.
 // Keep validated runtime expressions as views of shared immutable storage.
 // Retain caller locations when restoring runtime command expressions.
@@ -33,6 +34,7 @@
 #include <vector>
 
 #include "loc.h"
+#include "session.h"
 
 class Evaluator;
 
@@ -61,7 +63,7 @@ class Evaluable {
   const Loc loc_;
 };
 
-class Value : public Evaluable {
+class Value : public Evaluable, public SessionAllocated<Value> {
  public:
   std::string_view IncrementalIdentity() const;
   // Restore a bounded structural expression record without evaluating it.

@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Invalidate native filesystem query epochs after ordered effects.
 // Changed by the Openmktr fork, maintained by Rihards Paps and Haralds Paps.
 // Upstream material retains its Apache-2.0 terms. Fork modifications use
@@ -27,6 +28,7 @@
 
 #include "expr.h"
 #include "loc.h"
+#include "session.h"
 
 struct FuncInfo {
   const char* name;
@@ -52,7 +54,7 @@ enum struct CommandOp {
   APPEND,
 };
 
-struct CommandResult {
+struct CommandResult : public SessionAllocated<CommandResult> {
   CommandOp op;
   std::string shell;
   std::string shellflag;

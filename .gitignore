@@ -10,6 +10,10 @@
 .kati_stamp*
 .ninja_log
 .ninja_deps
+.ninja_lock
+.omktr-generations/
+.omktr-objects/
+.kati_resolution*
 .openmktr/
 .openmktr.lock
 .openmktr-recursive.lock

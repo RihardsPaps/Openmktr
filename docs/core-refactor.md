@@ -1,0 +1,415 @@
+# Core speed and reliability architecture
+
+This overhaul starts at `77a397ffd7a1cc5f48e406f8cf9052a50cc0d150`.
+Implementation and portable checks do not replace performance qualification.
+The paired PC campaign described below remains unrun; the latest review and
+cloud validation are recorded separately from historical results. Historical
+project results do not qualify this revision.
+
+## Invocation and language ownership
+
+`BuildSession` owns symbols, global bindings, flags, parse/file caches, diagnostics,
+filesystem observation state, statistics, native-find state and runtime snapshots.
+A session allocation arena owns expressions, statements, rules and variables.
+Aligned 64 KiB chunks keep allocation ownership and live-object bitmaps out of
+individual objects; size-class free lists recycle early deletions. Oversized
+objects use separate blocks. Teardown destroys survivors before their backing
+text and services, and sanitizer builds poison unused and released slots.
+Pointer-sized allocation classes avoid padding small language objects; object
+sizes and aligned payload starts preserve their required alignment. Ordinary
+dependency nodes allocate double-colon rule groups only when needed.
+Thread-local service pointers are borrowed caches, invalidated whenever the
+binding changes; the session still owns and publishes each service exactly once.
+Scoped worker bindings share the invocation without sharing
+mutable state with another invocation. Evaluator mutation within one invocation
+remains serialized. Process-wide signal handlers still have one CLI owner.
+
+Fatal diagnostics unwind through the invocation boundary. The ready scheduler
+cancels active process work before joining workers on an expansion failure.
+Children are reaped, partial non-precious outputs are removed, and reservations
+are returned before cleanup finishes. The session unit exercises 100 sequential
+sessions, nested sessions, independent threads, evaluator calls and worker
+bindings with LeakSanitizer enabled.
+
+## Execution and freshness
+
+`ready_queue` has one shared coordinator for outstanding prerequisites and reverse
+edges, protected by a mutex. Completing participants update readiness directly
+without passing through a separate completion queue. The calling
+thread also executes ready tasks. Additional workers start only when runnable
+work can overlap other ready tasks, and total participants stay within the job
+limit. Pure metadata and literal phony no-op graphs create no worker threads.
+Ready prerequisites are read together with their outcomes, and already-observed
+source leaves need no second directory probe.
+The serial traversal remains for `-j1`, explanation and `.NOTPARALLEL`.
+Preparation preserves first-visit target scope, pre-prerequisite target stamps,
+stable cycle removal and edge-specific missing-intermediate decisions.
+
+`process` owns spawn structures, descriptors, output transport, signal forwarding,
+reaping and cleanup. `jobserver` owns local process admission, inherited FIFO
+reservations and load admission. Evaluation-time shell functions and recipes
+now enter the same local process budget. A waiting process holds no shared FIFO
+token. Session teardown closes cached worker connections and wakeup descriptors.
+
+`FileStamp` distinguishes missing, ignored, present and logically updated nodes.
+Present timestamps use exact seconds and nanoseconds, including dates before the
+Unix epoch. `NodeOutcome` distinguishes running, succeeded and failed execution.
+Direct execution, explanations, automatic `$?` and native Ninja freshness guards
+use the shared freshness predicates. Order-only and validation edges do not
+make an output stale. Recipe-time queries reobserve files after effects while
+retaining logical/phony updates. Recipes needing deferred automatic freshness
+use the native evaluator, so shell quoting cannot turn `$?` into a literal shell
+variable. Existing dialect restrictions remain documented in the compatibility
+guides; this refactor does not add a new Make dialect.
+
+## Publication, readers and migration
+
+Each output-directory/suffix pair has a writer lock and an immutable bundle
+under `.omktr-generations/`. Graph, environment, launcher, stamp and context
+manifest are completed and synced before a single `current` symlink rename
+publishes them. Public filenames remain entry points. A checksummed versioned
+manifest validates bundle artifacts; the stamp separately seals its structural
+bytes while allowing its validation checkpoint to advance.
+Immutable object writes use batches of at most 256 paths, syncing every file
+and each containing directory before publication. Unsealed reused paths
+participate too, so an interrupted or concurrent writer cannot supply an
+unsynced object to a committed graph. After flushing, objects become owner-read-only
+(`0400`); this seal permits later reuse without repeated disk barriers, while
+full bytes are still checked. Sealing precedes recording regeneration identities.
+These private cache files must remain immutable; regenerate after editing them.
+
+Generated launchers pin their selected bundle with a shared lease for the whole
+Ninja run. A native supervisor owns the lease, jobserver FIFO and load state,
+forwards cancellation, reaps Ninja and then removes its resources. FIFO creation
+and token seeding require no external shell utilities. A checksummed launch plan
+stores literal exports, unsets and Ninja options in the same published bundle;
+the supervisor validates it before applying the environment. `omktr build`
+launches this plan directly, while `ninja.sh` is a short native-launch entry point.
+Collection checks
+exclusive leases, retains the current and preceding
+bundles, and visits at most 256 candidates per publication. Interrupted staging
+directories are recovered by later maintenance. Legacy public files migrate
+automatically through a preserved legacy snapshot. Corrupt, obsolete or missing
+state triggers regeneration rather than requiring manual cache deletion.
+Caller-created regular Ninja wrappers, such as pool declarations including the
+generated graph, remain supported.
+
+Recipe expected states, scripts, variable contexts and environment snapshots
+are immutable objects. Filename hashes select storage; full bytes establish
+identity, and atomic no-replace publication resolves collisions. Mutable success
+history is separate from immutable expected state. Small expected-state records
+share bounded packs (at most 256 records and 1 MiB). Each record has a stable
+private symlink descriptor naming its pack and byte range; readers parse these
+bytes without following the descriptor as a path. Bounded regular-file reads
+check the record's digest, and publication compares the complete record bytes.
+Pack contents and descriptor directories join the publication durability barrier.
+Changing one record leaves neighboring command identities intact. Legacy regular
+state objects remain readable.
+
+Raw Ninja reads retain their
+open graph inode and refer to stable immutable recipe objects, including
+intermediate-state proofs; they do not depend on a collected bundle directory.
+Shared objects are retained for saved graphs and raw Ninja consumers. Remove them
+only with their owning disposable workspace when all readers have stopped;
+automatic bundle collection intentionally does not guess which saved graphs
+still reference objects. Normal `omktr build` validates and regenerates stale
+formats, including runtime-recipe schema v7. Old standalone generated graphs
+should be regenerated when updating the executable.
+
+## Selective persistent resolution
+
+Typed observation records cover file contents/identity, metadata, glob results,
+native-find results and ordered symbol interning. Existing evaluation records
+and the resolution cache share decoding and validation. Positive and negative
+filesystem observations invalidate equally. Any overlapping filesystem effect
+or epoch change makes an observation log ineligible for reuse.
+
+The `resolution` optimization persists pure top-level implicit-chain feasibility
+queries. Its identity includes ordered rule structure, suffix precedence, phony
+names and executable identity. It validates every witness before replaying symbol
+interning in order. Recipe text and target-variable changes can retain these pure
+queries; scopes, secondary expansion and Makefile effects still execute through
+the ordinary resolver. VPATH and unsupported query contexts take the ordinary
+path. It never replays a persistent mutable evaluator or a complete resolved graph.
+
+Budgets are 16 MiB stored, 64 MiB validation/recording work, 8,192 cache entries,
+and 1 MiB/8,192 observations per query. Oversized identities, invalid records,
+publication failures and budget exhaustion fall back to uncached resolution.
+`--disable_graph_optimization=resolution` provides an ablation; `off` disables it.
+`safe` and `aggressive` enable it independently of evaluation memoization.
+
+## Diagnostics
+
+`--stats_json FILE` appends schema-1 JSON Lines with process identity, monotonic
+phase durations, peak individual-process RSS, counters and accumulated statistics.
+No raw recipes or environment values are included. Phases can overlap and must
+not be added into a wall-time total. The build supervisor and generation child
+report separately. Missing records on fatal exits never count as success.
+Existing `--kati_stats` diagnostics remain available, including resolution hits
+and misses. Scheduler worker counts describe spawned threads; peak active tasks
+also include the calling thread. Filesystem timestamps and regeneration
+checkpoints remain wall-clock
+observations; elapsed timing uses monotonic clocks.
+
+## Second full review
+
+Runtime `97b6788c4cd5b38af93b691b361af58c67f6d8c9` follows a further review of
+ownership, scheduling, process admission, caches, freshness, graph publication,
+runtime recipe decoding, dependency resolution and workspace recovery. It fixes
+the following reproducible defects:
+
+- Capturing `$(shell ...)` output could silently lose data when the caller had
+  closed standard descriptors. Capture pipes now move only colliding descriptors
+  above the standard descriptor range before installing spawn actions.
+- `.LOW_RESOLUTION_TIME` was applied to prerequisite timestamps instead of the
+  marked output. Output comparison now includes the end of its timestamp second;
+  prerequisites retain their raw timestamps. Direct execution, generated guards,
+  automatic `$?`, and independent rule groups share this rule. Existing helper
+  formats retain their saved-graph wire behavior; new graphs use the new output
+  mode. Obsolete per-node low-resolution input lists and redundant guards are gone.
+- Generated double-colon recipes previously merged independent rule groups.
+  Versioned runtime metadata now selects each group against the same pre-recipe
+  output timestamp and expands only selected recipes. Normal and order-only
+  automatic inputs retain each group's order, providers, aliases and logical kind.
+  Unconditional groups remain unconditional, and context-only regeneration does
+  not evaluate current groups. Recipes newly deferred for group selection retain
+  their prior quiet display; existing runtime recipes retain their verbosity.
+- Opening a FIFO in the owned build-graph path could hang before validation.
+  Nonblocking descriptor opening and a regular-file check now reject it promptly.
+- Missing paths below a regular-file parent produced `ENOTDIR` observations that
+  could never validate. Negative metadata witnesses now accept both absence
+  forms and invalidate when the formerly impossible child appears.
+- Special-target sets stored normalized names but were queried with lexical
+  names. An existing file could therefore hide `.PHONY: dir/../force`. Lookup now
+  uses the normalized name while recipes retain lexical automatic variables.
+
+Codex found two provider/alias omissions in the first double-colon revision.
+Both were reproduced and fixed, including recipe-less VPATH source aliases.
+[Its final runtime review](https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6557128402)
+completed with no findings or unresolved findings. GNU reference checks agree
+with the timestamp and independent-group expectations; the portable suites
+themselves remain GNU-free. The old snapshot expectations remain unchanged.
+
+All 28 portable groups and all 17 ASan/UBSan groups pass on this runtime,
+including 22 architecture tests, 192 correctness cases in each profile and
+858/858 snapshots in each profile with zero quarantined crashes. Session
+ownership also passes with LeakSanitizer; the other sanitizer groups retain
+`detect_leaks=0`. The two earlier display attempts failed snapshot checks and
+remain separately recorded; their failures were not accepted as expectations.
+
+All 27 external GNU incremental scenarios pass without incorrect output,
+unnecessary rebuilds or harness errors. The main and release CI workflows pass
+for this code commit; external Gentoo validation is still running.
+
+**57 of 60 timing/memory gates pass** the unchanged median ratio ≤1.00 and
+bootstrap 95% upper bound ≤1.05 criteria. All 30 memory gates and 27 timing gates
+pass. Three timing controls miss the median limit, so this campaign **does not
+certify the zero-regression requirement**. Each of their confidence intervals
+spans parity; none establishes a statistically supported slowdown:
+
+| Control | Paired median time increase | Bootstrap 95% interval | Pairs |
+| --- | ---: | ---: | ---: |
+| Parallel execution | 0.015% | -0.027% to 0.068% | 1,001 |
+| Nested parallel execution | 0.012% | -0.030% to 0.053% | 1,001 |
+| Small end-to-end graph change | 0.565% | -0.116% to 1.139% | 1,001 |
+
+These completed results were retained without relaxing thresholds or rerunning
+until a passing result appeared. The required seven-repeat standard comparison
+also completed. Selected paired time reductions against original baseline
+`77a397f`, using the same cloud Chimera toolchain and CPUs 0–3:
+
+| Workload | Median reduction | Bootstrap 95% interval | Pairs |
+| --- | ---: | ---: | ---: |
+| Direct clean, 512 targets | 4.8% | 2.6% to 7.5% | 101 |
+| Build-mode clean, 512 targets | 29.5% | 25.6% to 32.7% | 101 |
+| Build-mode no-op, 512 targets | 16.1% | 14.0% to 17.8% | 101 |
+| Saved-graph clean, 512 targets | 26.8% | 23.2% to 30.3% | 101 |
+| Clean end-to-end, 32 targets | 6.7% | 6.0% to 7.2% | 1,001 |
+| Convert a 10,000-target graph | 12.8% | 11.1% to 14.5% | 101 |
+
+Large-graph conversion uses 2.5% less peak process RSS. RSS is the maximum for an
+individual process, not aggregate process-tree memory; the parent/exec high-water
+floor can mask small workloads. These measurements compare the full current
+refactor with the original baseline, not the preceding review's binary.
+
+The first main matrix exhausted the workspace's inodes during saved-graph sample
+58. Its report, raw samples and command logs are retained as incomplete evidence.
+The complete 30-cell matrix was restarted with identical counts and thresholds,
+retiring only rebuildable fixtures between entry points. The already completed
+small clean gate was retained, not repeated. This recovery changed no source.
+
+The [results](../validation/evidence/core-second-review-2026-11-01.json),
+[raw evidence](../validation/evidence/core-second-review-2026-11-01.zip) and
+[checksum](../validation/evidence/core-second-review-2026-11-01.zip.sha256)
+retain source/binary identities, plans, complete samples, test logs, review
+receipts and earlier failures. The implementation review is complete, but
+performance qualification remains open. Real PC release qualification is unrun;
+no absolute optimality or universal no-regression claim follows from this matrix.
+
+## Cleanup and independent PR review
+
+Runtime `fdff3e56aecf8dbfbde1cc55253347b101c0db42` removes duplicated executor
+bookkeeping, the obsolete one-iteration scheduler loop, repeated jobserver
+connection lookups and a redundant mutex/allocation, duplicate temporary-script
+cleanup, launch-plan string copies, duplicated generation pinning, unused
+Makefile metadata and obsolete includes. Saved-graph launchers, reader leases
+and ordinary-resolution fallbacks remain required.
+
+[Codex reviewed PR #65](https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6551227449).
+Its earlier review found that deferred `$?` expansion could drop logical/phony
+prerequisites in multiple double-colon rules. The fix retains prerequisite kinds
+and timestamp resolution in the probe while keeping the old saved-graph helper
+format. Direct/build/legacy regression coverage runs at one and four jobs.
+The review of the final code commit completed with no findings or unresolved
+findings.
+
+Silent phony `@:` recipes with the default `/bin/sh -c`, no deferred evaluation
+or command environment changes, and no explicit recursive prefix or Ninja
+metadata requiring a command retain their dependency edges without launching a
+shell. Custom interpreters, flags, exports, deferred reads and visible commands
+still execute. The 2,000-no-op fixture lists zero shell commands instead of
+2,000. Manual review caught depfile-input loss and unnecessary restat rebuilds
+in the initial optimization; regression tests reproduce both and verify that
+explicit Ninja metadata retains its commands.
+
+Fresh graph publication no longer creates an empty legacy snapshot. Existing
+public aliases with the required target remain in place; replacing a different
+entry retains atomic rename. Required artifact, directory and publication
+barriers remain. The migration test now exercises first migration from actual
+standalone files. Ordinary generated recipes also check for a missing output
+in their existing shell before spawning the native timestamp helper. Existing
+outputs retain native nanosecond checks, and intermediate-consumer proofs keep
+their previous path. A trace confirms 32 freshness-helper processes fall to
+zero in the small clean fixture. These operation counts are not estimates of
+whole-project speedup.
+
+All 28 portable checks and all 17 ASan/UBSan checks pass on this runtime,
+including 192 correctness cases in each profile and 858/858 snapshots in each
+profile with zero quarantined crashes. Session ownership also passes with
+LeakSanitizer; other suites retain `detect_leaks=0`. All 27 external GNU
+incremental scenarios pass without incorrect output, unnecessary rebuilds or
+harness errors. All three CI workflows pass for this code commit, including
+Alpine, Gentoo and the external GNU reference jobs.
+
+All **60 timing and memory acceptance cells pass** the unchanged criteria:
+median candidate/baseline ratio ≤1.00 and bootstrap 95% upper bound ≤1.05.
+Every cell is assessed separately. The fresh campaign uses 101 pairs for the
+main and large-graph matrices and ordinary standard cases, 301 for two short
+standard cases, and 1,001 for clean, graph-change and both parallel controls.
+Both binaries use the same pinned cloud Chimera toolchain and inherit affinity
+to CPUs 0–3. The required seven-repeat `tests/bench.py` comparison also completed.
+
+Selected paired time reductions against original baseline `77a397f`:
+
+| Workload | Median reduction | Bootstrap 95% interval | Pairs |
+| --- | ---: | ---: | ---: |
+| Direct clean, 512 targets | 0.9% | -2.0% to 3.3% | 101 |
+| Build-mode clean, 512 targets | 32.0% | 31.7% to 32.8% | 101 |
+| Build-mode no-op, 512 targets | 17.6% | 14.6% to 19.8% | 101 |
+| Saved-graph clean, 512 targets | 31.1% | 30.2% to 31.4% | 101 |
+| Clean end-to-end, 32 targets | 9.4% | 9.0% to 10.0% | 1,001 |
+| Convert a 10,000-target graph | 9.0% | 7.7% to 10.1% | 101 |
+
+Direct clean execution is near parity; its interval spans a small slowdown and
+speedup. Both parallel sleep controls are also near parity. Large-graph
+conversion uses 2.1% less peak process RSS. RSS measures the maximum individual
+process, not aggregate process-tree memory; the parent/exec high-water floor
+can mask small workloads.
+
+The [results](../validation/evidence/core-cleanup-review-2026-11-01.json),
+[raw evidence](../validation/evidence/core-cleanup-review-2026-11-01.zip) and
+[checksum](../validation/evidence/core-cleanup-review-2026-11-01.zip.sha256)
+retain the analysis, source and binary identities, test logs, review receipts,
+plans and samples. Earlier failures remain separately identified, including
+the confirmed 3.3% small clean regression on `f1ee1a2` and 2.1% on publication-only
+`d4dca5f`. The final runtime passed a fresh campaign after the missing-output
+probe fix; earlier measurements were not relabeled or discarded.
+
+These synthetic cloud results do not qualify real project releases. PC checks
+for Linux 7.3, FFmpeg 9.0.2 and LibreOffice 26.8.2.2 remain unrun.
+
+## Historical portable validation and performance at fd7573b
+
+Runtime revision `fd7573bdd7e0166d3f97fa5d41e29b0e2613ae3f` is compared with the
+original `77a397f` binary using the same pinned cloud Chimera toolchain. Both
+normal and sanitizer binaries embed the recorded runtime revision.
+
+All 28 portable checks pass, including 858/858 snapshots in each of the safe
+and aggressive profiles, with zero quarantined crashes. Coverage includes
+14 architecture cases, 187 correctness cases per profile, 45 runtime-recipe
+cases, 58 graph cases, 30 workspace cases and 12 jobserver cases. Both builds
+and all 17 ASan/UBSan checks pass. The session ownership/arena unit also runs
+with LeakSanitizer enabled; the remaining sanitizer suites retain their
+established `detect_leaks=0` setting. Whole-program leak detection is not claimed.
+The external GNU incremental comparison passes all 27 scenarios without
+incorrect outputs, unnecessary rebuilding or harness errors.
+
+The no-regression acceptance checks pass all **60 timing and memory cells**:
+
+- Five scenarios through direct, build and generated-shell entry points: 31
+  alternating pairs per cell at `-j4`, with checked outputs and rebuild sets.
+- Conversion, syntax checking, direct dry runs and no-op regeneration of a
+  10,000-target graph: 101 alternating pairs per cell.
+- Paired controls of the required `tests/bench.py` workloads: 31 pairs per cell,
+  except the short no-op chain and serial recipe dispatch. Their initial
+  near-parity medians led to one fixed extension to 301 pairs, retaining every
+  earlier sample. Both extended cases pass.
+
+Each case discards two initial warmup pairs. Every cell requires a paired median
+candidate/baseline ratio at most 1.00 and a bootstrap 95% upper bound at most
+1.05. Thresholds were not relaxed, and a faster case cannot offset a slower one.
+The standalone `tests/bench.py --repeats 7` run is also retained; it measures
+binaries in separate blocks and showed mixed raw medians. Alternating controls
+resolve those differences without deleting the original measurements.
+
+Selected ratios below use values above 1 for slower execution or greater memory:
+
+| Workload | Median ratio | Bootstrap 95% interval |
+| --- | ---: | ---: |
+| Direct clean | 0.955 | 0.941–1.012 |
+| Build clean | 0.918 | 0.912–0.924 |
+| Generated clean | 0.914 | 0.906–0.932 |
+| Direct no-op | 0.781 | 0.764–0.840 |
+| Build no-op | 0.778 | 0.763–0.804 |
+| Generated no-op | 0.983 | 0.895–1.016 |
+| 10,000-target conversion | 0.904 | 0.890–0.921 |
+| Conversion peak process RSS | 0.974 | 0.973–0.975 |
+
+These results correct the earlier clean-build, startup, conversion and memory
+regressions in the covered workloads. They are cloud synthetic measurements,
+not real-project performance qualification. The RSS metric is `wait4` peak
+individual-process memory; it is not aggregate tree memory, and small cases can
+be masked by the parent/exec high-water floor.
+
+The [performance report](../validation/evidence/core-performance-2026-10-31.json)
+and [checksummed raw archive](../validation/evidence/core-performance-2026-10-31.zip)
+retain binary hashes, revisions, drivers, individual samples, test logs, failed
+attempts and rejected experiments. The [earlier architecture evidence](../validation/evidence/core-architecture-2026-10-31.json)
+remains historical. In particular, it is not relabeled as passing performance
+qualification.
+
+## Remaining PC qualification
+
+[`qualify_core.py`](../validation/qualify_core.py) runs the reviewed Linux 7.3,
+FFmpeg 9.0.2 and LibreOffice 26.8.2.2 releases against external GNU Make in both
+direct and build modes. The [configuration example](../validation/core-qualification.example.json)
+and [run guide](../validation/README.md#qualify-the-core-overhaul-on-the-pc)
+cover tools, archives, configure options and incremental probes.
+
+Each requested job count uses two discarded warmup pairs and at least seven
+alternating measured pairs: clean, no-op, source touch, missing output and
+Makefile timestamp change. Checks retain configurations, artifacts, source
+integrity, rebuild sets, application output, command failures and individual
+samples. LibreOffice additionally verifies Writer, Calc and Impress PDF output.
+No third-party sources are patched. Incomplete evidence cannot qualify.
+
+Every timing and memory cell requires a median candidate/baseline ratio no worse
+than 1.00 and a bootstrap 95% upper bound no worse than 1.05. The memory metric is
+`wait4` peak individual-process RSS, not aggregate simultaneous process-tree RSS;
+LibreOffice also retains sampled tree RSS for diagnosis. Qualification requires
+all projects, modes, job counts and scenarios. Cloud synthetic checks exercise
+the implementation but cannot establish this PC release gate.
+
+The [first delivery evidence](../validation/evidence/core-runtime-refactor-2026-10-31.json)
+retains its measured runtime revision, earlier failed experiments and limits.
+It remains historical and is not relabeled as final architecture qualification.

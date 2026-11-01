@@ -5,6 +5,7 @@
 """Focused producer/consumer checks for runtime Ninja recipe expansion."""
 
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -147,6 +148,7 @@ else:
             (root / "probe.py").write_text(script)
             for mode in ("unchanged", "changed", "corrupt", "unsealed"):
                 with self.subTest(mode=mode):
+                    context.chmod(0o600)  # Fault injection into a sealed object.
                     context.write_bytes(original)
                     (root / "result").unlink(missing_ok=True)
                     result = subprocess.run(
@@ -660,7 +662,11 @@ else:
                 cwd=root, capture_output=True, text=True, timeout=20)
             self.assertEqual(generated.returncode, 0,
                              generated.stdout + generated.stderr)
-            states = list((root / ".openmktr/.kati_recipes").iterdir())
+            states = {
+                path.with_name(re.split(r"\.(?:version|packed)-", path.name, maxsplit=1)[0])
+                for path in (root / ".openmktr/.kati_recipes").iterdir()
+                if re.search(r"\.(?:version|packed)-", path.name)
+            }
             self.assertTrue(states)
             for path in states:
                 Path(str(path) + ".reads-pending").mkdir()
@@ -961,6 +967,7 @@ else:
                 sidecars = list(root.glob(".kati_runtime-*"))
                 self.assertTrue(sidecars)
                 for sidecar in sidecars:
+                    sidecar.chmod(0o600)  # Deliberately break an immutable object.
                     sidecar.write_bytes(b"corrupt")
                 (root / "result").unlink()
                 failed = subprocess.run(
@@ -1095,6 +1102,7 @@ else:
                     break
             else:
                 self.fail("Unused definition missing from full runtime context")
+            context.chmod(0o600)  # Fault injection into a sealed object.
             for broken in (original[:-1], original + b"trailing",
                            b"\xff" * 8 + original[8:], cache(pack(definitions))):
                 context.write_bytes(broken)

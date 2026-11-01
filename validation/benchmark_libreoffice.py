@@ -36,33 +36,66 @@ def main():
     parser.add_argument('--workspace', type=Path, required=True)
     parser.add_argument('--omktr', type=Path, required=True)
     parser.add_argument('--report', type=Path, required=True)
+    parser.add_argument('--archive', type=Path, required=True)
+    parser.add_argument('--configuration', type=Path, required=True,
+                        help='JSON containing the recorded configure_options list')
+    parser.add_argument('--make', default='make')
+    parser.add_argument('--cc', default='clang')
+    parser.add_argument('--cxx', default='clang++')
+    parser.add_argument('--ninja-dir', type=Path)
     parser.add_argument('--jobs', type=int, default=32)
-    parser.add_argument('--lanes', nargs='+', default=['gnu', 'aggressive'])
+    parser.add_argument('--lanes', nargs='+', choices=['gnu', 'direct', 'safe', 'aggressive'], default=['gnu', 'direct', 'safe'])
     parser.add_argument('--repeats', type=int, default=3)
+    parser.add_argument('--release-version', default='25.2.7.2')
+    parser.add_argument('--incremental', action='store_true',
+                        help='run source-touch, missing-output and graph-touch checks')
+    parser.add_argument('--source-probe', default='sal/osl/unx/file.cxx')
+    parser.add_argument('--output-probe', default='workdir/CxxObject/sal/osl/unx/file.o')
+    parser.add_argument('--unrelated-probe', default='workdir/CxxObject/sal/osl/unx/thread.o')
     parser.add_argument('--resume', action='store_true')
     parser.add_argument('--pdf-module-path', type=Path)
     args = parser.parse_args()
-    if args.repeats < 1:
-        parser.error("--repeats must be positive")
-    root = args.workspace
+    if args.repeats < 1 or args.jobs < 1:
+        parser.error("--repeats and --jobs must be positive")
+    root = args.workspace.resolve()
     root.mkdir(parents=True, exist_ok=True)
+    args.report = args.report.resolve()
     args.report.mkdir(parents=True, exist_ok=True)
-    campaign = Path('/root/universal-tool-campaign-20260927')
-    archive = campaign / 'sources/libreoffice-25.2.7.2.tar.xz'
-    old = json.loads(Path('/mnt/c/Users/Harry/Documents/ChatGPT/Universal Tool/validation/libreoffice-benchmark-results.json').read_text())
+    archive = args.archive.resolve()
+    args.omktr = args.omktr.resolve()
+    old = json.loads(args.configuration.read_text())
     options = [re.sub(r'--with-parallelism=\d+', '--with-parallelism=' + str(args.jobs), s) for s in old['configure_options']]
-    env = dict(os.environ, PATH='/root/omktr-graph-optimizations/ninja-1.13.2:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', CC='/usr/bin/clang-18', CXX='/usr/bin/clang++-18', CCACHE_DISABLE='1', LC_ALL='C', TZ='UTC')
+    env = dict(os.environ, CC=args.cc, CXX=args.cxx, CCACHE_DISABLE='1', LC_ALL='C', TZ='UTC')
+    if args.ninja_dir:
+        env['PATH'] = str(args.ninja_dir.resolve()) + os.pathsep + env.get('PATH', os.defpath)
+    make = shutil.which(args.make, path=env.get('PATH', os.defpath))
+    if not make:
+        parser.error('external GNU Make executable not found')
     for key in list(env):
         if key.startswith(('KATI_', 'OMKTR_', 'MAKEFLAGS', 'MFLAGS', 'MAKELEVEL')) or key == 'MAKE':
             env.pop(key)
     report = dict(status='preparing', jobs=args.jobs, repeats=args.repeats, configure_options=options,
                   environment={k: env[k] for k in ('PATH', 'CC', 'CXX', 'CCACHE_DISABLE', 'LC_ALL', 'TZ')},
                   archive_sha256=digest(archive), binary_sha256=digest(args.omktr), runs={}, lanes={})
-    assert report['archive_sha256'] == '21b38b7f429d305b229fb70f3294dd6ccd803f52dad0463d0923cdf143e9c8bd'
+    expected_sha = '21b38b7f429d305b229fb70f3294dd6ccd803f52dad0463d0923cdf143e9c8bd'
+    if args.release_version != '25.2.7.2':
+        campaign = json.loads(Path(__file__).with_name('dependency-campaign.json').read_text())
+        selected = next((item for item in campaign['components']
+                         if item['id'] == 'libreoffice' and item['version'] == args.release_version), None)
+        if selected is None:
+            parser.error('LibreOffice release is not in the reviewed campaign manifest')
+        expected_sha = selected['sha256']
+    if report['archive_sha256'] != expected_sha:
+        parser.error('LibreOffice archive checksum differs from the pinned release')
+    report['release_version'] = args.release_version
+    report['incremental_probes'] = dict(source=args.source_probe, output=args.output_probe,
+                                        unrelated=args.unrelated_probe, enabled=args.incremental)
     if args.resume:
-        report = json.loads((root / 'report.json').read_text())
-        if report['jobs'] != args.jobs or report['configure_options'] != options:
-            raise RuntimeError('Resume configuration differs from recorded campaign')
+        previous = json.loads((root / 'report.json').read_text())
+        for field in ('jobs', 'configure_options', 'archive_sha256', 'binary_sha256', 'environment', 'release_version', 'incremental_probes'):
+            if previous[field] != report[field]:
+                raise RuntimeError('Resume identity differs from recorded campaign: ' + field)
+        report = previous
     pdf_extract = ('import sys; from pathlib import Path; '
                    + ('sys.path.insert(0,' + repr(str(args.pdf_module_path)) + '); '
                       if args.pdf_module_path else '')
@@ -155,7 +188,7 @@ def main():
             raise RuntimeError('Clock discontinuities invalidate phase: ' + label)
         return result
 
-    report['versions'] = {name: subprocess.check_output(cmd, env=env, text=True, stderr=subprocess.STDOUT) for name, cmd in {'omktr':[str(args.omktr),'--version'], 'make':['/usr/bin/make','--version'], 'clang':['clang-18','--version'], 'ninja':['ninja','--version'], 'kernel':['uname','-a'], 'cpu':['lscpu']}.items()}
+    report['versions'] = {name: subprocess.check_output(cmd, env=env, text=True, stderr=subprocess.STDOUT) for name, cmd in {'omktr':[str(args.omktr),'--version'], 'make':[make,'--version'], 'clang':[args.cc,'--version'], 'ninja':['ninja','--version'], 'kernel':['uname','-a'], 'cpu':['lscpu']}.items()}
     save()
     for lane in args.lanes:
         assert shutil.disk_usage(root).free > 60*1024**3, 'Insufficient free disk'
@@ -164,7 +197,7 @@ def main():
             if not args.resume or lane not in report['lanes']:
                 raise RuntimeError('Existing lane requires recorded resume state')
             data = report['lanes'][lane]
-            expected = digest(args.omktr) if lane != 'gnu' else digest('/usr/bin/make')
+            expected = digest(args.omktr) if lane != 'gnu' else digest(make)
             if data['binary_sha256'] != expected or lane+'-build' not in report['runs']:
                 raise RuntimeError('Existing lane is incomplete or binary changed')
         else:
@@ -173,8 +206,8 @@ def main():
             with tarfile.open(archive) as tar:
                 tar.extractall(base, filter='data')
             data = report['lanes'][lane] = dict(extract_seconds=elapsed_clock()-start,
-                                              binary_sha256=digest(args.omktr) if lane != 'gnu' else digest('/usr/bin/make'))
-        source = base/'libreoffice-25.2.7.2'
+                                              binary_sha256=digest(args.omktr) if lane != 'gnu' else digest(make))
+        source = base/('libreoffice-' + args.release_version)
         build = base/'build'
         build.mkdir(exist_ok=args.resume)
         total_start = elapsed_clock()
@@ -188,11 +221,11 @@ def main():
             raise RuntimeError('Recorded lane configuration changed')
         data['normalized_config_sha256'] = normalized_digest
         langs = re.search(r'^ALL_LANGS=(.*)$', (build/'config_host_lang.mk').read_text(), re.M).group(1)
-        tool = '/usr/bin/make' if lane=='gnu' else str(args.omktr)
+        tool = make if lane=='gnu' else str(args.omktr)
         prepared = run(lane+'-bootstrap', [tool, '-j'+str(args.jobs), 'MAKE='+tool, 'ALL_LANGS='+langs, 'bootstrap', 'fetch', 'install-gdb-printers'], build)
         if prepared['exit_code']:
             continue
-        command = [tool]+([] if lane=='gnu' else ['build','--graph_optimizations=aggressive'])+['-j'+str(args.jobs),'-rs','-f',str(source/'Makefile.gbuild'),'MAKE='+tool,'ALL_LANGS='+langs,'build']
+        command = [tool]+([] if lane in ('gnu', 'direct') else ['build','--graph_optimizations='+lane])+['-j'+str(args.jobs),'-rs','-f',str(source/'Makefile.gbuild'),'MAKE='+tool,'ALL_LANGS='+langs,'build']
         extra = dict(SRCDIR=str(source),BUILDDIR=str(build),WORKDIR=str(build/'workdir'))
         built = run(lane+'-build', command, build, extra)
         if 'configure_through_build_seconds' not in data:
@@ -232,6 +265,46 @@ def main():
                 save()
                 if measured['exit_code'] or blocking:
                     raise RuntimeError('Repeat changed outputs: ' + repr(blocking[:20]))
+            if args.incremental:
+                source_probe = source / args.source_probe
+                output_probe = build / args.output_probe
+                unrelated_probe = build / args.unrelated_probe
+                for path in (source_probe, output_probe, unrelated_probe):
+                    if not path.is_file():
+                        raise RuntimeError('Configured incremental probe is absent: ' + str(path))
+                data['incremental_checks'] = []
+                for scenario in ('source', 'missing', 'graph'):
+                    before = output_state(build)
+                    original_hash = digest(output_probe)
+                    touched = source_probe if scenario == 'source' else source/'Makefile.gbuild'
+                    timestamp = touched.stat()
+                    if scenario == 'missing':
+                        output_probe.unlink()
+                    else:
+                        now = max(time.time_ns(), output_probe.stat().st_mtime_ns + 1_000_000,
+                                  timestamp.st_mtime_ns + 1_000_000)
+                        os.utime(touched, ns=(timestamp.st_atime_ns, now))
+                    try:
+                        # Scenario mutations must always be followed by a fresh
+                        # invocation, even when an interrupted campaign resumes.
+                        label = lane + '-incremental-' + scenario
+                        report['runs'].pop(label, None)
+                        measured = run(label, command, build, extra)
+                    finally:
+                        if scenario != 'missing':
+                            os.utime(touched, ns=(timestamp.st_atime_ns, timestamp.st_mtime_ns))
+                    after = output_state(build)
+                    changed = sorted(key for key in before.keys() | after.keys()
+                                     if before.get(key) != after.get(key))
+                    valid = (measured['exit_code'] == 0 and output_probe.is_file()
+                             and digest(output_probe) == original_hash)
+                    if scenario in ('source', 'missing'):
+                        valid &= args.output_probe in changed and args.unrelated_probe not in changed
+                    check = dict(scenario=scenario, changed=changed, passed=bool(valid))
+                    data['incremental_checks'].append(check)
+                    save()
+                    if not valid:
+                        raise RuntimeError('Incremental artifact check failed: ' + repr(check))
             data['installed_after_repeat'] = manifest(build/'instdir')
             smoke = base/'smoke'
             smoke.mkdir(exist_ok=args.resume)
@@ -240,6 +313,7 @@ def main():
             (smoke/'input.fodp').write_text('<?xml version="1.0"?><office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" office:version="1.2" office:mimetype="application/vnd.oasis.opendocument.presentation"><office:body><office:presentation><draw:page draw:name="Benchmark"><draw:frame svg:x="1cm" svg:y="1cm" svg:width="20cm" svg:height="5cm"><draw:text-box><text:p>Openmktr Impress verification</text:p></draw:text-box></draw:frame></draw:page></office:presentation></office:body></office:document>')
             soffice = str(build/'instdir/program/soffice')
             assert run(lane+'-version',[soffice,'--version'],build)['exit_code'] == 0
+            data['smoke_texts'] = {}
             for kind, ext in [('writer','txt'),('calc','csv'),('impress','fodp')]:
                 out = smoke/kind
                 out.mkdir(exist_ok=args.resume)
@@ -251,11 +325,12 @@ def main():
                                 calc=['Name', 'Value', 'Benchmark', '42'],
                                 impress=['Openmktr Impress verification'])[kind]
                 content = (out/'content.txt').read_text()
+                data['smoke_texts'][kind] = content
                 assert all(text in content for text in expected), (kind, content)
             data['installed_manifest'] = manifest(build/'instdir')
             assert run(lane+'-libraries',['ldd',str(build/'instdir/program/soffice.bin')],build)['exit_code'] == 0
             assert 'not found' not in (root/(lane+'-libraries.log')).read_text()
-            assert '25.2.7.2' in (root/(lane+'-version.log')).read_text()
+            assert args.release_version in (root/(lane+'-version.log')).read_text()
         run(lane+'-source-integrity',['python3',str(Path(__file__).with_name('verify_release_archive.py')),str(archive),str(source)],build)
         save()
     report['comparison_lanes'] = args.lanes
@@ -263,7 +338,9 @@ def main():
     selected_runs = [v for k, v in report['runs'].items()
                      if any(k.startswith(lane+'-') for lane in args.lanes)]
     assert all(v['exit_code'] == 0 for v in selected_runs), 'Failed comparison command'
-    report['status'] = 'builds-finished-cross-lane-verification-pending'
+    # Timing qualification is deliberately separate; the paired driver compares
+    # these retained configurations, artifact inventories and application checks.
+    report['status'] = 'builds-and-incremental-checks-finished'
     save()
 
 

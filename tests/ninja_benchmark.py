@@ -23,6 +23,73 @@ spec.loader.exec_module(benchmark)
 
 
 class Evidence(unittest.TestCase):
+    def test_no_regression_gate_requires_every_requested_cell_and_sample(self):
+        complete = [dict(pairs=7, parity_passed=True) for _ in range(5)]
+        self.assertTrue(benchmark.no_regression_passed(complete, complete, 5, 7))
+        self.assertFalse(benchmark.no_regression_passed(complete[:-1], complete, 5, 7))
+        self.assertFalse(benchmark.no_regression_passed(complete, [], 5, 7))
+        self.assertFalse(benchmark.no_regression_passed([], [], 0, 7))
+        self.assertFalse(benchmark.no_regression_passed(complete, complete, 5, 9))
+        regressing = [*complete[:-1], dict(pairs=7, parity_passed=False)]
+        self.assertFalse(benchmark.no_regression_passed(regressing, complete, 5, 7))
+        self.assertFalse(benchmark.no_regression_passed(complete, regressing, 5, 7))
+
+    def test_direct_and_make_lanes_include_no_generation(self):
+        for kind, entrypoint in (("make", "build"), ("make", "legacy"),
+                                 ("omktr", "direct")):
+            self.assertEqual(benchmark.invocation_commands(
+                "/tool", entrypoint, 8, ["MODE=release"], kind=kind),
+                [("invocation", ["/tool", "-j8", "MODE=release", "all"])])
+        commands = benchmark.invocation_commands("/tool", "legacy", 8, [])
+        self.assertEqual(len(commands), 2)
+        self.assertIn("--regen", commands[0][1])
+
+    def test_parity_requires_enough_pairs_and_no_median_regression(self):
+        def rows(count, ratio):
+            return [dict(project="synthetic", entrypoint="direct", jobs=8,
+                         scenario="noop", sample=sample, variant=variant,
+                         total_seconds=seconds, warmup=False)
+                    for sample in range(count)
+                    for variant, seconds in (("baseline", 1), ("candidate", ratio))]
+        self.assertFalse(benchmark.parity_summary(rows(6, .5))[0]["parity_passed"])
+        self.assertFalse(benchmark.parity_summary(rows(7, 1.01))[0]["parity_passed"])
+        self.assertTrue(benchmark.parity_summary(rows(7, .99))[0]["parity_passed"])
+
+    def test_memory_gate_cannot_pass_with_missing_or_regressing_samples(self):
+        rows = [dict(project="synthetic", entrypoint="direct", jobs=4,
+                     scenario="clean", sample=sample, variant=variant,
+                     peak_rss_kib=peak, total_seconds=1, warmup=False)
+                for sample in range(7)
+                for variant, peak in (("baseline", 100), ("candidate", 120))]
+        self.assertFalse(benchmark.memory_summary(rows)[0]["parity_passed"])
+        for row in rows:
+            row.pop("peak_rss_kib")
+        self.assertEqual(benchmark.memory_summary(rows), [])
+
+    def test_pc_qualification_pairs_both_backends_and_rejects_incomplete_libreoffice(self):
+        spec = importlib.util.spec_from_file_location(
+            "qualify_core", Path(benchmark.__file__).with_name("qualify_core.py"))
+        qualification = importlib.util.module_from_spec(spec)
+        with mock.patch.dict(sys.modules, benchmark_ninja=benchmark):
+            spec.loader.exec_module(qualification)
+        config = dict(root="/disposable/qualification", candidate="/pc/omktr", make="/pc/gmake",
+                      archives="/pc/archives", candidate_revision="candidate", make_revision="4.4.1",
+                      cc="clang", cxx="clang++", jobs=[4], libreoffice=dict(
+                          version="25.2.7.2", archive="libreoffice-25.2.7.2.tar.xz",
+                          configuration="/pc/libreoffice.json"))
+        plan = qualification.make_plan(config, 7, 2)
+        self.assertEqual({item["project"] for item in plan}, {"linux", "ffmpeg", "libreoffice"})
+        lo = [item for item in plan if item["project"] == "libreoffice"]
+        self.assertEqual(len(lo), 2 * 9 * 2)
+        self.assertEqual([item["variant"] for item in lo[:4]],
+                         ["baseline", "candidate", "candidate", "baseline"])
+        self.assertTrue(all("--incremental" in item["command"] for item in lo))
+        with self.assertRaises(ValueError):
+            qualification.libreoffice_rows(lo[0], dict(status="incomplete", lanes={"gnu": {}}))
+        with self.assertRaises(ValueError):
+            qualification.compare_libreoffice(dict(normalized_config_sha256="one"),
+                                               dict(normalized_config_sha256="two"))
+
     def test_dependency_budget_survives_failure_and_reopen(self):
         spec = importlib.util.spec_from_file_location(
             "qualify_dependencies", Path(benchmark.__file__).with_name("qualify_dependencies.py"))

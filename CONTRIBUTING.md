@@ -47,7 +47,7 @@ with the listed build requirements:
 
 ```sh
 ninja -f build.ninja -j4 omktr tests
-out/find_test && out/ninja_test && out/strutil_test && out/load_limit_test
+out/ready_queue_test && out/timeutil_test && out/find_test && out/ninja_test && out/strutil_test && out/load_limit_test
 python tests/version_generator.py
 python tests/correctness.py
 python tests/generated_recipe_reads.py
@@ -136,12 +136,16 @@ as CI from the repository root inside Chimera:
 ```sh
 python tools/gen_sanitizer_build.py
 ninja -f build.sanitizer.ninja -j4 omktr-sanitized tests
+ASAN_OPTIONS=detect_leaks=1 out/sanitized/session_test
+ASAN_OPTIONS=detect_leaks=0 out/sanitized/ready_queue_test
+ASAN_OPTIONS=detect_leaks=0 out/sanitized/timeutil_test
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/find_test
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/ninja_test
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/strutil_test
 ASAN_OPTIONS=detect_leaks=0 out/sanitized/load_limit_test
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/portage.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/load_limits.py
+ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/architecture.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/correctness.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/generated_recipe_reads.py
 ASAN_OPTIONS=detect_leaks=0 OMKTR_BINARY="$(pwd)/omktr-sanitized" python tests/graph_optimizations.py
@@ -155,6 +159,9 @@ The generator creates an isolated ASan/UBSan graph and output directory.
 The normal build remains available for comparison.
 
 ## Measure performance
+
+See [core runtime refactor](docs/core-refactor.md) for the ready scheduler,
+invocation ownership, atomic publication, structured timing, and PC qualification.
 
 Build baseline and candidate binaries with the same toolchain. On Linux, run:
 
@@ -201,12 +208,16 @@ Both modes share parsing, evaluation, and dependency resolution.
 
 | Stage | Main source files |
 | --- | --- |
+| Own invocation state and language allocations | [session.cc](src/session.cc), [session.h](src/session.h) |
 | Parse statements and expressions | [parser.cc](src/parser.cc), [expr.cc](src/expr.cc) |
 | Cache parsed includes | [file_cache.cc](src/file_cache.cc) |
 | Evaluate variables, directives, functions, and rules | [eval.cc](src/eval.cc), [stmt.cc](src/stmt.cc), [func.cc](src/func.cc) |
-| Resolve rules and dependencies | [dep.cc](src/dep.cc) |
-| Expand recipes and schedule direct builds | [command.cc](src/command.cc), [exec.cc](src/exec.cc) |
+| Resolve rules, record observations and reuse pure queries | [dep.cc](src/dep.cc), [observation.cc](src/observation.cc), [resolution_cache.cc](src/resolution_cache.cc) |
+| Compare typed timestamps and edge freshness | [freshness.cc](src/freshness.cc) |
+| Expand recipes and schedule direct builds | [command.cc](src/command.cc), [exec.cc](src/exec.cc), [ready_queue.cc](src/ready_queue.cc) |
+| Admit, supervise and reap child processes | [jobserver.cc](src/jobserver.cc), [process.cc](src/process.cc) |
 | Generate Ninja files and check regeneration | [ninja.cc](src/ninja.cc), [regen.cc](src/regen.cc) |
+| Publish complete generations and retain active readers | [generation.cc](src/generation.cc) |
 
 ## Use external compatibility evidence
 

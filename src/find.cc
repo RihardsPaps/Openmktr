@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Invalidate native directory queries after ordered filesystem effects.
 // Changed by the Openmktr fork, maintained by Rihards Paps and Haralds Paps.
 // Upstream material retains its Apache-2.0 terms. Fork modifications use
@@ -21,6 +22,7 @@
 // +build ignore
 
 #include "find.h"
+#include "session.h"
 
 #include <dirent.h>
 #include <fnmatch.h>
@@ -51,7 +53,11 @@
     }                                   \
   } while (0)
 
-static unsigned int find_emulator_node_cnt = 0;
+struct FindState {
+  unsigned int node_count = 0;
+  std::unique_ptr<FindEmulator> emulator;
+};
+#define find_emulator_node_cnt (SessionService<FindState>().node_count)
 
 class FindCond {
  public:
@@ -1016,13 +1022,11 @@ class FindCommandParser {
   std::string_view unget_tok_;
 };
 
-static FindEmulator* g_instance;
-
 class FindEmulatorImpl : public FindEmulator {
  public:
-  FindEmulatorImpl() { g_instance = this; }
+  FindEmulatorImpl() = default;
 
-  virtual ~FindEmulatorImpl() = default;
+  ~FindEmulatorImpl() override { delete root_; }
   void InvalidateCache() override { dirty_ = true; }
 
   bool CanHandle(std::string_view s) const {
@@ -1188,7 +1192,7 @@ bool FindCommand::Parse(const std::string& cmd) {
 }
 
 FindEmulator* FindEmulator::Get() {
-  return g_instance;
+  return SessionService<FindState>().emulator.get();
 }
 
 unsigned int FindEmulator::GetNodeCount() {
@@ -1196,5 +1200,5 @@ unsigned int FindEmulator::GetNodeCount() {
 }
 
 void InitFindEmulator() {
-  new FindEmulatorImpl();
+  SessionService<FindState>().emulator = std::make_unique<FindEmulatorImpl>();
 }

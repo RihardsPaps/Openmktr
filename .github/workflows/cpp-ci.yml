@@ -77,11 +77,12 @@ jobs:
           docker run --rm -e ASAN_OPTIONS=detect_leaks=0 openmktr-test /bin/sh -c '
             python tools/gen_sanitizer_build.py &&
             ninja -f build.sanitizer.ninja -j4 omktr-sanitized tests &&
-            out/sanitized/find_test && out/sanitized/ninja_test &&
+            ASAN_OPTIONS=detect_leaks=1 out/sanitized/session_test && out/sanitized/ready_queue_test && out/sanitized/timeutil_test && out/sanitized/find_test && out/sanitized/ninja_test &&
             out/sanitized/strutil_test &&
             out/sanitized/load_limit_test &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/portage.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/load_limits.py &&
+            OMKTR_BINARY=/workspace/omktr-sanitized python tests/architecture.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/correctness.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/generated_recipe_reads.py &&
             OMKTR_BINARY=/workspace/omktr-sanitized python tests/graph_optimizations.py &&

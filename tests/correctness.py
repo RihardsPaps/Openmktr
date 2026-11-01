@@ -4,6 +4,7 @@
 import json
 import os
 import signal
+import random
 from pathlib import Path
 import subprocess
 import tempfile
@@ -17,6 +18,125 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_phony_noop_preserves_ninja_depfile_inputs(self):
+        self.makefile(
+            ".PHONY: noop\n"
+            "noop: .KATI_DEPFILE = noop.d\n"
+            "noop:\n\t@:\n")
+        (self.directory / "noop").write_text("keep")
+        (self.directory / "input").write_text("input")
+        (self.directory / "noop.d").write_text("noop: input\n")
+        self.direct("--ninja", "noop")
+        self.run_command("sh", "./ninja.sh", "noop")
+        _, dependencies = self.run_command("ninja", "-t", "deps", "noop")
+        self.assertIn("    input\n", dependencies)
+        self.assertFalse((self.directory / "noop.d").exists())
+
+    def test_phony_noop_preserves_ninja_restat(self):
+        self.makefile(
+            ".PHONY: all noop\n.KATI_RESTAT: noop\nall: out\n"
+            "noop:\n\t@:\nout: noop\n\t@printf x >> $@\n")
+        (self.directory / "noop").write_text("keep")
+        self.direct("--ninja", "all")
+        for _ in range(2):
+            self.run_command("sh", "./ninja.sh", "-j4", "all")
+            self.assertEqual((self.directory / "out").read_text(), "x")
+        self.assertEqual((self.directory / "noop").read_text(), "keep")
+
+    def test_ninja_silent_phony_noops_preserve_freshness_and_recipe_effects(self):
+        root = self.directory
+        for mode in ("direct", "build", "legacy"):
+            with self.subTest(mode=mode):
+                self.directory = root / mode
+                self.directory.mkdir()
+                shell = self.directory / "custom-shell"
+                shell.write_text('#!/bin/sh\nprintf custom >> custom-runs\nexec /bin/sh "$@"\n')
+                shell.chmod(0o755)
+                self.makefile(
+                    ".PHONY: all noop custom flagged exported echoed\n"
+                    "all: result custom flagged exported echoed\n"
+                    "seed:\n\t@touch $@\nnoop: seed\n\t@:\n"
+                    "result: noop\n\t@test -f seed; printf x >> $@\n"
+                    f"custom: SHELL := {shell}\ncustom:\n\t@:\n"
+                    "flagged: .SHELLFLAGS := -xc\nflagged:\n\t@:\n"
+                    "exported: export VALUE = $(file >>exports,$@)\n"
+                    "exported: seed\n\t@:\nechoed:\n\t:\n")
+                (self.directory / "noop").write_text("keep")
+                if mode == "legacy":
+                    self.direct("--ninja", "all")
+                for repeat in (1, 2):
+                    if mode == "legacy":
+                        _, output = self.run_command("sh", "./ninja.sh", "-j4", "all")
+                    else:
+                        _, output = self.direct(*(("build",) if mode == "build" else ()),
+                                                "-j4", "all")
+                    self.assertIn("+ :", output)
+                    self.assertEqual((self.directory / "result").read_text(), "x" * repeat)
+                    self.assertEqual((self.directory / "noop").read_text(), "keep")
+                    self.assertEqual((self.directory / "custom-runs").read_text(), "custom" * repeat)
+                    self.assertEqual((self.directory / "exports").read_text(), "seed\n" + "exported\n" * repeat)
+                if mode != "direct":
+                    graph = ".openmktr/build.ninja" if mode == "build" else "build.ninja"
+                    _, commands = self.run_command("ninja", "-f", graph, "-t", "commands", "echoed")
+                    self.assertIn(":", commands)
+
+    def test_phony_noop_preparation_preserves_exports_shells_and_failures(self):
+        shell = self.directory / "custom-shell"
+        shell.write_text('#!/bin/sh\nprintf "%s\\n" "$MARK" >> shells\nexec /bin/sh "$@"\n')
+        shell.chmod(0o755)
+        self.makefile(
+            ".PHONY: all plain custom blocked fail\nall: plain custom blocked\n"
+            "plain custom blocked: export MARK = $(file >>exports,$@)$@\n"
+            f"custom: SHELL := {shell}\n"
+            "plain custom blocked:\n\t@:\nblocked: fail\nfail:\n\t@false\n")
+        for jobs in (1, 4):
+            for name in ("exports", "shells"):
+                (self.directory / name).unlink(missing_ok=True)
+            self.direct(f"-j{jobs}", "-k", "all", success=False)
+            # Target-specific exports reach prerequisites too; the failed
+            # prerequisite expands its value, while blocked never expands.
+            self.assertEqual(sorted((self.directory / "exports").read_text().splitlines()),
+                             ["custom", "fail", "plain"])
+            self.assertEqual((self.directory / "shells").read_text(), "custom\n")
+
+    def test_ready_queue_shared_dependencies_execute_exactly_once(self):
+        rng = random.Random(431)
+        lines = ["all: " + " ".join(f"node{i}" for i in range(48))]
+        for i in range(48):
+            dependencies = sorted(rng.sample(range(i), min(i, 3)))
+            names = " ".join(f"node{j}" for j in dependencies)
+            checks = "".join(f"test -f node{j} && " for j in dependencies)
+            lines.append(f"node{i}: {names}\n\t@{checks}printf '%s\\n' '$@' >> calls; touch $@")
+        self.makefile("\n".join(lines) + "\n")
+        for jobs in (1, 2, 8):
+            with self.subTest(jobs=jobs):
+                for path in self.directory.glob("node*"):
+                    path.unlink()
+                (self.directory / "calls").unlink(missing_ok=True)
+                self.direct(f"-j{jobs}", "all")
+                calls = (self.directory / "calls").read_text().splitlines()
+                self.assertEqual(len(calls), 48)
+                self.assertEqual(set(calls), {f"node{i}" for i in range(48)})
+                self.direct(f"-j{jobs}", "all")
+                self.assertEqual((self.directory / "calls").read_text().splitlines(), calls)
+
+    def test_structured_statistics_do_not_invalidate_graph(self):
+        self.makefile("all: result\nresult:\n\t@printf ok > result\n")
+        self.direct("build", "all")
+        graph = self.directory / ".openmktr/build.ninja"
+        before = graph.stat().st_mtime_ns
+        trace = self.directory / "stats.jsonl"
+        self.direct("build", "--stats_json", str(trace), "all")
+        self.assertEqual(graph.stat().st_mtime_ns, before)
+        records = [json.loads(line) for line in trace.read_text().splitlines()]
+        self.assertGreaterEqual(len(records), 2)
+        self.assertTrue(any("Ninja execution time" in r["phases"] for r in records))
+        for record in records:
+            self.assertEqual(record["schema"], 1)
+            self.assertEqual(record["clock"], "CLOCK_MONOTONIC")
+            self.assertTrue(all(seconds >= 0 for seconds in record["phases"].values()))
+            self.assertTrue(all(stat["seconds"] >= 0 for stat in record["statistics"]))
+
     def test_make_defaults_echo_commands_and_keep_internal_checks_silent(self):
         self.makefile("Makefile: ;\nall:\n\tprintf '%s\\n' visible\n"
                       "\t@printf '%s\\n' quiet\n")
@@ -1066,7 +1186,7 @@ class BuildCorrectness(unittest.TestCase):
         second.write_text("second\n")
         self.direct("--ninja", "all")
         self.run_command("sh", "./ninja.sh", "-j2")
-        self.assertEqual(output.read_text(), "first second kati_missing_output")
+        self.assertEqual(output.read_text(), "first second")
 
         # Put the output later in the same second as both inputs, then move
         # one prerequisite 250 ms ahead without relying on sleeps or crossing
@@ -1076,7 +1196,7 @@ class BuildCorrectness(unittest.TestCase):
         os.utime(output, ns=(2_000_000_000, 2_000_000_000))
         os.utime(second, ns=(2_250_000_000, 2_250_000_000))
         self.run_command("sh", "./ninja.sh", "-j2")
-        self.assertEqual(output.read_text(), "second kati_missing_output")
+        self.assertEqual(output.read_text(), "second")
 
     def test_ninja_question_preserves_low_resolution_prerequisite_semantics(self):
         self.makefile(
@@ -1098,12 +1218,12 @@ class BuildCorrectness(unittest.TestCase):
         os.utime(second, ns=(base + 750_000_000, base + 750_000_000))
         os.utime(output, ns=(base + 500_000_000, base + 500_000_000))
         self.run_command("sh", "./ninja.sh", "-j2")
-        self.assertEqual(output.read_text(), "first second kati_missing_output")
+        self.assertEqual(output.read_text(), "second")
 
         os.utime(second, ns=(base + 2_000_000_000, base + 2_000_000_000))
         os.utime(output, ns=(base + 1_500_000_000, base + 1_500_000_000))
         self.run_command("sh", "./ninja.sh", "-j2")
-        self.assertEqual(output.read_text(), "second kati_missing_output")
+        self.assertEqual(output.read_text(), "second")
 
     def test_multiline_function_call_in_define(self):
         self.makefile(
@@ -1728,6 +1848,62 @@ class BuildCorrectness(unittest.TestCase):
         self.direct("a")
         self.assertEqual((self.directory / "a").read_text(), "rule2")
 
+    def test_double_colon_newer_inputs_preserve_logical_prerequisites(self):
+        for mode in ("direct", "build", "legacy"):
+            for kind in ("phony", "phony-file", "logical"):
+                for jobs in (1, 4):
+                    with self.subTest(mode=mode, kind=kind, jobs=jobs):
+                        with tempfile.TemporaryDirectory(dir=self.directory) as path:
+                            directory = Path(path)
+                            (directory / "Makefile").write_text(
+                                (".PHONY: force\n" if kind.startswith("phony") else "") +
+                                "output:: force force | order\n"
+                                "\t@if test -n \"$?\"; then printf '%s' \"$?\" > $@; fi\n"
+                                "output::; @:\nforce:; @:\n"
+                                ".PHONY: order\norder:; @:\n")
+                            if kind == "phony-file":
+                                (directory / "force").write_text("")
+                                os.utime(directory / "force", (100, 100))
+                            def invoke(*args):
+                                result = subprocess.run(args, cwd=directory,
+                                                        capture_output=True, text=True,
+                                                        timeout=15)
+                                self.assertEqual(result.returncode, 0,
+                                                 result.stdout + result.stderr)
+                            if mode == "legacy":
+                                invoke(str(KATI), "--ninja", "output")
+                                command = ("sh", "./ninja.sh", f"-j{jobs}", "output")
+                            else:
+                                command = (str(KATI), *(("build",) if mode == "build" else ()),
+                                           f"-j{jobs}", "output")
+                            invoke(*command)
+                            self.assertEqual((directory / "output").read_text(), "force")
+                            (directory / "output").write_text("stale")
+                            invoke(*command)
+                            self.assertEqual((directory / "output").read_text(), "force")
+
+    def test_deferred_newer_input_metadata_and_saved_graph_format(self):
+        for name in ("output", "newer", "phony", "--"):
+            (self.directory / name).write_text("")
+        os.utime(self.directory / "output", ns=(100_500_000_000, 100_500_000_000))
+        os.utime(self.directory / "newer", ns=(100_750_000_000, 100_750_000_000))
+        os.utime(self.directory / "phony", ns=(100_000_000_000, 100_000_000_000))
+        _, output = self.direct("--internal-newer-inputs-v2", "output",
+                                "p0", "phony", "l0", "logical",
+                                "f0", "missing", "f0", "newer", "f0", "--")
+        self.assertEqual(output, "phony logical newer --")
+        _, output = self.direct("--internal-newer-inputs-v2", "output",
+                                "f1", "newer", "l0", "phony")
+        self.assertEqual(output, "")
+        for arguments in (("p0",), ("x0", "missing"), ("f2", "newer")):
+            status, _ = self.direct("--internal-newer-inputs-v2", "output",
+                                    *arguments, success=False)
+            self.assertEqual(status, 2)
+        _, output = self.direct("--internal-newer-inputs", "output", "newer", "missing")
+        self.assertEqual(output, "newer")
+        _, output = self.direct("--internal-newer-inputs", "output", "newer", "--", "newer")
+        self.assertEqual(output, "")
+
     def test_shell_function_stops_at_nul_without_truncating_recipe(self):
         (self.directory / "loader").write_bytes(b"/lib/loader.so\0")
         self.makefile("all:\n"
@@ -1878,6 +2054,9 @@ class BuildCorrectness(unittest.TestCase):
         self.run_command("sh", "./ninja.sh", "-j2")
         self.assertEqual((self.directory / "generated").read_text(), "current")
         os.utime(self.directory / "source", (300, 300))
+        self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertEqual((self.directory / "generated").read_text(), "rebuilt")
+        (self.directory / "generated").unlink()
         self.run_command("sh", "./ninja.sh", "-j2")
         self.assertEqual((self.directory / "generated").read_text(), "rebuilt")
 

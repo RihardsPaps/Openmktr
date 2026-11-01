@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Expose scoped lookup observation for successful runtime recipe identities.
 // Own replaced recipe-time target bindings until dependent scopes expire.
 // Track and validate incremental evaluation, include proofs and imported Ninja
@@ -230,7 +231,7 @@ class Evaluator {
   }
   void clear_delayed_output_commands() { delayed_output_commands_.clear(); }
 
-  static const SymbolSet& used_undefined_vars() { return used_undefined_vars_; }
+  static const SymbolSet& used_undefined_vars();
 
   int eval_depth() const { return eval_depth_; }
   void IncrementEvalDepth() { eval_depth_++; }
@@ -354,8 +355,6 @@ class Evaluator {
   bool export_error_;
 
   std::vector<std::string> profiled_files_;
-
-  static SymbolSet used_undefined_vars_;
 
   bool is_evaluating_command_ = false;
   uint64_t recipe_snapshot_epoch_ = 0;

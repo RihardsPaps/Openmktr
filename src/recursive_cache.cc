@@ -392,11 +392,11 @@ void RecursiveCache::Save(const std::vector<NamedDepNode>& roots,
       continue;
     if (node->rule_vars || node->vpath_provider.IsValid() ||
         node->intermediate || node->oneshell || node->export_all_variables ||
-        node->is_notparallel || !node->double_colon_group_inputs.empty() ||
+        node->is_notparallel || !node->DoubleColon().inputs.empty() ||
         !node->validations.empty() || !node->wait_groups.empty() ||
         !node->implicit_outputs.empty() || !node->implicit_inputs.empty() ||
-        node->output_pattern.IsValid() ||
-        !node->low_resolution_inputs.empty() || node->depfile_var)
+        node->output_pattern.IsValid() || node->low_resolution ||
+        node->depfile_var)
       return;
     const bool root = root_nodes.count(node) != 0;
     struct stat st;

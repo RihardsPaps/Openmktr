@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -31,13 +32,14 @@
 
 #include "loc.h"
 #include "log.h"
+#include "session.h"
 #include "stmt.h"
 #include "symtab.h"
 
 class Value;
 class Evaluator;
 
-class Rule {
+class Rule : public SessionAllocated<Rule> {
  public:
   Rule();
 

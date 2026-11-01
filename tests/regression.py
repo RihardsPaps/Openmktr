@@ -57,6 +57,11 @@ UNSTABLE_SCRIPTS = {"precious_delete_on_error.sh"}
 
 def normalize(value: str, directory: Path) -> str:
     value = value.replace(str(directory), "<TESTDIR>").replace(str(KATI), "<KATI>")
+    # Storage identities are deliberately generation/content specific. Keep
+    # command/error semantics visible while normalizing only those paths.
+    value = re.sub(r"(?:<TESTDIR>/)?\.omktr-objects/env-\d+(?:\.\d+)?", "././env.sh", value)
+    value = re.sub(r"(\.kati_recipes/[0-9a-f]+)\.(?:version|packed)-\d+(?:\.\d+)?", r"\1", value)
+    value = re.sub(r"<TESTDIR>/\.omktr-generations/\d+/g-[A-Za-z0-9]+/(build[^/\s:]*\.ninja)", r"./\1", value)
     value = re.sub(r"/tmp-test-[^/\s]+", "<TESTDIR-SUBST>", value)
     value = re.sub(r"/tmp/tmp[^/\s]+", "<SCRIPT-TEMP>", value)
     return re.sub(r"(src/[A-Za-z_]+\.cc):\d+:", r"\1:<LINE>:", value)
@@ -91,6 +96,7 @@ def created_files(directory: Path) -> list[str]:
         for child in directory.iterdir()
         if child.name not in IGNORED_FILES
         and not child.name.startswith(".kati")
+        and not child.name.startswith(".omktr-")
         and not child.name.startswith("stdout")
     )
 
@@ -116,6 +122,18 @@ def run_makefile(source: Path, target: str, ninja: bool) -> dict:
             output += ninja_output
         if not ninja and source.name in UNORDERED_OUTPUT_CASES:
             output = "".join(sorted(output.splitlines(keepends=True)))
+        if source.name == "find_command.mk" and target == "test2":
+            # readdir order differs between the reference image's filesystems.
+            # This missing-tree case lists only these two fixture entries.
+            # Preserve every path and diagnostic; canonicalize that one order.
+            lines = output.splitlines(keepends=True)
+            for index, line in enumerate(lines):
+                words = line.split()
+                if (len(words) == 3 and
+                        {word.rsplit("/", 1)[-1] for word in words[1:]} ==
+                        {"Makefile", "submake"}):
+                    lines[index] = " ".join([words[0], *sorted(words[1:])]) + "\n"
+            output = "".join(lines)
         if not ninja and source.name == "multi_explicit_output_patterns.mk" and target == "test":
             # The two prerequisites of zzz are independent. Their build
             # notices can interleave with their recipe output under -j1.

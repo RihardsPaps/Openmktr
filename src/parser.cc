@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Own invocation state and publish coherent generations with typed freshness.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -23,6 +24,7 @@
 // +build ignore
 
 #include "parser.h"
+#include "session.h"
 
 #include <stack>
 #include <string_view>
@@ -151,7 +153,12 @@ class Parser {
                 "*** missing `endef', unterminated `define'.");
   }
 
-  static std::vector<ParseErrorStmt*> parse_errors;
+  static std::vector<ParseErrorStmt*>& Errors() {
+    struct State {
+      std::vector<ParseErrorStmt*> errors;
+    };
+    return SessionService<State>().errors;
+  }
 
  private:
   void Error(const std::string& msg) {
@@ -159,7 +166,7 @@ class Parser {
     stmt->set_loc(loc_);
     stmt->msg = msg;
     out_stmts_->push_back(stmt);
-    parse_errors.push_back(stmt);
+    Errors().push_back(stmt);
   }
 
   size_t FindEndOfLine(size_t* lf_cnt) {
@@ -765,8 +772,6 @@ const size_t Parser::longest_directive_len_ = []() {
   return result;
 }();
 
-std::vector<ParseErrorStmt*> Parser::parse_errors;
-
 void ParseAssignStatement(std::string_view line,
                           size_t sep,
                           std::string_view* lhs,
@@ -810,5 +815,5 @@ void ParseAssignStatement(std::string_view line,
 }
 
 const std::vector<ParseErrorStmt*>& GetParseErrors() {
-  return Parser::parse_errors;
+  return Parser::Errors();
 }
