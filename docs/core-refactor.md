@@ -1,9 +1,10 @@
 # Core speed and reliability architecture
 
 This overhaul starts at `77a397ffd7a1cc5f48e406f8cf9052a50cc0d150`.
-The implementation and portable validation are separate from release performance
-qualification: the remaining release gate is the paired PC campaign described
-below. Historical project results do not qualify this revision.
+Implementation and portable checks do not replace performance qualification.
+The paired PC campaign described below remains unrun; the latest cleanup and
+cloud validation are recorded separately from historical results. Historical
+project results do not qualify this revision.
 
 ## Invocation and language ownership
 
@@ -150,7 +151,89 @@ also include the calling thread. Filesystem timestamps and regeneration
 checkpoints remain wall-clock
 observations; elapsed timing uses monotonic clocks.
 
-## Portable validation and performance
+## Cleanup and independent PR review
+
+Runtime `fdff3e56aecf8dbfbde1cc55253347b101c0db42` removes duplicated executor
+bookkeeping, the obsolete one-iteration scheduler loop, repeated jobserver
+connection lookups and a redundant mutex/allocation, duplicate temporary-script
+cleanup, launch-plan string copies, duplicated generation pinning, unused
+Makefile metadata and obsolete includes. Saved-graph launchers, reader leases
+and ordinary-resolution fallbacks remain required.
+
+[Codex reviewed PR #65](https://github.com/RihardsPaps/Openmktr/pull/65#issuecomment-6551227449).
+Its earlier review found that deferred `$?` expansion could drop logical/phony
+prerequisites in multiple double-colon rules. The fix retains prerequisite kinds
+and timestamp resolution in the probe while keeping the old saved-graph helper
+format. Direct/build/legacy regression coverage runs at one and four jobs.
+The review of the final code commit completed with no findings or unresolved
+findings.
+
+Silent phony `@:` recipes with the default `/bin/sh -c`, no deferred evaluation
+or command environment changes, and no explicit recursive prefix or Ninja
+metadata requiring a command retain their dependency edges without launching a
+shell. Custom interpreters, flags, exports, deferred reads and visible commands
+still execute. The 2,000-no-op fixture lists zero shell commands instead of
+2,000. Manual review caught depfile-input loss and unnecessary restat rebuilds
+in the initial optimization; regression tests reproduce both and verify that
+explicit Ninja metadata retains its commands.
+
+Fresh graph publication no longer creates an empty legacy snapshot. Existing
+public aliases with the required target remain in place; replacing a different
+entry retains atomic rename. Required artifact, directory and publication
+barriers remain. The migration test now exercises first migration from actual
+standalone files. Ordinary generated recipes also check for a missing output
+in their existing shell before spawning the native timestamp helper. Existing
+outputs retain native nanosecond checks, and intermediate-consumer proofs keep
+their previous path. A trace confirms 32 freshness-helper processes fall to
+zero in the small clean fixture. These operation counts are not estimates of
+whole-project speedup.
+
+All 28 portable checks and all 17 ASan/UBSan checks pass on this runtime,
+including 192 correctness cases in each profile and 858/858 snapshots in each
+profile with zero quarantined crashes. Session ownership also passes with
+LeakSanitizer; other suites retain `detect_leaks=0`. All 27 external GNU
+incremental scenarios pass without incorrect output, unnecessary rebuilds or
+harness errors. All three CI workflows pass for this code commit, including
+Alpine, Gentoo and the external GNU reference jobs.
+
+All **60 timing and memory acceptance cells pass** the unchanged criteria:
+median candidate/baseline ratio ≤1.00 and bootstrap 95% upper bound ≤1.05.
+Every cell is assessed separately. The fresh campaign uses 101 pairs for the
+main and large-graph matrices and ordinary standard cases, 301 for two short
+standard cases, and 1,001 for clean, graph-change and both parallel controls.
+Both binaries use the same pinned cloud Chimera toolchain and inherit affinity
+to CPUs 0–3. The required seven-repeat `tests/bench.py` comparison also completed.
+
+Selected paired time reductions against original baseline `77a397f`:
+
+| Workload | Median reduction | Bootstrap 95% interval | Pairs |
+| --- | ---: | ---: | ---: |
+| Direct clean, 512 targets | 0.9% | -2.0% to 3.3% | 101 |
+| Build-mode clean, 512 targets | 32.0% | 31.7% to 32.8% | 101 |
+| Build-mode no-op, 512 targets | 17.6% | 14.6% to 19.8% | 101 |
+| Saved-graph clean, 512 targets | 31.1% | 30.2% to 31.4% | 101 |
+| Clean end-to-end, 32 targets | 9.4% | 9.0% to 10.0% | 1,001 |
+| Convert a 10,000-target graph | 9.0% | 7.7% to 10.1% | 101 |
+
+Direct clean execution is near parity; its interval spans a small slowdown and
+speedup. Both parallel sleep controls are also near parity. Large-graph
+conversion uses 2.1% less peak process RSS. RSS measures the maximum individual
+process, not aggregate process-tree memory; the parent/exec high-water floor
+can mask small workloads.
+
+The [results](../validation/evidence/core-cleanup-review-2026-11-01.json),
+[raw evidence](../validation/evidence/core-cleanup-review-2026-11-01.zip) and
+[checksum](../validation/evidence/core-cleanup-review-2026-11-01.zip.sha256)
+retain the analysis, source and binary identities, test logs, review receipts,
+plans and samples. Earlier failures remain separately identified, including
+the confirmed 3.3% small clean regression on `f1ee1a2` and 2.1% on publication-only
+`d4dca5f`. The final runtime passed a fresh campaign after the missing-output
+probe fix; earlier measurements were not relabeled or discarded.
+
+These synthetic cloud results do not qualify real project releases. PC checks
+for Linux 7.3, FFmpeg 9.0.2 and LibreOffice 26.8.2.2 remain unrun.
+
+## Historical portable validation and performance at fd7573b
 
 Runtime revision `fd7573bdd7e0166d3f97fa5d41e29b0e2613ae3f` is compared with the
 original `77a397f` binary using the same pinned cloud Chimera toolchain. Both

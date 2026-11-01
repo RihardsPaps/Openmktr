@@ -9,7 +9,33 @@ The matrix records specific releases and configurations; a passing result does
 not establish compatibility with every version or target. Read the
 [campaign guide](README.md) before using the tools or citing a row.
 
-## Core architecture and performance follow-up — 31 October 2026
+## Core cleanup and independent review — 1 November 2026
+
+The [cleanup and Codex review](../docs/core-refactor.md#cleanup-and-independent-pr-review)
+remove redundant scheduler/jobserver bookkeeping, unused metadata, duplicate
+resource handling and serialization copies. Runtime `fdff3e5` also fixes the
+Codex-reported double-colon `$?` regression, avoids silent phony no-op shell
+launches while preserving explicit Ninja metadata, removes redundant generation
+publication work, and skips timestamp-helper processes for missing ordinary
+outputs. Codex's review of this code commit completed with no findings or
+unresolved findings.
+
+All 28 portable checks, 17 sanitizer checks and 27 external GNU incremental
+scenarios pass; both snapshot profiles pass 858/858 with zero quarantined crashes.
+All three CI workflows pass for this code commit. All 60 paired timing and
+memory acceptance cells pass the unchanged median ratio ≤1.00 and bootstrap
+95% upper bound ≤1.05 criteria.
+
+Against original baseline `77a397f`, the 512-target build-mode clean fixture is
+32.0% faster and its no-op build is 17.6% faster. The 32-target end-to-end clean
+fixture is 9.4% faster; 10,000-target conversion is 9.0% faster with 2.1% lower
+peak process RSS. Direct clean execution and parallel sleep controls are near
+parity. These are synthetic cloud measurements. The
+[results and evidence](evidence/core-cleanup-review-2026-11-01.json) preserve
+all samples, earlier failed candidates, review receipts and measurement limits.
+Real PC release qualification remains unrun.
+
+## Historical core architecture and performance follow-up — 31 October 2026
 
 The [core overhaul](../docs/core-refactor.md) now implements invocation ownership,
 ready scheduling and unified child-process admission, typed freshness, complete
@@ -28,7 +54,7 @@ These are cloud synthetic results. Exact revisions, raw samples, failed attempts
 rejected experiments and measurement limits are retained in the
 [performance evidence](evidence/core-performance-2026-10-31.json).
 
-Only the real PC release qualification remains in this refactor's work plan.
+At `fd7573b`, only real PC release qualification remained in the work plan.
 [`qualify_core.py`](qualify_core.py) and its [configuration example](core-qualification.example.json)
 cover Linux 7.3, FFmpeg 9.0.2 and LibreOffice 26.8.2.2 in direct and build modes,
 with alternating pairs, correctness checks, timing and memory gates. That matrix
