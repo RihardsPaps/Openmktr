@@ -2,7 +2,7 @@
 // Carry output timestamp resolution into runtime recipes and automatic inputs.
 // Defer independent double-colon groups and select their own automatic inputs.
 // Preserve logical prerequisites in deferred double-colon freshness checks.
-// Keep deferred Ninja recipes quiet unless command display is requested.
+// Preserve command display when static rule groups become deferred recipes.
 // Read optional double-colon metadata through the shared dependency view.
 // Read logical updates directly from the dependency execution flag.
 // Own invocation state and publish coherent generations with typed freshness.
@@ -439,8 +439,10 @@ bool MakeRuntimeRecipe(const DepNode& node,
         inspection.Variable(name.str());
   if (node.export_all_variables)
     inspection.dynamic = true;
-  if (!inspection.io && !inspection.dynamic &&
-      !inspection.automatic_freshness && node.DoubleColon().inputs.empty()) {
+  const bool runtime_expansion =
+      (!node.actual_inputs.empty() || !node.actual_order_only_inputs.empty()) &&
+      (inspection.io || inspection.dynamic || inspection.automatic_freshness);
+  if (!runtime_expansion && node.DoubleColon().inputs.empty()) {
     ev->set_current_scope(nullptr);
     return false;
   }
@@ -455,10 +457,14 @@ bool MakeRuntimeRecipe(const DepNode& node,
   AppendGraphString(node.lexical_output.str(), &payload);
   AppendGraphString(
       node.output_pattern.IsValid() ? node.output_pattern.str() : "", &payload);
+  // Groups that would otherwise be expanded statically retain Ninja's quiet
+  // command display. Recipes already requiring runtime expansion retain their
+  // existing verbosity, including explicit display settings and @ prefixes.
+  const bool silent = node.silent || !runtime_expansion;
   std::string flags;
   for (bool flag :
-       {node.oneshell, node.ignore_errors, node.silent,
-        node.export_all_variables, node.low_resolution, node.is_phony})
+       {node.oneshell, node.ignore_errors, silent, node.export_all_variables,
+        node.low_resolution, node.is_phony})
     flags += flag ? '1' : '0';
   AppendGraphString(flags, &payload);
   std::string identity = payload;
@@ -1962,10 +1968,7 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
     Var* verbosity = ev_->LookupVar(Intern("V"));
     // V is a display extension, not a make variable used by this recipe.
     // Expanding a deferred definition here can run shell functions or fail.
-    // Ninja already displays edge progress. Deferred expansion must not add
-    // command echoes that the same statically expanded recipe would omit.
-    return (kati_verbose ? std::string_view(kati_verbose) != "0"
-                         : !n.runtime_inputs) ||
+    return kati_verbose == nullptr || std::string_view(kati_verbose) != "0" ||
            (verbosity->IsDefined() && verbosity->String() == "1");
   };
   if (n.oneshell) {

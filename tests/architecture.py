@@ -56,16 +56,19 @@ class Architecture(unittest.TestCase):
         return (self.root / "build.ninja").resolve().parent
 
     def test_deferred_ninja_recipes_preserve_progress_display(self):
-        for rule in ("output::", "output: input"):
-            for verbose in (False, True):
-                with self.subTest(rule=rule, verbose=verbose):
-                    self.write(rule + "\n\tprintf '%s\\n' '$(shell printf visible)'\n"
+        for rule, value, runtime in (("output::", "visible", False),
+                                     ("output::", "$(shell printf visible)", False),
+                                     ("output:: input", "$(shell printf visible)", True),
+                                     ("output: input", "$(shell printf visible)", True)):
+            for verbose in (None, "0", "1"):
+                with self.subTest(rule=rule, runtime=runtime, verbose=verbose):
+                    self.write(rule + f"\n\tprintf '%s\\n' '{value}'\n"
                                "\t@printf '%s\\n' quiet\n")
                     (self.root / "input").write_text("source")
                     environment = dict(os.environ)
                     environment.pop("KATI_VERBOSE", None)
-                    if verbose:
-                        environment["KATI_VERBOSE"] = "1"
+                    if verbose is not None:
+                        environment["KATI_VERBOSE"] = verbose
                     self.run_tool("--ninja", "output")
                     result = subprocess.run(["/bin/sh", "ninja.sh", "-j1"],
                                             cwd=self.root, env=environment,
@@ -74,7 +77,7 @@ class Architecture(unittest.TestCase):
                     self.assertIn("visible\n", result.stdout)
                     self.assertIn("quiet\n", result.stdout)
                     self.assertEqual("printf '%s\\n' 'visible'" in result.stdout,
-                                     verbose)
+                                     runtime and verbose != "0")
                     self.assertNotIn("printf '%s\\n' quiet", result.stdout)
 
     def test_build_rejects_nonregular_graph_without_waiting_for_a_writer(self):
