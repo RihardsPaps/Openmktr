@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Bind automatic variables to the active independent double-colon rule group.
 // Pack recipe booleans together to avoid padding every expanded command.
 // Own invocation state and publish coherent generations with typed freshness.
 // Capture actual direct bootstrap reads for later deferred recipe identities.
@@ -92,6 +93,8 @@ class CommandEvaluator {
                             FileStamp target_age,
                             size_t double_colon_group);
   const DepNode* current_dep_node() const { return current_dep_node_; }
+  const std::vector<Symbol>& actual_inputs() const;
+  const std::vector<Symbol>& order_only_inputs() const;
   FileStamp target_age() const { return target_age_; }
   Evaluator* evaluator() const { return ev_; }
   bool found_new_inputs() const { return found_new_inputs_; }
@@ -100,6 +103,7 @@ class CommandEvaluator {
  private:
   Evaluator* ev_;
   const DepNode* current_dep_node_;
+  size_t double_colon_group_ = static_cast<size_t>(-1);
   FileStamp target_age_;
   bool found_new_inputs_;
   FileObservationCache observations_;

@@ -1,4 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
+// Carry output timestamp resolution into runtime recipes and automatic inputs.
+// Defer independent double-colon groups and select their own automatic inputs.
 // Preserve logical prerequisites in deferred double-colon freshness checks.
 // Read optional double-colon metadata through the shared dependency view.
 // Read logical updates directly from the dependency execution flag.
@@ -300,7 +302,7 @@ RuntimeRecipeReadCapture::RuntimeRecipeReadCapture(const Command& command,
     if (!ConsumeGraphString(&data, &fields.back()))
       ERROR("invalid bootstrap runtime metadata");
   }
-  if (fields.size() != 17 || fields[0] != "runtime-recipe-v7")
+  if (fields.size() != 17 || fields[0] != "runtime-recipe-v8")
     ERROR("incompatible bootstrap runtime metadata");
   impl_->observation = fields[10];
   if (impl_->observation.empty())
@@ -401,7 +403,8 @@ bool MakeRuntimeRecipe(const DepNode& node,
   // With no prerequisites there is no producer whose completion Ninja must
   // await. Retain ordinary generation-time expansion for such recipes,
   // including existing diagnostics and source-tree find emulation.
-  if (node.actual_inputs.empty() && node.actual_order_only_inputs.empty())
+  if (node.actual_inputs.empty() && node.actual_order_only_inputs.empty() &&
+      node.DoubleColon().inputs.empty())
     return false;
   ev->set_current_scope(node.rule_vars);
   ev->ApplyRecipeTargetUpdates(node.lexical_output);
@@ -424,8 +427,7 @@ bool MakeRuntimeRecipe(const DepNode& node,
   if (node.export_all_variables)
     inspection.dynamic = true;
   if (!inspection.io && !inspection.dynamic &&
-      (!inspection.automatic_freshness ||
-       node.DoubleColon().inputs.size() > 1)) {
+      !inspection.automatic_freshness && node.DoubleColon().inputs.empty()) {
     ev->set_current_scope(nullptr);
     return false;
   }
@@ -435,18 +437,15 @@ bool MakeRuntimeRecipe(const DepNode& node,
   // a watch list of previously existing environment names cannot detect it.
   if (inspection.io || inspection.dynamic)
     MakefileCacheManager::Get().RequireEvaluation();
-  if (node.DoubleColon().inputs.size() > 1)
-    ERROR(
-        "runtime recipe evaluation does not support multiple double-colon "
-        "groups");
   std::string payload;
-  AppendGraphString("runtime-recipe-v7", &payload);
+  AppendGraphString("runtime-recipe-v8", &payload);
   AppendGraphString(node.lexical_output.str(), &payload);
   AppendGraphString(
       node.output_pattern.IsValid() ? node.output_pattern.str() : "", &payload);
   std::string flags;
-  for (bool flag : {node.oneshell, node.ignore_errors, node.silent,
-                    node.export_all_variables})
+  for (bool flag :
+       {node.oneshell, node.ignore_errors, node.silent,
+        node.export_all_variables, node.low_resolution, node.is_phony})
     flags += flag ? '1' : '0';
   AppendGraphString(flags, &payload);
   std::string identity = payload;
@@ -613,19 +612,38 @@ bool MakeRuntimeRecipe(const DepNode& node,
   AppendGraphString(environment_names, &structural);
   if (!inspection.dynamic)
     AppendGraphString(environment_definitions, &identity);
-  std::string low_resolution, phony_inputs, logical_inputs;
-  for (Symbol input : node.low_resolution_inputs)
-    AppendGraphString(input.str(), &low_resolution);
+  std::string phony_inputs, logical_inputs;
   for (const auto& input : node.deps) {
     if (input.second->is_phony)
       AppendGraphString(input.first.str(), &phony_inputs);
     if (input.second->has_rule && !input.second->intermediate)
       AppendGraphString(input.first.str(), &logical_inputs);
   }
-  for (const auto& metadata : {low_resolution, phony_inputs, logical_inputs}) {
+  for (const auto& metadata : {phony_inputs, logical_inputs}) {
     AppendGraphString(metadata, &identity);
     AppendGraphString(metadata, &structural);
   }
+  std::string groups, command_groups, double_colon;
+  for (size_t group = 0; group < node.DoubleColon().inputs.size(); ++group) {
+    std::string record, inputs, order_only;
+    AppendGraphString(node.DoubleColon().has_prerequisites[group] ? "1" : "0",
+                      &record);
+    for (Symbol input : node.DoubleColon().inputs[group])
+      AppendGraphString(input.str(), &inputs);
+    for (Symbol input : node.DoubleColon().order_only_inputs[group])
+      AppendGraphString(input.str(), &order_only);
+    AppendGraphString(inputs, &record);
+    AppendGraphString(order_only, &record);
+    AppendGraphString(record, &groups);
+  }
+  for (size_t group : node.DoubleColon().for_cmd)
+    AppendGraphString(std::to_string(group), &command_groups);
+  if (!groups.empty()) {
+    AppendGraphString(groups, &double_colon);
+    AppendGraphString(command_groups, &double_colon);
+  }
+  AppendGraphString(double_colon, &identity);
+  AppendGraphString(double_colon, &structural);
   const std::string observation =
       inspection.dynamic && !node.export_all_variables && !node.is_phony
           ? directory + "/.kati_runtime-reads-" + GraphDigest(structural)
@@ -648,9 +666,9 @@ bool MakeRuntimeRecipe(const DepNode& node,
   AppendGraphString(structural, &payload);
   AppendGraphString(generation, &payload);
   AppendGraphString(identity, &payload);
-  AppendGraphString(low_resolution, &payload);
   AppendGraphString(phony_inputs, &payload);
   AppendGraphString(logical_inputs, &payload);
+  AppendGraphString(double_colon, &payload);
   ev->set_current_scope(nullptr);
   const std::string path = PublishGraphObject(
       directory + "/.kati_runtime-" + GraphDigest(payload), payload);
@@ -846,19 +864,21 @@ int RunRuntimeRecipe(const char* path) {
       ERROR("invalid runtime recipe sidecar; regenerate the Ninja graph");
     return value;
   };
-  if (take(&data) != "runtime-recipe-v7")
+  if (take(&data) != "runtime-recipe-v8")
     ERROR("incompatible runtime recipe sidecar; regenerate the Ninja graph");
   Evaluator evaluator;
   evaluator.Start();
   DepNode node(Intern(take(&data)), false, false);
   node.output_pattern = Intern(take(&data));
   const std::string flags = take(&data);
-  if (flags.size() != 4 || flags.find_first_not_of("01") != std::string::npos)
+  if (flags.size() != 6 || flags.find_first_not_of("01") != std::string::npos)
     ERROR("invalid runtime recipe flags; regenerate the Ninja graph");
   node.oneshell = flags[0] == '1';
   node.ignore_errors = flags[1] == '1';
   node.silent = flags[2] == '1';
   node.export_all_variables = flags[3] == '1';
+  node.low_resolution = flags[4] == '1';
+  node.is_phony = flags[5] == '1';
   for (auto* inputs : {&node.actual_inputs, &node.actual_order_only_inputs}) {
     std::string storage = take(&data);
     std::string_view record(storage);
@@ -970,12 +990,51 @@ int RunRuntimeRecipe(const char* path) {
   const std::string generation = take(&data);
   const std::string identity = take(&data);
   node.runtime_inputs = std::make_unique<DepNode::RuntimeInputs>();
-  for (auto* inputs : {&node.low_resolution_inputs, &node.runtime_inputs->phony,
-                       &node.runtime_inputs->logical}) {
+  for (auto* inputs :
+       {&node.runtime_inputs->phony, &node.runtime_inputs->logical}) {
     const std::string storage = take(&data);
     std::string_view names(storage);
     while (!names.empty())
       inputs->push_back(Intern(take(&names)));
+  }
+  const std::string double_colon = take(&data);
+  if (!double_colon.empty()) {
+    auto& groups = node.MutableDoubleColon();
+    std::string_view metadata(double_colon);
+    const std::string records = take(&metadata);
+    std::string_view entries(records);
+    while (!entries.empty()) {
+      const std::string record = take(&entries);
+      std::string_view fields(record);
+      const std::string has_inputs = take(&fields);
+      if (has_inputs != "0" && has_inputs != "1")
+        ERROR("invalid runtime rule group; regenerate the Ninja graph");
+      groups.has_prerequisites.push_back(has_inputs == "1");
+      for (auto* collection : {&groups.inputs, &groups.order_only_inputs}) {
+        const std::string names = take(&fields);
+        std::string_view inputs(names);
+        auto& group = collection->emplace_back();
+        while (!inputs.empty())
+          group.push_back(Intern(take(&inputs)));
+      }
+      if (!fields.empty())
+        ERROR("trailing runtime rule group; regenerate the Ninja graph");
+    }
+    const std::string commands = take(&metadata);
+    std::string_view indices(commands);
+    while (!indices.empty()) {
+      const std::string index = take(&indices);
+      char* end = nullptr;
+      errno = 0;
+      const unsigned long group = strtoul(index.c_str(), &end, 10);
+      if (errno || index.empty() ||
+          index.find_first_not_of("0123456789") != std::string::npos || *end ||
+          group >= groups.inputs.size())
+        ERROR("invalid runtime command group; regenerate the Ninja graph");
+      groups.for_cmd.push_back(group);
+    }
+    if (!metadata.empty() || groups.for_cmd.size() != node.cmds.size())
+      ERROR("invalid runtime rule groups; regenerate the Ninja graph");
   }
   const char* owner_env = getenv("KATI_RECIPE_STATE_PATH");
   const std::string owner = owner_env ? owner_env : "";
@@ -991,7 +1050,41 @@ int RunRuntimeRecipe(const char* path) {
       ERROR("cannot retire runtime variable observations");
     evaluator.set_recipe_reads(&reads);
   }
-  const auto expanded = commands.Eval(node);
+  std::vector<Command> expanded;
+  if (node.DoubleColon().inputs.empty()) {
+    expanded = commands.Eval(node);
+  } else {
+    FileStamp target = FileStamp::Read(node.output.str());
+    if (node.low_resolution)
+      target = target.LowResolution();
+    // Select every group against the same pre-recipe timestamp. Expanding a
+    // skipped group can itself have effects, so expand only selected recipes.
+    const char* changed = getenv("KATI_RECIPE_CHANGED");
+    const bool recipe_changed = changed && std::string_view(changed) == "1";
+    std::vector<bool> dirty;
+    for (size_t group = 0; group < node.DoubleColon().inputs.size(); ++group) {
+      bool run = recipe_changed || node.is_phony || !target.exists() ||
+                 !node.DoubleColon().has_prerequisites[group];
+      for (Symbol input : node.DoubleColon().inputs[group]) {
+        FileStamp timestamp = FileStamp::Read(input.str());
+        const auto& phony = node.runtime_inputs->phony;
+        const auto& logical = node.runtime_inputs->logical;
+        if (std::find(phony.begin(), phony.end(), input) != phony.end() ||
+            (!timestamp.exists() &&
+             std::find(logical.begin(), logical.end(), input) != logical.end()))
+          timestamp = FileStamp::Updated();
+        run |= InputIsNewer(timestamp, target);
+      }
+      dirty.push_back(run);
+    }
+    for (size_t group = 0; group < dirty.size(); ++group) {
+      if (!dirty[group])
+        continue;
+      auto selected = commands.Eval(node, target, group);
+      expanded.insert(expanded.end(), std::make_move_iterator(selected.begin()),
+                      std::make_move_iterator(selected.end()));
+    }
+  }
   evaluator.set_recipe_reads(nullptr);
   if (!evaluator.rules().empty())
     ERROR(
@@ -1529,7 +1622,7 @@ void AutoLessVar::Eval(Evaluator* ev, std::string* s) const {
   const DepNode* n = ce_->current_dep_node();
   if (!n)
     return;
-  auto& ai = n->actual_inputs;
+  const auto& ai = ce_->actual_inputs();
   if (!ai.empty())
     *s += EffectivePrerequisite(ev, n, ai[0]).str();
 }
@@ -1540,7 +1633,7 @@ void AutoHatVar::Eval(Evaluator* ev, std::string* s) const {
     return;
   std::unordered_set<std::string_view> seen;
   WordWriter ww(s);
-  for (Symbol ai : n->actual_inputs) {
+  for (Symbol ai : ce_->actual_inputs()) {
     ai = EffectivePrerequisite(ev, n, ai);
     if (seen.insert(ai.str()).second)
       ww.Write(ai.str());
@@ -1552,7 +1645,7 @@ void AutoPlusVar::Eval(Evaluator* ev, std::string* s) const {
   if (!n)
     return;
   WordWriter ww(s);
-  for (Symbol ai : n->actual_inputs) {
+  for (Symbol ai : ce_->actual_inputs()) {
     ai = EffectivePrerequisite(ev, n, ai);
     ww.Write(ai.str());
   }
@@ -1570,7 +1663,7 @@ void AutoStarVar::Eval(Evaluator*, std::string* s) const {
 
 void AutoQuestionVar::Eval(Evaluator* ev, std::string* s) const {
   const DepNode* n = ce_->current_dep_node();
-  if (!n || n->actual_inputs.empty())
+  if (!n || ce_->actual_inputs().empty())
     return;
   std::unordered_set<std::string_view> seen;
 
@@ -1581,7 +1674,8 @@ void AutoQuestionVar::Eval(Evaluator* ev, std::string* s) const {
     if (!ce_->found_new_inputs()) {
       std::string def = "KATI_NEW_INPUTS=$( ";
       def += ShellQuoteCommand(GetExecutablePath());
-      def += " --internal-newer-inputs-v2 ";
+      def += n->low_resolution ? " --internal-newer-inputs-low-output-v2 "
+                               : " --internal-newer-inputs-v2 ";
       def += ShellQuoteCommand(n->lexical_output.str());
       std::unordered_map<Symbol, char> kinds;
       for (const auto& dependency : n->deps) {
@@ -1591,17 +1685,15 @@ void AutoQuestionVar::Eval(Evaluator* ev, std::string* s) const {
                  !dependency.second->intermediate)
           kinds[dependency.first] = 'l';
       }
-      const std::unordered_set<Symbol> low_resolution(
-          n->low_resolution_inputs.begin(), n->low_resolution_inputs.end());
       // Retain lexical prerequisite order and deduplication. Each input
-      // carries its logical kind and timestamp resolution, so a phony or
+      // carries its logical kind, so a phony or
       // completed fileless rule is not lost to a filesystem-only probe.
-      for (Symbol ai : n->actual_inputs) {
+      for (Symbol ai : ce_->actual_inputs()) {
         if (seen.insert(ai.str()).second) {
           def += " ";
           auto kind = kinds.find(ai);
           def += kind == kinds.end() ? 'f' : kind->second;
-          def += low_resolution.count(ai) ? '1' : '0';
+          def += '0';
           def += " ";
           def += ShellQuoteCommand(ai.str());
         }
@@ -1617,7 +1709,7 @@ void AutoQuestionVar::Eval(Evaluator* ev, std::string* s) const {
     // target as a side effect; restating it here would erase the original
     // newer-prerequisite list used by generated makefile refresh recipes.
     FileStamp target_age = ce_->target_age();
-    for (Symbol ai : n->actual_inputs) {
+    for (Symbol ai : ce_->actual_inputs()) {
       ai = EffectivePrerequisite(ev, n, ai);
       FileStamp input_age = FileStamp::Read(ai.str());
       for (const auto& dependency : n->deps) {
@@ -1646,10 +1738,6 @@ void AutoQuestionVar::Eval(Evaluator* ev, std::string* s) const {
                     n->runtime_inputs->logical.end(),
                     ai) != n->runtime_inputs->logical.end())
         input_age = FileStamp::Updated();
-      if (std::find(n->low_resolution_inputs.begin(),
-                    n->low_resolution_inputs.end(),
-                    ai) != n->low_resolution_inputs.end())
-        input_age = input_age.LowResolution();
       if (seen.insert(ai.str()).second && InputIsNewer(input_age, target_age)) {
         ww.Write(ai.str());
       }
@@ -1674,7 +1762,7 @@ void AutoPipeVar::Eval(Evaluator* ev, std::string* s) const {
   if (!n)
     return;
   WordWriter ww(s);
-  for (Symbol input : n->actual_order_only_inputs)
+  for (Symbol input : ce_->order_only_inputs())
     ww.Write(EffectivePrerequisite(ev, n, input).str());
 }
 
@@ -1755,6 +1843,19 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n) {
   return Eval(n, FileStamp::Read(n.output.str()));
 }
 
+const std::vector<Symbol>& CommandEvaluator::actual_inputs() const {
+  return double_colon_group_ == static_cast<size_t>(-1)
+             ? current_dep_node_->actual_inputs
+             : current_dep_node_->DoubleColon().inputs[double_colon_group_];
+}
+
+const std::vector<Symbol>& CommandEvaluator::order_only_inputs() const {
+  return double_colon_group_ == static_cast<size_t>(-1)
+             ? current_dep_node_->actual_order_only_inputs
+             : current_dep_node_->DoubleColon()
+                   .order_only_inputs[double_colon_group_];
+}
+
 std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
                                             FileStamp target_age) {
   return Eval(n, target_age, static_cast<size_t>(-1));
@@ -1772,12 +1873,13 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
     filesystem_epoch_ = FilesystemObservationEpoch();
   }
   ScopedFileObservations observations(observe, &observations_);
-  target_age_ = target_age;
+  target_age_ = n.low_resolution ? target_age.LowResolution() : target_age;
   ev_->set_loc(n.loc);
   ev_->set_current_scope(n.rule_vars);
   ev_->ApplyRecipeTargetUpdates(n.lexical_output);
   ev_->SetEvaluatingCommand(true);
   current_dep_node_ = &n;
+  double_colon_group_ = double_colon_group;
   if (ev_->runtime_recipe_exports()) {
     for (const auto& entry : ev_->exports()) {
       if (entry.first.str() == "KATI_RUNTIME_CONTEXT_FD")

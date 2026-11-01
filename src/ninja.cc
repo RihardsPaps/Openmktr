@@ -1,4 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
+// Use one resolution-aware freshness guard and preserve low-resolution outputs.
+// Keep unconditional double-colon groups scheduled on existing outputs.
 // Skip native freshness probes for missing ordinary outputs.
 // Preserve explicit Ninja metadata when eliding phony no-op commands.
 // Elide shell launches for silent, side-effect-free phony no-op recipes.
@@ -364,9 +366,9 @@ class NinjaGenerator {
         if (node.is_notparallel || node.vpath_provider.IsValid() ||
             node.output_pattern.IsValid() || !node.implicit_inputs.empty() ||
             !node.implicit_outputs.empty() || !node.validations.empty() ||
-            !node.DoubleColon().for_cmd.empty() ||
-            !node.low_resolution_inputs.empty() || !node.wait_groups.empty() ||
-            node.intermediate || node.precious || node.ignore_errors ||
+            !node.DoubleColon().for_cmd.empty() || node.low_resolution ||
+            !node.wait_groups.empty() || node.intermediate || node.precious ||
+            node.ignore_errors ||
             std::any_of(
                 nn.commands.begin(), nn.commands.end(),
                 [](const Command& command) { return command.ignore_error; }) ||
@@ -537,6 +539,10 @@ class NinjaGenerator {
         continue;
       // Optional pruning must not duplicate a large compiler dependency graph.
       if (seen.size() > 131072 || records.size() > 64 * 1024 * 1024)
+        return "";
+      // These optional proofs encode raw timestamps only. Keep resolution
+      // semantics in the ordinary executor until the proof format carries it.
+      if (entry->low_resolution)
         return "";
       std::string record, flags, inputs, order_only;
       AppendGraphString(entry->output.str(), &record);
@@ -1115,14 +1121,20 @@ class NinjaGenerator {
       // Make's declared prerequisite list omits Ninja's depfile inputs. Never
       // let it suppress a scheduled compiler recipe in a managed workspace.
       // Keep commands stable before/after first output creation and restore.
-      const bool make_freshness_guard = recipe_state.empty() || !has_depfile;
+      const bool make_freshness_guard =
+          (recipe_state.empty() || !has_depfile) &&
+          std::find(node->DoubleColon().has_prerequisites.begin(),
+                    node->DoubleColon().has_prerequisites.end(),
+                    false) == node->DoubleColon().has_prerequisites.end();
       // BusyBox test -nt compares whole seconds. Use the native stat helper
       // once for the complete input set, preserving Ninja's subsecond changes.
       auto inputs_current = [&](Symbol output) {
-        std::string condition = quoted_binary_ +
-                                " --internal-low-resolution-up-to-date " +
-                                ShellQuote(output.str()) + " " +
-                                std::to_string(node->deps.size()) + " 0";
+        std::string condition =
+            quoted_binary_ +
+            (node->low_resolution ? " --internal-low-resolution-output-current "
+                                  : " --internal-low-resolution-up-to-date ") +
+            ShellQuote(output.str()) + " " + std::to_string(node->deps.size()) +
+            " 0";
         for (const NamedDepNode& dep : node->deps)
           condition += " " + ShellQuote(dep.first.str());
         // A changed context sidecar can schedule a current consumer even when
@@ -1236,26 +1248,7 @@ class NinjaGenerator {
       // including the graph's environment snapshot.
       cmd_buf = working_prefix_ + cmd_buf;
 
-      // Ninja compares nanosecond timestamps, while GNU make treats
-      // prerequisites named by .LOW_RESOLUTION_TIME as second-resolution
-      // timestamps.  Ninja may therefore schedule this edge for a change
-      // that GNU make would ignore.  Recheck the complete normal-prerequisite
-      // set at recipe time and skip only when the edge is stale solely due to
-      // a low-resolution prerequisite within the same second.
       const std::string output = ShellQuote(node->output.str());
-      if (make_freshness_guard && !node->low_resolution_inputs.empty()) {
-        std::string guard = "if " + recipe_unchanged + quoted_binary_ +
-                            " --internal-low-resolution-up-to-date " + output +
-                            " " + std::to_string(node->actual_inputs.size()) +
-                            " " +
-                            std::to_string(node->low_resolution_inputs.size());
-        for (Symbol input : node->actual_inputs)
-          guard += " " + ShellQuote(input.str());
-        for (Symbol input : node->low_resolution_inputs)
-          guard += " " + ShellQuote(input.str());
-        guard += "; then exit 0; fi; ";
-        cmd_buf = guard + cmd_buf;
-      }
 
       if (node->delete_on_error && !node->precious) {
         cmd_buf = "( " + cmd_buf +
@@ -1716,6 +1709,11 @@ class NinjaGenerator {
         implicit_input(command.runtime_context);
       }
     }
+    if (!nn.commands.empty() &&
+        std::find(node->DoubleColon().has_prerequisites.begin(),
+                  node->DoubleColon().has_prerequisites.end(),
+                  false) != node->DoubleColon().has_prerequisites.end())
+      implicit_input("_kati_always_build_");
     if (!script_path.empty())
       implicit_input(script_path);
     if (!intermediate_proof.empty())
@@ -2008,7 +2006,12 @@ class NinjaGenerator {
         out << "builddir = " << g_flags.ninja_dir << "\n\n";
       }
 
-      if (!g_flags.use_ninja_phony_output) {
+      if (!g_flags.use_ninja_phony_output ||
+          std::any_of(nodes_.begin(), nodes_.end(), [](const NinjaNode& node) {
+            const auto& groups = node.node->DoubleColon().has_prerequisites;
+            return std::find(groups.begin(), groups.end(), false) !=
+                   groups.end();
+          })) {
         out << "build " << EscapeBuildTarget(Intern("_kati_always_build_"))
             << ": phony\n\n";
       }

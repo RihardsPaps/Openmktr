@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Compare truncated timestamps consistently without lowering the newest input.
 // Consolidate completed-node bookkeeping and remove obsolete scheduler code.
 // Consume ready prerequisites directly and complete observed source leaves
 // once. Avoid copying path names when testing optional timestamp overrides.
@@ -81,8 +82,8 @@ int CommandExitStatus(int status) {
   return status;
 }
 
-static FileStamp LowResolutionTimestamp(FileStamp timestamp) {
-  return timestamp.LowResolution();
+static FileStamp Resolution(const DepNode& node, FileStamp timestamp) {
+  return node.low_resolution ? timestamp.LowResolution() : timestamp;
 }
 
 static bool IsRecursiveKatiCommandMarker(const std::string& command) {
@@ -202,12 +203,8 @@ class Executor {
         if (completed != done_.end())
           timestamp = completed->second.timestamp;
       }
-      if (std::find(n.low_resolution_inputs.begin(),
-                    n.low_resolution_inputs.end(),
-                    dep.first) != n.low_resolution_inputs.end())
-        timestamp = LowResolutionTimestamp(timestamp);
       if (dep.second->is_phony || IsWhatIf(dep.second->output) ||
-          timestamp > output_ts) {
+          timestamp > Resolution(n, output_ts)) {
         printf("  Outdated prerequisite: %s (%s)\n", dep.first.c_str(),
                dep.second->is_phony           ? "phony"
                : IsWhatIf(dep.second->output) ? "forced by -W"
@@ -251,7 +248,8 @@ class Executor {
         return false;
       if (child_timestamp != kNotExist &&
           (child_timestamp > target_timestamp ||
-           !DependenciesAreCurrent(child, child_timestamp, visiting)))
+           !DependenciesAreCurrent(child, Resolution(child, child_timestamp),
+                                   visiting)))
         return false;
     }
     for (const auto& dep : node.order_onlys) {
@@ -259,7 +257,8 @@ class Executor {
           FileStamp::Read(dep.second->output.c_str());
       if (dep.second->is_phony || IsWhatIf(dep.second->output) ||
           order_timestamp == kNotExist ||
-          !DependenciesAreCurrent(*dep.second, order_timestamp, visiting))
+          !DependenciesAreCurrent(
+              *dep.second, Resolution(*dep.second, order_timestamp), visiting))
         return false;
     }
     visiting->erase(node.output);
@@ -340,7 +339,8 @@ class Executor {
       const FileStamp parent_ts = FileStamp::Read(needed_by);
       std::unordered_set<Symbol> visited;
       if (parent_ts != kNotExist &&
-          DependenciesAreCurrent(*parent_node, parent_ts, &visited)) {
+          DependenciesAreCurrent(
+              *parent_node, Resolution(*parent_node, parent_ts), &visited)) {
         ExplainNode(n, output_ts,
                     "missing intermediate is not needed by current parent");
         {
@@ -382,11 +382,6 @@ class Executor {
 
     FileStamp latest = kIgnoredEdge;
     bool dependency_failed = false;
-    auto is_low_resolution = [&n](Symbol input) {
-      return std::find(n.low_resolution_inputs.begin(),
-                       n.low_resolution_inputs.end(),
-                       input) != n.low_resolution_inputs.end();
-    };
     auto visit_child = [&](const auto& d, bool order_only) {
       FileStamp ts = kIgnoredEdge;
       bool ignored = false;
@@ -425,8 +420,8 @@ class Executor {
         latest = FileStamp::Updated();
       else if (d.second->is_phony && !order_only)
         latest = FileStamp::Updated();
-      else if (!order_only && latest < ts)
-        latest = is_low_resolution(d.first) ? LowResolutionTimestamp(ts) : ts;
+      else if (!order_only)
+        latest = std::max(latest, ts);
     };
 
     for (auto const& d : n.order_onlys)
@@ -475,7 +470,8 @@ class Executor {
       return output_ts;
     }
 
-    if (!DecideFreshness(output_ts, latest, n.is_phony).dirty() &&
+    if (!DecideFreshness(Resolution(n, output_ts), latest, n.is_phony)
+             .dirty() &&
         !output_is_directory && n.DoubleColon().inputs.empty()) {
       ExplainNode(n, output_ts, "up to date");
       {
@@ -491,6 +487,7 @@ class Executor {
     // incremental no-op builds.
     auto double_colon_group_needs_build = [&](size_t group,
                                               FileStamp target_ts) {
+      target_ts = Resolution(n, target_ts);
       if (target_ts == kNotExist || n.is_phony ||
           !n.DoubleColon().has_prerequisites[group])
         return true;
@@ -595,7 +592,8 @@ class Executor {
     // ordinary directory-creation recipes such as `mkdir ../lib` on every
     // invocation.
     if (output_is_directory && n.DoubleColon().inputs.empty() &&
-        output_ts != kNotExist && output_ts >= latest && !n.is_phony &&
+        output_ts != kNotExist && Resolution(n, output_ts) >= latest &&
+        !n.is_phony &&
         std::none_of(commands.begin(), commands.end(), [](const Command& c) {
           return IsRecursiveKatiCommand(c.cmd);
         })) {
@@ -985,6 +983,7 @@ class Executor {
   }
 
   bool CanFinishInline(const DepNode& node, FileStamp timestamp) {
+    timestamp = Resolution(node, timestamp);
     if (cancel_requested_.load(std::memory_order_relaxed) || GetBuildSignal())
       return true;
     if (timestamp == kNotExist || node.is_phony ||
@@ -998,11 +997,7 @@ class Executor {
       if (completed == done_.end() ||
           (completed->second.outcome == NodeOutcome::Running))
         return false;
-      FileStamp input_time = completed->second.timestamp;
-      if (std::find(node.low_resolution_inputs.begin(),
-                    node.low_resolution_inputs.end(),
-                    input.first) != node.low_resolution_inputs.end())
-        input_time = LowResolutionTimestamp(input_time);
+      const FileStamp input_time = completed->second.timestamp;
       if (input_time > timestamp)
         return false;
     }
@@ -1066,7 +1061,8 @@ class Executor {
               parent_time != kNotExist &&
               FileStamp::Read(child->output.c_str()) == kNotExist) {
             std::unordered_set<Symbol> visiting;
-            if (DependenciesAreCurrent(node, parent_time, &visiting)) {
+            if (DependenciesAreCurrent(node, Resolution(node, parent_time),
+                                       &visiting)) {
               ignored_inputs_[node.output][child->output] = parent_time;
               continue;
             }

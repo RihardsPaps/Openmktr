@@ -65,9 +65,18 @@ bool ObservationRecord::Validate(std::string* accepted) const {
   bool valid = false;
   switch (kind) {
     case ObservationKind::File:
-    case ObservationKind::Metadata:
       valid = fields.size() == 2 && fields[1] != "unreadable" &&
               GetFileIdentity(fields[0]) == fields[1];
+      break;
+    case ObservationKind::Metadata:
+      if (fields.size() == 2 && fields[1] != "unreadable") {
+        struct stat metadata;
+        if (stat(fields[0].c_str(), &metadata) == 0)
+          valid = GetFileIdentityFromStat(metadata) == fields[1];
+        else
+          valid =
+              fields[1] == "missing" && (errno == ENOENT || errno == ENOTDIR);
+      }
       break;
     case ObservationKind::Glob:
       if (!fields.empty()) {

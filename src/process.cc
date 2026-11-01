@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Keep capture pipes separate from closed standard descriptors during spawn.
 // Centralize spawn error checks and let each temporary recipe be removed once.
 // Own invocation state and publish coherent generations with typed freshness.
 // Extract process supervision from filesystem observation. Reap failed
@@ -289,6 +290,20 @@ int RunCommandImpl(const std::string& shell,
       fcntl(pipefd[1], F_SETFD, FD_CLOEXEC) < 0)
     CheckProcessCall(errno, "fcntl(FD_CLOEXEC) failed");
 #endif
+
+  // pipe() can reuse closed standard descriptors. Spawn actions redirect and
+  // close these ends in order, so a pipe at fd 1 or 2 could close its own
+  // destination or be overwritten by the stderr action. Normal launches do
+  // not need any extra descriptor operations.
+  for (int& fd : pipefd) {
+    if (fd > STDERR_FILENO)
+      continue;
+    const int relocated = fcntl(fd, F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
+    if (relocated < 0)
+      CheckProcessCall(errno, "relocate capture pipe failed");
+    close(fd);
+    fd = relocated;
+  }
 
   auto& action = resources.actions;
   CheckProcessCall(posix_spawn_file_actions_init(&action),

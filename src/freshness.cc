@@ -19,13 +19,10 @@ FileStamp FileStamp::Read(const std::string& path) {
   struct stat metadata;
   return ObserveFile(path, &metadata) ? FromStat(metadata) : Missing();
 }
-bool InputIsNewer(FileStamp input,
-                  FileStamp output,
-                  EdgeKind kind,
-                  bool low_resolution) {
+bool InputIsNewer(FileStamp input, FileStamp output, EdgeKind kind) {
   if (kind != EdgeKind::Normal || input.kind() == FileStamp::Kind::Ignored)
     return false;
-  return (low_resolution ? input.LowResolution() : input) > output;
+  return input > output;
 }
 FreshnessDecision DecideFreshness(FileStamp output,
                                   FileStamp newest_input,

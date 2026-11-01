@@ -28,7 +28,13 @@ class FileStamp {
   static FileStamp Read(const std::string& path);
   bool exists() const { return kind_ == Kind::Present; }
   Kind kind() const { return kind_; }
-  FileStamp LowResolution() const { return FileStamp(kind_, seconds_, 0); }
+  // When testing whether this output needs updating, a truncated timestamp
+  // can represent any instant within its second. Prerequisites retain their
+  // observed timestamps, even when they are low-resolution outputs themselves.
+  // Logical updates and missing/ignored observations are not wall times.
+  FileStamp LowResolution() const {
+    return exists() ? At(seconds_, 999999999) : *this;
+  }
   friend bool operator==(FileStamp a, FileStamp b) {
     return a.kind_ == b.kind_ && a.seconds_ == b.seconds_ &&
            a.nanoseconds_ == b.nanoseconds_;
@@ -73,6 +79,5 @@ FreshnessDecision DecideFreshness(FileStamp output,
                                   bool unconditional = false);
 bool InputIsNewer(FileStamp input,
                   FileStamp output,
-                  EdgeKind kind = EdgeKind::Normal,
-                  bool low_resolution = false);
+                  EdgeKind kind = EdgeKind::Normal);
 #endif

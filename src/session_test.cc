@@ -16,6 +16,7 @@
 #include "graph_optimization.h"
 #include "log.h"
 #include "ninja_launcher.h"
+#include "observation.h"
 #include "parser.h"
 #include "recipe_state.h"
 #include "session.h"
@@ -199,6 +200,23 @@ int main() {
   char directory[] = "/tmp/omktr-objects-XXXXXX";
   assert(mkdtemp(directory));
   const std::string base = std::string(directory) + "/same-hash";
+  // A failed metadata probe below an ordinary file is a reusable negative
+  // witness, just like ENOENT. Turning the parent into a directory and creating
+  // the child must invalidate it. File-read errors retain their own contract.
+  {
+    const std::string parent = std::string(directory) + "/parent";
+    const std::string child = parent + "/child";
+    FILE* file = fopen(parent.c_str(), "w");
+    assert(file && fclose(file) == 0);
+    ObservationRecord missing{ObservationKind::Metadata, {child, "missing"}};
+    assert(missing.Validate());
+    assert(unlink(parent.c_str()) == 0);
+    assert(missing.Validate());
+    assert(mkdir(parent.c_str(), 0700) == 0);
+    file = fopen(child.c_str(), "w");
+    assert(file && fclose(file) == 0);
+    assert(!missing.Validate());
+  }
   {
     GraphObjectBatch objects;
     RecipeStateBatch records;

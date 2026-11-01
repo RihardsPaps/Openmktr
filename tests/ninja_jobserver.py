@@ -6,6 +6,7 @@ The reference FIFO is provided by Python; no GNU Make dependency is needed.
 """
 
 import json
+import itertools
 import os
 from pathlib import Path
 import re
@@ -21,6 +22,26 @@ from correctness import KATI
 
 
 class NinjaJobserver(unittest.TestCase):
+    def test_shell_capture_with_closed_standard_descriptors(self):
+        with tempfile.TemporaryDirectory(prefix="omktr-closed-standard-") as temp:
+            cwd = Path(temp)
+            (cwd / "Makefile").write_text(
+                "VALUE := $(shell printf expected; exit 7)\n"
+                "$(file >result,$(VALUE)|$(.SHELLSTATUS))\n"
+                ".PHONY: all\nall:\n")
+            for count in range(4):
+                for closed in itertools.combinations(range(3), count):
+                    with self.subTest(closed=closed):
+                        def close_standard():
+                            for fd in closed:
+                                os.close(fd)
+                        result = subprocess.run(
+                            [str(KATI), "-j1", "all"], cwd=cwd,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            preexec_fn=close_standard, timeout=10)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual((cwd / "result").read_text(), "expected|7\n")
+
     def test_output_spool_failure_reaps_child_and_returns_token(self):
         with tempfile.TemporaryDirectory(prefix="omktr-output-failure-") as temp:
             cwd = Path(temp)

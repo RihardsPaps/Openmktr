@@ -1,4 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
+// Retain low-resolution output metadata through dependency resolution.
+// Keep independent normal and order-only inputs for double-colon recipes.
 // Materialize double-colon group storage only for double-colon rules.
 // Own invocation state and publish coherent generations with typed freshness.
 // Reuse explicitly named VPATH source providers before implicit regeneration.
@@ -499,7 +501,8 @@ struct RuleMerger {
           return;
         const size_t group = n->MutableDoubleColon().inputs.size();
         n->MutableDoubleColon().inputs.emplace_back();
-        std::vector<Symbol> first_inputs;
+        n->MutableDoubleColon().order_only_inputs.emplace_back();
+        std::vector<Symbol> first_inputs, first_order_only;
         auto has_first_pass_input = [&](const std::vector<Symbol>& inputs) {
           bool any = false;
           for (Symbol input : inputs) {
@@ -508,6 +511,8 @@ struct RuleMerger {
               any = true;
               if (&inputs == &rule->inputs)
                 first_inputs.push_back(input);
+              else
+                first_order_only.push_back(input);
             }
           }
           return any;
@@ -518,11 +523,16 @@ struct RuleMerger {
                                                             order_only);
         ApplyOutputPattern(*rule, output, first_inputs,
                            &n->MutableDoubleColon().inputs.back());
+        ApplyOutputPattern(*rule, output, first_order_only,
+                           &n->MutableDoubleColon().order_only_inputs.back());
         const Rule* recipe = rule;
         if (rule->cmds.empty() && pattern_rule) {
           recipe = pattern_rule;
           ApplyOutputPattern(*pattern_rule, output, pattern_rule->inputs,
                              &n->MutableDoubleColon().inputs.back());
+          ApplyOutputPattern(*pattern_rule, output,
+                             pattern_rule->order_only_inputs,
+                             &n->MutableDoubleColon().order_only_inputs.back());
           if (!pattern_rule->inputs.empty() ||
               !pattern_rule->order_only_inputs.empty())
             n->MutableDoubleColon().has_prerequisites.back() = true;
@@ -1996,6 +2006,7 @@ class DepBuilder {
     n->is_notparallel = notparallel_;
     n->delete_on_error = delete_on_error_;
     n->precious = precious_.exists(n->lexical_output);
+    n->low_resolution = low_resolution_.exists(n->lexical_output);
     n->intermediate = intermediate_.exists(n->lexical_output) &&
                       !secondary_all_ &&
                       !secondary_.exists(n->lexical_output) && !n->precious;
@@ -2344,6 +2355,11 @@ class DepBuilder {
           auto& inputs = n->MutableDoubleColon().inputs[group];
           inputs.insert(inputs.end(), n->actual_inputs.begin() + prior_inputs,
                         n->actual_inputs.end());
+          auto& order_only = n->MutableDoubleColon().order_only_inputs[group];
+          order_only.insert(
+              order_only.end(),
+              n->actual_order_only_inputs.begin() + prior_order_only,
+              n->actual_order_only_inputs.end());
           if (!inputs.empty() ||
               n->actual_order_only_inputs.size() > prior_order_only)
             n->MutableDoubleColon().has_prerequisites[group] = true;
@@ -2540,14 +2556,16 @@ class DepBuilder {
         const std::string provider = ev_->ResolveVpath(input);
         if (!provider.empty() && c->output == Intern(provider)) {
           graph_input = canonical_symbol(c->output);
-          if (g_flags.generate_ninja)
+          if (g_flags.generate_ninja) {
+            if (n->double_colon)
+              for (auto& group : n->double_colon->inputs)
+                std::replace(group.begin(), group.end(), input, c->output);
             input = c->output;
+          }
         }
       }
       inherit_rule_vars(c, n);
       n->deps.push_back({graph_input, c});
-      if (low_resolution_.exists(input))
-        n->low_resolution_inputs.push_back(graph_input);
 
       bool is_phony = c->is_phony;
       if (!is_phony && !c->has_rule && g_flags.top_level_phony) {

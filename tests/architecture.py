@@ -52,6 +52,18 @@ class Architecture(unittest.TestCase):
     def current(self):
         return (self.root / "build.ninja").resolve().parent
 
+    def test_build_rejects_nonregular_graph_without_waiting_for_a_writer(self):
+        self.write("all:\n\t@touch result\n")
+        (self.root / ".openmktr").mkdir()
+        graph = self.root / ".openmktr/build.ninja"
+        os.mkfifo(graph)
+        result = subprocess.run([str(BINARY), "build", "all"], cwd=self.root,
+                                capture_output=True, text=True, timeout=5)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("nonregular graph", result.stderr)
+        self.assertFalse((self.root / "result").exists())
+        self.assertTrue(graph.is_fifo())
+
     def test_launcher_needs_no_fifo_shell_utilities_and_cleans_after_failure(self):
         # The launcher should require Ninja and the recipe shell, without
         # external mkfifo/rm helpers. Keep a colliding name owned by the caller.
@@ -114,6 +126,90 @@ class Architecture(unittest.TestCase):
             (self.root / "output").write_text("existing")
             self.run_tool(*mode, "all")
             self.assertEqual((self.root / "output").read_text(), "empty")
+
+    def test_low_resolution_freshness_and_newer_inputs(self):
+        # Expected results checked against GNU make separately; the portable
+        # gate requires no GNU tools. Only the output comparison is rounded;
+        # prerequisites retain their timestamps. Test both orders and saved graphs.
+        cases = (
+            ("low", "high low", 600_000_000, 900_000_000, 400_000_000, "high low"),
+            ("low", "low high", 600_000_000, 900_000_000, 400_000_000, "low high"),
+            ("low", "low", 0, 0, 500_000_000, "old"),
+            ("output", "high", 600_000_000, 0, 0, "old"),
+            ("output", "high", 1_000_000_000, 0, 0, "high"),
+            ("output low", "high low", 600_000_000, 0, 0, "old"),
+            ("output", "force high", 600_000_000, 0, 0, "force"),
+            ("low", "force low", 0, 0, 500_000_000, "force"),
+        )
+        root = self.root
+        for index, (listed, inputs, high, low, output, expected) in enumerate(cases):
+            for colon in (":", "::"):
+                for mode in ("direct", "build", "legacy"):
+                    for jobs in (1, 4):
+                        with self.subTest(case=index, colon=colon, mode=mode, jobs=jobs):
+                            self.root = root / f"{index}-{colon.count(':')}-{mode}-{jobs}"
+                            self.root.mkdir()
+                            self.write(f".LOW_RESOLUTION_TIME: {listed}\n"
+                                       ".PHONY: force\nforce:\nall: output\n"
+                                       f"output{colon} {inputs}\n\t@printf '%s' '$?' > $@\n")
+                            for name in ("high", "low", "output", "force"):
+                                (self.root / name).write_text("old")
+                            if mode == "legacy":
+                                self.run_tool("--ninja", "all")
+                            for _ in range(2):
+                                (self.root / "output").write_text("old")
+                                base = 1_700_000_000_000_000_000
+                                for name, offset in (("high", high), ("low", low), ("output", output)):
+                                    os.utime(self.root / name, ns=(base + offset, base + offset))
+                                args = ["-j" + str(jobs), "all"]
+                                if mode == "legacy":
+                                    subprocess.run(["sh", "ninja.sh", *args], cwd=self.root,
+                                                   check=True, capture_output=True, timeout=20)
+                                else:
+                                    self.run_tool(*(["build"] if mode == "build" else []), *args)
+                                self.assertEqual((self.root / "output").read_text(), expected)
+        self.root = root
+
+    def test_low_resolution_double_colon_groups_keep_independent_freshness(self):
+        self.write(".LOW_RESOLUTION_TIME: output\nall: output\n"
+                   "output:: same\n\t@$(error stale group expanded)\n"
+                   "output:: newer | order\n\t@printf 'newer:%s\\n' '$?|$<|$^|$+|$|' >> trace\n"
+                   ".PHONY: order\norder:\n")
+        base = 1_700_000_000_000_000_000
+        for name, offset in (("output", 0), ("same", 500_000_000), ("newer", 1_000_000_000)):
+            (self.root / name).write_text("old")
+            os.utime(self.root / name, ns=(base + offset, base + offset))
+        self.run_tool("--ninja", "all")
+        for mode in ("direct", "build", "legacy"):
+            for jobs in (1, 4):
+                with self.subTest(mode=mode, jobs=jobs):
+                    (self.root / "trace").unlink(missing_ok=True)
+                    if mode == "legacy":
+                        subprocess.run(["sh", "ninja.sh", f"-j{jobs}", "all"], cwd=self.root,
+                                       check=True, capture_output=True, timeout=20)
+                    else:
+                        self.run_tool(*(["build"] if mode == "build" else []), f"-j{jobs}", "all")
+                    self.assertEqual((self.root / "trace").read_text(), "newer:newer|newer|newer|newer|order\n")
+
+    def test_unconditional_double_colon_runs_beside_current_and_order_only_groups(self):
+        self.write("all: output\noutput:: older\n\t@$(error current group expanded)\n"
+                   "output:: | order\n\t@$(error order-only group expanded)\n"
+                   "output::\n\t@printf 'run:%s\\n' '$?|$<|$^|$+|$|' >> trace\n"
+                   ".PHONY: order\norder:\n")
+        for name, timestamp in (("older", 100), ("output", 200)):
+            (self.root / name).write_text("old")
+            os.utime(self.root / name, (timestamp, timestamp))
+        self.run_tool("--ninja", "all")
+        for mode in ("direct", "build", "legacy"):
+            for repeat in range(2):
+                with self.subTest(mode=mode, repeat=repeat):
+                    (self.root / "trace").unlink(missing_ok=True)
+                    if mode == "legacy":
+                        subprocess.run(["sh", "ninja.sh", "-j4", "all"], cwd=self.root,
+                                       check=True, capture_output=True, timeout=20)
+                    else:
+                        self.run_tool(*(["build"] if mode == "build" else []), "-j4", "all")
+                    self.assertEqual((self.root / "trace").read_text(), "run:||||\n")
 
     def test_expansion_failure_cancels_and_reaps_active_siblings(self):
         self.write(".PHONY: all fail ready\nall: output fail\noutput:\n"

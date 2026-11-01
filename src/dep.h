@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Retain whether a target has a truncated whole-second timestamp.
 // Allocate double-colon rule groups only for targets that use them.
 // Store only the logical execution flag needed by recipe expansion.
 // Return dependency storage to the graph's caller for bounded lifetimes.
@@ -73,6 +74,7 @@ struct DepNode {
   bool is_notparallel;
   bool is_phony;
   bool is_restat;
+  bool low_resolution = false;
   bool delete_on_error;
   bool precious;
   bool intermediate;
@@ -92,6 +94,7 @@ struct DepNode {
   // groups. Their recipes must not be merged into one always-run sequence.
   struct DoubleColonGroups {
     std::vector<std::vector<Symbol>> inputs;
+    std::vector<std::vector<Symbol>> order_only_inputs;
     std::vector<bool> has_prerequisites;
     std::vector<size_t> for_cmd;
   };
@@ -105,7 +108,6 @@ struct DepNode {
   }
   std::unique_ptr<DoubleColonGroups> double_colon;
   inline static const DoubleColonGroups empty_double_colon{};
-  std::vector<Symbol> low_resolution_inputs;
   // Shared automatic-variable contract: completed direct prerequisites retain
   // logical updates; serialized Ninja recipes retain phony prerequisite names.
   // Only decoded runtime recipes need serialized logical input lists.

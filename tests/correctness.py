@@ -1218,7 +1218,7 @@ class BuildCorrectness(unittest.TestCase):
         os.utime(second, ns=(base + 750_000_000, base + 750_000_000))
         os.utime(output, ns=(base + 500_000_000, base + 500_000_000))
         self.run_command("sh", "./ninja.sh", "-j2")
-        self.assertEqual(output.read_text(), "first second")
+        self.assertEqual(output.read_text(), "second")
 
         os.utime(second, ns=(base + 2_000_000_000, base + 2_000_000_000))
         os.utime(output, ns=(base + 1_500_000_000, base + 1_500_000_000))
