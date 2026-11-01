@@ -894,6 +894,70 @@ else:
                                  result.stdout + result.stderr)
                 self.assertIn(expected + "\n", result.stdout)
 
+    def test_deferred_recursive_siblings_share_incremental_archive(self):
+        # The parent only knows the bootstrap prerequisite. Later source
+        # changes are visible inside both children, as with glibc's others
+        # targets rebuilding a shared libc_pic archive.
+        for profile in ("off", "safe", "aggressive"):
+            for mode in ("direct", "build", "launcher", "raw"):
+                for jobs in (1, 8):
+                    with self.subTest(profile=profile, mode=mode, jobs=jobs), \
+                            tempfile.TemporaryDirectory() as tmp:
+                        root = Path(tmp)
+                        (root / "source").write_text("clean")
+                        (root / "Makefile").write_text(
+                            ".PHONY: all a b c d e\nall: a b c d e\n"
+                            "ready:\n\t@$(MAKE) -f child.mk\n"
+                            "\t@printf ready > $@\n"
+                            "invoke = $(MAKE) -f child.mk\n"
+                            "simple := $(MAKE) -f child.mk\n"
+                            "selected := invoke\n"
+                            "a b c d e: ready\n"
+                            "a:\n\t@test '$(shell cat ready)' = ready; $(invoke)\n"
+                            "b:\n\t@$($(selected))\n"
+                            "c:\n\t@$(MAKE) -f child.mk\n"
+                            f"d:\n\t@{BINARY} -f child.mk CHANGED='$?'\n"
+                            "e:\n\t@$(simple) READY='$(shell cat ready)'\n")
+                        (root / "child.mk").write_text(
+                            "all: shared.a\nshared.a: source\n"
+                            "\t@python3 archive.py\n")
+                        (root / "archive.py").write_text(
+                            "from pathlib import Path\nimport time\n"
+                            "lock = Path('archive.lock')\n"
+                            "lock.mkdir()  # Fail if two children own the archive.\n"
+                            "try:\n"
+                            " time.sleep(.15)\n"
+                            " Path('shared.a').write_text(Path('source').read_text())\n"
+                            " with open('writes', 'a') as f: f.write('x')\n"
+                            "finally:\n lock.rmdir()\n")
+
+                        def run(command):
+                            result = subprocess.run(command, cwd=root,
+                                                    capture_output=True, text=True,
+                                                    timeout=30)
+                            self.assertEqual(result.returncode, 0,
+                                             result.stdout + result.stderr)
+
+                        options = ["--graph_optimizations=" + profile,
+                                   f"-j{jobs}", "all"]
+                        if mode in ("launcher", "raw"):
+                            run([str(BINARY), "--ninja", *options])
+                            command = (["sh", "./ninja.sh"] if mode == "launcher"
+                                       else ["ninja"]) + [f"-j{jobs}", "all"]
+                        else:
+                            command = [str(BINARY)] + (
+                                ["build"] if mode == "build" else []) + options
+                        run(command)
+                        self.assertEqual((root / "shared.a").read_text(), "clean")
+                        self.assertEqual((root / "writes").read_text(), "x")
+                        time.sleep(.02)
+                        (root / "source").write_text("incremental")
+                        run(command)
+                        self.assertEqual((root / "shared.a").read_text(), "incremental")
+                        self.assertEqual((root / "writes").read_text(), "xx")
+                        run(command)
+                        self.assertEqual((root / "writes").read_text(), "xx")
+
     def test_runtime_consumers_overlap_within_job_limit(self):
         for profile in ("off", "safe", "aggressive"):
             with self.subTest(profile=profile), tempfile.TemporaryDirectory() as tmp:

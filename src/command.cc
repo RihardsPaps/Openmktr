@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Inspect deferred recipes for recursive scheduling without expanding effects.
 // Carry output timestamp resolution into runtime recipes and automatic inputs.
 // Defer independent double-colon groups and select their own automatic inputs.
 // Preserve logical prerequisites in deferred double-colon freshness checks.
@@ -110,7 +111,9 @@ struct RecipeInspection {
   bool dynamic = false;
   bool conservative = false;
   bool automatic_freshness = false;
+  bool may_recurse = false;
   void Variable(const std::string& name) {
+    may_recurse |= name == "MAKE" || name == "MAKE_COMMAND";
     automatic_freshness |= name == "?" || name == "?D" || name == "?F";
     if (name == ".VARIABLES" || name == ".KATI_SYMBOLS")
       conservative = true;
@@ -122,6 +125,8 @@ struct RecipeInspection {
     Var* var = ev->LookupVar(symbol);
     if (auto* recursive = dynamic_cast<RecursiveVar*>(var))
       Expression(recursive->v_->IncrementalIdentity());
+    else if (var->IsDefined() && var->Origin() != VarOrigin::AUTOMATIC)
+      may_recurse |= IsRecursiveKatiCommand(std::string(var->String()));
   }
   void Expression(std::string_view record) {
     // Once full-context runtime evaluation is required, further reference
@@ -133,8 +138,13 @@ struct RecipeInspection {
       dynamic = true;
       return;
     }
-    if (kind == "literal")
+    if (kind == "literal") {
+      if (ConsumeGraphString(&record, &field)) {
+        field.erase(0, field.find_first_not_of(" \t\r\n@-+"));
+        may_recurse |= IsRecursiveKatiCommand(field);
+      }
       return;
+    }
     if (kind == "reference") {
       if (ConsumeGraphString(&record, &field))
         Variable(field);
@@ -424,6 +434,12 @@ bool MakeRuntimeRecipe(const DepNode& node,
   RecipeInspection inspection{ev, {}};
   for (Value* value : node.cmds)
     inspection.Expression(value->IncrementalIdentity());
+  // Keep opaque recursive calls in the same Ninja pool as statically expanded
+  // calls. Computed references/eval can hide MAKE or a command alias; do not
+  // expand them now, before their producers have run. Inspect the recipe before
+  // implicit transport and exports, where MAKE can be data rather than a call.
+  const bool may_recurse =
+      inspection.may_recurse || inspection.dynamic || inspection.conservative;
   inspection.Variable("SHELL");
   inspection.Variable(".SHELLFLAGS");
   // Recursive execution reads this transport variable implicitly after
@@ -726,6 +742,7 @@ bool MakeRuntimeRecipe(const DepNode& node,
   command.runtime_context = context_path;
   command.runtime_identity = std::move(identity);
   command.runtime_freshness_only = !inspection.io && !inspection.dynamic;
+  command.runtime_may_recurse = may_recurse;
   command.cmd = "\"" + executable + "\" --internal-evaluate-recipe \"" +
                 quoted_path + "\"";
   command.shell = "/bin/sh";

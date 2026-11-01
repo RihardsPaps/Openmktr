@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Serialize deferred recursive calls with ordinary opaque recursive recipes.
 // Use one resolution-aware freshness guard and preserve low-resolution outputs.
 // Keep unconditional double-colon groups scheduled on existing outputs.
 // Skip native freshness probes for missing ordinary outputs.
@@ -1149,8 +1150,9 @@ class NinjaGenerator {
       };
       // Internal cleanup helpers are ordinary commands, not recursive makes.
       // Classify the actual recipe before adding those executable references.
-      use_local_pool = commands.front().runtime_sidecar.empty() &&
-                       IsRecursiveKatiCommand(cmd_buf);
+      use_local_pool = commands.front().runtime_sidecar.empty()
+                           ? IsRecursiveKatiCommand(cmd_buf)
+                           : commands.front().runtime_may_recurse;
       // The helper already supervises the recipe process. Record the output
       // there after admission instead of launching another copy of the tool
       // and a shell subshell/trap wrapper for every file recipe. An absolute
