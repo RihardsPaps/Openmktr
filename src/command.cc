@@ -2,6 +2,7 @@
 // Carry output timestamp resolution into runtime recipes and automatic inputs.
 // Defer independent double-colon groups and select their own automatic inputs.
 // Preserve logical prerequisites in deferred double-colon freshness checks.
+// Keep deferred Ninja recipes quiet unless command display is requested.
 // Read optional double-colon metadata through the shared dependency view.
 // Read logical updates directly from the dependency execution flag.
 // Own invocation state and publish coherent generations with typed freshness.
@@ -1961,7 +1962,10 @@ std::vector<Command> CommandEvaluator::Eval(const DepNode& n,
     Var* verbosity = ev_->LookupVar(Intern("V"));
     // V is a display extension, not a make variable used by this recipe.
     // Expanding a deferred definition here can run shell functions or fail.
-    return kati_verbose == nullptr || std::string_view(kati_verbose) != "0" ||
+    // Ninja already displays edge progress. Deferred expansion must not add
+    // command echoes that the same statically expanded recipe would omit.
+    return (kati_verbose ? std::string_view(kati_verbose) != "0"
+                         : !n.runtime_inputs) ||
            (verbosity->IsDefined() && verbosity->String() == "1");
   };
   if (n.oneshell) {

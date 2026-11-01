@@ -55,6 +55,28 @@ class Architecture(unittest.TestCase):
     def current(self):
         return (self.root / "build.ninja").resolve().parent
 
+    def test_deferred_ninja_recipes_preserve_progress_display(self):
+        for rule in ("output::", "output: input"):
+            for verbose in (False, True):
+                with self.subTest(rule=rule, verbose=verbose):
+                    self.write(rule + "\n\tprintf '%s\\n' '$(shell printf visible)'\n"
+                               "\t@printf '%s\\n' quiet\n")
+                    (self.root / "input").write_text("source")
+                    environment = dict(os.environ)
+                    environment.pop("KATI_VERBOSE", None)
+                    if verbose:
+                        environment["KATI_VERBOSE"] = "1"
+                    self.run_tool("--ninja", "output")
+                    result = subprocess.run(["/bin/sh", "ninja.sh", "-j1"],
+                                            cwd=self.root, env=environment,
+                                            capture_output=True, text=True, timeout=10)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn("visible\n", result.stdout)
+                    self.assertIn("quiet\n", result.stdout)
+                    self.assertEqual("printf '%s\\n' 'visible'" in result.stdout,
+                                     verbose)
+                    self.assertNotIn("printf '%s\\n' quiet", result.stdout)
+
     def test_build_rejects_nonregular_graph_without_waiting_for_a_writer(self):
         self.write("all:\n\t@touch result\n")
         (self.root / ".openmktr").mkdir()
