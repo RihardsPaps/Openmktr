@@ -1,4 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
+// Reobserve recipe-less targets after prerequisites materialize their files.
+// Keep peer file timestamps distinct when implicit outputs share a producer.
 // Compare truncated timestamps consistently without lowering the newest input.
 // Consolidate completed-node bookkeeping and remove obsolete scheduler code.
 // Consume ready prerequisites directly and complete observed source leaves
@@ -411,6 +413,16 @@ class Executor {
           if (IsFailed(d.second->output))
             dependency_failed = true;
         }
+        // Multi-output pattern rules share one producer node, but each
+        // prerequisite still names its own file. A sibling output can change
+        // while the producer's chosen output keeps its old timestamp (glibc's
+        // subdirectory stamps do this). Observe that file after the producer
+        // completes instead of substituting the chosen output's timestamp.
+        if (!d.second->is_phony && !(d.first == d.second->output)) {
+          const FileStamp named_ts = FileStamp::Read(d.first.c_str());
+          if (named_ts.exists())
+            ts = named_ts;
+        }
       }
       // Order-only prerequisites must be built before the recipe, but do
       // not participate in the timestamp comparison.  This includes
@@ -585,6 +597,19 @@ class Executor {
       }
       if (capture)
         capture->Finish(bootstrap_owner);
+    }
+    // An empty recipe can name a file produced by a recursive prerequisite.
+    // glibc's `stamp: subdir_lib;` rules expose child outputs this way. Once
+    // such a target needs updating, propagate its current timestamp rather
+    // than the pre-build snapshot. An explicit ';' can leave a syntactic
+    // command that expands to nothing, so inspect the evaluated commands.
+    // Keep the original timestamp for real recipes and their $?, and retain
+    // the earlier up-to-date path for unchanged/order-only prerequisites.
+    if (commands.empty() && !n.is_phony &&
+        (!n.deps.empty() || !n.order_onlys.empty())) {
+      output_ts = FileStamp::Read(n.output.c_str());
+      if (output_ts == kNotExist && n.vpath_provider.IsValid())
+        output_ts = FileStamp::Read(n.vpath_provider.c_str());
     }
     // A directory is a normal timestamped target unless its recipe enters a
     // recursive make that may update files inside it without changing the

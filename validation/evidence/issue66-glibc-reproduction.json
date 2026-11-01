@@ -1,0 +1,336 @@
+{
+  "issue": 66,
+  "date": "2026-11-01",
+  "baseline_source": "16b350c831e9fb441721fe20f6ef857a24ac5fdf",
+  "candidate_source_files_sha256": {
+    "src/exec.cc": "69af0cb3874e80306ad978d3f1c093bd5eb3b4f15fa02e2fb31e13d5c6d4d092",
+    "tests/architecture.py": "e22829a80dcff72bc66d843cb0a54b449eb7ec25657d25de9284fbdfb9e4699d"
+  },
+  "glibc_release": "2.44",
+  "source_integrity": {
+    "archive_sha256": "37f600f2bef3c5e8300147059568b2a2e40a7ad6ccc65ce942556d49429cc667",
+    "regular_files_checked": 20947,
+    "content_mismatches": []
+  },
+  "environment": {
+    "location": "managed cloud Gentoo container",
+    "image": "gentoo/stage3@sha256:1ca7647d1ce968d02c2858ee4201e2173675fd3fc0754a8acd583d9288b75478",
+    "gcc": "16.2.1_p20260926 p1",
+    "gnu_make": "4.4.1",
+    "ninja": "1.13.2",
+    "omktr_toolchain": "pinned Chimera Clang 22.1.8, musl and libc++; same toolchain for baseline and candidates"
+  },
+  "configure": [
+    "--prefix=/usr",
+    "--libdir=/usr/lib64",
+    "--enable-kernel=5.10",
+    "--disable-werror"
+  ],
+  "baseline": {
+    "clean_returncode": 0,
+    "touched_strtol_incremental_returncode": 1,
+    "symptoms": [
+      "concurrent linkobj/libc_pic.a reconstruction",
+      "shared extracted .os files removed by another writer"
+    ]
+  },
+  "incomplete_candidate": {
+    "change": "Refresh dirty empty-recipe targets only; still misses grouped peer output timestamps",
+    "results": {
+      "binary_sha256": "d3818b04e2cf7bbafca96ccc0af340c27090db542d03cd59625635ac247228d7",
+      "phases": [
+        {
+          "name": "configure-candidate",
+          "command": [
+            "/src/configure",
+            "--prefix=/usr",
+            "--libdir=/usr/lib64",
+            "--enable-kernel=5.10",
+            "--disable-werror"
+          ],
+          "returncode": 0,
+          "seconds": 2.89352005299952
+        },
+        {
+          "name": "generate-candidate",
+          "command": [
+            "/opt/omktr/omktr",
+            "--ninja",
+            "--graph_optimizations=aggressive",
+            "-j8",
+            "all"
+          ],
+          "returncode": 0,
+          "seconds": 0.007629215000633849
+        },
+        {
+          "name": "clean-candidate",
+          "command": [
+            "sh",
+            "./ninja.sh",
+            "-j8",
+            "all"
+          ],
+          "returncode": 0,
+          "seconds": 208.45763196399912
+        },
+        {
+          "name": "incremental-candidate",
+          "command": [
+            "sh",
+            "./ninja.sh",
+            "-j8",
+            "all"
+          ],
+          "returncode": 1,
+          "seconds": 30.4733922180003
+        }
+      ]
+    }
+  },
+  "final_candidate": {
+    "binary_sha256": "c33d8d08ce94f18527c0da9e721b0921ba9f2e79772e0460126d284ac015b6f8",
+    "phases": [
+      {
+        "name": "configure-candidate-v3",
+        "command": [
+          "/src/configure",
+          "--prefix=/usr",
+          "--libdir=/usr/lib64",
+          "--enable-kernel=5.10",
+          "--disable-werror"
+        ],
+        "returncode": 0,
+        "seconds": 2.8802548940002453
+      },
+      {
+        "name": "generate-candidate-v3",
+        "command": [
+          "/opt/omktr/omktr",
+          "--ninja",
+          "--graph_optimizations=aggressive",
+          "-j8",
+          "all"
+        ],
+        "returncode": 0,
+        "seconds": 0.006062335999558854
+      },
+      {
+        "name": "clean-candidate-v3",
+        "command": [
+          "sh",
+          "./ninja.sh",
+          "-j8",
+          "all"
+        ],
+        "returncode": 0,
+        "seconds": 215.6906408019995
+      },
+      {
+        "name": "incremental-candidate-v3",
+        "command": [
+          "sh",
+          "./ninja.sh",
+          "-j8",
+          "all"
+        ],
+        "returncode": 0,
+        "seconds": 33.92499758699978
+      },
+      {
+        "name": "noop-candidate-v3",
+        "command": [
+          "sh",
+          "./ninja.sh",
+          "-j8",
+          "all"
+        ],
+        "returncode": 0,
+        "seconds": 25.479491688000053
+      },
+      {
+        "name": "incremental2-candidate-v3",
+        "command": [
+          "sh",
+          "./ninja.sh",
+          "-j8",
+          "all"
+        ],
+        "returncode": 0,
+        "seconds": 27.437262477999866
+      },
+      {
+        "name": "archive-candidate-v3",
+        "command": [
+          "readelf",
+          "-h",
+          "linkobj/libc_pic.a"
+        ],
+        "returncode": 0,
+        "seconds": 0.019220331999349582
+      },
+      {
+        "name": "compile-smoke-candidate-v3",
+        "command": [
+          "gcc",
+          "/repro/smoke.c",
+          "-o",
+          "/repro/smoke"
+        ],
+        "returncode": 0,
+        "seconds": 0.035177287000806245
+      },
+      {
+        "name": "runtime-smoke-candidate-v3",
+        "command": [
+          "/repro/candidate-v3/elf/ld.so",
+          "--library-path",
+          "/repro/candidate-v3",
+          "/repro/smoke"
+        ],
+        "returncode": 0,
+        "seconds": 0.0015448109998033033
+      }
+    ]
+  },
+  "shared_archive_reconstructions": {
+    "incremental-candidate-v3": 1,
+    "noop-candidate-v3": 0,
+    "incremental2-candidate-v3": 1
+  },
+  "elf_archive_members_validated": 2259,
+  "loader_verification": "gcc (Gentoo 16.2.1_p20260926 p1) 16.2.1 20260926\nGNU Make 4.4.1\n1.13.2\n\tlinux-vdso.so.1 (0x00007fad95c5f000)\n\tlibc.so.6 => /repro/candidate-v3/libc.so.6 (0x00007fad95a54000)\n\t/lib64/ld-linux-x86-64.so.2 => /repro/candidate-v3/elf/ld.so (0x00007fad95c61000)\n",
+  "limits": [
+    "Reporter GCC 15.3.0 PC was not accessed or rerun.",
+    "Wall times are diagnostics from concurrent cloud workloads, not a performance comparison.",
+    "Failure logs are retained; failed build directories were removed after hashing artifacts to recover workspace space."
+  ],
+  "evidence_archive": {
+    "path": "issue66-glibc-reproduction.zip",
+    "sha256": "c7117e88e79ba64f2d9f674297add29e3b6d31cc1c0561675e983705a3b65a1b",
+    "bytes": 1258142,
+    "normalization": "Ephemeral HTTP proxy addresses replaced with <session-proxy>.",
+    "files": {
+      "archive-candidate-v3.log": {
+        "sha256": "3651b48bdc40530db300c84a4e4938bc6a72730400f41da1dc6b2b436640e0eb",
+        "bytes": 2246289
+      },
+      "baseline-config.make": {
+        "sha256": "2bdb8f1bbf0c12854d03be30041ba2b0078b77b5e8531d4a8c970af85264cec0",
+        "bytes": 6300
+      },
+      "candidate-config.make": {
+        "sha256": "2bdb8f1bbf0c12854d03be30041ba2b0078b77b5e8531d4a8c970af85264cec0",
+        "bytes": 6300
+      },
+      "candidate-status.log": {
+        "sha256": "ff19769d1ff3f292304155a65bc1311d0461313819afa4228c81f112a8415c6f",
+        "bytes": 85
+      },
+      "candidate-v3-status.log": {
+        "sha256": "5e8ee1da75248ad15e05cdadff8da53671581c0652006df0cb356ad439764680",
+        "bytes": 226
+      },
+      "candidate-v3.json": {
+        "sha256": "f70a2c86def04f4daf6fe760d80f4331b582ec9ce72333575835be3905efb8a0",
+        "bytes": 2158
+      },
+      "candidate.json": {
+        "sha256": "8765b3cfd11abc8a758a2f93f5c68df38e14f0206f08497a776d3494176cd6cc",
+        "bytes": 1042
+      },
+      "clean-baseline.log": {
+        "sha256": "315c603c0b2539ad207233f3d7bdad8516dd67567644c320501d9d215a7a3f67",
+        "bytes": 15274012
+      },
+      "clean-candidate-v3.log": {
+        "sha256": "69a8fc4361f6b715ebaf6e56055f9c671b4a94d308e50c5e8c1308f61a5f2b79",
+        "bytes": 15526856
+      },
+      "clean-candidate.log": {
+        "sha256": "4b3133e61f4a5d06238511552e770ee9a1be2794f59eec2413741c234347732b",
+        "bytes": 15337223
+      },
+      "compile-smoke-candidate-v3.log": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "configure-baseline.log": {
+        "sha256": "86bde8c5336c45009e6dc424272fae59905a33bfbc265128d3ab7ab166113bbc",
+        "bytes": 7983
+      },
+      "configure-candidate-v3.log": {
+        "sha256": "86bde8c5336c45009e6dc424272fae59905a33bfbc265128d3ab7ab166113bbc",
+        "bytes": 7983
+      },
+      "configure-candidate.log": {
+        "sha256": "86bde8c5336c45009e6dc424272fae59905a33bfbc265128d3ab7ab166113bbc",
+        "bytes": 7983
+      },
+      "failed-artifact-hashes.json": {
+        "sha256": "bff437d00fd766fa2b7f193f205b47a407a0d64fe3b82cc3bdeba39db57fcfab",
+        "bytes": 858
+      },
+      "generate-baseline.log": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "generate-candidate-v3.log": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "generate-candidate.log": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "incremental-baseline.log": {
+        "sha256": "0d7cc7a989a23a4fb9f3710debaafacf8c5c82f7bb345650e375cdea6ad0362c",
+        "bytes": 105800
+      },
+      "incremental-candidate-v3.log": {
+        "sha256": "44eb94a7b01ea74c3a92e42498af701c2e1f532a9e335d05aedc6612f04a9b0a",
+        "bytes": 103260
+      },
+      "incremental-candidate.log": {
+        "sha256": "b7017c565bd913dad766d6e31b745cbad93db55d659db109414f4ef2708ac229",
+        "bytes": 342836
+      },
+      "incremental2-candidate-v3.log": {
+        "sha256": "744d748b2f8d25b2986bec254119fa91c7303f1051170edcb16c05e0d0725809",
+        "bytes": 103260
+      },
+      "noop-candidate-v3.log": {
+        "sha256": "29056b4ab0f5f73a16d91657a7aef6c707780a6e5595dfd45ff5a729b5c631a2",
+        "bytes": 21466
+      },
+      "run-baseline.sh": {
+        "sha256": "a33bacbe467ff6e9388a24e9ad8fb4c53263095efe9dc1ae157e4878917b99ff",
+        "bytes": 516
+      },
+      "run-candidate-v3.py": {
+        "sha256": "3b17a7f0274679319a518db46b749bd4eea7b050065d9109e6dabbb20721fefa",
+        "bytes": 1787
+      },
+      "run-candidate.py": {
+        "sha256": "76da25255356367b5292d795ce2f690d3333c96c68ab7dd8b23d6d0e911dd16a",
+        "bytes": 1754
+      },
+      "runtime-smoke-candidate-v3.log": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "source-integrity.json": {
+        "sha256": "13dd6c2003b53db28e142c78f6301675f2a630a2de29ec9ff0d3280bf0389fc7",
+        "bytes": 153
+      },
+      "tool-versions-and-loader.log": {
+        "sha256": "b57b59091a47bf92acc07223eb0f7c23d1b285d90e016c251616f75f6f0fe360",
+        "bytes": 257
+      },
+      "Dockerfile.glibc-repro": {
+        "sha256": "ea0e077a7debfac242e96608d81c1093ba5e70181f11f67c1e0cead5f518d428",
+        "bytes": 588
+      }
+    }
+  }
+}

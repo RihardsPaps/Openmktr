@@ -55,6 +55,86 @@ class Architecture(unittest.TestCase):
     def current(self):
         return (self.root / "build.ninja").resolve().parent
 
+    def test_recursive_stamp_updates_reach_archive_before_sibling_builds(self):
+        root = self.root
+        for profile in ("off", "aggressive"):
+            for mode in ("direct", "build", "launcher", "raw"):
+                for jobs in (1, 8):
+                    with self.subTest(profile=profile, mode=mode, jobs=jobs):
+                        self.root = root / f"{profile}-{mode}-{jobs}"
+                        self.root.mkdir()
+                        self.write(".PHONY: all\nall:\n\t@$(MAKE) -f main.mk all\n")
+                        (self.root / "source").write_text("clean")
+                        (self.root / "seed").write_text("unchanged")
+                        (self.root / "main.mk").write_text(
+                            "OWNER := parent\n.PHONY: all lib objects others a b\n"
+                            "all: lib others\nlib: shared.a\n"
+                            "include common.mk\n"
+                            "first.stamp% second.stamp%: objects ;\n"
+                            "objects:\n\t@$(MAKE) -f objects.mk\n"
+                            "others: a b\na b: lib\n"
+                            "\t@$(MAKE) -f child.mk\n")
+                        (self.root / "objects.mk").write_text(
+                            "all: first.stamp.os second.stamp.os\n"
+                            "first.stamp.os: seed\n\t@cp seed $@\n"
+                            "second.stamp.os: source\n\t@cp source $@\n")
+                        (self.root / "child.mk").write_text(
+                            "OWNER := child\nall: shared.a\ninclude common.mk\n")
+                        (self.root / "common.mk").write_text(
+                            "shared.a: first.stamp.os second.stamp.os\n"
+                            "\t@python3 archive.py '$(OWNER)'\n")
+                        (self.root / "archive.py").write_text(
+                            "from pathlib import Path\nimport sys, time\n"
+                            "lock = Path('archive.lock')\nlock.mkdir()\n"
+                            "try:\n time.sleep(.1)\n"
+                            " Path('shared.a').write_text(Path('second.stamp.os').read_text())\n"
+                            " with open('writes', 'a') as f: f.write(sys.argv[1] + '\\n')\n"
+                            "finally:\n lock.rmdir()\n")
+                        options = ["--graph_optimizations=" + profile, f"-j{jobs}", "all"]
+                        if mode in ("launcher", "raw"):
+                            self.run_tool("--ninja", *options)
+                            command = (["sh", "ninja.sh"] if mode == "launcher"
+                                       else ["ninja"]) + [f"-j{jobs}", "all"]
+                        else:
+                            command = [str(BINARY)] + (
+                                ["build"] if mode == "build" else []) + options
+                        for filename, value, count in (
+                                ("source", "clean", 1), ("source", "changed", 2),
+                                ("source", "changed", 2), ("seed", "updated", 3),
+                                ("seed", "updated", 3)):
+                            changed = self.root / filename
+                            if changed.read_text() != value:
+                                time.sleep(.02)
+                                changed.write_text(value)
+                            result = subprocess.run(command, cwd=self.root, text=True,
+                                                    stdout=subprocess.PIPE,
+                                                    stderr=subprocess.STDOUT, timeout=20)
+                            self.assertEqual(result.returncode, 0, result.stdout)
+                            self.assertEqual((self.root / "shared.a").read_text(),
+                                             (self.root / "source").read_text())
+                            self.assertEqual((self.root / "writes").read_text(),
+                                             "parent\n" * count)
+        self.root = root
+
+    def test_recipe_less_target_observes_prerequisite_side_effects(self):
+        # Normal prerequisites refresh the alias. Order-only prerequisites
+        # alone leave an existing alias up to date, matching make's fast path.
+        for jobs in (1, 8):
+            for order in ("", "| "):
+                with self.subTest(jobs=jobs, order=order):
+                    self.write(".PHONY: all update\nall: archive\n"
+                               "archive: stamp\n\t@cp stamp archive\n"
+                               f"stamp: {order}update ;\n"
+                               "update:\n\t@cp source stamp\n")
+                    for name in ("stamp", "archive"):
+                        (self.root / name).unlink(missing_ok=True)
+                    for value in ("first", "second"):
+                        time.sleep(.02)
+                        (self.root / "source").write_text(value)
+                        self.run_tool(f"-j{jobs}", "all")
+                        expected = "first" if order else value
+                        self.assertEqual((self.root / "archive").read_text(), expected)
+
     def test_deferred_ninja_recipes_preserve_progress_display(self):
         for rule, value, runtime in (("output::", "visible", False),
                                      ("output::", "$(shell printf visible)", False),
