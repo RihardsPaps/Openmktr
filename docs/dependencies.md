@@ -5,8 +5,9 @@ The supported reference build uses the stable packages in
 system and transitive toolchain dependencies. The verified base image digest,
 distribution repository, tested versions, compatibility image digests and CI
 action commits are recorded in [`tools/dependencies.json`](../tools/dependencies.json).
-The Chimera base digest was still current on 2026-10-27; the lock upgrades its
-older system packages to the current repository versions.
+The package lock was refreshed from the stable repository on 2026-11-02; the
+base image digest was last verified current on 2026-10-27. The lock upgrades
+its older system packages to the current repository versions.
 
 The reference uses LLVM/Clang/LLD/libc++ 22.1.8, Ninja 1.13.2, Python 3.14.6 and
 musl 1.2.6-r3. These are distribution-supported versions. Newer upstream LLVM or

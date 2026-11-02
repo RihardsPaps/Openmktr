@@ -2789,6 +2789,23 @@
     "output": "Makefile:17: *** invalid syntax in conditional.\n",
     "status": 1
   },
+  "multi_implicit_pattern_outputs.mk:default:direct": {
+    "files": [
+      "calls",
+      "output"
+    ],
+    "output": "",
+    "status": 0
+  },
+  "multi_implicit_pattern_outputs.mk:default:ninja": {
+    "files": [
+      ".ninja_log",
+      "calls",
+      "output"
+    ],
+    "output": "[1/1] build output/foo.one\n",
+    "status": 0
+  },
   "multi_outputs.mk:test:direct": {
     "files": [],
     "output": "PASS_bar\nPASS_foo\necho PASS_bar\necho PASS_foo\n",

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MPL-2.0
-# Full reference image package set resolved on 2026-10-27 (x86_64).
+# Full reference image package set resolved on 2026-11-02 (x86_64).
 acl=2.4.0-r0
-apk-tools=3.0.7-r1
+apk-tools=3.0.8-r0
 base-bootstrap=0.1-r2
 base-files=0.2-r1
 bzip2=1.0.8-r3

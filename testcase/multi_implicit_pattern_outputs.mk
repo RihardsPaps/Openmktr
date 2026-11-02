@@ -2,7 +2,7 @@
 
 all: output/foo.one output/foo.two
 
-%.one %.two: input
+output/%.one output/%.two:
 	@echo run >> calls
 	@mkdir -p output
-	@touch $*.one $*.two
+	@touch output/$*.one output/$*.two
