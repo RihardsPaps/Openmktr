@@ -11,6 +11,7 @@
 // Avoid synthetic parent-directory edges that depend back on their output.
 // Share resolver-local filesystem observations with generated-include proofs.
 // Avoid redundant VPATH filesystem probes for already resolved graph edges.
+// Treat multiple implicit pattern targets as one grouped output action.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed implicit pattern matching, build execution, and portability.
@@ -1628,14 +1629,20 @@ class DepBuilder {
 
     *out_rule = std::make_shared<Rule>(*rule);
     if ((*out_rule)->output_patterns.size() > 1) {
-      // We should mark all other output patterns as used.
-      Pattern pat(matched.str());
+      // Multi-target implicit pattern rules are grouped outputs: building
+      // any matching target runs the recipe once and updates its peers too.
+      // Record those peers on the node so Ninja sees the complete output set,
+      // and retain the resolver aliases for direct execution.
       for (Symbol output_pattern : rule->output_patterns) {
         if (output_pattern == matched)
           continue;
-        std::string buf;
-        pat.AppendSubst(output.str(), output_pattern.str(), &buf);
-        done_[Intern(buf)] = n;
+        const std::string peer = SubstituteImplicitPrerequisite(
+            output, matched, output_pattern.str());
+        const Symbol peer_output = Intern(peer);
+        if (std::find(n->implicit_outputs.begin(), n->implicit_outputs.end(),
+                      peer_output) == n->implicit_outputs.end())
+          n->implicit_outputs.push_back(peer_output);
+        done_[peer_output] = n;
       }
       (*out_rule)->output_patterns.clear();
       (*out_rule)->output_patterns.push_back(matched);

@@ -22,6 +22,46 @@ from correctness import KATI
 
 
 class NinjaJobserver(unittest.TestCase):
+    def test_makeflags_job_limit_overrides_kati_jobs(self):
+        with tempfile.TemporaryDirectory(prefix="omktr-makeflags-jobs-") as temp:
+            cwd = Path(temp)
+            env = {k: v for k, v in os.environ.items()
+                   if not k.startswith("KATI_") and
+                   k not in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL", "MAKEOVERRIDES")}
+            env["KATI_JOBS"] = "8"
+            (cwd / "worker.py").write_text(
+                "import fcntl, json, sys, time\n"
+                "with open('counts', 'r+') as f:\n"
+                "    fcntl.flock(f, fcntl.LOCK_EX)\n"
+                "    active, peak = json.load(f)\n"
+                "    active += 1\n"
+                "    f.seek(0)\n"
+                "    json.dump([active, max(peak, active)], f)\n"
+                "    f.truncate()\n"
+                "time.sleep(.1)\n"
+                "with open('counts', 'r+') as f:\n"
+                "    fcntl.flock(f, fcntl.LOCK_EX)\n"
+                "    active, peak = json.load(f)\n"
+                "    f.seek(0)\n"
+                "    json.dump([active - 1, peak], f)\n"
+                "    f.truncate()\n")
+            (cwd / "Makefile").write_text(
+                ".PHONY: all a b c d e f g h\n"
+                "all: a b c d e f g h\n"
+                "a b c d e f g h:\n\t@python3 worker.py\n")
+            for makeflags, expected_peak in (("-j1", 1), ("-j 2", 2),
+                                             ("--jobs=3", 3)):
+                with self.subTest(makeflags=makeflags):
+                    env["MAKEFLAGS"] = makeflags
+                    (cwd / "counts").write_text("[0, 0]")
+                    result = subprocess.run([str(KATI), "all"], cwd=cwd, env=env,
+                                            capture_output=True, text=True,
+                                            timeout=10)
+                    self.assertEqual(result.returncode, 0,
+                                     result.stdout + result.stderr)
+                    self.assertEqual(json.loads((cwd / "counts").read_text()),
+                                     [0, expected_peak])
+
     def test_shell_capture_with_closed_standard_descriptors(self):
         with tempfile.TemporaryDirectory(prefix="omktr-closed-standard-") as temp:
             cwd = Path(temp)

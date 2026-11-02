@@ -26,6 +26,12 @@
 
 namespace {
 constexpr size_t kMaxCacheSize = 64 * 1024 * 1024;
+// Evaluated Makefiles can produce large, but valid, immutable graph objects
+// (for example, a runtime recipe context containing many exported variables).
+// Keep a larger explicit bound for those objects while retaining the smaller
+// limit for graph stamps and other compact caches.
+constexpr size_t kMaxGraphPayloadSize = 256 * 1024 * 1024;
+constexpr size_t kMaxGraphCacheFileSize = kMaxGraphPayloadSize + 128;
 struct ObjectPublication {
   GraphObjectBatch* batch = nullptr;
 };
@@ -146,7 +152,7 @@ bool ConsumeGraphStringView(std::string_view* data, std::string_view* value) {
     length |= static_cast<uint64_t>(static_cast<unsigned char>((*data)[i]))
               << (8 * i);
   data->remove_prefix(8);
-  if (length > data->size() || length > kMaxCacheSize)
+  if (length > data->size() || length > kMaxGraphPayloadSize)
     return false;
   *value = data->substr(0, length);
   data->remove_prefix(length);
@@ -163,7 +169,7 @@ bool ReadGraphCache(const std::string& path,
     return false;
   struct stat st;
   bool valid = fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && st.st_size >= 0 &&
-               static_cast<uint64_t>(st.st_size) <= kMaxCacheSize;
+               static_cast<uint64_t>(st.st_size) <= kMaxGraphCacheFileSize;
   size_t remaining = valid ? static_cast<size_t>(st.st_size) : 0;
   auto read_all = [&](char* data, size_t length) {
     if (length > remaining)
@@ -192,8 +198,9 @@ bool ReadGraphCache(const std::string& path,
   };
   std::string magic, checksum;
   valid = valid && read_string(&magic, 12) && magic == "OMKTR_GRAPH1" &&
-          read_string(&checksum, 64) && read_string(payload, kMaxCacheSize) &&
-          remaining == 0 && checksum == GraphDigest(*payload);
+          read_string(&checksum, 64) &&
+          read_string(payload, kMaxGraphPayloadSize) && remaining == 0 &&
+          checksum == GraphDigest(*payload);
   close(fd);
   if (valid && sealed)
     *sealed = (st.st_mode & 07777) == 0400;
@@ -260,7 +267,7 @@ bool WriteGraphCache(const std::string& path, std::string_view payload) {
   AppendGraphString("OMKTR_GRAPH1", &bytes);
   AppendGraphString(GraphDigest(payload), &bytes);
   AppendGraphString(payload, &bytes);
-  if (bytes.size() > kMaxCacheSize)
+  if (bytes.size() > kMaxGraphCacheFileSize)
     return false;
   std::string temporary = path + ".tmp.XXXXXX";
   int fd = mkstemp(temporary.data());
@@ -345,7 +352,7 @@ std::string PublishGraphObject(const std::string& base,
     struct stat metadata;
     bool ok = fstat(fd, &metadata) == 0 && S_ISREG(metadata.st_mode) &&
               metadata.st_size >= 0 &&
-              metadata.st_size <= static_cast<off_t>(kMaxCacheSize);
+              metadata.st_size <= static_cast<off_t>(kMaxGraphPayloadSize);
     if (ok) {
       bytes->resize(metadata.st_size);
       size_t offset = 0;
@@ -364,8 +371,11 @@ std::string PublishGraphObject(const std::string& base,
       sealed = (metadata.st_mode & 07777) == 0400;
     return ok;
   };
-  if (payload.size() > kMaxCacheSize)
-    ERROR("immutable graph object exceeds size budget");
+  if (payload.size() > kMaxGraphPayloadSize)
+    ERROR(
+        "immutable graph object exceeds the %zu-byte size limit (%zu bytes): "
+        "%s",
+        kMaxGraphPayloadSize, payload.size(), base.c_str());
   for (size_t collision = 0; collision < 1024; ++collision) {
     const std::string path =
         base + (collision ? "." + std::to_string(collision) : "");

@@ -12,6 +12,7 @@
 // Validate recursive reuse, regeneration inputs, and shared recipe budgets.
 // Parse explanation and strict compatibility options.
 // Parse and validate Make-compatible load-average limits.
+// Honor recursive MAKEFLAGS job counts over the KATI_JOBS fallback.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -321,6 +322,9 @@ void Flags::Parse(int argc, char** argv) {
 
     for (size_t i = 0; i < makeflags_tokens.size(); ++i) {
       const std::string& tok = makeflags_tokens[i];
+      const char* next = i + 1 < makeflags_tokens.size()
+                             ? makeflags_tokens[i + 1].c_str()
+                             : nullptr;
       if (HasPrefix(tok, "--jobserver-auth=")) {
         ninja_jobserver_fifo.clear();
         if (HasPrefix(tok, "--jobserver-auth=fifo:"))
@@ -331,10 +335,21 @@ void Flags::Parse(int argc, char** argv) {
             std::string::npos)
           ninja_jobserver_fifo.clear();
       }
+      if (tok == "--jobs" || HasPrefix(tok, "--jobs=")) {
+        const char* value =
+            tok == "--jobs" ? next : tok.c_str() + strlen("--jobs=");
+        if (value && isdigit(static_cast<unsigned char>(*value))) {
+          char* end = nullptr;
+          long parsed = strtol(value, &end, 10);
+          if (end != value && *end == '\0' && parsed > 0 && parsed <= INT_MAX) {
+            num_jobs = static_cast<int>(parsed);
+            if (tok == "--jobs")
+              ++i;
+          }
+        }
+        continue;
+      }
       bool consume_next;
-      const char* next = i + 1 < makeflags_tokens.size()
-                             ? makeflags_tokens[i + 1].c_str()
-                             : nullptr;
       if (ParseLoadOption(tok, next, &consume_next, &load_limit)) {
         load_limit_set = true;
         if (consume_next)
@@ -346,6 +361,22 @@ void Flags::Parse(int argc, char** argv) {
       // executing them.  GNU make may combine short flags into one word.
       if (tok.size() > 1 && tok[0] == '-' && tok[1] != '-') {
         for (size_t j = 1; j < tok.size(); ++j) {
+          if (tok[j] == 'j') {
+            const char* value = tok.c_str() + j + 1;
+            if (!*value && next && isdigit(static_cast<unsigned char>(*next))) {
+              value = next;
+              ++i;
+            }
+            if (*value && isdigit(static_cast<unsigned char>(*value))) {
+              char* end = nullptr;
+              long parsed = strtol(value, &end, 10);
+              if (end != value && *end == '\0' && parsed > 0 &&
+                  parsed <= INT_MAX) {
+                num_jobs = static_cast<int>(parsed);
+              }
+            }
+            break;
+          }
           if (tok[j] == 'l') {
             ParseLoadOption("-l" + tok.substr(j + 1), next, &consume_next,
                             &load_limit);

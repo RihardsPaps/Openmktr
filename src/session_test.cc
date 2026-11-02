@@ -262,6 +262,10 @@ int main() {
   std::string bytes;
   assert(ReadGraphCache(one, &bytes) && bytes == "first");
   assert(ReadGraphCache(two, &bytes) && bytes == "second");
+  const std::string large_payload(64 * 1024 * 1024 + 1, 'x');
+  const std::string large_object =
+      PublishGraphObject(base + "-large", large_payload);
+  assert(ReadGraphCache(large_object, &bytes) && bytes == large_payload);
   struct stat sealed;
   assert(stat(one.c_str(), &sealed) == 0);
   assert((sealed.st_mode & 07777) == 0400);
