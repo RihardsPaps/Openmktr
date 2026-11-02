@@ -11,18 +11,27 @@ for option in -n --just-print --dry-run; do
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' RETURN
   cat >"$tmp/Makefile" <<'EOF'
-all: output
+all: output quiet
 
 output:
-	@printf built > output
+	printf built > output
+
+quiet:
+	@printf quiet > quiet
 EOF
 
   if ! output=$(cd "$tmp" && "$mk" "$option" -f Makefile all 2>&1); then
     echo "dry-run option failed: $option" >&2
     exit 1
   fi
-  printf '%s\n' "$output" | grep -q 'printf built > output' || {
-    echo "recipe was not printed for $option" >&2
+  count=$(printf '%s\n' "$output" | grep -F -c 'printf built > output' || true)
+  [ "$count" -eq 1 ] || {
+    echo "ordinary recipe printed $count times for $option" >&2
+    exit 1
+  }
+  count=$(printf '%s\n' "$output" | grep -F -c 'printf quiet > quiet' || true)
+  [ "$count" -eq 1 ] || {
+    echo "silent recipe printed $count times for $option" >&2
     exit 1
   }
   [ ! -e "$tmp/output" ] || {

@@ -2845,6 +2845,30 @@ class BuildCorrectness(unittest.TestCase):
         self.assertEqual((self.directory / "build/image-image.o").read_text(),
                          "compiled:build/image-image.c")
 
+    def test_multi_target_implicit_pattern_rule_runs_once(self):
+        (self.directory / "input").touch()
+        self.makefile(
+            ".PHONY: all\n"
+            "all: output/foo.one output/foo.two\n"
+            "%.one %.two: input\n"
+            "\t@echo run >> calls\n"
+            "\t@mkdir -p output\n"
+            "\t@touch $*.one $*.two\n"
+        )
+        self.direct("all")
+        self.assertEqual((self.directory / "calls").read_text().splitlines(),
+                         ["run"])
+        self.assertTrue((self.directory / "output/foo.one").exists())
+        self.assertTrue((self.directory / "output/foo.two").exists())
+        (self.directory / "calls").unlink()
+        (self.directory / "output/foo.one").unlink()
+        (self.directory / "output/foo.two").unlink()
+        self.ninja()
+        self.assertEqual((self.directory / "calls").read_text().splitlines(),
+                         ["run"])
+        self.assertTrue((self.directory / "output/foo.one").exists())
+        self.assertTrue((self.directory / "output/foo.two").exists())
+
     def test_equal_stem_rules_keep_definition_order_across_trie_paths(self):
         (self.directory / "dep-a").touch()
         (self.directory / "dep-b").touch()

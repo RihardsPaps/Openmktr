@@ -10,6 +10,7 @@
 // Schedule resolved dependencies with a bounded ready queue. Preserve serial
 // goal order and parent-specific intermediate decisions. Expand recipes under
 // one evaluator lock; share process supervision and recursive job leases.
+// Print dry-run recipes only once after command expansion.
 // Changed by the Openmktr fork, maintained by Rihards Paps and Haralds Paps.
 // Upstream material retains Apache-2.0 terms. Fork changes are covered by
 // MPL-2.0; see docs/LICENSING.md and NOTICE. Original notices follow.
@@ -702,7 +703,8 @@ class Executor {
         std::lock_guard<std::mutex> lock(state_mu_);
         num_commands_ += 1;
       }
-      if (command.echo && !command.cmd.empty() && command.cmd != ":") {
+      if (!g_flags.is_dry_run && command.echo && !command.cmd.empty() &&
+          command.cmd != ":") {
         if (command.verbose)
           printf("%s\n", command.display_cmd.c_str());
         else
@@ -722,7 +724,7 @@ class Executor {
         // remain unexecuted. The normalized MAKEFLAGS installed by
         // UpdateMakeFlags carries -n into the child Kati process.
         if (recursive || command.force_run) {
-          auto recursive_lock = LockRecursiveCommand();
+          auto recursive_lock = LockRecursiveCommand(n);
           const std::string& command_shell =
               command.shell.empty() ? shell_ : command.shell;
           const std::string& command_shellflag =
@@ -750,7 +752,7 @@ class Executor {
         std::unique_lock<std::mutex> recursive_lock;
         std::string command_text = command.cmd;
         if (recursive) {
-          recursive_lock = LockRecursiveCommand();
+          recursive_lock = LockRecursiveCommand(n);
           // Recursive children share the wrapper's FIFO. RunCommand passes
           // an inherited reserved slot to the child when one is available;
           // otherwise this boundary takes no FIFO token and the child takes
@@ -1170,15 +1172,41 @@ class Executor {
     return it != done_.end() && (it->second.outcome == NodeOutcome::Failed);
   }
 
-  std::unique_lock<std::mutex> LockRecursiveCommand() {
+  std::unique_lock<std::mutex> LockRecursiveCommand(const DepNode& node) {
     std::unique_lock<std::mutex> lock(recursive_command_mu_, std::defer_lock);
     // A shared FIFO already limits the visible work across child executors.
     // Serializing independent recursive recipes as well prevents their small
     // subgraphs from filling that budget (notably Kbuild subdirectories).
+    // Recursive recipes that publish the same grouped output set need local
+    // serialization even with a shared FIFO: child graphs do not share target
+    // ownership. Key by the complete output set so unrelated groups still run
+    // in parallel.
     // Without a shared jobserver retain the conservative fallback: each
     // child otherwise has its own full local -j limit.
-    if (!IsKatiJobserverAvailable())
+    if (!IsKatiJobserverAvailable()) {
       lock.lock();
+    } else if (!node.implicit_outputs.empty()) {
+      std::vector<std::string> outputs{node.output.str()};
+      for (Symbol output : node.implicit_outputs)
+        outputs.emplace_back(output.str());
+      std::sort(outputs.begin(), outputs.end());
+      outputs.erase(std::unique(outputs.begin(), outputs.end()), outputs.end());
+      std::string key;
+      for (const std::string& output : outputs) {
+        key += std::to_string(output.size());
+        key += ':';
+        key += output;
+      }
+      std::shared_ptr<std::mutex> grouped_lock;
+      {
+        std::lock_guard<std::mutex> guard(grouped_recursive_command_mu_);
+        auto& slot = grouped_recursive_command_locks_[key];
+        if (!slot)
+          slot = std::make_shared<std::mutex>();
+        grouped_lock = slot;
+      }
+      lock = std::unique_lock<std::mutex>(*grouped_lock);
+    }
     return lock;
   }
 
@@ -1199,6 +1227,9 @@ class Executor {
   std::mutex eval_mu_;
   std::mutex output_mu_;
   std::mutex recursive_command_mu_;
+  std::mutex grouped_recursive_command_mu_;
+  std::unordered_map<std::string, std::shared_ptr<std::mutex>>
+      grouped_recursive_command_locks_;
   int job_limit_;
   std::string shell_;
   std::string shellflag_;
