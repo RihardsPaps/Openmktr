@@ -1,6 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
 // Drop process-only headers after separating runtime supervision.
 // Expose invocation-scoped environment identities for deferred graph reuse.
+// Validate content fingerprints through exact metadata before hashing again.
 // Own invocation state and publish coherent generations with typed freshness.
 // Separate runtime services and preserve scoped resource ownership.
 // Preserve owned path strings through filesystem-probe cache lookups.
@@ -58,6 +59,8 @@ std::string GetFileIdentityFromStat(const struct stat& st);
 // Content identity for parsed makefiles. Unlike the metadata identity, this
 // remains stable when a build tool only updates the file timestamp.
 std::string GetFileContentIdentity(std::string_view path);
+bool FileContentIdentityMatches(std::string_view path,
+                                std::string_view expected);
 struct FileObservationState;
 // Reused only by serialized recipe expansion. Active commands and filesystem
 // effects invalidate it across executor threads through a process-wide epoch.

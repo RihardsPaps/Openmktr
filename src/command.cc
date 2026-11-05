@@ -853,6 +853,7 @@ bool MakeRuntimeRecipe(const DepNode& node,
   const std::string runtime_inputs_path = PublishGraphObject(
       directory + "/.kati-runtime-inputs-" + GraphDigest(runtime_input_data),
       runtime_input_data);
+  MakefileCacheManager::Get().AddGeneratedGraphDep(runtime_inputs_path);
   std::string runtime_inputs_field;
   AppendGraphString(runtime_inputs_path, &runtime_inputs_field);
   payload.insert(runtime_inputs_offset, runtime_inputs_field);

@@ -43,6 +43,7 @@
 // Avoid per-target heap allocation while emitting small dependency lists.
 // Preserve phony invalidation, depfile includes and physical import ownership.
 // Keep input manifests immutable across configurations and graph generations.
+// Inline small freshness checks while retaining manifests for wide input lists.
 // Keep runtime-expanded nonrecursive recipes in Ninja's job budget.
 // Limit depfile inference to literal compiler commands; preserve quoted
 // recipes. Reject known Ninja compatibility gaps before publishing a strict
@@ -1474,22 +1475,38 @@ class NinjaGenerator {
       // BusyBox test -nt compares whole seconds. Use the native stat helper
       // once for the complete input set, preserving Ninja's subsecond changes.
       auto inputs_current = [&](Symbol output) {
-        std::string inputs;
-        AppendGraphString("ninja-inputs-v1", &inputs);
-        AppendGraphString(output.str(), &inputs);
-        for (const NamedDepNode& dep : node->deps)
-          AppendGraphString(dep.first.str(), &inputs);
-        if (!input_manifest_dir_ready_) {
-          if (!EnsureDirectory(GetFilename(".kati-inputs%s")))
-            ERROR("cannot create Ninja input manifest directory");
-          input_manifest_dir_ready_ = true;
+        std::string condition;
+        if (node->deps.size() <= 8) {
+          // Small lists cost less to pass directly than to publish, validate
+          // and read another immutable object. Wide compiler input lists use
+          // the manifest below to stay clear of argument-size limits.
+          condition = quoted_binary_ +
+                      (node->low_resolution
+                           ? " --internal-low-resolution-output-current "
+                           : " --internal-low-resolution-up-to-date ") +
+                      ShellQuote(output.str()) + " " +
+                      std::to_string(node->deps.size()) + " 0";
+          for (const NamedDepNode& dep : node->deps)
+            condition += " " + ShellQuote(dep.first.str());
+        } else {
+          std::string inputs;
+          AppendGraphString("ninja-inputs-v1", &inputs);
+          AppendGraphString(output.str(), &inputs);
+          for (const NamedDepNode& dep : node->deps)
+            AppendGraphString(dep.first.str(), &inputs);
+          if (!input_manifest_dir_ready_) {
+            if (!EnsureDirectory(GetFilename(".kati-inputs%s")))
+              ERROR("cannot create Ninja input manifest directory");
+            input_manifest_dir_ready_ = true;
+          }
+          const std::string manifest = PublishGraphObject(
+              GetFilename(".kati-inputs%s") + "/" + GraphDigest(inputs),
+              inputs);
+          condition =
+              quoted_binary_ + " --internal-low-resolution-manifest-current " +
+              ShellQuote(output.str()) + " " +
+              (node->low_resolution ? "1 " : "0 ") + ShellQuote(manifest);
         }
-        const std::string manifest = PublishGraphObject(
-            GetFilename(".kati-inputs%s") + "/" + GraphDigest(inputs), inputs);
-        std::string condition =
-            quoted_binary_ + " --internal-low-resolution-manifest-current " +
-            ShellQuote(output.str()) + " " +
-            (node->low_resolution ? "1 " : "0 ") + ShellQuote(manifest);
         // A changed context sidecar can schedule a current consumer even when
         // Ninja restats its deliberately absent intermediate inputs. Reuse
         // the same complete freshness proof rather than recreating them.

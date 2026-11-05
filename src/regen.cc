@@ -246,10 +246,10 @@ class StampChecker {
             !ConsumeGraphString(&view, &identity))
           RETURN_TRUE;
         const bool content_identity = identity.compare(0, 8, "content:") == 0;
-        const std::string actual = content_identity
-                                       ? GetFileContentIdentity(path)
-                                       : GetFileIdentity(path);
-        if (identity == "unreadable" || actual != identity)
+        const bool matches = content_identity
+                                 ? FileContentIdentityMatches(path, identity)
+                                 : GetFileIdentity(path) == identity;
+        if (identity == "unreadable" || !matches)
           RETURN_TRUE;
       }
     } else if (requires_evaluation != 0) {
@@ -306,11 +306,13 @@ class StampChecker {
       double ts = monitored ? timestamps[i]
                   : exists  ? GetTimestampFromStat(st)
                             : -1;
-      const std::string identity = content_identity ? GetFileContentIdentity(s)
-                                   : monitored      ? identities[i]
-                                   : exists ? GetFileIdentityFromStat(st)
-                                   : stat_error == ENOENT ? "missing"
-                                                          : "unreadable";
+      const std::string identity =
+          content_identity
+              ? (FileContentIdentityMatches(s, s2) ? s2 : "changed-content")
+          : monitored            ? identities[i]
+          : exists               ? GetFileIdentityFromStat(st)
+          : stat_error == ENOENT ? "missing"
+                                 : "unreadable";
       // GetTimestamp returns < 0 when there's an error reading the file, like
       // when its been removed.
       const bool unchanged_missing = s2 == "missing" && identity == "missing";

@@ -1,5 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
 // Reuse the running executable identity within each invocation.
+// Reuse content hashes only while complete filesystem metadata stays unchanged.
 // Snapshot caller environments before Makefile evaluation changes process
 // state. Own invocation state and publish coherent generations with typed
 // freshness. Keep filesystem identities, observation epochs, globbing and
@@ -450,7 +451,36 @@ std::string GetFileContentIdentity(std::string_view path) {
   snprintf(digest, sizeof(digest), "%016llx%016llx",
            static_cast<unsigned long long>(first),
            static_cast<unsigned long long>(second));
-  return "content:" + std::to_string(before.st_size) + ":" + digest;
+  std::string result = "content:";
+  AppendGraphString(GetFileIdentityFromStat(before), &result);
+  AppendGraphString(std::to_string(before.st_size) + ":" + digest, &result);
+  return result;
+}
+
+bool FileContentIdentityMatches(std::string_view path,
+                                std::string_view expected) {
+  if (!HasPrefix(expected, "content:"))
+    return expected != "unreadable" && expected != "unstable" &&
+           GetFileIdentity(path) == expected;
+  expected.remove_prefix(8);
+  std::string metadata, digest;
+  if (!ConsumeGraphString(&expected, &metadata) ||
+      !ConsumeGraphString(&expected, &digest) || !expected.empty())
+    return false;
+  // Exact inode, size, mtime and ctime equality certifies the previous hash.
+  // Touches still fall through to content comparison, preserving reuse when
+  // only timestamps changed without rehashing unchanged files on every build.
+  if (GetFileIdentity(path) == metadata)
+    return true;
+  const std::string actual = GetFileContentIdentity(path);
+  std::string_view fields(actual);
+  if (!HasPrefix(fields, "content:"))
+    return false;
+  fields.remove_prefix(8);
+  std::string actual_digest;
+  return ConsumeGraphString(&fields, &metadata) &&
+         ConsumeGraphString(&fields, &actual_digest) && fields.empty() &&
+         digest == actual_digest;
 }
 
 void DeleteChangedOutput(std::string_view path, const std::string& previous) {

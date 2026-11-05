@@ -19,6 +19,23 @@ BINARY = Path(os.environ.get(
 
 
 class GeneratedRecipeReads(unittest.TestCase):
+    def test_missing_runtime_input_manifest_regenerates_before_execution(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "seed").write_text("ready")
+            (root / "Makefile").write_text(
+                "all: result\nresult: seed\n"
+                "\t@printf '%s' '$(shell cat seed)' > $@\n")
+            command = [str(BINARY), "build", "--graph_optimizations=aggressive", "all"]
+            subprocess.run(command, cwd=root, check=True, capture_output=True, timeout=20)
+            manifests = list((root / ".openmktr").glob(".kati-runtime-inputs-*"))
+            self.assertTrue(manifests)
+            for manifest in manifests:
+                manifest.unlink()
+            subprocess.run(command, cwd=root, check=True, capture_output=True, timeout=20)
+            self.assertTrue(all(path.exists() for path in manifests))
+            self.assertEqual((root / "result").read_text(), "ready")
+
     def test_suffixed_graphs_keep_separate_runtime_input_contexts(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
