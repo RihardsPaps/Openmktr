@@ -36,9 +36,8 @@ bool ResolveFileReadExpansions(std::string* value) {
     }
     const std::string_view path = expression.substr(prefix.size());
     if (path.empty() ||
-        path.find_first_not_of(
-            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./-") !=
-            std::string_view::npos)
+        path.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTU"
+                               "VWXYZ0123456789_./-") != std::string_view::npos)
       return false;
     std::ifstream input(std::string(path), std::ios::binary);
     if (!input)
@@ -192,8 +191,7 @@ bool ParseImportCommand(const Command& command,
   // before parsing argv while continuing to reject other shell escapes.
   std::string flattened;
   for (size_t i = 0; i < command.display_cmd.size(); ++i) {
-    if (command.display_cmd[i] == '\\' &&
-        i + 1 < command.display_cmd.size() &&
+    if (command.display_cmd[i] == '\\' && i + 1 < command.display_cmd.size() &&
         command.display_cmd[i + 1] == '\n') {
       ++i;
       while (i + 1 < command.display_cmd.size() &&

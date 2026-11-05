@@ -1,5 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
 // Launch validation workers only when independent observations need checking.
+// Retain shell diagnostics and stop replay at changed conditional boundaries.
+// Validate complete deferred environments and inherited jobserver identities.
 // Own invocation state and publish coherent generations with typed freshness.
 // Separate runtime services and preserve scoped resource ownership.
 // Track and validate incremental evaluation, include proofs and imported Ninja
@@ -80,19 +82,27 @@ std::string NormalizeMakeFlags(std::string_view flags) {
   std::istringstream input{std::string(flags)};
   std::string token;
   std::string normalized;
+  std::string jobs = std::to_string(g_flags.num_jobs);
   while (input >> token) {
-    bool parallelism = token == "-j" || token == "--jobs" ||
-                       token.rfind("-j", 0) == 0 ||
-                       token.rfind("--jobs=", 0) == 0 ||
-                       token.rfind("--jobserver-auth=", 0) == 0 ||
-                       token.rfind("--jobserver-fds=", 0) == 0;
-    if (parallelism)
+    if (token == "-j" || token == "--jobs" || token.rfind("-j", 0) == 0 ||
+        token.rfind("--jobs=", 0) == 0) {
+      std::string count;
+      if (token == "-j" || token == "--jobs") {
+        input >> std::ws;
+        if (input.peek() >= '0' && input.peek() <= '9')
+          input >> count;
+      } else {
+        count = token.substr(token[1] == 'j' ? 2 : 7);
+      }
+      if (!g_flags.num_jobs_specified && !count.empty())
+        jobs = count;
       continue;
+    }
     if (!normalized.empty())
       normalized.push_back(' ');
     normalized += token;
   }
-  return normalized;
+  return normalized + " --effective-jobs=" + jobs;
 }
 
 class StampChecker {
@@ -296,12 +306,11 @@ class StampChecker {
       double ts = monitored ? timestamps[i]
                   : exists  ? GetTimestampFromStat(st)
                             : -1;
-      const std::string identity =
-          content_identity ? GetFileContentIdentity(s)
-          : monitored       ? identities[i]
-          : exists          ? GetFileIdentityFromStat(st)
-                            : stat_error == ENOENT ? "missing"
-                                                   : "unreadable";
+      const std::string identity = content_identity ? GetFileContentIdentity(s)
+                                   : monitored      ? identities[i]
+                                   : exists ? GetFileIdentityFromStat(st)
+                                   : stat_error == ENOENT ? "missing"
+                                                          : "unreadable";
       // GetTimestamp returns < 0 when there's an error reading the file, like
       // when its been removed.
       const bool unchanged_missing = s2 == "missing" && identity == "missing";
@@ -351,10 +360,10 @@ class StampChecker {
       const char* val_c_str = getenv(s.c_str());
       std::string_view val(val_c_str ? val_c_str : "");
       LOAD_STRING(fp, &s2);
-      const bool changed = s == "MAKEFLAGS"
-                               ? NormalizeMakeFlags(val) !=
-                                     NormalizeMakeFlags(s2)
-                               : val != s2;
+      const bool changed =
+          s.empty()          ? InvocationEnvironmentIdentity() != s2
+          : s == "MAKEFLAGS" ? NormalizeMakeFlags(val) != NormalizeMakeFlags(s2)
+                             : val != s2;
       if (changed) {
         if (g_flags.dump_kati_stamp) {
           printf("env %s: dirty (%s => %.*s)\n", s.c_str(), s2.c_str(),
@@ -534,7 +543,7 @@ class StampChecker {
       }
     } else {
       const int raw_status = RunCommand(sr->shell, sr->shellflag, sr->cmd,
-                                        RedirectStderr::DEV_NULL, &result);
+                                        RedirectStderr::NONE, &result);
       FormatForCommandSubstitution(&result);
       status = WIFEXITED(raw_status) ? WEXITSTATUS(raw_status) : 1;
     }
@@ -583,6 +592,10 @@ class StampChecker {
             needs_regen_ = true;
             msg_ = err;
           }
+          // Later commands may belong to a branch selected by this result.
+          // Replay the validated prefix during evaluation, then execute the
+          // newly selected branch exactly once.
+          break;
         }
       }
     };

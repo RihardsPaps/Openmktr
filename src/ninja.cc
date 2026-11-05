@@ -41,6 +41,8 @@
 // Preserve trailing background commands inside generated shell guards.
 // Track workspace exports and identities of elided source-only recipes.
 // Avoid per-target heap allocation while emitting small dependency lists.
+// Preserve phony invalidation, depfile includes and physical import ownership.
+// Keep input manifests immutable across configurations and graph generations.
 // Keep runtime-expanded nonrecursive recipes in Ninja's job budget.
 // Limit depfile inference to literal compiler commands; preserve quoted
 // recipes. Reject known Ninja compatibility gaps before publishing a strict
@@ -73,9 +75,9 @@
 #define OMKTR_NINJA_EXECUTABLE "ninja"
 #endif
 
+#include <dirent.h>
 #include <errno.h>
 #include <limits.h>
-#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -176,49 +178,61 @@ static bool EnsureDirectory(std::string_view path) {
 // unknown wrappers require explicit .KATI_DEPFILE metadata.
 bool GetDepfileFromCommand(std::string* cmd,
                            std::string* out,
-                           bool relaxed_flags = false,
-                           bool copy_for_makefile = true) {
+                           bool relaxed_flags,
+                           bool copy_for_makefile) {
   std::vector<std::string> owned_words;
+  std::vector<std::string_view> words;
   if (relaxed_flags) {
     std::string word;
     char quote = 0;
     bool escaped = false;
+    bool started = false;
     for (char c : *cmd) {
       if (escaped) {
-        word += c;
+        if (c != '\n')
+          word += c;
         escaped = false;
-      } else if (c == '\\') {
-        escaped = true;
       } else if (quote) {
         if (c == quote)
           quote = 0;
+        else if (quote == '"' && (c == '$' || c == '`' || c == '\\'))
+          return false;
         else
           word += c;
+      } else if (c == '\\') {
+        escaped = true;
+        started = true;
       } else if (c == '\'' || c == '"') {
         quote = c;
+        started = true;
       } else if (c == ' ' || c == '\t') {
-        if (!word.empty()) {
+        if (started) {
           owned_words.push_back(std::move(word));
           word.clear();
+          started = false;
         }
-      } else if (std::string_view(";&|<>()`$").find(c) !=
+      } else if (std::string_view(";&|<>()`$#*?[]{}~\r\n").find(c) !=
                  std::string_view::npos) {
         return false;
       } else {
         word += c;
+        started = true;
       }
     }
     if (escaped || quote)
       return false;
-    if (!word.empty())
+    if (started)
       owned_words.push_back(std::move(word));
+    words.reserve(owned_words.size());
+    for (const std::string& word : owned_words)
+      words.emplace_back(word);
   } else {
     size_t start = 0;
     for (size_t i = 0; i <= cmd->size(); ++i) {
       const char c = i == cmd->size() ? ' ' : (*cmd)[i];
       if (c == ' ' || c == '\t') {
         if (i > start)
-          owned_words.emplace_back(cmd->data() + start, i - start);
+          words.emplace_back(cmd->data() + start, i - start);
         start = i + 1;
       } else if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
                    (c >= '0' && c <= '9') ||
@@ -228,10 +242,6 @@ bool GetDepfileFromCommand(std::string* cmd,
       }
     }
   }
-  std::vector<std::string_view> words;
-  words.reserve(owned_words.size());
-  for (const std::string& word : owned_words)
-    words.emplace_back(word);
   if (words.empty())
     return false;
   size_t compiler = 0;
@@ -255,20 +265,20 @@ bool GetDepfileFromCommand(std::string* cmd,
       compile = true;
     } else if (assembler && word == "-MD") {
       dependencies = true;
-      if (++i == words.size() || words[i].front() == '-')
+      if (++i == words.size() || words[i].empty() || words[i].front() == '-')
         return false;
       depfile = words[i];
     } else if (word == "-MD" || word == "-MMD") {
       dependencies = true;
     } else if (word == "--" || word == "-E" || word == "-S" || word == "-M" ||
                word == "-MM" || HasPrefix(word, "-X") ||
-               HasPrefix(word, "-Wp,")) {
+               HasPrefix(word, "-Wp,") || HasPrefix(word, "@")) {
       return false;
     } else if (HasPrefix(word, "-MF") || HasPrefix(word, "-o")) {
       const size_t length = HasPrefix(word, "-MF") ? 3 : 2;
       std::string_view value = word.substr(length);
       if (value.empty()) {
-        if (++i == words.size() || words[i].front() == '-')
+        if (++i == words.size() || words[i].empty() || words[i].front() == '-')
           return false;
         value = words[i];
       }
@@ -285,10 +295,9 @@ bool GetDepfileFromCommand(std::string* cmd,
       if (++i == words.size())
         return false;
     } else if (!relaxed_flags && !word.empty() && word.front() == '-' &&
-               word != "-MP" &&
-               word != "-g" && word != "-O0" && word != "-O1" &&
-               word != "-O2" && word != "-O3" && word != "-Os" &&
-               word != "-Oz" && !HasPrefix(word, "-std=") &&
+               word != "-MP" && word != "-g" && word != "-O0" &&
+               word != "-O1" && word != "-O2" && word != "-O3" &&
+               word != "-Os" && word != "-Oz" && !HasPrefix(word, "-std=") &&
                !HasPrefix(word, "-I") && !HasPrefix(word, "-D") &&
                !HasPrefix(word, "-U")) {
       return false;
@@ -307,7 +316,8 @@ bool GetDepfileFromCommand(std::string* cmd,
   if (detected == "-" || detected.front() == '-')
     return false;
   if (copy_for_makefile) {
-    // Ninja consumes our copy; keep the original for Makefile include directives.
+    // Ninja consumes our copy; keep the original for Makefile include
+    // directives.
     *cmd = "( " + *cmd + " ) && cp " + ShellQuote(detected) + " " +
            ShellQuote(detected + ".tmp");
     *out = detected + ".tmp";
@@ -362,8 +372,7 @@ static bool GetDepfileFromRecipe(std::string_view recipe,
       }
     }
     std::string command(recipe.substr(i, command_end - i));
-    const bool detected =
-        GetDepfileFromCommand(&command, depfile, true, false);
+    const bool detected = GetDepfileFromCommand(&command, depfile, true, false);
     if (detected)
       return true;
     i = end - 1;
@@ -420,8 +429,7 @@ class OutputMetadata {
 
 static std::string DirectoryMarker(std::string_view output) {
   std::string identity;
-  AppendGraphString(g_flags.import_root ? g_flags.import_root : "",
-                    &identity);
+  AppendGraphString(g_flags.import_root ? g_flags.import_root : "", &identity);
   AppendGraphString(output, &identity);
   const std::string suffix = GraphDigest(identity);
   std::string marker(output);
@@ -482,9 +490,10 @@ class NinjaGenerator {
     GraphObjectBatch runtime_objects(false);
     PopulateNinjaNodes(nodes);
     if (g_flags.import_root && g_flags.use_ninja_phony_output)
+      imported_phony_aliases_.insert(Intern("_kati_always_build_"));
+    if (g_flags.import_root && g_flags.use_ninja_phony_output)
       for (const NinjaNode& nn : nodes_)
-        if (nn.node->is_phony &&
-            !IsFileLikePhonyOutput(nn.node->output))
+        if (nn.node->is_phony)
           imported_phony_aliases_.insert(nn.node->output);
     if (g_flags.use_ninja_phony_output &&
         g_flags.GraphOptimizationEnabled("recursive") &&
@@ -550,8 +559,7 @@ class NinjaGenerator {
         if (g_flags.make_level == 0 && previous_valid) {
           for (const auto& [path, stamp] : source_stamps) {
             auto previous = previous_stamps.find(path);
-            if (previous != previous_stamps.end() &&
-                previous->second == stamp)
+            if (previous != previous_stamps.end() && previous->second == stamp)
               continue;
             recursive_sources_changed_ = true;
           }
@@ -598,11 +606,11 @@ class NinjaGenerator {
         throw BuildExit{3};
       for (const NinjaNode& nn : nodes_) {
         const DepNode& node = *nn.node;
-        const bool unsupported = node.is_notparallel || node.vpath_provider.IsValid() ||
-            !node.validations.empty() ||
-            !node.DoubleColon().for_cmd.empty() || node.low_resolution ||
-            !node.wait_groups.empty() || node.intermediate || node.precious ||
-            node.ignore_errors ||
+        const bool unsupported =
+            node.is_notparallel || node.vpath_provider.IsValid() ||
+            !node.validations.empty() || !node.DoubleColon().for_cmd.empty() ||
+            node.low_resolution || !node.wait_groups.empty() ||
+            node.intermediate || node.precious || node.ignore_errors ||
             std::any_of(
                 nn.commands.begin(), nn.commands.end(),
                 [](const Command& command) { return command.ignore_error; });
@@ -660,15 +668,13 @@ class NinjaGenerator {
       for (const NinjaNode& nn : nodes_) {
         if (!IsSpecialTarget(nn.node->output)) {
           OutputMetadata metadata(nn.node->output);
-          const bool directory =
-              nn.node->output == Intern(".") ||
-              (!nn.node->output.str().empty() &&
-               nn.node->output.str().back() == '/') ||
-              metadata.IsDirectory();
+          const bool directory = nn.node->output == Intern(".") ||
+                                 (!nn.node->output.str().empty() &&
+                                  nn.node->output.str().back() == '/') ||
+                                 metadata.IsDirectory();
           if (directory)
             record("output", Intern(DirectoryMarker(nn.node->output.str())));
-          else if (!nn.node->is_phony ||
-                   IsFileLikePhonyOutput(nn.node->output))
+          else if (!nn.node->is_phony)
             record("output", nn.node->output);
         }
         for (Symbol output : nn.node->implicit_outputs)
@@ -686,10 +692,10 @@ class NinjaGenerator {
             (!goal.empty() && goal.back() == '/') || metadata.IsDirectory()) {
           goal = DirectoryMarker(root.second->output.str());
         }
-        const bool directory_goal =
-            root.second->output == Intern(".") ||
-            (!root.second->output.str().empty() &&
-             root.second->output.str().back() == '/') || metadata.IsDirectory();
+        const bool directory_goal = root.second->output == Intern(".") ||
+                                    (!root.second->output.str().empty() &&
+                                     root.second->output.str().back() == '/') ||
+                                    metadata.IsDirectory();
         record(root.second->is_phony && !directory_goal ? "phony-goal" : "goal",
                Intern(goal));
       }
@@ -1205,9 +1211,8 @@ class NinjaGenerator {
         !g_flags.GraphOptimizationEnabled("depfiles"))
       return false;
 
-    return GetDepfileFromCommand(
-        cmd_buf, depfile,
-        g_flags.GraphOptimizationEnabled("depfiles"));
+    return GetDepfileFromCommand(cmd_buf, depfile,
+                                 g_flags.GraphOptimizationEnabled("depfiles"));
   }
 
   void EmitDepfile(const NinjaNode& nn,
@@ -1337,8 +1342,7 @@ class NinjaGenerator {
               : EscapeNinja(commands.front().shellflag);
       std::string inferred_depfile;
       bool inferred_depfile_from_recipe = false;
-      if (!node->depfile_var &&
-          g_flags.GraphOptimizationEnabled("depfiles")) {
+      if (!node->depfile_var && g_flags.GraphOptimizationEnabled("depfiles")) {
         bool ambiguous = false;
         for (const Command& command : commands) {
           if (!command.runtime_sidecar.empty()) {
@@ -1363,7 +1367,11 @@ class NinjaGenerator {
       std::string depfile;
       bool has_depfile;
       if (inferred_depfile_from_recipe) {
-        depfile = inferred_depfile;
+        // Ninja removes consumed depfiles. Keep the compiler's original for
+        // subsequent direct builds and Makefile include evaluation.
+        cmd_buf = "( " + cmd_buf + " ) && cp " + ShellQuote(inferred_depfile) +
+                  " " + ShellQuote(inferred_depfile + ".tmp");
+        depfile = inferred_depfile + ".tmp";
         has_depfile = true;
       } else {
         has_depfile = GetDepfile(node, &cmd_buf, &depfile);
@@ -1371,8 +1379,7 @@ class NinjaGenerator {
       if (has_depfile) {
         ninja_depfiles_.insert(depfile);
         if (HasSuffix(depfile, ".d.tmp")) {
-          const std::string original =
-              depfile.substr(0, depfile.size() - 4);
+          const std::string original = depfile.substr(0, depfile.size() - 4);
           ninja_depfiles_.insert(original);
           std::string original_absolute;
           AbsPath(original, &original_absolute);
@@ -1473,17 +1480,12 @@ class NinjaGenerator {
         for (const NamedDepNode& dep : node->deps)
           AppendGraphString(dep.first.str(), &inputs);
         if (!input_manifest_dir_ready_) {
-          if (!EnsureDirectory(working_dir_ + "/.openmktr"))
+          if (!EnsureDirectory(GetFilename(".kati-inputs%s")))
             ERROR("cannot create Ninja input manifest directory");
           input_manifest_dir_ready_ = true;
         }
-        const std::string manifest = working_dir_ + "/.openmktr/.kati-inputs-" +
-                                     GraphDigest(output.str());
-        std::string previous;
-        if (!ReadGraphCache(manifest, &previous) || previous != inputs) {
-          if (!WriteGraphCache(manifest, inputs))
-            ERROR("cannot publish Ninja input manifest: %s", manifest.c_str());
-        }
+        const std::string manifest = PublishGraphObject(
+            GetFilename(".kati-inputs%s") + "/" + GraphDigest(inputs), inputs);
         std::string condition =
             quoted_binary_ + " --internal-low-resolution-manifest-current " +
             ShellQuote(output.str()) + " " +
@@ -1501,10 +1503,12 @@ class NinjaGenerator {
       // Deferred recipes reserve a normal Ninja job token before they are
       // expanded. Their runtime executor passes that reservation to a
       // recursive child when the expanded command actually invokes Make.
-      // Serialize only statically expanded recursive recipes, whose command
-      // is already known to be a recursive boundary.
-      use_local_pool = commands.front().runtime_sidecar.empty() &&
-                       IsRecursiveKatiCommand(cmd_buf);
+      // Serialize known recursive commands and opaque expressions that may
+      // recurse into shared outputs. Bounded nonrecursive recipes stay
+      // parallel.
+      use_local_pool = commands.front().runtime_sidecar.empty()
+                           ? IsRecursiveKatiCommand(cmd_buf)
+                           : commands.front().runtime_may_recurse;
       // The helper already supervises the recipe process. Record the output
       // there after admission instead of launching another copy of the tool
       // and a shell subshell/trap wrapper for every file recipe. An absolute
@@ -1565,16 +1569,9 @@ class NinjaGenerator {
       // OpenSSL's configdata.pm recipe deliberately fails after reconfiguring,
       // so the first Ninja run must honor the ordinary timestamp fast path.
       // Phony and validation prerequisites retain their usual Ninja behavior.
-      const bool has_phony_input =
-          std::any_of(node->deps.begin(), node->deps.end(),
-                      [&](const NamedDepNode& dep) {
-                        return dep.second->is_phony &&
-                               (!(g_flags.import_root &&
-                                  g_flags.use_ninja_phony_output) ||
-                                (node->is_phony &&
-                                 !IsFileLikePhonyOutput(node->output)) ||
-                                IsFileLikePhonyOutput(dep.first));
-                      });
+      const bool has_phony_input = std::any_of(
+          node->deps.begin(), node->deps.end(),
+          [](const NamedDepNode& dep) { return dep.second->is_phony; });
       if (!intermediate_proof.empty()) {
         cmd_buf = "if " + recipe_unchanged + quoted_binary_ +
                   " --internal-intermediate-current " +
@@ -1708,20 +1705,15 @@ class NinjaGenerator {
       rule_key += '\0';
       rule_key += has_depfile ? depfile : "";
       rule_key += '\0';
-      const bool imported_file_phony_output =
-          g_flags.import_root && g_flags.use_ninja_phony_output &&
-          node->is_phony && IsFileLikePhonyOutput(node->output);
       const bool effective_restat =
           node->is_restat ||
           (((!commands.front().runtime_sidecar.empty() &&
              !commands.front().runtime_freshness_only) ||
             !script_path.empty() || !proof_dependency.empty()) &&
-           (!node->is_phony || imported_file_phony_output) &&
-           !has_phony_input && make_freshness_guard) ||
+           !node->is_phony && !has_phony_input && make_freshness_guard) ||
           (commands.size() == 1 && !commands.front().echo &&
-           commands.front().cmd == ":" &&
-           (!node->is_phony || imported_file_phony_output) &&
-           !has_phony_input && make_freshness_guard);
+           commands.front().cmd == ":" && !node->is_phony && !has_phony_input &&
+           make_freshness_guard);
       rule_key += effective_restat ? '1' : '0';
       rule_key += node->delete_on_error ? '1' : '0';
       rule_key += node->precious ? '1' : '0';
@@ -1863,13 +1855,11 @@ class NinjaGenerator {
         !g_flags.import_root ||
         (g_flags.use_ninja_phony_output && g_flags.make_level < 32);
     if (!g_flags.GraphOptimizationEnabled("recursive") ||
-        !allow_nested_import || g_flags.is_dry_run ||
-        nn.commands.size() != 1 ||
+        !allow_nested_import || g_flags.is_dry_run || nn.commands.size() != 1 ||
         g_flags.is_touch || g_flags.is_question || g_flags.keep_going ||
         g_flags.load_limit_set || g_flags.detect_depfiles || node.depfile_var ||
         node.ninja_pool_var || node.is_notparallel || node.precious ||
-        !node.validations.empty() ||
-        !node.wait_groups.empty() ||
+        !node.validations.empty() || !node.wait_groups.empty() ||
         !node.DoubleColon().for_cmd.empty()) {
       return false;
     }
@@ -1910,8 +1900,8 @@ class NinjaGenerator {
       for (const char* makefile : g_flags.makefiles) {
         std::string current_makefile;
         AbsPath(makefile, &current_makefile);
-        same_makefile |= !child_makefile.empty() &&
-                         child_makefile == current_makefile;
+        same_makefile |=
+            !child_makefile.empty() && child_makefile == current_makefile;
       }
       // Kbuild's top-level all target can recursively invoke the same
       // Makefile and target. Importing that alias creates two Ninja rules for
@@ -1925,6 +1915,7 @@ class NinjaGenerator {
     // Imported Ninja files are immutable and may outlive the generator binary.
     // Keep their cache namespace versioned when output naming semantics change.
     AppendGraphString("directory-marker-v4", &import_identity);
+    AppendGraphString(GetFileIdentity(kati_binary_), &import_identity);
     AppendGraphString(node.output.str(), &import_identity);
     AppendGraphString(nn.commands.front().cmd, &import_identity);
     AppendGraphString(nn.commands.front().display_cmd, &import_identity);
@@ -1957,8 +1948,8 @@ class NinjaGenerator {
     // generation-specific path made runtime sidecar paths (and therefore
     // Ninja command hashes) change on every invocation, forcing Kbuild's
     // archive and link chain to rebuild even when no inputs changed.
-    std::string directory = GetFilename(".imports%s") + "/" +
-                            GraphDigest(import_identity);
+    std::string directory =
+        GetFilename(".imports%s") + "/" + GraphDigest(import_identity);
     std::string absolute_directory;
     AbsPath(directory, &absolute_directory);
     directory = std::move(absolute_directory);
@@ -2020,14 +2011,13 @@ class NinjaGenerator {
           matching_budget = true;
         } else if (kind == "source") {
           cached_sources.push_back(path);
-        } else if (kind != "output" && kind != "goal" &&
-                   kind != "phony-goal") {
+        } else if (kind != "output" && kind != "goal" && kind != "phony-goal") {
           valid_manifest = false;
         }
       }
       std::sort(cached_sources.begin(), cached_sources.end());
       std::string expected_validation;
-      AppendGraphString("import-validation-v2", &expected_validation);
+      AppendGraphString("import-validation-v3", &expected_validation);
       std::unordered_set<std::string> validated_sources;
       for (const std::string& path : cached_sources) {
         struct stat source_metadata;
@@ -2036,9 +2026,7 @@ class NinjaGenerator {
           break;
         }
         AppendGraphString(path, &expected_validation);
-        AppendGraphString(std::to_string(source_metadata.st_mtim.tv_sec) +
-                              ":" +
-                              std::to_string(source_metadata.st_mtim.tv_nsec),
+        AppendGraphString(GetFileIdentityFromStat(source_metadata),
                           &expected_validation);
         validated_sources.insert(path);
       }
@@ -2051,9 +2039,7 @@ class NinjaGenerator {
           break;
         }
         AppendGraphString(path, &expected_validation);
-        AppendGraphString(std::to_string(source_metadata.st_mtim.tv_sec) +
-                              ":" +
-                              std::to_string(source_metadata.st_mtim.tv_nsec),
+        AppendGraphString(GetFileIdentityFromStat(source_metadata),
                           &expected_validation);
       }
       cache_fresh = valid_manifest && matching_budget && has_validation &&
@@ -2089,8 +2075,7 @@ class NinjaGenerator {
       else if (kind == "phony-goal") {
         goals.push_back(path);
         phony_goals.push_back(path);
-      }
-      else if (kind == "jobs") {
+      } else if (kind == "jobs") {
         if (matching_budget || path != std::to_string(g_flags.num_jobs))
           return false;
         matching_budget = true;
@@ -2100,16 +2085,14 @@ class NinjaGenerator {
     if (generated_graph) {
       std::sort(sources.begin(), sources.end());
       std::string validation;
-      AppendGraphString("import-validation-v2", &validation);
+      AppendGraphString("import-validation-v3", &validation);
       std::unordered_set<std::string> validated_sources;
       for (const std::string& path : sources) {
         struct stat source_metadata;
         if (stat(path.c_str(), &source_metadata) != 0)
           return false;
         AppendGraphString(path, &validation);
-        AppendGraphString(std::to_string(source_metadata.st_mtim.tv_sec) +
-                              ":" +
-                              std::to_string(source_metadata.st_mtim.tv_nsec),
+        AppendGraphString(GetFileIdentityFromStat(source_metadata),
                           &validation);
         validated_sources.insert(path);
       }
@@ -2120,9 +2103,7 @@ class NinjaGenerator {
         if (stat(path.c_str(), &source_metadata) != 0)
           return false;
         AppendGraphString(path, &validation);
-        AppendGraphString(std::to_string(source_metadata.st_mtim.tv_sec) +
-                              ":" +
-                              std::to_string(source_metadata.st_mtim.tv_nsec),
+        AppendGraphString(GetFileIdentityFromStat(source_metadata),
                           &validation);
       }
       if (!WriteGraphCache(directory + "/cache-validation", validation))
@@ -2170,8 +2151,8 @@ class NinjaGenerator {
         size_t offset = 1;
         while (offset < parent.size()) {
           const size_t end = parent.find('/', offset);
-          const size_t count = (end == std::string::npos ? parent.size() : end) -
-                               offset;
+          const size_t count =
+              (end == std::string::npos ? parent.size() : end) - offset;
           const std::string_view component(parent.data() + offset, count);
           if (component == "..")
             return false;
@@ -2198,24 +2179,55 @@ class NinjaGenerator {
         return errno == ENOENT;
       return !S_ISLNK(st.st_mode) && (!S_ISREG(st.st_mode) || st.st_nlink == 1);
     };
-    std::unordered_set<std::string> claimed = imported_outputs_;
+    std::unordered_set<std::string> claimed;
+    auto claim_output = [&](const std::string& path, bool reject_duplicate) {
+      // Aggressive imports may use filesystem aliases, but two graphs must
+      // never acquire the same physical output through different spellings.
+      std::string ancestor = path;
+      std::string suffix;
+      char resolved[PATH_MAX];
+      while (!realpath(ancestor.c_str(), resolved)) {
+        struct stat metadata;
+        if (errno != ENOENT || lstat(ancestor.c_str(), &metadata) == 0)
+          return false;
+        suffix = "/" + std::string(Basename(ancestor)) + suffix;
+        ancestor = std::string(Dirname(ancestor));
+        if (ancestor.empty())
+          return false;
+      }
+      std::string canonical = std::string(resolved) + suffix;
+      NormalizePath(&canonical);
+      bool unique = claimed.insert("path:" + canonical).second;
+      struct stat metadata;
+      if (stat(path.c_str(), &metadata) == 0 && S_ISREG(metadata.st_mode))
+        unique &= claimed
+                      .insert("inode:" + std::to_string(metadata.st_dev) + ":" +
+                              std::to_string(metadata.st_ino))
+                      .second;
+      return unique || !reject_duplicate;
+    };
+    for (const auto& output : imported_outputs_)
+      if (!claim_output(output, false))
+        return false;
     const bool allow_filesystem_aliases = g_flags.use_ninja_phony_output;
     for (const NinjaNode& other : nodes_) {
       std::string absolute;
       AbsPath(other.node->output.str(), &absolute);
       if (!allow_filesystem_aliases && !unambiguous_output(absolute))
         return false;
-      claimed.insert(absolute);
+      if (!claim_output(absolute, false))
+        return false;
       for (Symbol output : other.node->implicit_outputs) {
         AbsPath(output.str(), &absolute);
         if (!allow_filesystem_aliases && !unambiguous_output(absolute))
           return false;
-        claimed.insert(absolute);
+        if (!claim_output(absolute, false))
+          return false;
       }
     }
     for (const auto& output : outputs)
       if ((!allow_filesystem_aliases && !unambiguous_output(output)) ||
-          !claimed.insert(output).second)
+          !claim_output(output, true))
         return false;
     std::vector<const DepNode*> pending;
     for (const auto& input : node.deps)
@@ -2268,6 +2280,7 @@ class NinjaGenerator {
     import_artifacts_.push_back(directory + "/ninja.sh");
     import_artifacts_.push_back(directory + "/manifest");
     import_artifacts_.push_back(directory + "/cache-validation");
+    MakefileCacheManager::Get().RequireEnvironmentValidation();
     return true;
   }
 
@@ -2329,27 +2342,18 @@ class NinjaGenerator {
 
   bool IsExistingDirectoryAlias(Symbol dependency) const {
     std::string_view path = dependency.str();
-    if (path.empty() || (path.back() != '/' && path != "."))
+    if (path.empty() || path.back() != '/')
       return false;
 
-    // Existing directories are unstable Ninja inputs: adding any sibling
-    // changes their mtime and can make every archive in a recursive Kbuild
-    // subtree stale. Makefile wildcard/source discovery already captures
-    // directory membership; a directory prerequisite here serves only as an
-    // existence/order hint. Keep missing directories in the graph so their
-    // producer can still create them.
+    // Ninja canonicalizes a trailing slash, so an existing directory such
+    // as "doc/" would resolve to the unrelated Make target "doc". Preserve
+    // that lexical distinction. Ordinary directory prerequisites, including
+    // ".", still retain their timestamp and producer dependencies.
     while (!path.empty() && path.back() == '/')
       path.remove_suffix(1);
     struct stat st;
     return !path.empty() && done_.exists(Intern(path)) &&
            stat(dependency.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
-  }
-
-  static bool IsFileLikePhonyOutput(Symbol output) {
-    const std::string_view name = output.str();
-    const size_t slash = name.rfind('/');
-    return name.substr(slash == std::string_view::npos ? 0 : slash + 1)
-               .find('.') != std::string_view::npos;
   }
 
   void CollectRecursiveSourceInputs() {
@@ -2366,7 +2370,8 @@ class NinjaGenerator {
         continue;
       const std::string candidate = absolute.substr(0, slash);
       struct stat metadata;
-      if (stat((candidate + "/scripts/Kbuild.include").c_str(), &metadata) == 0 &&
+      if (stat((candidate + "/scripts/Kbuild.include").c_str(), &metadata) ==
+              0 &&
           S_ISREG(metadata.st_mode) &&
           stat((candidate + "/init/main.c").c_str(), &metadata) == 0 &&
           S_ISREG(metadata.st_mode)) {
@@ -2394,9 +2399,8 @@ class NinjaGenerator {
             recursive_source_inputs_.push_back(Intern(path));
           }
           if (!recursive_source_inputs_.empty()) {
-            recursive_source_group_ =
-                Intern(std::string(g_flags.import_root) +
-                       "/.recursive-source-inputs");
+            recursive_source_group_ = Intern(std::string(g_flags.import_root) +
+                                             "/.recursive-source-inputs");
             return;
           }
         }
@@ -2408,8 +2412,8 @@ class NinjaGenerator {
     if (g_flags.import_root && recursive_source_inputs_.empty())
       return;
     static constexpr std::string_view suffixes[] = {
-        ".c", ".h", ".S", ".s", ".tbl", ".ld", ".lds", ".sh",
-        ".py", ".pl", ".awk"};
+        ".c",   ".h",  ".S",  ".s",  ".tbl", ".ld",
+        ".lds", ".sh", ".py", ".pl", ".awk"};
     std::vector<std::string> pending{source_root};
     while (!pending.empty()) {
       std::string directory = std::move(pending.back());
@@ -2421,11 +2425,9 @@ class NinjaGenerator {
         const std::string_view name(entry->d_name);
         if (name == "." || name == ".." || name == ".git")
           continue;
-        const bool source_suffix =
-            std::any_of(std::begin(suffixes), std::end(suffixes),
-                        [&](std::string_view suffix) {
-                          return HasSuffix(name, suffix);
-                        });
+        const bool source_suffix = std::any_of(
+            std::begin(suffixes), std::end(suffixes),
+            [&](std::string_view suffix) { return HasSuffix(name, suffix); });
         // Most directory entries are ordinary files or directories. Trust
         // d_type when available and only issue metadata syscalls for unknown
         // entries and source symlinks. A recursive tree scan otherwise pays
@@ -2476,13 +2478,12 @@ class NinjaGenerator {
     }
     std::sort(recursive_source_inputs_.begin(), recursive_source_inputs_.end(),
               [](Symbol a, Symbol b) { return a.str() < b.str(); });
-    recursive_source_inputs_.erase(
-        std::unique(recursive_source_inputs_.begin(),
-                    recursive_source_inputs_.end()),
-        recursive_source_inputs_.end());
+    recursive_source_inputs_.erase(std::unique(recursive_source_inputs_.begin(),
+                                               recursive_source_inputs_.end()),
+                                   recursive_source_inputs_.end());
     if (g_flags.import_root && !recursive_source_inputs_.empty())
-      recursive_source_group_ =
-          Intern(std::string(g_flags.import_root) + "/.recursive-source-inputs");
+      recursive_source_group_ = Intern(std::string(g_flags.import_root) +
+                                       "/.recursive-source-inputs");
     if (!g_flags.import_root && !recursive_source_inputs_.empty()) {
       std::string inventory;
       AppendGraphString("recursive-source-inventory-v1", &inventory);
@@ -2549,16 +2550,13 @@ class NinjaGenerator {
     }
     out << ": " << rule_name;
     std::vector<Symbol> order_onlys;
-    if (node->is_phony && !g_flags.use_ninja_phony_output) {
+    if (node->is_phony) {
       out << ' ' << EscapeBuildTarget(Intern("_kati_always_build_"));
     }
-    std::vector<Symbol> imported_phony_order_onlys;
-    const bool imported_phony_is_order_only =
-        g_flags.import_root && g_flags.use_ninja_phony_output &&
-        (!node->is_phony || IsFileLikePhonyOutput(node->output));
-    out << NormalDependencyFragment(
-        node, imported_phony_is_order_only ? &imported_phony_order_onlys
-                                           : nullptr);
+    // Normal phony prerequisites must continue to invalidate their consumers.
+    // Explicit order-only edges and .KATI_RESTAT express the cases that can
+    // safely prune work; the spelling of a target does not establish that.
+    out << NormalDependencyFragment(node);
     const std::string_view output_name = node->output.str();
     const size_t output_slash = output_name.rfind('/');
     const std::string_view output_base = output_name.substr(
@@ -2596,19 +2594,6 @@ class NinjaGenerator {
         out << " ||";
       has_order_only = true;
       out << " " << EscapeBuildTarget(d.first).c_str();
-    }
-    for (Symbol dependency : imported_phony_order_onlys) {
-      if (std::find_if(node->order_onlys.begin(), node->order_onlys.end(),
-                       [&](const NamedDepNode& edge) {
-                         return edge.first == dependency;
-                       }) != node->order_onlys.end() ||
-          IsCycleEdge(node->output, dependency) ||
-          IsExistingDirectoryAlias(dependency))
-        continue;
-      if (!has_order_only)
-        out << " ||";
-      has_order_only = true;
-      out << " " << EscapeBuildTarget(dependency);
     }
     for (const auto& command : nn.commands) {
       if (command.runtime_sidecar.empty())
@@ -2670,8 +2655,7 @@ class NinjaGenerator {
     } else if (use_local_pool) {
       out << " pool = local_pool\n";
     }
-    if (node->is_phony && g_flags.use_ninja_phony_output &&
-        !(g_flags.import_root && IsFileLikePhonyOutput(node->output))) {
+    if (node->is_phony && g_flags.use_ninja_phony_output) {
       out << " phony_output = true\n";
     }
     if (node->tags_var) {
@@ -2689,11 +2673,9 @@ class NinjaGenerator {
     }
   }
 
-  const std::string& NormalDependencyFragment(
-      const DepNode* node,
-      std::vector<Symbol>* imported_phony_order_onlys = nullptr) {
+  const std::string& NormalDependencyFragment(const DepNode* node) {
     size_t hash = node->deps.size();
-    bool cacheable = cycle_edges_.empty() && !imported_phony_order_onlys;
+    bool cacheable = cycle_edges_.empty();
     for (const auto& edge : node->deps) {
       hash ^= std::hash<Symbol>()(edge.first) + size_t(0x9e3779b9) +
               (hash << 6) + (hash >> 2);
@@ -2721,20 +2703,8 @@ class NinjaGenerator {
     size_t emitted_small_size = 0;
     std::unordered_set<Symbol> emitted_large;
     for (const auto& edge : node->deps) {
-      const std::string_view edge_name = edge.first.str();
-      const size_t edge_slash = edge_name.rfind('/');
-      const std::string_view edge_base =
-          edge_name.substr(edge_slash == std::string_view::npos
-                               ? 0
-                               : edge_slash + 1);
-      const bool imported_phony_alias =
-          imported_phony_order_onlys && edge.second->is_phony &&
-          edge_base.find('.') == std::string_view::npos;
-      if (imported_phony_alias)
-        imported_phony_order_onlys->push_back(edge.first);
       if (IsCycleEdge(node->output, edge.first) ||
-          IsExistingDirectoryAlias(edge.first) ||
-          imported_phony_alias)
+          IsExistingDirectoryAlias(edge.first))
         continue;
       auto group = source_dependency_groups_.find(edge.first);
       const Symbol name =
@@ -2923,6 +2893,8 @@ class NinjaGenerator {
       }
 
       if (!g_flags.use_ninja_phony_output ||
+          std::any_of(nodes_.begin(), nodes_.end(),
+                      [](const NinjaNode& nn) { return nn.node->is_phony; }) ||
           std::any_of(nodes_.begin(), nodes_.end(), [](const NinjaNode& node) {
             const auto& groups = node.node->DoubleColon().has_prerequisites;
             return std::find(groups.begin(), groups.end(), false) !=
@@ -3266,10 +3238,10 @@ class NinjaGenerator {
         // files during the build. Their mtime is therefore not a useful
         // Makefile input signal; actual included files and depfiles are
         // tracked separately.
-        if (!ninja_depfiles_.count(path) &&
+        if ((!ninja_depfiles_.count(path) ||
+             MakefileCacheManager::Get().IsParsedMakefile(path)) &&
             !is_generated_directory_dep(path))
-          record(path,
-                 MakefileCacheManager::Get().IsParsedMakefile(path));
+          record(path, MakefileCacheManager::Get().IsParsedMakefile(path));
       }
       evaluation =
           WriteGraphCache(GetNinjaStampFilename() + ".includes", proof) ? 2 : 1;
@@ -3303,7 +3275,8 @@ class NinjaGenerator {
     }
     size_t stamp_file_count = 1;  // The Openmktr executable.
     for (const std::string& makefile : makefiles)
-      if (!ninja_depfiles_.count(makefile) &&
+      if ((!ninja_depfiles_.count(makefile) ||
+           MakefileCacheManager::Get().IsParsedMakefile(makefile)) &&
           !is_generated_directory_dep(makefile))
         ++stamp_file_count;
     DumpInt(fp, stamp_file_count);
@@ -3313,7 +3286,8 @@ class NinjaGenerator {
       // Ninja owns and validates compiler depfiles through its native depfile
       // loader. They are outputs of the clean build and must not invalidate
       // the Makefile regeneration stamp when first created.
-      if (ninja_depfiles_.count(makefile) ||
+      if ((ninja_depfiles_.count(makefile) &&
+           !MakefileCacheManager::Get().IsParsedMakefile(makefile)) ||
           is_generated_directory_dep(makefile))
         continue;
       DumpString(fp, makefile);
@@ -3323,8 +3297,8 @@ class NinjaGenerator {
           MakefileCacheManager::Get().IsParsedMakefile(makefile);
       const std::string identity =
           generated ? "generated:" + GetFileIdentity(makefile)
-          : parsed    ? "content:" + GetFileContentIdentity(makefile)
-                      : GetFileIdentity(makefile);
+          : parsed  ? "content:" + GetFileContentIdentity(makefile)
+                    : GetFileIdentity(makefile);
       DumpString(fp, identity);
     }
 
@@ -3332,7 +3306,15 @@ class NinjaGenerator {
     for (Symbol v : Evaluator::used_undefined_vars()) {
       DumpString(fp, v.str());
     }
-    DumpInt(fp, used_envs_.size());
+    const bool validate_environment =
+        MakefileCacheManager::Get().requires_environment_validation();
+    DumpInt(fp, used_envs_.size() + (validate_environment ? 1 : 0));
+    if (validate_environment) {
+      // Empty names cannot be exported; reserve one record for the complete
+      // caller environment observed by deferred recipes and imported children.
+      DumpString(fp, "");
+      DumpString(fp, InvocationEnvironmentIdentity());
+    }
     for (const auto& [key, value] : used_envs_) {
       DumpString(fp, key);
       DumpString(fp, value);

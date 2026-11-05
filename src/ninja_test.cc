@@ -2,6 +2,7 @@
 // Own invocation state and publish coherent generations with typed freshness.
 // Verify owned, C-string and bounded-view filesystem probes across mutations.
 // Cover conservative depfile inference and reject ambiguous shell commands.
+// Exercise quoted literal arguments and decline shell-dependent depfile paths.
 // Fork modifications are covered by MPL-2.0; see docs/LICENSING.md and NOTICE.
 
 // Copyright 2015 Google Inc. All rights reserved
@@ -143,12 +144,31 @@ void TestGetDepfile() {
   assert(!g_last_error);
 }
 
+void TestRelaxedDepfiles() {
+  std::string command = "clang -c source.c -MMD -MF 'space name.d' -o out.o";
+  std::string depfile;
+  assert(GetDepfileFromCommand(&command, &depfile, true, false));
+  ASSERT_EQ(depfile, "space name.d");
+  for (const char* source : {"clang -c source.c -MMD -MF \"$DEPFILE\" -o out.o",
+                             "clang -c source.c -MMD -o out.o # -MF ignored.d",
+                             "clang @flags -c source.c -MMD -o out.o",
+                             "clang -c source.c -MMD -o ''",
+                             "nasm -f elf64 -MD '' -o out.o source.asm"}) {
+    command = source;
+    depfile.clear();
+    assert(!GetDepfileFromCommand(&command, &depfile, true, false));
+    ASSERT_EQ(command, source);
+    ASSERT_EQ(depfile, "");
+  }
+}
+
 }  // namespace
 
 int main() {
   BuildSession session;
   g_log_no_exit = true;
   TestGetDepfile();
+  TestRelaxedDepfiles();
   TestOwnedFilesystemPaths();
   assert(!g_failed);
 }

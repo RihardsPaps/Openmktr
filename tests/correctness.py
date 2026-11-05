@@ -18,6 +18,41 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_current_directory_normal_prerequisite_still_invalidates_output(self):
+        self.makefile("all: result\nresult: .\n\t@printf x >> result\n")
+        self.direct("build", "all")
+        directory_stamp = (self.directory / "result").stat().st_mtime_ns + 2_000_000_000
+        os.utime(self.directory, ns=(directory_stamp, directory_stamp))
+        self.direct("build", "all")
+        self.assertEqual((self.directory / "result").read_text(), "xx")
+
+    def test_aggressive_depfile_remains_available_to_direct_builds(self):
+        self.makefile("all: out.o\n-include out.d\nout.o: source.c\n"
+                      "\t@clang -MMD -MF out.d -c source.c -o out.o\n")
+        (self.directory / "source.c").write_text(
+            '#include "header.h"\nint value = VALUE;\n')
+        (self.directory / "header.h").write_text("#define VALUE 1\n")
+        self.direct("build", "--graph_optimizations=aggressive", "all")
+        self.assertTrue((self.directory / "out.d").is_file())
+        before = (self.directory / "out.o").read_bytes()
+        (self.directory / "header.h").write_text("#define VALUE 2\n")
+        self.direct("all")
+        self.assertNotEqual((self.directory / "out.o").read_bytes(), before)
+
+    def test_inferred_depfiles_do_not_hide_included_makefile_directives(self):
+        self.makefile("-include out.d\n.PHONY: all\nall: out.o\n"
+                      "\t@printf '%s' '$(VALUE)' > result\n"
+                      "out.o: source.c\n"
+                      "\t@clang -MMD -MF out.d -c source.c -o out.o\n")
+        (self.directory / "source.c").write_text("int value;\n")
+        command = ("build", "--graph_optimizations=aggressive", "all")
+        self.direct(*command)
+        self.direct(*command)
+        with (self.directory / "out.d").open("a") as depfile:
+            depfile.write("VALUE := changed\n")
+        self.direct(*command)
+        self.assertEqual((self.directory / "result").read_text(), "changed")
+
     def test_phony_noop_preserves_ninja_depfile_inputs(self):
         self.makefile(
             ".PHONY: noop\n"
@@ -399,7 +434,7 @@ class BuildCorrectness(unittest.TestCase):
             '#include "header.h"\nint value = VALUE;\n')
         header = self.directory / "header.h"
         header.write_text("#define VALUE 1\n")
-        self.direct("--ninja")
+        self.direct("--ninja", "--disable_graph_optimization=depfiles")
         self.assertNotIn(" depfile =", (self.directory / "build.ninja").read_text())
         self.direct("--ninja", "--detect_depfiles")
         self.run_command("sh", "./ninja.sh", "-j2")
@@ -421,7 +456,7 @@ class BuildCorrectness(unittest.TestCase):
         header = self.directory / "header.h"
         header.write_text("#define VALUE 1\n")
         self.direct("build", "--graph_optimizations=aggressive", "-j2", "all")
-        self.assertIn("omktr_depfile = out.d\n",
+        self.assertIn("omktr_depfile = out.d.tmp\n",
                       (self.directory / ".openmktr/build.ninja").read_text())
         original = (self.directory / "out.o").read_bytes()
         header.write_text("#define VALUE 2\n")
@@ -438,7 +473,7 @@ class BuildCorrectness(unittest.TestCase):
         header = self.directory / "header.inc"
         header.write_text("%define VALUE 1\n")
         self.direct("build", "--graph_optimizations=aggressive", "-j2", "all")
-        self.assertIn("omktr_depfile = out.d\n",
+        self.assertIn("omktr_depfile = out.d.tmp\n",
                       (self.directory / ".openmktr/build.ninja").read_text())
         original = (self.directory / "out.o").read_bytes()
         header.write_text("%define VALUE 2\n")

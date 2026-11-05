@@ -19,6 +19,22 @@ BINARY = Path(os.environ.get(
 
 
 class GeneratedRecipeReads(unittest.TestCase):
+    def test_suffixed_graphs_keep_separate_runtime_input_contexts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "seed").write_text("ready")
+            (root / "Makefile").write_text(
+                "selected = reader\nreader = $(WORD):$(shell cat seed)\n"
+                "all: result\nresult: seed\n"
+                "\t@printf '%s' '$(call $(selected))' > $@\n")
+            for suffix, word in (("-one", "first"), ("-two", "second")):
+                subprocess.run([str(BINARY), "--ninja", "--ninja_suffix=" + suffix,
+                                "WORD=" + word, "all"], cwd=root, check=True,
+                               capture_output=True, timeout=20)
+            subprocess.run(["sh", "./ninja-one.sh", "-j2"], cwd=root, check=True,
+                           capture_output=True, timeout=20)
+            self.assertEqual((root / "result").read_text(), "first:ready")
+
     def test_deferred_recursion_preserves_implicit_makeflags_reads(self):
         for profile in ("off", "safe", "aggressive"):
             with self.subTest(profile=profile), tempfile.TemporaryDirectory() as tmp:
@@ -1155,7 +1171,8 @@ else:
             sidecar = next(p for p in root.glob(".kati_runtime-*")
                            if not p.name.startswith((".kati_runtime-context-",
                                                      ".kati_runtime-reads-")))
-            context = root / parts(parts(sidecar.read_bytes())[2])[7].decode()
+            runtime_inputs = root / parts(parts(sidecar.read_bytes())[2])[4].decode()
+            context = root / parts(parts(runtime_inputs.read_bytes())[2])[2].decode()
             original = context.read_bytes()
             definitions = parts(parts(original)[2])
             for i, definition in enumerate(definitions):

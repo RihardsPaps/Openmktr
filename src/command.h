@@ -1,7 +1,8 @@
 // FORK MODIFICATION NOTICE (2026)
 // Retain possible recursion when deferring recipe expansion for Ninja.
-// Bind automatic variables to the active independent double-colon rule group.
-// Pack recipe booleans together to avoid padding every expanded command.
+// Keep bounded nonrecursive expansions parallel while protecting recursive
+// peers. Bind automatic variables to the active independent double-colon rule
+// group. Pack recipe booleans together to avoid padding every expanded command.
 // Own invocation state and publish coherent generations with typed freshness.
 // Capture actual direct bootstrap reads for later deferred recipe identities.
 // Expose private recipe snapshot and runtime evaluation helpers.
@@ -91,6 +92,7 @@ struct Command {
   bool ignore_error;
   bool force_no_subshell;
   bool runtime_freshness_only = false;
+  bool runtime_may_recurse = false;
   size_t double_colon_group = static_cast<size_t>(-1);
 };
 

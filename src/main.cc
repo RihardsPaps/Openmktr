@@ -1,5 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
 // Honor low-resolution outputs in native freshness and automatic-input helpers.
+// Capture caller environments and preflight effects before speculative imports.
 // Reject nonregular graph artifacts before reading their bounded header.
 // Retain logical prerequisite metadata in deferred newer-input probes.
 // Share generation pinning and collection-race recovery across launchers.
@@ -273,9 +274,9 @@ static int HandleBuild(int argc, char** argv) {
     status = RunGeneratedNinja(
         reader, std::string(Basename(GetNinjaShellScriptFilename())),
         ninja.size(), ninja.data());
-    const std::string dirty_marker = GenerationPath(
-        g_flags.ninja_dir ? g_flags.ninja_dir : ".",
-        ".kati_recursive_source_dirty");
+    const std::string dirty_marker =
+        GenerationPath(g_flags.ninja_dir ? g_flags.ninja_dir : ".",
+                       ".kati_recursive_source_dirty");
     if (status == 0)
       unlink(dirty_marker.c_str());
   }
@@ -1123,14 +1124,14 @@ static int Run(const std::vector<Symbol>& targets,
                const std::string& orig_args,
                const std::string& invocation_dir) {
   double start_time = GetWallTime();
+  InvocationEnvironmentIdentity();
   LOG_STAT("graph optimization settings: %s",
            g_flags.GraphOptimizationIdentity().c_str());
   if (g_flags.import_root) {
     std::vector<std::string> files;
     const bool static_import_sources = StaticImportSources(&files);
     if (g_flags.is_dry_run || g_flags.is_touch || g_flags.is_question ||
-        g_flags.keep_going || g_flags.load_limit_set ||
-        (!static_import_sources && !g_flags.use_ninja_phony_output))
+        g_flags.keep_going || g_flags.load_limit_set || !static_import_sources)
       return 3;
   }
   RecursiveCache recursive_cache(orig_args);
@@ -1516,8 +1517,7 @@ static int Run(const std::vector<Symbol>& targets,
                   !node->is_phony && !node->is_notparallel &&
                   node->implicit_outputs.empty() && node->validations.empty() &&
                   node->DoubleColon().for_cmd.empty() &&
-                  !node->low_resolution &&
-                  stat(path.c_str(), &st) == 0 &&
+                  !node->low_resolution && stat(path.c_str(), &st) == 0 &&
                   (S_ISREG(st.st_mode) || S_ISDIR(st.st_mode));
               if (!eligible)
                 break;
@@ -2187,8 +2187,7 @@ static int Main(int argc, char* argv[]) {
       // only to return the same status. The shell inherits the jobserver
       // reservation and receives signals directly in the same process group.
       if (recursive_recipe && argc == 5 && argv[2][0] == '/' &&
-          argv[3][0] != '\0' &&
-          strpbrk(argv[3], " \t\r\n'\"\\$`") == nullptr) {
+          argv[3][0] != '\0' && strpbrk(argv[3], " \t\r\n'\"\\$`") == nullptr) {
         char* arguments[] = {argv[2], argv[3], argv[4], nullptr};
         execv(arguments[0], arguments);
         PERROR("executing recursive recipe shell failed");

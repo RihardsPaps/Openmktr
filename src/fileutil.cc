@@ -1,12 +1,14 @@
 // FORK MODIFICATION NOTICE (2026)
 // Reuse the running executable identity within each invocation.
-// Own invocation state and publish coherent generations with typed freshness.
-// Keep filesystem identities, observation epochs, globbing and recipe state
-// separate from process supervision. Reject nonregular recipe-state files
-// without blocking, and retain bounded atomic state publication.
-// Changed by the Openmktr fork, maintained by Rihards Paps and Haralds Paps.
-// Upstream material retains Apache-2.0 terms. Fork changes are covered by
-// MPL-2.0; see docs/LICENSING.md and NOTICE. Original notices follow.
+// Snapshot caller environments before Makefile evaluation changes process
+// state. Own invocation state and publish coherent generations with typed
+// freshness. Keep filesystem identities, observation epochs, globbing and
+// recipe state separate from process supervision. Reject nonregular
+// recipe-state files without blocking, and retain bounded atomic state
+// publication. Changed by the Openmktr fork, maintained by Rihards Paps and
+// Haralds Paps. Upstream material retains Apache-2.0 terms. Fork changes are
+// covered by MPL-2.0; see docs/LICENSING.md and NOTICE. Original notices
+// follow.
 
 // Copyright 2015 Google Inc. All rights reserved
 //
@@ -56,12 +58,38 @@
 #include "strutil.h"
 
 namespace {
+struct InvocationEnvironment {
+  std::string identity;
+  bool captured = false;
+};
 struct FilesystemSession {
   std::atomic<uint64_t> epoch{0};
   std::atomic<size_t> effects{0};
 };
 
 }  // namespace
+
+const std::string& InvocationEnvironmentIdentity() {
+  auto& snapshot = SessionService<InvocationEnvironment>();
+  if (!snapshot.captured) {
+    extern char** environ;
+    std::vector<std::string> entries;
+    for (char** entry = environ; entry && *entry; ++entry) {
+      // MAKEFLAGS is checked separately after the frontend has interpreted
+      // its options. MFLAGS is reconstructed from those same options.
+      if (HasPrefix(*entry, "MAKEFLAGS=") || HasPrefix(*entry, "MFLAGS="))
+        continue;
+      entries.emplace_back(*entry);
+    }
+    std::sort(entries.begin(), entries.end());
+    std::string bytes;
+    for (const auto& entry : entries)
+      AppendGraphString(entry, &bytes);
+    snapshot.identity = GraphDigest(bytes);
+    snapshot.captured = true;
+  }
+  return snapshot.identity;
+}
 
 uint64_t FilesystemObservationEpoch() {
   return SessionService<FilesystemSession>().epoch.load(
@@ -412,9 +440,9 @@ std::string GetFileContentIdentity(std::string_view path) {
     }
   }
   struct stat after;
-  const bool stable = fstat(fd, &after) == 0 &&
-                      GetFileIdentityFromStat(before) ==
-                          GetFileIdentityFromStat(after);
+  const bool stable =
+      fstat(fd, &after) == 0 &&
+      GetFileIdentityFromStat(before) == GetFileIdentityFromStat(after);
   close(fd);
   if (!stable)
     return "unstable";

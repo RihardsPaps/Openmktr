@@ -21,6 +21,132 @@ BINARY = Path(os.environ.get("OMKTR_BINARY", Path(__file__).resolve().parents[1]
 
 
 class GraphOptimizations(unittest.TestCase):
+    def test_shell_validation_stops_before_obsolete_conditional_effects(self):
+        (self.root / "mode").write_text("old")
+        self.makefile("MODE := $(shell cat mode)\n"
+                      "ifeq ($(MODE),old)\nVALUE := $(shell printf x >> old-effects)\n"
+                      "else\nVALUE := $(shell printf x >> new-effects)\nendif\n"
+                      ".PHONY: all\nall:\n\t@:\n")
+        self.run_tool("build", "all")
+        (self.root / "mode").write_text("new")
+        self.run_tool("build", "all")
+        self.assertEqual((self.root / "old-effects").read_text(), "x")
+        self.assertEqual((self.root / "new-effects").read_text(), "x")
+
+    def test_shell_validation_preserves_diagnostics_once_per_invocation(self):
+        self.makefile("VALUE := $(shell printf diagnostic >&2; printf value)\n"
+                      ".PHONY: all\nall:\n\t@printf '%s' '$(VALUE)' > output\n")
+        for _ in range(2):
+            result = self.run_tool("build", "all")
+            self.assertEqual(result.stdout.count("diagnostic"), 1, result.stdout)
+
+    def test_imported_phony_prerequisites_and_dotted_phonies_keep_running(self):
+        child = self.root / "child"
+        child.mkdir()
+        (child / "Makefile").write_text(
+            ".PHONY: all FORCE action.done\nall: output action.done\n"
+            "FORCE:\noutput: FORCE\n\t@printf x >> $@\n"
+            "action.done:\n\t@printf x >> $@\n")
+        self.makefile(".PHONY: all\nall:\n\t@$(MAKE) -C child all\n")
+        for repeat in (1, 2):
+            self.run_tool("build", "-j8", "--graph_optimizations=aggressive",
+                          "--use_ninja_phony_output", "all")
+            for output in ("output", "action.done"):
+                self.assertEqual((child / output).read_text(), "x" * repeat, output)
+
+    def test_imported_shell_and_wildcard_inputs_invalidate_cached_children(self):
+        child = self.root / "child"
+        child.mkdir()
+        (child / "config").write_text("one")
+        (child / "first.src").touch()
+        (child / "Makefile").write_text(
+            "VALUE := $(shell cat config)\nSOURCES := $(wildcard *.src)\n"
+            ".PHONY: all\nall: output\noutput: config $(SOURCES)\n"
+            "\t@printf '%s' '$(VALUE):$(SOURCES)' > $@\n")
+        self.makefile(".PHONY: all\nall:\n\t@$(MAKE) -C child all\n")
+        command = ("build", "-j8", "--graph_optimizations=aggressive",
+                   "--use_ninja_phony_output", "all")
+        self.run_tool(*command)
+        self.assertEqual((child / "output").read_text(), "one:first.src")
+        (child / "config").write_text("two")
+        (child / "second.src").touch()
+        self.run_tool(*command)
+        self.assertEqual((child / "output").read_text(), "two:first.src second.src")
+
+    def test_import_discovery_never_runs_effects_before_parent_prerequisites(self):
+        child = self.root / "child"
+        child.mkdir()
+        (child / "Makefile").write_text(
+            "$(file >>effects,$(wildcard ../ready))\n"
+            ".PHONY: all\nall:\n\t@:\n")
+        self.makefile(".PHONY: all child\nall: child\nchild: ready\n"
+                      "\t@$(MAKE) -C child all\nready:\n\t@touch $@\n")
+        for repeat in (1, 2):
+            self.run_tool("build", "-j8", "--graph_optimizations=aggressive",
+                          "--use_ninja_phony_output", "all")
+            self.assertEqual((child / "effects").read_text(), "../ready\n" * repeat)
+
+    def test_deferred_environment_changes_keep_noop_generation_reusable(self):
+        (self.root / "seed").write_text("ready")
+        self.makefile("all: output\noutput: seed\n"
+                      "\t@printf '%s:%s' '$(shell cat seed)' \"$$TEST_VALUE\" > $@\n")
+        command = ("build", "--graph_optimizations=aggressive", "all")
+        env = {**os.environ, "TEST_VALUE": "one"}
+        self.run_tool(*command, env=env)
+        graph_time = (self.root / ".openmktr/build.ninja").stat().st_mtime_ns
+        self.run_tool(*command, env=env)
+        self.assertEqual((self.root / ".openmktr/build.ninja").stat().st_mtime_ns,
+                         graph_time)
+        self.run_tool(*command, env={**env, "TEST_VALUE": "two"})
+        self.assertEqual((self.root / "output").read_text(), "ready:two")
+
+    def test_import_cache_is_bound_to_generator_identity(self):
+        executable = self.root / "tool"
+        shutil.copy2(BINARY, executable)
+        child = self.root / "child"
+        child.mkdir()
+        (child / "Makefile").write_text("all: output\noutput:\n\t@touch $@\n")
+        self.makefile(".PHONY: all\nall:\n\t@$(MAKE) -C child all\n")
+        command = [str(executable), "build", "--graph_optimizations=aggressive",
+                   "--use_ninja_phony_output", "all"]
+        subprocess.run(command, cwd=self.root, check=True, capture_output=True,
+                       timeout=30)
+        original = (self.root / ".openmktr/build.ninja").read_text()
+        metadata = executable.stat()
+        os.utime(executable, ns=(metadata.st_atime_ns,
+                                 metadata.st_mtime_ns + 1_000_000))
+        subprocess.run(command, cwd=self.root, check=True, capture_output=True,
+                       timeout=30)
+        self.assertNotEqual((self.root / ".openmktr/build.ninja").read_text(), original)
+
+    def test_import_cache_checks_preserved_timestamp_makefile_edits(self):
+        child = self.root / "child"
+        child.mkdir()
+        makefile = child / "Makefile"
+        makefile.write_text("all: output\noutput:\n\t@printf first > $@\n")
+        self.makefile(".PHONY: all\nall:\n\t@$(MAKE) -C child all\n")
+        command = ("build", "--graph_optimizations=aggressive", "all")
+        self.run_tool(*command)
+        before = makefile.stat()
+        makefile.write_text(makefile.read_text().replace("first", "other"))
+        os.utime(makefile, ns=(before.st_atime_ns, before.st_mtime_ns))
+        self.run_tool(*command)
+        self.assertEqual((child / "output").read_text(), "other")
+
+    def test_phony_output_imports_preserve_alias_ownership_checks(self):
+        (self.root / "alias").symlink_to(".", target_is_directory=True)
+        self.makefile(".PHONY: all a b\nall: a b\na:\n\t@$(MAKE) -C a all\n"
+                      "b:\n\t@$(MAKE) -C b all\n")
+        for name, output in (("a", "../shared"), ("b", "../alias/shared")):
+            child = self.root / name
+            child.mkdir()
+            (child / "Makefile").write_text(
+                f"all: {output}\n{output}:\n\t@printf value > {output}\n")
+        self.run_tool("--ninja", "--graph_optimizations=aggressive",
+                      "--use_ninja_phony_output", "all")
+        self.assertNotIn("subninja ", (self.root / "build.ninja").read_text())
+        self.assertFalse((self.root / "shared").exists())
+
     def test_dependency_fragments_recheck_directory_aliases_after_effects(self):
         (self.root / "dir").mkdir()
         self.makefile(
@@ -773,6 +899,14 @@ print(sys.argv[1])
                                env={**os.environ, "MAKEFLAGS": "-s"}).stdout
         self.assertNotIn("No need to regenerate ninja file", output)
 
+    def test_inherited_job_count_changes_observed_makeflags(self):
+        self.makefile("ifeq ($(filter -j2,$(MAKEFLAGS)),-j2)\n"
+                      "VALUE := two\nelse\nVALUE := other\nendif\n"
+                      ".PHONY: all\nall:\n\t@printf '%s' '$(VALUE)' > result\n")
+        for jobs, expected in ((2, "two"), (3, "other")):
+            self.run_tool("build", "all", env={**os.environ, "MAKEFLAGS": f"-j{jobs}"})
+            self.assertEqual((self.root / "result").read_text(), expected)
+
     def test_native_find_missing_parents_symlinks_and_diagnostics(self):
         self.makefile("FOUND := $(shell if [ -d absent ]; then find absent -name '*.src'; fi)\n"
                       "LINKED := $(shell find -L links -name '*.src')\n"
@@ -1353,6 +1487,9 @@ print(sys.argv[1])
         cases.append((["--graph_optimizations=safe", "--disable_graph_optimization=resolution"],
                       "v1:safe:resolution",
                       "evaluation=1 includes=1 recursive=0 compact=1 monitor=0 depfiles=0 full=0 pattern_index=1 resolution=0"))
+        cases.append((["--graph_optimizations=aggressive", "--disable_graph_optimization=depfiles"],
+                      "v1:aggressive:depfiles",
+                      "evaluation=1 includes=1 recursive=1 compact=1 monitor=1 depfiles=0 full=1 pattern_index=1 resolution=1"))
         for jobs in (1, 8, 16):
             for options, transport, settings in cases:
                 for ninja in (False, True):

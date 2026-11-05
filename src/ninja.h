@@ -2,6 +2,7 @@
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
+// Keep depfile inference options shared by production and unit-test callers.
 // Upstream material retains its Apache-2.0 terms. Fork modifications are
 // covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
 // at the repository root. Original notices below remain applicable.
@@ -44,6 +45,9 @@ std::string GetEnvScriptFilename();
 std::string GetNinjaStampFilename();
 
 // Exposed only for test.
-bool GetDepfileFromCommand(std::string* cmd, std::string* out);
+bool GetDepfileFromCommand(std::string* cmd,
+                           std::string* out,
+                           bool relaxed_flags = false,
+                           bool copy_for_makefile = true);
 
 #endif  // NINJA_H_
