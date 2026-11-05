@@ -282,8 +282,9 @@ bool WriteGraphCache(const std::string& path, std::string_view payload) {
   return ok;
 }
 
-GraphObjectBatch::GraphObjectBatch()
-    : previous_(SessionService<ObjectPublication>().batch) {
+GraphObjectBatch::GraphObjectBatch(bool sync_payloads)
+    : previous_(SessionService<ObjectPublication>().batch),
+      sync_payloads_(sync_payloads) {
   SessionService<ObjectPublication>().batch = this;
 }
 GraphObjectBatch::~GraphObjectBatch() {
@@ -304,7 +305,8 @@ void GraphObjectBatch::Flush() {
   // Unsealed existing objects are included: another writer may just have
   // linked one, or abandoned a batch before making its objects durable.
   for (const auto& path : paths_) {
-    SyncObjectPath(path, false);
+    if (sync_payloads_)
+      SyncObjectPath(path, false);
     directories_.insert(ObjectParent(path));
   }
   for (const auto& path : directories_)

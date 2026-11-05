@@ -637,7 +637,7 @@ print(sys.argv[1])
                 self.assertEqual((self.root / "result").read_text(), status)
                 self.assertEqual((self.root / "effects").read_text(), "x" * invocations)
                 if repeat:
-                    self.assertRegex(result.stdout, r"state replay: Makefile:2 assign")
+                    self.assertIn("No need to regenerate ninja file", result.stdout)
 
     def test_eval_assignment_to_call_parameter_retains_the_live_binding(self):
         self.makefile("1 := outer\n"
@@ -709,7 +709,7 @@ print(sys.argv[1])
                     expected = value
                 self.assertEqual(value, expected)
                 self.assertTrue(value.endswith("|0"))
-            self.assertRegex(result.stdout, r"state replay: Makefile:2 assign")
+            self.assertIn("No need to regenerate ninja file", result.stdout)
         # Without arbitrary effects, the stamp checker must also find a new
         # top-level result even when the directory mtime was preserved.
         self.makefile("FOUND := $(shell find . -name '*.src')\n"
@@ -720,6 +720,58 @@ print(sys.argv[1])
         os.utime(self.root, ns=(before.st_atime_ns, before.st_mtime_ns))
         self.run_tool("build", "--use_find_emulator")
         self.assertIn("late.src", (self.root / "result").read_text())
+
+    def test_include_certificate_tracks_vpath_directory_membership(self):
+        (self.root / "search").mkdir()
+        (self.root / "input").write_text("local")
+        self.makefile("VPATH := search\n"
+                      "include generated.mk\n"
+                      "generated.mk:\n\t@printf 'VALUE := ready\\n' > $@\n"
+                      ".PHONY: all\nall: output\n"
+                      "output: input\n\t@cat $< > $@\n")
+        self.run_tool("build", "-j8", "--graph_optimizations=aggressive", "all")
+        self.assertEqual((self.root / "output").read_text(), "local")
+        noop = self.run_tool("build", "-j8", "--graph_optimizations=aggressive",
+                             "--regen_debug", "all")
+        self.assertIn("ninja: no work to do.", noop.stdout)
+
+        (self.root / "input").unlink()
+        (self.root / "search/input").write_text("vpath")
+        result = self.run_tool("build", "-j8", "--graph_optimizations=aggressive",
+                               "--regen_debug", "all")
+        self.assertEqual((self.root / "output").read_text(), "vpath")
+        self.assertNotIn("No need to regenerate ninja file", result.stdout)
+
+    def test_include_certificate_ignores_makefile_timestamp_only_changes(self):
+        self.makefile("VALUE := first\n.PHONY: all\nall:\n"
+                      "\t@printf '%s' '$(VALUE)' > result\n")
+        makefile = self.root / "Makefile"
+        self.run_tool("build", "--graph_optimizations=aggressive")
+        before = makefile.stat()
+        os.utime(makefile, ns=(before.st_atime_ns,
+                               before.st_mtime_ns + 2_000_000_000))
+        noop = self.run_tool("build", "--graph_optimizations=aggressive")
+        self.assertIn("No need to regenerate ninja file", noop.stdout)
+        self.assertEqual((self.root / "result").read_text(), "first")
+
+        makefile.write_text("VALUE := second\n.PHONY: all\nall:\n"
+                            "\t@printf '%s' '$(VALUE)' > result\n")
+        changed = self.run_tool("build", "--graph_optimizations=aggressive")
+        self.assertNotIn("No need to regenerate ninja file", changed.stdout)
+        self.assertEqual((self.root / "result").read_text(), "second")
+
+    def test_makeflags_job_count_does_not_regenerate_but_other_flags_do(self):
+        self.makefile("ifeq ($(filter -s,$(MAKEFLAGS)),-s)\n"
+                      "all: quiet\nelse\nall: normal\nendif\n"
+                      "quiet normal:\n\t@:\n")
+        self.run_tool("build", "-j8", "all",
+                      env={**os.environ, "MAKEFLAGS": "-j8"})
+        output = self.run_tool("build", "-j8", "all",
+                               env={**os.environ, "MAKEFLAGS": ""}).stdout
+        self.assertIn("No need to regenerate ninja file", output)
+        output = self.run_tool("build", "-j8", "all",
+                               env={**os.environ, "MAKEFLAGS": "-s"}).stdout
+        self.assertNotIn("No need to regenerate ninja file", output)
 
     def test_native_find_missing_parents_symlinks_and_diagnostics(self):
         self.makefile("FOUND := $(shell if [ -d absent ]; then find absent -name '*.src'; fi)\n"
@@ -1288,19 +1340,19 @@ print(sys.argv[1])
             "'$(origin KATI_GRAPH_SETTINGS)' '$(MAKE)' > result\n")
         cases = [
             (["--graph_optimizations=off"], "v1:off",
-             "evaluation=0 includes=0 recursive=0 compact=0 monitor=0 full=0 pattern_index=0 resolution=0"),
+             "evaluation=0 includes=0 recursive=0 compact=0 monitor=0 depfiles=0 full=0 pattern_index=0 resolution=0"),
             (["--graph_optimizations=safe"], "v1:safe",
-             "evaluation=1 includes=1 recursive=0 compact=1 monitor=0 full=0 pattern_index=1 resolution=1"),
+             "evaluation=1 includes=1 recursive=0 compact=1 monitor=0 depfiles=0 full=0 pattern_index=1 resolution=1"),
             (["--graph_optimizations=aggressive", "--disable_graph_optimization=evaluation",
               "--disable_graph_optimization=compact"], "v1:aggressive:evaluation:compact",
-             "evaluation=0 includes=1 recursive=1 compact=0 monitor=1 full=1 pattern_index=1 resolution=1"),
+             "evaluation=0 includes=1 recursive=1 compact=0 monitor=1 depfiles=1 full=1 pattern_index=1 resolution=1"),
             (["--graph_optimizations=aggressive", "--disable_graph_optimization=pattern_index"],
              "v1:aggressive:pattern_index",
-             "evaluation=1 includes=1 recursive=1 compact=1 monitor=1 full=1 pattern_index=0 resolution=1"),
+             "evaluation=1 includes=1 recursive=1 compact=1 monitor=1 depfiles=1 full=1 pattern_index=0 resolution=1"),
         ]
         cases.append((["--graph_optimizations=safe", "--disable_graph_optimization=resolution"],
                       "v1:safe:resolution",
-                      "evaluation=1 includes=1 recursive=0 compact=1 monitor=0 full=0 pattern_index=1 resolution=0"))
+                      "evaluation=1 includes=1 recursive=0 compact=1 monitor=0 depfiles=0 full=0 pattern_index=1 resolution=0"))
         for jobs in (1, 8, 16):
             for options, transport, settings in cases:
                 for ninja in (False, True):
@@ -1326,9 +1378,9 @@ print(sys.argv[1])
         env = dict(os.environ, KATI_GRAPH_SETTINGS="v99:aggressive:unknown")
         output = self.run_tool("--kati_stats", env=env).stdout
         self.assertIn("ignored invalid inherited graph controls", output)
-        self.assertIn("evaluation=0 includes=0 recursive=0 compact=0 monitor=0 full=0", output)
+        self.assertIn("evaluation=0 includes=0 recursive=0 compact=0 monitor=0 depfiles=0 full=0", output)
         output = self.run_tool("--kati_stats", "--graph_optimizations=aggressive", env=env).stdout
-        self.assertIn("evaluation=1 includes=1 recursive=1 compact=1 monitor=1 full=1", output)
+        self.assertIn("evaluation=1 includes=1 recursive=1 compact=1 monitor=1 depfiles=1 full=1", output)
 
     def test_profile_and_ablation_validation(self):
         self.makefile("all:\n\t@:\n")

@@ -8,6 +8,7 @@
 
 struct Command;
 bool StaticImportSources(std::vector<std::string>* files);
+bool ResolveImportedCommandEnvironment(Command* command);
 bool ParseImportCommand(const Command& command, std::vector<std::string>* argv);
 int GenerateImportedGraph(const Command& command,
                           const std::vector<std::string>& argv,

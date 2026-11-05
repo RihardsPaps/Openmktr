@@ -1,0 +1,711 @@
+{
+  "metadata": {
+    "project": "linux",
+    "baseline_kind": "make",
+    "jobs": [
+      8
+    ],
+    "samples": 1,
+    "build_state": "fresh clean per pair",
+    "candidate_options": [
+      "--graph_optimizations=aggressive",
+      "--use_ninja_phony_output"
+    ],
+    "baseline_options": [],
+    "candidate_effective_settings": {
+      "profile": "aggressive",
+      "enabled": {
+        "evaluation": true,
+        "pattern_index": true,
+        "resolution": true,
+        "includes": true,
+        "recursive": true,
+        "compact": true,
+        "monitor": true
+      },
+      "general_state_replay": true,
+      "monitor_policy": "already-running-only"
+    },
+    "baseline_effective_settings": "starting revision defaults",
+    "monitor_explicitly_started": false,
+    "monitor_startup_timing": null,
+    "ninja_directory": "/tmp/openmktr-ninja-only",
+    "ninja_bundle_sha256": {
+      "ninja": "8ff3cade0962e2cfcc8ac635c60d8d081f1c81c5db8ee50d53a21adfa718aef2"
+    },
+    "ninja_executable": {
+      "path": "/tmp/openmktr-ninja-only/ninja",
+      "sha256": "8ff3cade0962e2cfcc8ac635c60d8d081f1c81c5db8ee50d53a21adfa718aef2"
+    },
+    "llvm_version": null,
+    "toolchain_directory": "/tmp/openmktr-kbuild-toolchain21",
+    "toolchain_executable_sha256": {
+      "FileCheck": "984806c56882efb63d91657a395703e311aa1362db566ef06905f68249567e85",
+      "UnicodeNameMappingGenerator": "356162497252f61c007436db60f9ab2fc13eeaeb642dd45f7021aeb9c428b991",
+      "amdgpu-arch": "bbc64b6e1949fbca44b70ce82034cda4ae610e0260be397354b06539416fa046",
+      "analyze-build": "82bea81e98a4d4a12ebc91922fdbe07733f0fdbd9c3e00d837dcb63bc9e277f0",
+      "bugpoint": "491b69b43caab23874334e754c959271a780a436d786da9997c1223119bc4694",
+      "c-index-test": "a0e55d8e848e5c544415a4331e54576538354abb3ec0f7c013f53cefde0ace83",
+      "clang": "556d0e2f46bcb5c47c16d72c7caf44d303e36214c1c72b857d03593f3c22e329",
+      "clang++": "f032e981c4e4033972cb4b8a39fa448dc53c6043ece1b0ba7c9cf8d080aefc53",
+      "clang++-21": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "clang-21": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "clang-apply-replacements": "c2a9a73ef81f8fa5a297b9332a0098bd56e6f3fff4ce563376412099d16bab2e",
+      "clang-change-namespace": "aa7b21df46f2423aba650f4b81262c4fc16140f600466c7595b7fde53e825dd6",
+      "clang-check": "0bad1667b480fa95b70e0058d469e5b806718a6c545ce4db1b76e00e7eea1944",
+      "clang-cl": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "clang-cl-21": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "clang-cpp": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "clang-cpp-21": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "clang-doc": "faeb6923fc7eb04e2f73b30ca59655bb78b2ec7dc22b4519417d1ab676fb8723",
+      "clang-extdef-mapping": "ccc84f32200395fcd07cd42a104fd253cd25031af9b1ffc059b4fa63561d639c",
+      "clang-format": "cfde75b35205fb30e034f96d99a4d3a50d823dd7dd97fb91749025ccac26c55a",
+      "clang-include-cleaner": "c9fbcbefcbc3a19ff1527ca3b6928a8715f5e8ca72c1b7fbcc0211a7c2278bfe",
+      "clang-include-fixer": "a6094c0eed1b6645742b0ffed5cf43cfad7fdaa62ed99238e8e5a24b4efb94fd",
+      "clang-installapi": "64c065b34510267c242447b6ea794e126be8179927ebcdd6a38da909b9aab82d",
+      "clang-linker-wrapper": "67ae61130eed8eb73f45cac73bc91d48184c857c5f5dd4eb22305279a99ca1e4",
+      "clang-move": "fe2ef9b792980c9282c40ff43b14f0fa99001ab8230cc936820c906816629698",
+      "clang-nvlink-wrapper": "92b07fbf275691fe1729b37ee32f5c0b158c1c6ab97beaa4be34711bb4dadefc",
+      "clang-offload-bundler": "ff97b5a6321d96d1286acac82c2fad6b9587e34118e04c13462b006b770a384f",
+      "clang-offload-packager": "063540db4b6f5f8eafa4c991c7438a01a1499762febd343016b63252d4b1b561",
+      "clang-query": "416f68ff38d819a122bf61337837a23853ffdc4822c8a09351301f9d5b40b120",
+      "clang-refactor": "2c2561d510a73ed1f145a2536721ed9b7ef52bced8bb1d5621d4dc4a7051398f",
+      "clang-reorder-fields": "af38f6f620bafacc17cf0fb532cdc8be1bfdcfcdf0cb814f95c65af27a35155e",
+      "clang-repl": "0bc88ede3493c97a2b7b19c4445701c43255732e4d6446f1adfe891d29e91b64",
+      "clang-scan-deps": "942481dbcef6f2ec8f70f0ffdc6348e12e1177c401fd8e0f5d7ed9928ed75e09",
+      "clang-sycl-linker": "a07bfc2640d1764aefccf15b72cb8c5a06da38490d525f9ddefdbd7232b9b4a1",
+      "clang-tblgen": "9db3ed02455f679ba4190bf4f2a618f31f989da0c6876a2e45092f31ac80e502",
+      "clang-tidy": "a666e8af7ee9367cc4c9555c633494b7837dbc6e7b49d52a2a9bf520d513b4ed",
+      "clangd": "f7d4851cd55af53cfd3fb590f4bf483d67a85af97aa5d3dcd1f47210147682ef",
+      "count": "d27c987c96c78a1a0d293340b34dad974bac0913e25bfd9d5feb0dfba4039f24",
+      "diagtool": "155d912a0baf835ec73f207330a4782a468fdcc732ba7439fa652e5e768e21ab",
+      "dsymutil": "d7c56362346b2aa9ac65b07def0fd9628e7b3723ef9190cbd25cf6b4220f99a8",
+      "find-all-symbols": "864c19b6467217ba44900b0e13133536888ed84eefbeb08520535e24dbf7cd78",
+      "git-clang-format": "2912f18e4be1a4abe3ddc326b281adf5890e52f8d728ff7c49a3877bdae1d964",
+      "hmaptool": "847664576f6cd56019dfee81c6a2f9e8dc47aab7bcb67aa1eb0ea0deae1075f5",
+      "i686-pc-linux-gnu-clang": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "i686-pc-linux-gnu-clang++": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "i686-pc-linux-gnu-clang++-21": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "i686-pc-linux-gnu-clang-21": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "i686-pc-linux-gnu-clang-cl": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "i686-pc-linux-gnu-clang-cl-21": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "i686-pc-linux-gnu-clang-cpp": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "i686-pc-linux-gnu-clang-cpp-21": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "intercept-build": "d6c0e4698782ed9269f4ff0a7a58bfe05cecc38452cb0cae16e7e72c6f7be8d6",
+      "ld.lld": "b3567e9e222e13adc6fd5576cab3cf191c2835b482ae436798dd45c92cc4ece1",
+      "ld64.lld": "b3567e9e222e13adc6fd5576cab3cf191c2835b482ae436798dd45c92cc4ece1",
+      "llc": "b3db0350a0ddfd049ebabd95d634207035c040d7a8e71fe60f95a62b078a0775",
+      "lld": "b3567e9e222e13adc6fd5576cab3cf191c2835b482ae436798dd45c92cc4ece1",
+      "lld-link": "b3567e9e222e13adc6fd5576cab3cf191c2835b482ae436798dd45c92cc4ece1",
+      "lli": "cf0f40ea838ee148944b08f448493176414dde576b0edeb7574ac7cfa0b48d05",
+      "lli-child-target": "a04daf79f05ac2c4379bb53132d4d8f71c10648f883f5c580cc5393462f3693f",
+      "llvm-PerfectShuffle": "46d3e4ed6bf7ef00c32a2199dde3556eff36b760899f691b2965a9908c12c5fb",
+      "llvm-addr2line": "30031109a02d349f868972d53a3de7c8fcdc8a301233bb46210f27b27392755c",
+      "llvm-ar": "26a50301ec962e66e0d22100046bc3c8a8c2e801dbc65cbd3e7e443e055e9426",
+      "llvm-as": "b19fbf925428621d4dd3b3263e8b89572efb0a0005a5b506c1ad6a792b5d8c7d",
+      "llvm-bcanalyzer": "5cee7d0d69dc238fbe34f2ce7fcce3bd10d993ad63571951ed6190a82bd3a44b",
+      "llvm-bitcode-strip": "5274c3eb9648b32ae9368a0aa412894c5c0eee711a0453f671f91313bd211f12",
+      "llvm-c-test": "5a82c41012b3fb5b8880e14aa318aa448eff7aa1657d22335894528463f381b6",
+      "llvm-cat": "e884f1a682006be2552886378d560fcc0b71488aa058d9ddcb994cd47020f38b",
+      "llvm-cfi-verify": "654de6e8cfb71e6761aaeb8891a0b8fbedc284579a07d13ac7ebfd9a0e82395f",
+      "llvm-cgdata": "d3b81d63eced7fa06ad03ed96ddca8c8d2a3254290364f8adc46a5609a5594fd",
+      "llvm-config": "32e6a2285b0f0cf1a3ab307acc9b4d37fdae1a3431bf76b5c56c8d6a553d9447",
+      "llvm-cov": "7fa09113a3af9078e31410887e459a2b46c27312fd1214742d5e5e93485ffcc4",
+      "llvm-ctxprof-util": "44cf608d43be5f52224f684b45469011dc47315d56c009c20427836fd5949ec5",
+      "llvm-cvtres": "79948ead9601ebd9a1f252d2e23b20f9c793c4b3a85d0da4d8ef1e61a0b3c921",
+      "llvm-cxxdump": "56626b8ef86d6a17565e71a8bfeca5a8d599faf3676d033934706b6e110e7296",
+      "llvm-cxxfilt": "50a5c9732d682bed071763fd88234c7f978eed86a1ab2a378a49eac0d919ab1c",
+      "llvm-cxxmap": "4c655c90c96baba8991a872d34a8e9b9d036b44310905417f76b857b8294831c",
+      "llvm-debuginfo-analyzer": "99f1fefe60739b00fa643208d8ab9eb0e560e78cfa181674274dbc21e7cdd5f0",
+      "llvm-debuginfod-find": "d45846a2a1a89d6a5ddc88c57107a4ee5ad8999486f38cd5590d7eb360d49d2f",
+      "llvm-diff": "e62e67dc10ce3be6de38bed843b1525d8b8c542c58570bf1bb89a3f48ce73c99",
+      "llvm-dis": "d5ec5ba18d6dc5d3e73cde8b9e2cde4b75a4503916aa1ab82c3c59fcecf35e61",
+      "llvm-dlltool": "26a50301ec962e66e0d22100046bc3c8a8c2e801dbc65cbd3e7e443e055e9426",
+      "llvm-dwarfdump": "93886f33f744e77b493d68ffd58243289bdd523b11f757784bd955c36f211bd8",
+      "llvm-dwarfutil": "d4f94fcec7745fa537c1230f6e77ee0dad8a0e2c081b2947192aa9305f0fc02a",
+      "llvm-dwp": "ad3333cdc1002e74c5db1d53eb83cd56fabd9bf09cf262f976ca62e6e7aaab6c",
+      "llvm-exegesis": "a9c713e6cb93a65b2c28327fabf230617c0efc49b33414dac4a7062bd352e5f7",
+      "llvm-extract": "e206e19a35e3fbfc970c3c9bba302d65f6dcc37f054c105636c957ea9d89f6ca",
+      "llvm-gsymutil": "29f2beef024762cec18e7944db768388956ea0c5e0cf1c98372c28abd3a5ba1a",
+      "llvm-ifs": "42139f3c64b67d00f2281853043a69fbaba74acc79864558a4ebbdb5d66d8111",
+      "llvm-install-name-tool": "5274c3eb9648b32ae9368a0aa412894c5c0eee711a0453f671f91313bd211f12",
+      "llvm-jitlink": "7b21b94990b2a46459552f65dbaf063c926b809441f20dc8fb1a3bea23a0f5d4",
+      "llvm-jitlink-executor": "ffda428a8400c2f47ba1a5ce8b06898fd431270241e4a37e24d0aeaa6d523668",
+      "llvm-lib": "26a50301ec962e66e0d22100046bc3c8a8c2e801dbc65cbd3e7e443e055e9426",
+      "llvm-libtool-darwin": "c6269ce3f4987336d9c9c1812701a463dfa91865c68636a83246ee40321916ae",
+      "llvm-link": "6849df9591bd85da6bb11da95f42a07c8561c656782ab3e8e7e456781e4e722f",
+      "llvm-lipo": "82303f3d38359e150d62f5e16ec2117f8b7fcfbd7f90dee0d3a5a676751e5d2c",
+      "llvm-lto": "e9fb8f0adb4d288ef02bd848de192cfad30b48ba8c9566fca6defcf74bfe315c",
+      "llvm-lto2": "84c0a13250f20d55a91dee0e7f09dd9bda1da5059841a233350d32097895d8cf",
+      "llvm-mc": "182174eb2489cde5f544e8eb2e36ec884ceef4960d1dbbcdb1892813c4767a90",
+      "llvm-mca": "a81c954717b719e199acbf8c5a9f5f9755d34527f673c67de764c79d0c79aa94",
+      "llvm-ml": "42f59ecdf093014a459dc8f102fc1fb08890f47db21546c0bcb729043c584ff2",
+      "llvm-ml64": "42f59ecdf093014a459dc8f102fc1fb08890f47db21546c0bcb729043c584ff2",
+      "llvm-modextract": "640c60161193b7cbc170c8b60cfd79315c41f3ccda746ac3cd8425e3c848d53c",
+      "llvm-mt": "d2c09d79f4ce417b68eb78608f827a421953502616205a8c68a02593eddfbb0d",
+      "llvm-nm": "9460785f8641855ba7b0b110b0dea7ffb38078fe599a5642152188f17b6b8c4d",
+      "llvm-objcopy": "5274c3eb9648b32ae9368a0aa412894c5c0eee711a0453f671f91313bd211f12",
+      "llvm-objdump": "16caaa4d66895a183e2711b2c843626e3fb5400e0aa7f0e7669fb7f76fa6c422",
+      "llvm-opt-report": "25249d691fc7cefcce5c297e8e303314b6024bceda00d48b953dff11009ed20f",
+      "llvm-otool": "16caaa4d66895a183e2711b2c843626e3fb5400e0aa7f0e7669fb7f76fa6c422",
+      "llvm-pdbutil": "8ab26ef95357d2346c6eef8d51f2a29d35a49c14511658c042541863f12cce21",
+      "llvm-profdata": "daa475de7b75566212c7255a42fe85c63d3f61da1a457c1f849d502e3b662226",
+      "llvm-profgen": "f4932530a2ab25039337d210973affa1540d0ebe4a5cdeb69f82aa418a5a3647",
+      "llvm-ranlib": "26a50301ec962e66e0d22100046bc3c8a8c2e801dbc65cbd3e7e443e055e9426",
+      "llvm-rc": "6c05f71f8aa0dd0dbf351e3f2d1e73891b5e1612dbd1a234e517dea60e19f031",
+      "llvm-readelf": "1a5dd68cd66a092ed91039486b99574f7a530ca3b8cc1ac6eafbbcdd41e6907d",
+      "llvm-readobj": "1a5dd68cd66a092ed91039486b99574f7a530ca3b8cc1ac6eafbbcdd41e6907d",
+      "llvm-readtapi": "068dfd8a7d51a1e6258a5ebe95af3a7946fba27a83aba000a53ee2ae0433eda4",
+      "llvm-reduce": "61b6b3648bd523a0810f305df04acd69f4c9a3487b54a65235e5ae820f5ae79f",
+      "llvm-remarkutil": "207fab7e003646c98a43bcf1fc9d51e183a5bd7317b2dbf3b27ec95812321823",
+      "llvm-rtdyld": "d123ec7eb6b0da46afa01e1d10e4079a22be9c1dca8e19d179cd9e73f2fcdfc8",
+      "llvm-sim": "8e32cb95ad0b3ba6eee23d488b02b143fb059db9b96a6404aa5335bcc72eb501",
+      "llvm-size": "b68bb21f15480b7e69f5ae04eff94baa714f4b78a156db36b1328eb59fabf7a8",
+      "llvm-split": "e78e0bdc4c1b2647a0fc15532a9cc40381bfe06ae50ee7dd5b9f5a3322735e8e",
+      "llvm-stress": "41c2a13d983d9c31a80f4a41102e956349278bda60178d0053ad55ced5296490",
+      "llvm-strings": "5289836f7bc8ce4a0c97bee028b14ec6eb971840503a808d7d2d27090069f5ed",
+      "llvm-strip": "5274c3eb9648b32ae9368a0aa412894c5c0eee711a0453f671f91313bd211f12",
+      "llvm-symbolizer": "30031109a02d349f868972d53a3de7c8fcdc8a301233bb46210f27b27392755c",
+      "llvm-tblgen": "2053379f72fdbd97d8f701167e604c81ac68438a8ebf2f5ad5ad27c53a8d9f30",
+      "llvm-test-mustache-spec": "78a74f9284c6b01712de30d6e133d62b41918e6de83776680ec781c69ca558d4",
+      "llvm-tli-checker": "5fdde23be341a647a0259c1f66279fb8a3e5670e1f442d9b144276983f41b428",
+      "llvm-undname": "b458dee787d4af96dc4d5dafa23eeb6764c08bd9062f2debf47efdcafe560e3e",
+      "llvm-windres": "6c05f71f8aa0dd0dbf351e3f2d1e73891b5e1612dbd1a234e517dea60e19f031",
+      "llvm-xray": "b3539d272ce8848b15998616f50ae4afe7d6e0d72f74a6e99dfb6be07fc4689e",
+      "modularize": "dc84306f62eca1f2e8cbb2ead08cf7d3a1f289ae8dcf82c8a97381a3e6fdb681",
+      "not": "9efdf88c991657ef2b587e8eae2f7f5f15db604d4a0a2c5c72dd09da588f61a9",
+      "nvptx-arch": "bbc64b6e1949fbca44b70ce82034cda4ae610e0260be397354b06539416fa046",
+      "obj2yaml": "8e8202aaf25e72eefc10d8f347974c96e4b502aba64b68d74fda8ad86a8dfc3a",
+      "offload-arch": "bbc64b6e1949fbca44b70ce82034cda4ae610e0260be397354b06539416fa046",
+      "opt": "69e8f760533aedc236514b2d4f367b52e3d383a0473974053ec6828a605b5f7d",
+      "pp-trace": "2e016ed9abecbdb1bcbafffd1abe48f702f99ac7e1d195b5acac61ea5c84fc47",
+      "reduce-chunk-list": "ab203cab8c6a96ab02baa953833fbc03ce20f8cec4e9ca7a78d371fef6322195",
+      "run-clang-tidy": "64f268832e40ad4ba29d429a7bc3b860640caa70a8f7b3c102c4686f9907cf4c",
+      "sancov": "123601d378c2f867a76ced5728bc5a8ed0ff8f85a2b16a6ede106f4db1fda5ae",
+      "sanstats": "bb572d77b81fd60b05030b7704b8c8c8a3a6e08faebd37eeb795cef3a8fe9409",
+      "scan-build": "8ecb2e8fd4c607bf76817aab9afb8c4914e2b71ff0cfbe2f8c4abda0ed05c392",
+      "scan-build-py": "7f4a1792232d0a1ccb17c7b647a9bd9948209dc6e0b6bd5e35d9e16e5b083e10",
+      "scan-view": "8c286bb565699252a58341c9e1306705c026fb554385b2239baa4550b80a98a1",
+      "split-file": "a78576b401abffacfd6cbf103b33c5481044b51e7438b9959fd0143ddd95b1b7",
+      "verify-uselistorder": "6164dab972ae8e24868441c5f0d21d4fb07d1f8d780ddb535cfa66569e6789a5",
+      "wasm-ld": "b3567e9e222e13adc6fd5576cab3cf191c2835b482ae436798dd45c92cc4ece1",
+      "x86_64-pc-linux-gnu-clang": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "x86_64-pc-linux-gnu-clang++": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "x86_64-pc-linux-gnu-clang++-21": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "x86_64-pc-linux-gnu-clang-21": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "x86_64-pc-linux-gnu-clang-cl": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "x86_64-pc-linux-gnu-clang-cl-21": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "x86_64-pc-linux-gnu-clang-cpp": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "x86_64-pc-linux-gnu-clang-cpp-21": "42c9c16b44d7e1a7b094243408b829d34e73b0ef0391513ffc872d26b69ce677",
+      "x86_64-pc-linux-gnu-llvm-config": "32e6a2285b0f0cf1a3ab307acc9b4d37fdae1a3431bf76b5c56c8d6a553d9447",
+      "yaml-bench": "da8d3dfe0b0f10e3b19716a316b44408d103d09b591298140631055c017d3d7b",
+      "yaml2obj": "ecb13b28a5e62dfcf695a65ea96802144e5050694a92d7ed7d2ae5a6c8ad18cb"
+    },
+    "toolchain_manifest_sha256": null,
+    "execution_image": null,
+    "stack_limit_bytes": [
+      8388608,
+      -1
+    ],
+    "platform": [
+      "Linux",
+      "gentoo",
+      "7.2.0-gentoo",
+      "#1 SMP PREEMPT_DYNAMIC Thu Aug 27 17:38:43 EEST 2026",
+      "x86_64"
+    ],
+    "warmups": 0,
+    "entrypoints": [
+      "build"
+    ],
+    "harness_sha256": "cd830931cc5d46e46f42af31628bb5309e82285e9c77a5e49f52cddea1432c80",
+    "cpu_affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "versions": {
+      "clang": "clang version 21.1.8\nTarget: x86_64-pc-linux-gnu\nThread model: posix\nInstalledDir: /usr/lib/llvm/21/bin\nConfiguration file: /etc/clang/21/x86_64-pc-linux-gnu-clang.cfg\n",
+      "ninja": "1.13.2\n"
+    },
+    "binaries": {
+      "baseline": {
+        "path": "/usr/bin/gmake",
+        "sha256": "13bc736c5ee9a7bdf64245ffd2340765c38796adbfbb3fcaa665b65094428bfd",
+        "revision": "GNU-Make",
+        "version": "GNU Make 4.4.1\nBuilt for x86_64-pc-linux-gnu\nCopyright (C) 1988-2023 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.\n"
+      },
+      "candidate": {
+        "path": "/home/rihards/speed/Openmktr/omktr",
+        "sha256": "41354122ff37550c21e6dbaa4222a6bdea88ca94a222e47829d46cb08a3d385d",
+        "revision": "local-aggressive",
+        "version": "GNU Make 4.2.1\nomktr cca523c167c7\n"
+      }
+    },
+    "environment": {
+      "PATH": "/tmp/openmktr-ninja-only:/tmp/openmktr-kbuild-toolchain21:/usr/bin:/bin",
+      "CCACHE_DISABLE": "1",
+      "LC_ALL": "C",
+      "TZ": "UTC",
+      "SOURCE_DATE_EPOCH": "1731888000",
+      "KBUILD_BUILD_USER": "benchmark",
+      "KBUILD_BUILD_HOST": "benchmark",
+      "KBUILD_BUILD_VERSION": "1",
+      "KBUILD_BUILD_TIMESTAMP": "Mon Nov 18 00:00:00 UTC 2024"
+    },
+    "archive_sha256": "b1a2562be56e42afb3f8489d4c2a7ac472ac23098f1ef1c1e40da601f54625eb",
+    "release_directory": "linux-6.12"
+  },
+  "failure": null,
+  "monitor_cleanup_errors": [],
+  "source_changes": [],
+  "summary": [
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "clean",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        0.17264692812424265
+      ],
+      "median_improvement_percent": 0.17264692812424265,
+      "bootstrap_95_percent": [
+        0.17264692812424265,
+        0.17264692812424265
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 354.66367211705074,
+      "candidate_median_seconds": 354.051356181968
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "graph",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        76.13155325046576
+      ],
+      "median_improvement_percent": 76.13155325046576,
+      "bootstrap_95_percent": [
+        76.13155325046576,
+        76.13155325046576
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 3.3345164239872247,
+      "candidate_median_seconds": 0.7958972770138644
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "missing",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        79.18597735921857
+      ],
+      "median_improvement_percent": 79.18597735921857,
+      "bootstrap_95_percent": [
+        79.18597735921857,
+        79.18597735921857
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 17.418745000031777,
+      "candidate_median_seconds": 3.625541528046597
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "noop",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        -60.13335809513771
+      ],
+      "median_improvement_percent": -60.13335809513771,
+      "bootstrap_95_percent": [
+        -60.13335809513771,
+        -60.13335809513771
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 3.4336657479871064,
+      "candidate_median_seconds": 5.498444268014282
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "source",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        -16.551514469211725
+      ],
+      "median_improvement_percent": -16.551514469211725,
+      "bootstrap_95_percent": [
+        -16.551514469211725,
+        -16.551514469211725
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 17.294290630030446,
+      "candidate_median_seconds": 20.156757646007463
+    }
+  ],
+  "parity": [
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "clean",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        0.17264692812424265
+      ],
+      "median_improvement_percent": 0.17264692812424265,
+      "bootstrap_95_percent": [
+        0.17264692812424265,
+        0.17264692812424265
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 354.66367211705074,
+      "candidate_median_seconds": 354.051356181968,
+      "median_ratio": 0.9982735307187576,
+      "ratio_upper_95": 0.9982735307187576,
+      "parity_passed": false
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "graph",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        76.13155325046576
+      ],
+      "median_improvement_percent": 76.13155325046576,
+      "bootstrap_95_percent": [
+        76.13155325046576,
+        76.13155325046576
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 3.3345164239872247,
+      "candidate_median_seconds": 0.7958972770138644,
+      "median_ratio": 0.23868446749534244,
+      "ratio_upper_95": 0.23868446749534244,
+      "parity_passed": false
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "missing",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        79.18597735921857
+      ],
+      "median_improvement_percent": 79.18597735921857,
+      "bootstrap_95_percent": [
+        79.18597735921857,
+        79.18597735921857
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 17.418745000031777,
+      "candidate_median_seconds": 3.625541528046597,
+      "median_ratio": 0.20814022640781427,
+      "ratio_upper_95": 0.20814022640781427,
+      "parity_passed": false
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "noop",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        -60.13335809513771
+      ],
+      "median_improvement_percent": -60.13335809513771,
+      "bootstrap_95_percent": [
+        -60.13335809513771,
+        -60.13335809513771
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 3.4336657479871064,
+      "candidate_median_seconds": 5.498444268014282,
+      "median_ratio": 1.6013335809513771,
+      "ratio_upper_95": 1.6013335809513771,
+      "parity_passed": false
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "source",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        -16.551514469211725
+      ],
+      "median_improvement_percent": -16.551514469211725,
+      "bootstrap_95_percent": [
+        -16.551514469211725,
+        -16.551514469211725
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 17.294290630030446,
+      "candidate_median_seconds": 20.156757646007463,
+      "median_ratio": 1.1655151446921173,
+      "ratio_upper_95": 1.1655151446921173,
+      "parity_passed": false
+    }
+  ],
+  "memory": [
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "clean",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        -0.03675366528168578
+      ],
+      "median_improvement_percent": -0.03675366528168578,
+      "bootstrap_95_percent": [
+        -0.03675366528168578,
+        -0.03675366528168578
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "median_ratio": 1.0003675366528169,
+      "ratio_upper_95": 1.0003675366528169,
+      "parity_passed": false,
+      "metric": "wait4_peak_process_rss_kib",
+      "baseline_median_rss_kib": 892428,
+      "candidate_median_rss_kib": 892756
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "graph",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        0.0
+      ],
+      "median_improvement_percent": 0.0,
+      "bootstrap_95_percent": [
+        0.0,
+        0.0
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "median_ratio": 1.0,
+      "ratio_upper_95": 1.0,
+      "parity_passed": false,
+      "metric": "wait4_peak_process_rss_kib",
+      "baseline_median_rss_kib": 257476,
+      "candidate_median_rss_kib": 257476
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "missing",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        71.15321702421339
+      ],
+      "median_improvement_percent": 71.15321702421339,
+      "bootstrap_95_percent": [
+        71.15321702421339,
+        71.15321702421339
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "median_ratio": 0.2884678297578661,
+      "ratio_upper_95": 0.2884678297578661,
+      "parity_passed": false,
+      "metric": "wait4_peak_process_rss_kib",
+      "baseline_median_rss_kib": 892564,
+      "candidate_median_rss_kib": 257476
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "noop",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        0.0
+      ],
+      "median_improvement_percent": 0.0,
+      "bootstrap_95_percent": [
+        0.0,
+        0.0
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "median_ratio": 1.0,
+      "ratio_upper_95": 1.0,
+      "parity_passed": false,
+      "metric": "wait4_peak_process_rss_kib",
+      "baseline_median_rss_kib": 257476,
+      "candidate_median_rss_kib": 257476
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "source",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        -0.0035859163136864325
+      ],
+      "median_improvement_percent": -0.0035859163136864325,
+      "bootstrap_95_percent": [
+        -0.0035859163136864325,
+        -0.0035859163136864325
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "median_ratio": 1.0000358591631369,
+      "ratio_upper_95": 1.0000358591631369,
+      "parity_passed": false,
+      "metric": "wait4_peak_process_rss_kib",
+      "baseline_median_rss_kib": 892380,
+      "candidate_median_rss_kib": 892412
+    }
+  ],
+  "no_regression": [
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "clean",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        0.17264692812424265
+      ],
+      "median_improvement_percent": 0.17264692812424265,
+      "bootstrap_95_percent": [
+        0.17264692812424265,
+        0.17264692812424265
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 354.66367211705074,
+      "candidate_median_seconds": 354.051356181968,
+      "median_ratio": 0.9982735307187576,
+      "ratio_upper_95": 0.9982735307187576,
+      "parity_passed": false
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "graph",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        76.13155325046576
+      ],
+      "median_improvement_percent": 76.13155325046576,
+      "bootstrap_95_percent": [
+        76.13155325046576,
+        76.13155325046576
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 3.3345164239872247,
+      "candidate_median_seconds": 0.7958972770138644,
+      "median_ratio": 0.23868446749534244,
+      "ratio_upper_95": 0.23868446749534244,
+      "parity_passed": false
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "missing",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        79.18597735921857
+      ],
+      "median_improvement_percent": 79.18597735921857,
+      "bootstrap_95_percent": [
+        79.18597735921857,
+        79.18597735921857
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 17.418745000031777,
+      "candidate_median_seconds": 3.625541528046597,
+      "median_ratio": 0.20814022640781427,
+      "ratio_upper_95": 0.20814022640781427,
+      "parity_passed": false
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "noop",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        -60.13335809513771
+      ],
+      "median_improvement_percent": -60.13335809513771,
+      "bootstrap_95_percent": [
+        -60.13335809513771,
+        -60.13335809513771
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 3.4336657479871064,
+      "candidate_median_seconds": 5.498444268014282,
+      "median_ratio": 1.6013335809513771,
+      "ratio_upper_95": 1.6013335809513771,
+      "parity_passed": false
+    },
+    {
+      "project": "linux",
+      "entrypoint": "build",
+      "jobs": 8,
+      "scenario": "source",
+      "pairs": 1,
+      "paired_improvement_percent": [
+        -16.551514469211725
+      ],
+      "median_improvement_percent": -16.551514469211725,
+      "bootstrap_95_percent": [
+        -16.551514469211725,
+        -16.551514469211725
+      ],
+      "supported_improvement": false,
+      "supported_regression": false,
+      "baseline_median_seconds": 17.294290630030446,
+      "candidate_median_seconds": 20.156757646007463,
+      "median_ratio": 1.1655151446921173,
+      "ratio_upper_95": 1.1655151446921173,
+      "parity_passed": false
+    }
+  ],
+  "no_regression_passed": false,
+  "parity_passed": false
+}

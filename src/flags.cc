@@ -108,13 +108,15 @@ bool Flags::GraphOptimizationEnabled(std::string_view feature) const {
                 feature) != disabled_graph_optimizations.end())
     return false;
   return graph_optimizations == GraphOptimizations::kAggressive ||
-         (feature != "recursive" && feature != "monitor");
+         (feature != "recursive" && feature != "monitor" &&
+          feature != "depfiles");
 }
 
 std::string Flags::GraphOptimizationIdentity() const {
   std::string result = "graph-v1";
   for (const char* feature :
-       {"evaluation", "includes", "recursive", "compact", "monitor"}) {
+       {"evaluation", "includes", "recursive", "compact", "monitor",
+        "depfiles"}) {
     result += ' ';
     result += feature;
     result += GraphOptimizationEnabled(feature) ? "=1" : "=0";

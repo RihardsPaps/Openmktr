@@ -52,9 +52,19 @@ class RuntimeRecipeReadCapture {
   std::unique_ptr<Impl> impl_;
 };
 
+struct RuntimeRecipeProfile {
+  double inspection_seconds = 0;
+  double context_seconds = 0;
+  double metadata_seconds = 0;
+  double publish_seconds = 0;
+  size_t inspections = 0;
+  size_t deferred = 0;
+};
+
 bool MakeRuntimeRecipe(const DepNode& node,
                        Evaluator* evaluator,
                        const std::string& directory,
+                       RuntimeRecipeProfile* profile,
                        std::vector<Command>* commands);
 int RunRuntimeRecipe(const char* path);
 std::string RuntimeContextManifestPath(const std::string& graph);
@@ -81,7 +91,6 @@ struct Command {
   bool ignore_error;
   bool force_no_subshell;
   bool runtime_freshness_only = false;
-  bool runtime_may_recurse = false;
   size_t double_colon_group = static_cast<size_t>(-1);
 };
 

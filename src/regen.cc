@@ -38,6 +38,7 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <vector>
 
 #include "fileutil.h"
@@ -70,6 +71,30 @@ bool ShouldIgnoreDirty(std::string_view s) {
   return pat.Match(s) && !nopat.Match(s);
 }
 
+// Parallelism changes execution, not the generated graph. MAKEFLAGS is
+// reconstructed on every invocation and may contain a job count inherited
+// from a parent make on one invocation but not the next. Compare the
+// remaining flags so graph-affecting options (for example -e) still trigger
+// regeneration.
+std::string NormalizeMakeFlags(std::string_view flags) {
+  std::istringstream input{std::string(flags)};
+  std::string token;
+  std::string normalized;
+  while (input >> token) {
+    bool parallelism = token == "-j" || token == "--jobs" ||
+                       token.rfind("-j", 0) == 0 ||
+                       token.rfind("--jobs=", 0) == 0 ||
+                       token.rfind("--jobserver-auth=", 0) == 0 ||
+                       token.rfind("--jobserver-fds=", 0) == 0;
+    if (parallelism)
+      continue;
+    if (!normalized.empty())
+      normalized.push_back(' ');
+    normalized += token;
+  }
+  return normalized;
+}
+
 class StampChecker {
   struct GlobResult {
     std::string pat;
@@ -82,6 +107,7 @@ class StampChecker {
     std::string shellflag;
     std::string cmd;
     std::string result;
+    int status = 0;
     std::vector<std::string> missing_dirs;
     std::vector<std::string> files;
     std::vector<std::string> read_dirs;
@@ -100,6 +126,7 @@ class StampChecker {
   }
 
   bool NeedsRegen(double start_time, const std::string& orig_args) {
+    ResetValidatedShellResults();
     if (IsMissingOutputs())
       RETURN_TRUE;
 
@@ -186,7 +213,7 @@ class StampChecker {
     }
     char magic[4];
     if (fread(magic, 1, sizeof(magic), fp) != sizeof(magic) ||
-        memcmp(magic, "KAT4", sizeof(magic)) != 0) {
+        memcmp(magic, "KAT5", sizeof(magic)) != 0) {
       fprintf(stderr, "obsolete kati_stamp, regenerating...\n");
       RETURN_TRUE;
     }
@@ -206,8 +233,13 @@ class StampChecker {
         RETURN_TRUE;
       while (!view.empty()) {
         if (!ConsumeGraphString(&view, &path) ||
-            !ConsumeGraphString(&view, &identity) || identity == "unreadable" ||
-            GetFileIdentity(path) != identity)
+            !ConsumeGraphString(&view, &identity))
+          RETURN_TRUE;
+        const bool content_identity = identity.compare(0, 8, "content:") == 0;
+        const std::string actual = content_identity
+                                       ? GetFileContentIdentity(path)
+                                       : GetFileIdentity(path);
+        if (identity == "unreadable" || actual != identity)
           RETURN_TRUE;
       }
     } else if (requires_evaluation != 0) {
@@ -255,22 +287,27 @@ class StampChecker {
       const bool generated_artifact = s2.compare(0, 10, "generated:") == 0;
       if (generated_artifact)
         s2.erase(0, 10);
+      const bool content_identity = s2.compare(0, 8, "content:") == 0;
+      if (content_identity)
+        s2.erase(0, 8);
       struct stat st;
       const bool exists = !monitored && stat(s.c_str(), &st) == 0;
       const int stat_error = exists ? 0 : errno;
       double ts = monitored ? timestamps[i]
                   : exists  ? GetTimestampFromStat(st)
                             : -1;
-      const std::string identity = monitored ? identities[i]
-                                   : exists  ? GetFileIdentityFromStat(st)
-                                   : stat_error == ENOENT ? "missing"
-                                                          : "unreadable";
+      const std::string identity =
+          content_identity ? GetFileContentIdentity(s)
+          : monitored       ? identities[i]
+          : exists          ? GetFileIdentityFromStat(st)
+                            : stat_error == ENOENT ? "missing"
+                                                   : "unreadable";
       // GetTimestamp returns < 0 when there's an error reading the file, like
       // when its been removed.
       const bool unchanged_missing = s2 == "missing" && identity == "missing";
       if (!unchanged_missing &&
-          ((!generated_artifact && gen_time < ts) || ts < 0 || identity != s2 ||
-           s2 == "unreadable")) {
+          ((!generated_artifact && !content_identity && gen_time < ts) ||
+           ts < 0 || identity != s2 || s2 == "unreadable")) {
         if (g_flags.regen_ignoring_kati_binary) {
           if (s == GetExecutablePath()) {
             fprintf(stderr, "%s was modified, ignored.\n", s.c_str());
@@ -314,7 +351,11 @@ class StampChecker {
       const char* val_c_str = getenv(s.c_str());
       std::string_view val(val_c_str ? val_c_str : "");
       LOAD_STRING(fp, &s2);
-      if (val != s2) {
+      const bool changed = s == "MAKEFLAGS"
+                               ? NormalizeMakeFlags(val) !=
+                                     NormalizeMakeFlags(s2)
+                               : val != s2;
+      if (changed) {
         if (g_flags.dump_kati_stamp) {
           printf("env %s: dirty (%s => %.*s)\n", s.c_str(), s2.c_str(),
                  SPF(val));
@@ -353,6 +394,7 @@ class StampChecker {
       LOAD_STRING(fp, &sr->shellflag);
       LOAD_STRING(fp, &sr->cmd);
       LOAD_STRING(fp, &sr->result);
+      sr->status = LOAD_INT(fp);
 
       std::string file;
       // Ignore debug info
@@ -479,6 +521,7 @@ class StampChecker {
 
     COLLECT_STATS_WITH_SLOW_REPORT("shell time (regen)", sr->cmd.c_str());
     std::string result;
+    int status = 0;
     if (sr->op == CommandOp::FIND) {
       // Reexecute only the native interpreter. Directory timestamps cannot
       // certify negative matches, top-level membership or symlink searches.
@@ -490,11 +533,15 @@ class StampChecker {
         return true;
       }
     } else {
-      RunCommand(sr->shell, sr->shellflag, sr->cmd, RedirectStderr::DEV_NULL,
-                 &result);
+      const int raw_status = RunCommand(sr->shell, sr->shellflag, sr->cmd,
+                                        RedirectStderr::DEV_NULL, &result);
       FormatForCommandSubstitution(&result);
+      status = WIFEXITED(raw_status) ? WEXITSTATUS(raw_status) : 1;
     }
-    if (sr->result != result) {
+    if (sr->op == CommandOp::SHELL)
+      RememberValidatedShellResult(sr->shell, sr->shellflag, sr->cmd, result,
+                                   status);
+    if (sr->result != result || sr->status != status) {
       if (g_flags.dump_kati_stamp) {
         printf("shell %s: dirty\n", sr->cmd.c_str());
       } else {

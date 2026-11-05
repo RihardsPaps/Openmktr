@@ -43,6 +43,20 @@ class BuildCorrectness(unittest.TestCase):
             self.assertEqual((self.directory / "out").read_text(), "x")
         self.assertEqual((self.directory / "noop").read_text(), "keep")
 
+    def test_fresh_guarded_edge_restat_stops_downstream_fanout(self):
+        self.makefile(
+            ".PHONY: all\nall: child\n"
+            "parent: input\n\t@test -e $@ || touch $@\n"
+            "child: parent\n\t@printf c >> effects; touch $@\n")
+        (self.directory / "input").touch()
+        self.direct("build", "-j2", "all")
+        self.assertEqual((self.directory / "effects").read_text(), "c")
+
+        future = (self.directory / "child").stat().st_mtime + 2
+        os.utime(self.directory / "input", (future, future))
+        self.direct("build", "-j2", "all")
+        self.assertEqual((self.directory / "effects").read_text(), "c")
+
     def test_ninja_silent_phony_noops_preserve_freshness_and_recipe_effects(self):
         root = self.directory
         for mode in ("direct", "build", "legacy"):
@@ -399,6 +413,40 @@ class BuildCorrectness(unittest.TestCase):
         self.run_command("sh", "./ninja.sh", "-j2")
         self.assertNotEqual((self.directory / "out.o").read_bytes(), original)
 
+    def test_aggressive_mode_automatically_imports_compiler_depfiles(self):
+        self.makefile("all: out.o\nout.o: source.c\n"
+                      "\t@clang -c -MMD -MF $(@:.o=.d) -o $@ $<\n")
+        (self.directory / "source.c").write_text(
+            '#include "header.h"\nint value = VALUE;\n')
+        header = self.directory / "header.h"
+        header.write_text("#define VALUE 1\n")
+        self.direct("build", "--graph_optimizations=aggressive", "-j2", "all")
+        self.assertIn("omktr_depfile = out.d\n",
+                      (self.directory / ".openmktr/build.ninja").read_text())
+        original = (self.directory / "out.o").read_bytes()
+        header.write_text("#define VALUE 2\n")
+        future = (self.directory / "out.o").stat().st_mtime + 2
+        os.utime(header, (future, future))
+        self.direct("build", "--graph_optimizations=aggressive", "-j2", "all")
+        self.assertNotEqual((self.directory / "out.o").read_bytes(), original)
+
+    def test_aggressive_mode_imports_nasm_depfiles(self):
+        self.makefile("all: out.o\nout.o: source.asm\n"
+                      "\t@nasm -f elf64 -MD out.d -o $@ $<\n")
+        (self.directory / "source.asm").write_text(
+            "%include \"header.inc\"\nsection .data\nvalue: db VALUE\n")
+        header = self.directory / "header.inc"
+        header.write_text("%define VALUE 1\n")
+        self.direct("build", "--graph_optimizations=aggressive", "-j2", "all")
+        self.assertIn("omktr_depfile = out.d\n",
+                      (self.directory / ".openmktr/build.ninja").read_text())
+        original = (self.directory / "out.o").read_bytes()
+        header.write_text("%define VALUE 2\n")
+        future = (self.directory / "out.o").stat().st_mtime + 2
+        os.utime(header, (future, future))
+        self.direct("build", "--graph_optimizations=aggressive", "-j2", "all")
+        self.assertNotEqual((self.directory / "out.o").read_bytes(), original)
+
     def test_detection_declines_compound_recipes_without_changing_failure(self):
         self.makefile("all:\n\t@printf '%s' ' -c -MD -o out.o ' > result; false\n")
         self.direct("--ninja", "--detect_depfiles")
@@ -441,6 +489,41 @@ class BuildCorrectness(unittest.TestCase):
         os.utime(header, (future, future))
         self.run_command("sh", "./ninja.sh", "-j2")
         self.assertEqual((self.directory / "log").read_text(), "builtbuilt")
+
+    def test_runtime_recipe_depfile_import_does_not_change_recipe_identity(self):
+        self.makefile(
+            "all: out.o\n"
+            "-include deps.d\n"
+            "out.o: .KATI_DEPFILE = deps.d\n"
+            "out.o: source.c\n"
+            "\t@$(shell printf '')clang -c -MMD -MF deps.d -o $@ $< && "
+            "printf built >> log\n"
+            "%.h %_template.c:\n\t@:\n")
+        (self.directory / "source.c").write_text(
+            '#include "header.h"\nint value = VALUE;\n')
+        header = self.directory / "header.h"
+        header.write_text("#define VALUE 1\n")
+        self.direct("build", "-j2", "all")
+        self.direct("build", "-j2", "all")
+        self.assertEqual((self.directory / "log").read_text(), "built")
+        header.write_text("#define VALUE 2\n")
+        future = (self.directory / "out.o").stat().st_mtime + 2
+        os.utime(header, (future, future))
+        self.direct("build", "-j2", "all")
+        self.assertEqual((self.directory / "log").read_text(), "builtbuilt")
+
+    def test_multi_target_implicit_patterns_do_not_claim_unrequested_peers(self):
+        self.makefile(
+            "all: config.h\n"
+            "config.h: seed\n"
+            "%.h %_template.c: seed\n"
+            "\t@cp seed $@\n")
+        (self.directory / "seed").write_text("ready\n")
+        self.direct("build", "-j2", "all")
+        self.assertEqual((self.directory / "config.h").read_text(), "ready\n")
+        self.assertFalse((self.directory / "config_template.c").exists())
+        _, output = self.direct("build", "-j2", "all")
+        self.assertIn("no work to do", output)
 
     def test_translation_propagates_failure_between_recipe_lines(self):
         self.makefile("all:\n\t@printf '%s' 'literal # $$ ;' > result; false\n"

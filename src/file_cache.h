@@ -37,12 +37,22 @@ class MakefileCacheManager {
   const Makefile& ReadStdinMakefile();
   void GetAllFilenames(std::unordered_set<std::string>* out);
   void AddExtraFileDep(std::string_view dep);
+  void AddIncludeDirectoryDep(std::string_view directory) {
+    extra_file_deps_.emplace(directory);
+    include_directory_deps_.emplace(directory);
+  }
   void AddGeneratedGraphDep(const std::string& dep) {
     extra_file_deps_.insert(dep);
     generated_graph_deps_.insert(dep);
   }
   bool IsGeneratedGraphDep(const std::string& dep) const {
     return generated_graph_deps_.count(dep) != 0;
+  }
+  bool IsParsedMakefile(const std::string& path) const {
+    return cache_.count(path) != 0;
+  }
+  bool IsIncludeDirectoryDep(const std::string& path) const {
+    return include_directory_deps_.count(path) != 0;
   }
   void RequireEvaluation() { require_evaluation_ = true; }
   void RequireIncludeEvaluation() { require_include_evaluation_ = true; }
@@ -67,6 +77,7 @@ class MakefileCacheManager {
   std::unique_ptr<Makefile> stdin_makefile_;
   std::unordered_set<std::string> extra_file_deps_;
   std::unordered_set<std::string> generated_graph_deps_;
+  std::unordered_set<std::string> include_directory_deps_;
   bool require_evaluation_ = false;
   bool require_include_evaluation_ = false;
   bool includes_certified_ = false;

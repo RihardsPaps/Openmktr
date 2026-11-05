@@ -374,6 +374,57 @@ std::string GetFileIdentityFromStat(const struct stat& st) {
          std::to_string(ct.tv_sec) + ":" + std::to_string(ct.tv_nsec);
 }
 
+std::string GetFileContentIdentity(std::string_view path) {
+  const std::string filename(path);
+  const int fd = open(filename.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+  if (fd < 0)
+    return errno == ENOENT ? "missing" : "unreadable";
+  struct stat before;
+  if (fstat(fd, &before) != 0) {
+    close(fd);
+    return "unreadable";
+  }
+  if (!S_ISREG(before.st_mode)) {
+    close(fd);
+    return GetFileIdentityFromStat(before);
+  }
+
+  // Two independently seeded 64-bit streams make accidental collisions
+  // negligible while keeping this hot validation path dependency-free.
+  uint64_t first = 14695981039346656037ULL;
+  uint64_t second = 1099511628211ULL ^ 0x9e3779b97f4a7c15ULL;
+  char buffer[16384];
+  for (;;) {
+    ssize_t count;
+    do {
+      count = read(fd, buffer, sizeof(buffer));
+    } while (count < 0 && errno == EINTR);
+    if (count == 0)
+      break;
+    if (count < 0) {
+      close(fd);
+      return "unreadable";
+    }
+    for (ssize_t i = 0; i < count; ++i) {
+      const uint64_t byte = static_cast<unsigned char>(buffer[i]);
+      first = (first ^ byte) * 1099511628211ULL;
+      second = (second ^ (byte + 0x9d)) * 0x100000001b3ULL;
+    }
+  }
+  struct stat after;
+  const bool stable = fstat(fd, &after) == 0 &&
+                      GetFileIdentityFromStat(before) ==
+                          GetFileIdentityFromStat(after);
+  close(fd);
+  if (!stable)
+    return "unstable";
+  char digest[33];
+  snprintf(digest, sizeof(digest), "%016llx%016llx",
+           static_cast<unsigned long long>(first),
+           static_cast<unsigned long long>(second));
+  return "content:" + std::to_string(before.st_size) + ":" + digest;
+}
+
 void DeleteChangedOutput(std::string_view path, const std::string& previous) {
   ScopedFilesystemEffect effect;
   const std::string current = GetOutputStamp(path);

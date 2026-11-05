@@ -61,10 +61,22 @@ struct CommandResult : public SessionAllocated<CommandResult> {
   std::string cmd;
   std::unique_ptr<FindCommand> find;
   std::string result;
+  int status = 0;
   Loc loc;
 };
 
 const std::vector<CommandResult*>& GetShellCommandResults();
+void ResetValidatedShellResults();
+void RememberValidatedShellResult(const std::string& shell,
+                                  const std::string& shellflag,
+                                  const std::string& command,
+                                  const std::string& result,
+                                  int status);
+bool ReuseValidatedShellResult(const std::string& shell,
+                               const std::string& shellflag,
+                               const std::string& command,
+                               std::string* result,
+                               int* status);
 void InvalidateEvaluationFilesystemQueries();
 void ReplayNativeFileRead(Evaluator* evaluator,
                           const std::string& filename,

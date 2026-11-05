@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include <cstdlib>
+#include <fstream>
 #include <set>
 
 #include "command.h"
@@ -20,6 +21,41 @@
 #include "strutil.h"
 
 namespace {
+bool ResolveFileReadExpansions(std::string* value) {
+  const std::string prefix = GetExecutablePath() + " --file-read ";
+  size_t position = 0;
+  while ((position = value->find("$(", position)) != std::string::npos) {
+    const size_t end = value->find(')', position + 2);
+    if (end == std::string::npos)
+      break;
+    const std::string_view expression(value->data() + position + 2,
+                                      end - position - 2);
+    if (!HasPrefix(expression, prefix)) {
+      position = end + 1;
+      continue;
+    }
+    const std::string_view path = expression.substr(prefix.size());
+    if (path.empty() ||
+        path.find_first_not_of(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./-") !=
+            std::string_view::npos)
+      return false;
+    std::ifstream input(std::string(path), std::ios::binary);
+    if (!input)
+      return false;
+    std::string contents((std::istreambuf_iterator<char>(input)),
+                         std::istreambuf_iterator<char>());
+    if (!contents.empty() && contents.back() == '\n')
+      contents.pop_back();
+    value->replace(position, end - position + 1, contents);
+    position += contents.size();
+  }
+  // Other dollar expressions and backticks are literal Make variable values
+  // carried to the child. Only Openmktr's deferred file-read wrapper needs to
+  // be resolved while importing the graph.
+  return true;
+}
+
 bool StaticExpansion(std::string_view source) {
   for (size_t i = 0; i < source.size(); ++i) {
     if (source[i] != '$' || ++i == source.size())
@@ -104,6 +140,20 @@ bool Inspect(const std::string& name,
 }
 }  // namespace
 
+bool ResolveImportedCommandEnvironment(Command* command) {
+  for (std::string& value : command->environment) {
+    const size_t equal = value.find('=');
+    if (equal == std::string::npos)
+      return false;
+    std::string resolved = value.substr(equal + 1);
+    if (!ResolveFileReadExpansions(&resolved))
+      return false;
+    value.resize(equal + 1);
+    value += resolved;
+  }
+  return true;
+}
+
 bool StaticImportSources(std::vector<std::string>* files) {
   // Environment and argv definitions can hide effects behind a plain $(VAR).
   // Require their expansions to obey the same preflight as source definitions.
@@ -135,15 +185,31 @@ bool ParseImportCommand(const Command& command,
       (!command.shell.empty() && command.shell != "/bin/sh") ||
       (!command.shellflag.empty() && command.shellflag != "-c"))
     return false;
-  // Ninja may defer exported shell/file expansions until the recipe runs.
-  // Those strings are not resolved environment values for child discovery.
-  for (const auto& value : command.environment)
-    if (value.find_first_of("$`") != std::string::npos)
-      return false;
+  // Environment entries are passed directly to the child with setenv; shell
+  // metacharacters in their values remain literal and need no quoting here.
+  // Kbuild's recursive invocation can be line-wrapped by Make's command
+  // expansion. A backslash-newline pair is shell whitespace; flatten it
+  // before parsing argv while continuing to reject other shell escapes.
+  std::string flattened;
+  for (size_t i = 0; i < command.display_cmd.size(); ++i) {
+    if (command.display_cmd[i] == '\\' &&
+        i + 1 < command.display_cmd.size() &&
+        command.display_cmd[i + 1] == '\n') {
+      ++i;
+      while (i + 1 < command.display_cmd.size() &&
+             (command.display_cmd[i + 1] == ' ' ||
+              command.display_cmd[i + 1] == '\t'))
+        ++i;
+      if (!flattened.empty() && flattened.back() != ' ')
+        flattened.push_back(' ');
+    } else {
+      flattened.push_back(command.display_cmd[i]);
+    }
+  }
   std::string word;
   char quote = 0;
   bool started = false;
-  for (char c : command.display_cmd) {
+  for (char c : flattened) {
     if (quote) {
       if (c == quote)
         quote = 0;
@@ -182,6 +248,9 @@ bool ParseImportCommand(const Command& command,
     if (arg == "-C" || arg == "-f") {
       if (++i == argv->size())
         return false;
+    } else if (arg == "--no-print-directory") {
+      // Recursive Kbuild commands commonly add this output-only flag. It has
+      // no effect on graph semantics and can be preserved during discovery.
     } else if (!arg.empty() && arg.front() == '-') {
       return false;
     }
@@ -222,7 +291,11 @@ int GenerateImportedGraph(const Command& command,
     setenv("MAKELEVEL", std::to_string(g_flags.make_level + 1).c_str(), 1);
     std::vector<std::string> arguments = argv;
     arguments.push_back("--ninja");
-    arguments.push_back("--graph_optimizations=safe");
+    arguments.push_back(g_flags.GraphOptimizationEnabled("recursive")
+                            ? "--graph_optimizations=aggressive"
+                            : "--graph_optimizations=safe");
+    if (g_flags.use_ninja_phony_output)
+      arguments.push_back("--use_ninja_phony_output");
     for (const auto& feature : g_flags.disabled_graph_optimizations)
       arguments.push_back("--disable_graph_optimization=" + feature);
     arguments.push_back("--internal-import-root=" + directory);

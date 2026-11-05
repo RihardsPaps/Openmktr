@@ -54,6 +54,9 @@ double GetTimestamp(const char* f);
 // caches.
 std::string GetFileIdentity(std::string_view path);
 std::string GetFileIdentityFromStat(const struct stat& st);
+// Content identity for parsed makefiles. Unlike the metadata identity, this
+// remains stable when a build tool only updates the file timestamp.
+std::string GetFileContentIdentity(std::string_view path);
 struct FileObservationState;
 // Reused only by serialized recipe expansion. Active commands and filesystem
 // effects invalidate it across executor threads through a process-wide epoch.
