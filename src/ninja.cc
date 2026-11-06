@@ -2712,7 +2712,10 @@ class NinjaGenerator {
     for (const auto& child : prepared_imports_)
       LOG_STAT("imported child graph: %s", child.first.c_str());
     for (const auto& input : import_inputs_)
-      MakefileCacheManager::Get().AddExtraFileDep(input);
+      if (HasSuffix(input, ".cmd"))
+        MakefileCacheManager::Get().AddContentFileDep(input);
+      else
+        MakefileCacheManager::Get().AddExtraFileDep(input);
     for (const auto& artifact : import_artifacts_)
       MakefileCacheManager::Get().AddGeneratedGraphDep(artifact);
   }

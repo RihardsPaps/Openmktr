@@ -1,6 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
 // Keep include-producer freshness separate from parsed-source content reuse.
 // Track fixdep record contents independently of compiler rewrite timestamps.
+// Classify leading-dot aliases consistently without changing Makefile names.
 // Own invocation state and publish coherent generations with typed freshness.
 // Validate caller environments before reusing deferred recipes or child
 // imports. Track and validate incremental evaluation, include proofs and
@@ -43,10 +44,10 @@ class MakefileCacheManager {
   void AddExtraFileDep(std::string_view dep);
   void AddContentFileDep(const std::string& path) {
     extra_file_deps_.insert(path);
-    content_file_deps_.insert(path);
+    content_file_deps_.insert(ObservationPath(path));
   }
   bool IsContentFileDep(const std::string& path) const {
-    return content_file_deps_.count(path) != 0;
+    return content_file_deps_.count(ObservationPath(path)) != 0;
   }
   void AddIncludeDirectoryDep(std::string_view directory) {
     extra_file_deps_.emplace(directory);
@@ -60,17 +61,17 @@ class MakefileCacheManager {
     return generated_graph_deps_.count(dep) != 0;
   }
   bool IsParsedMakefile(const std::string& path) const {
-    return cache_.count(path) != 0;
+    return parsed_paths_.count(ObservationPath(path)) != 0;
   }
   bool IsIncludeDirectoryDep(const std::string& path) const {
     return include_directory_deps_.count(path) != 0;
   }
   void AddIncludeFreshnessDep(const std::string& path) {
     extra_file_deps_.insert(path);
-    include_freshness_deps_.insert(path);
+    include_freshness_deps_.insert(ObservationPath(path));
   }
   bool IsIncludeFreshnessDep(const std::string& path) const {
-    return include_freshness_deps_.count(path) != 0;
+    return include_freshness_deps_.count(ObservationPath(path)) != 0;
   }
   void RequireEvaluation() { require_evaluation_ = true; }
   void RequireEnvironmentValidation() {
@@ -95,9 +96,18 @@ class MakefileCacheManager {
   MakefileCacheManager() = default;
 
  private:
+  static std::string ObservationPath(std::string_view path) {
+    // Leading ./ components always name the same object. Preserve all other
+    // spellings, including .. and symlink components, and keep cache keys and
+    // MAKEFILE_LIST unchanged.
+    while (path.size() > 2 && path.substr(0, 2) == "./")
+      path.remove_prefix(2);
+    return std::string(path);
+  }
   MakefileCacheManager(const MakefileCacheManager&) = delete;
   MakefileCacheManager(MakefileCacheManager&&) = delete;
   std::unordered_map<std::string, Makefile> cache_;
+  std::unordered_set<std::string> parsed_paths_;
   std::unique_ptr<Makefile> stdin_makefile_;
   std::unordered_set<std::string> extra_file_deps_;
   std::unordered_set<std::string> content_file_deps_;

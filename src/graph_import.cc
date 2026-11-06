@@ -61,9 +61,19 @@ bool BuildMembership(const std::string& directory, std::string* membership) {
     if (S_ISLNK(metadata.st_mode)) {
       struct stat target;
       if (stat((directory + "/" + name).c_str(), &target) == 0 &&
-          S_ISDIR(target.st_mode))
-        entries.push_back("alias:" + name + ":" +
-                          GetFileIdentityFromStat(metadata));
+          S_ISDIR(target.st_mode)) {
+        char resolved[4096];
+        if (!realpath((directory + "/" + name).c_str(), resolved)) {
+          valid = false;
+          break;
+        }
+        // Kbuild refreshes the source symlink during ordinary preparation.
+        // Its destination and target directory identity matter, not the
+        // symlink's rewrite timestamp.
+        entries.push_back("alias:" + name + ":" + resolved + ":" +
+                          std::to_string(target.st_dev) + ":" +
+                          std::to_string(target.st_ino));
+      }
     }
     errno = 0;
   }

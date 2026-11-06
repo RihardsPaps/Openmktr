@@ -22,6 +22,32 @@ BINARY = Path(os.environ.get("OMKTR_BINARY", Path(__file__).resolve().parents[1]
 
 
 class GraphOptimizations(unittest.TestCase):
+    def test_include_dot_alias_reuses_content_and_preserves_producer_freshness(self):
+        (self.root / "config.mk").write_text("VALUE := first\n")
+        (self.root / "ready-seed").write_text("# ready\n")
+        self.makefile("include ./config.mk ready.mk\nready.mk: ready-seed\n"
+                      "\t@cp $< $@\n.PHONY: all\nall:\n"
+                      "\t@printf '%s' '$(VALUE)' > result\n")
+        command = ("build", "--graph_optimizations=aggressive", "--kati_stats", "all")
+        self.run_tool(*command)
+        self.run_tool(*command)
+        config = self.root / "config.mk"
+        config.write_text(config.read_text())
+        self.assertIn("No need to regenerate", self.run_tool(*command).stdout)
+        self.assertEqual((self.root / "result").read_text(), "first")
+        config.unlink()
+        (self.root / "seed").write_text("VALUE := generated\n")
+        self.makefile("include ./config.mk\nconfig.mk: seed\n"
+                      "\t@cp $< $@; printf x >> remakes\n"
+                      ".PHONY: all\nall:\n\t@printf '%s' '$(VALUE)' > result\n")
+        self.run_tool(*command)
+        self.run_tool(*command)
+        time.sleep(.02)
+        (self.root / "seed").touch()
+        self.run_tool(*command)
+        self.assertEqual((self.root / "remakes").read_text(), "xx")
+        self.assertEqual((self.root / "result").read_text(), "generated")
+
     def test_include_producer_freshness_tracks_timestamp_only_makefile_edits(self):
         for grouped in (False, True):
             with self.subTest(grouped=grouped):
@@ -452,6 +478,11 @@ class GraphOptimizations(unittest.TestCase):
         self.assertTrue(graphs)
         root_graph = build / ".openmktr/build.ninja"
         root_stamp = root_graph.stat().st_mtime_ns
+        # Kernel preparation refreshes this alias without changing its target.
+        (build / "source").unlink()
+        (build / "source").symlink_to(source, target_is_directory=True)
+        self.assertIn("No need to regenerate", self.run_tool(*command).stdout)
+        self.assertEqual(root_graph.stat().st_mtime_ns, root_stamp)
         time.sleep(0.02)
         (source / "init/main.c").write_text("updated init source\n")
         result = self.run_tool(*command)
