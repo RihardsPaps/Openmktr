@@ -577,7 +577,7 @@ int ObserveImport(pid_t child, const std::string& directory) {
             ptrace(PTRACE_CONT, child, 0, 0) == 0;
   }
   while (valid && !observer.children.empty()) {
-    if (GetBuildSignal()) {
+    if (GetBuildSignal() || std::chrono::steady_clock::now() >= deadline) {
       valid = false;
       break;
     }
