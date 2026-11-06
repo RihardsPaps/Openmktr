@@ -1513,6 +1513,7 @@ static int Run(const std::vector<Symbol>& targets,
               pending.push_back(root.second);
             std::unordered_set<const DepNode*> visited;
             std::vector<std::string> tracked_paths;
+            std::vector<const DepNode*> freshness_roots;
             bool eligible = true;
             while (!pending.empty() && eligible) {
               const DepNode* node = pending.back();
@@ -1531,6 +1532,8 @@ static int Run(const std::vector<Symbol>& targets,
                          (S_ISREG(st.st_mode) || S_ISDIR(st.st_mode));
               if (!eligible)
                 break;
+              if (!node->cmds.empty())
+                freshness_roots.push_back(node);
               // Directory prerequisites often receive generated objects
               // during the build, changing their mtimes without changing
               // include resolution. The included files themselves and VPATH
@@ -1577,6 +1580,28 @@ static int Run(const std::vector<Symbol>& targets,
                 cache.AddIncludeDirectoryDep(directory);
               for (const std::string& path : tracked_paths)
                 cache.AddExtraFileDep(path);
+              const std::unordered_set<std::string> regular_paths(
+                  tracked_paths.begin(), tracked_paths.end());
+              pending = std::move(freshness_roots);
+              visited.clear();
+              while (!pending.empty()) {
+                const DepNode* node = pending.back();
+                pending.pop_back();
+                if (!visited.insert(node).second)
+                  continue;
+                const std::string path = node->vpath_provider.IsValid()
+                                             ? node->vpath_provider.str()
+                                             : node->output.str();
+                if (regular_paths.count(path))
+                  cache.AddIncludeFreshnessDep(path);
+                for (Symbol peer : node->implicit_outputs)
+                  if (regular_paths.count(peer.str()))
+                    cache.AddIncludeFreshnessDep(peer.str());
+                for (const auto& input : node->deps)
+                  pending.push_back(input.second);
+                for (const auto& input : node->order_onlys)
+                  pending.push_back(input.second);
+              }
               cache.CertifyIncludeEvaluation();
               LOG_STAT("include certificate: %zu paths", tracked_paths.size());
             }

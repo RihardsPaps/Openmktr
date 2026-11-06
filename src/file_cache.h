@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Keep include-producer freshness separate from parsed-source content reuse.
 // Own invocation state and publish coherent generations with typed freshness.
 // Validate caller environments before reusing deferred recipes or child
 // imports. Track and validate incremental evaluation, include proofs and
@@ -56,6 +57,13 @@ class MakefileCacheManager {
   bool IsIncludeDirectoryDep(const std::string& path) const {
     return include_directory_deps_.count(path) != 0;
   }
+  void AddIncludeFreshnessDep(const std::string& path) {
+    extra_file_deps_.insert(path);
+    include_freshness_deps_.insert(path);
+  }
+  bool IsIncludeFreshnessDep(const std::string& path) const {
+    return include_freshness_deps_.count(path) != 0;
+  }
   void RequireEvaluation() { require_evaluation_ = true; }
   void RequireEnvironmentValidation() {
     require_environment_validation_ = true;
@@ -86,6 +94,7 @@ class MakefileCacheManager {
   std::unordered_set<std::string> extra_file_deps_;
   std::unordered_set<std::string> generated_graph_deps_;
   std::unordered_set<std::string> include_directory_deps_;
+  std::unordered_set<std::string> include_freshness_deps_;
   bool require_evaluation_ = false;
   bool require_environment_validation_ = false;
   bool require_include_evaluation_ = false;

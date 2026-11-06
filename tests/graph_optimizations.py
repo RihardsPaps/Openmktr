@@ -22,6 +22,25 @@ BINARY = Path(os.environ.get("OMKTR_BINARY", Path(__file__).resolve().parents[1]
 
 
 class GraphOptimizations(unittest.TestCase):
+    def test_include_producer_freshness_tracks_timestamp_only_makefile_edits(self):
+        for grouped in (False, True):
+            with self.subTest(grouped=grouped):
+                for path in ("config.mk", "peer", "remakes"):
+                    (self.root / path).unlink(missing_ok=True)
+                self.makefile("include config.mk\n" +
+                              ("config.mk: .KATI_IMPLICIT_OUTPUTS := peer\n" if grouped else "") +
+                              "config.mk: Makefile\n"
+                              "\t@printf 'VALUE := first\\n' > config.mk; touch peer; printf x >> remakes\n"
+                              ".PHONY: all\nall:\n\t@:\n")
+                command = ("build", "--graph_optimizations=aggressive", "all")
+                for _ in range(3):
+                    self.run_tool(*command)
+                self.assertEqual((self.root / "remakes").read_text(), "x")
+                time.sleep(.02)
+                (self.root / "Makefile").touch()
+                self.run_tool(*command)
+                self.assertEqual((self.root / "remakes").read_text(), "xx")
+
     def test_phony_recursive_owner_preserves_downstream_invalidation(self):
         (self.root / "input").write_text("input")
         for absolute, phony_outputs in ((False, False), (True, False), (False, True), (True, True)):

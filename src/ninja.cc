@@ -3670,9 +3670,12 @@ class NinjaGenerator {
       // graph publication replaces build.ninja or its environment script.
       auto record = [&](const std::string& path, bool parsed_makefile) {
         AppendGraphString(path, &proof);
-        AppendGraphString(parsed_makefile ? GetFileContentIdentity(path)
-                                          : metadata_identities.at(path),
-                          &proof);
+        AppendGraphString(
+            parsed_makefile &&
+                    !MakefileCacheManager::Get().IsIncludeFreshnessDep(path)
+                ? GetFileContentIdentity(path)
+                : metadata_identities.at(path),
+            &proof);
       };
       for (const auto& path : makefiles) {
         // Compiler depfiles are consumed by Ninja's depfile loader and can
