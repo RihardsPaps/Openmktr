@@ -18,6 +18,45 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_changed_directory_compilers_keep_original_command_context(self):
+        root = self.directory
+        for mode in ("direct", "build", "legacy"):
+            for index, directory_command in enumerate(("cd", "'cd'", "command cd", "X=1 cd")):
+                with self.subTest(mode=mode, directory_command=directory_command):
+                    self.directory = root / (mode + "-" + str(index))
+                    self.directory.mkdir()
+                    (self.directory / "sub").mkdir()
+                    for name in ("first", "second"):
+                        (self.directory / "sub" / (name + ".c")).write_text(f"int {name};\n")
+                    self.makefile(".PHONY: all\nall:\n"
+                                  f"\t@{directory_command} sub && "
+                                  "clang -c -MMD -MF first.d -o first.o first.c && "
+                                  "clang -c -MMD -MF second.d -o second.o second.c\n")
+                    flags = ("--graph_optimizations=aggressive", "all")
+                    if mode == "legacy":
+                        self.direct("--ninja", *flags)
+                        self.run_command("sh", "./ninja.sh", "-j2", "all")
+                    else:
+                        self.direct(*(("build",) if mode == "build" else ()), *flags)
+                    for name in ("first", "second"):
+                        self.assertTrue((self.directory / "sub" / (name + ".o")).is_file())
+                    if mode != "direct":
+                        graph = self.directory / (".openmktr/build.ninja" if mode == "build"
+                                                   else "build.ninja")
+                        self.assertNotIn("omktr_depfile =", graph.read_text())
+        self.directory = root
+
+    def test_oneshell_directory_change_disables_partial_depfile_inference(self):
+        (self.directory / "sub").mkdir()
+        (self.directory / "sub/source.c").write_text("int value;\n")
+        self.makefile(".ONESHELL:\n.PHONY: all\nall:\n"
+                      "\t@cd sub\n"
+                      "\tclang -c -MMD -MF out.d -o out.o source.c\n")
+        self.direct("build", "--graph_optimizations=aggressive", "all")
+        self.assertTrue((self.directory / "sub/out.o").is_file())
+        graph = (self.directory / ".openmktr/build.ninja").read_text()
+        self.assertNotIn("omktr_depfile =", graph)
+
     def test_inferred_compiler_preserves_supported_wrappers(self):
         root = self.directory
         for wrapper_name in ("ccache", "sccache", "custom-wrapper"):

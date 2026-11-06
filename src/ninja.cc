@@ -43,6 +43,7 @@
 // Avoid per-target heap allocation while emitting small dependency lists.
 // Preserve phony invalidation, depfile includes and physical import ownership.
 // Keep input manifests immutable across configurations and graph generations.
+// Anchor combined depfile streams and preserve changed-directory recipes.
 // Inline small freshness checks while retaining manifests for wide input lists.
 // Keep directory freshness and conditional depfile copies aligned with Make.
 // Rewrite complete compiler commands and collect every executed branch's deps.
@@ -337,7 +338,8 @@ struct InferredCompiler {
 };
 
 static std::vector<InferredCompiler> GetCompilersFromRecipe(
-    std::string_view recipe) {
+    std::string_view recipe,
+    bool* stable_directory) {
   std::vector<InferredCompiler> result;
   auto inspect = [&](size_t begin, size_t end) {
     while (begin < end) {
@@ -358,6 +360,34 @@ static std::vector<InferredCompiler> GetCompilersFromRecipe(
       --end;
     if (begin == end)
       return;
+    // Depfile paths and their relative prerequisites belong to the compiler's
+    // working directory. Do not infer them after shell code can change it.
+    // Decode the command word so quoted builtins cannot evade this check.
+    size_t word_end = begin;
+    std::string word;
+    char word_quote = 0;
+    while (word_end < end) {
+      const char c = recipe[word_end++];
+      if (!word_quote && isspace(static_cast<unsigned char>(c)))
+        break;
+      if (c == '\\' && word_quote != '\'' && word_end < end) {
+        word += recipe[word_end++];
+      } else if (c == word_quote) {
+        word_quote = 0;
+      } else if (!word_quote && (c == '\'' || c == '"')) {
+        word_quote = c;
+      } else {
+        word += c;
+      }
+    }
+    if (word == "cd" || word == "pushd" || word == "popd" || word == "." ||
+        word == "source" || word == "eval" || word == "command" ||
+        word == "builtin" || word.find('=') != std::string::npos ||
+        word.find('$') != std::string::npos ||
+        word.find('`') != std::string::npos) {
+      *stable_directory = false;
+      return;
+    }
     // Inspect a complete simple command. Supported wrappers stay inside its
     // rewrite; a compiler-looking argument to an unknown command is not an
     // invocation and must never be replaced independently.
@@ -1379,7 +1409,13 @@ class NinjaGenerator {
             ambiguous = true;
             break;
           }
-          compilers.push_back(GetCompilersFromRecipe(command.cmd));
+          bool stable_directory = true;
+          compilers.push_back(
+              GetCompilersFromRecipe(command.cmd, &stable_directory));
+          if (!stable_directory) {
+            ambiguous = true;
+            break;
+          }
           count += compilers.back().size();
         }
         if (!ambiguous && count) {
@@ -1389,8 +1425,9 @@ class NinjaGenerator {
               if (!candidates.empty())
                 inferred_depfile = candidates.front().depfile + ".tmp";
           } else {
-            inferred_depfile = GetFilename(".kati-inferred-deps%s-") +
-                               GraphDigest(node->output.str()) + ".tmp";
+            const std::string stream = GetFilename(".kati-inferred-deps%s-") +
+                                       GraphDigest(node->output.str()) + ".tmp";
+            AbsPath(stream, &inferred_depfile);
           }
           depfile_commands = commands;
           for (size_t i = 0; i < compilers.size(); ++i) {
