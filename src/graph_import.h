@@ -9,16 +9,20 @@
 #include <unordered_set>
 #include <vector>
 
+#include "symtab.h"
+
 struct Command;
 const std::vector<std::string>& ImportValidationPlans();
 void AddImportValidationPlan(const std::string& path);
 bool ValidateImportedGraph(const std::string& path);
 // Immutable dependency frontier reconstructed from Kbuild's fixdep records.
 // Unknown syntax invalidates coverage rather than silently omitting an owner.
+// Shared path symbols belong to the current BuildSession; only canonical
+// strings and dictionary offsets are written to persistent cache records.
 struct KbuildDependencyIndex {
   bool complete = false;
-  std::map<std::string, std::vector<std::string>> objects;
-  std::unordered_set<std::string> covered_inputs;
+  std::map<std::string, std::vector<Symbol>> objects;
+  std::unordered_set<Symbol> covered_inputs;
   std::map<std::string, std::pair<std::string, std::string>> directories;
   void Read(const std::string& directory, const std::string& source_directory);
   bool Covers(const std::string& input) const;

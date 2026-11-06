@@ -578,8 +578,13 @@ class GraphOptimizations(unittest.TestCase):
         for scope in ("init", "other"):
             self.assertIn("generated two", (build / scope / "main.o").read_text())
         (build / "init/main.o").unlink()
-        self.run_tool(*command)
+        self.assertIn("No need to regenerate", self.run_tool(*command).stdout)
         self.assertTrue((build / "init/main.o").is_file())
+        self.assertIn("No need to regenerate", self.run_tool(*command).stdout)
+        unknown_object = build / "init/unindexed.o"
+        unknown_object.touch()
+        self.assertIn("complete=0", self.run_tool(*command).stdout)
+        unknown_object.unlink()
         # Unknown fixdep syntax must keep the complete recursive correctness
         # path instead of claiming that an incomplete index proves ownership.
         (build / "init/.main.o.cmd").write_text("deps_init/main.o := $(UNKNOWN)\n")

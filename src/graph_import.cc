@@ -4,6 +4,7 @@
 #include "graph_import.h"
 
 #include <dirent.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -31,6 +32,34 @@
 #include "strutil.h"
 
 namespace {
+bool ReadDependencyRecord(const std::string& path, std::string* contents) {
+  const int descriptor = HANDLE_EINTR(
+      open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK));
+  if (descriptor < 0)
+    return false;
+  struct stat before, after;
+  bool valid = fstat(descriptor, &before) == 0 && S_ISREG(before.st_mode) &&
+               before.st_size >= 0 && before.st_size <= 256 * 1024 * 1024;
+  if (valid) {
+    contents->resize(static_cast<size_t>(before.st_size));
+    size_t position = 0;
+    while (position < contents->size()) {
+      const ssize_t count =
+          HANDLE_EINTR(read(descriptor, contents->data() + position,
+                            contents->size() - position));
+      if (count <= 0) {
+        valid = false;
+        break;
+      }
+      position += static_cast<size_t>(count);
+    }
+    valid &= fstat(descriptor, &after) == 0 &&
+             GetFileIdentityFromStat(before) == GetFileIdentityFromStat(after);
+  }
+  valid &= close(descriptor) == 0;
+  return valid && contents->find('\0') == std::string::npos;
+}
+
 struct ImportValidationState {
   std::vector<std::string> plans;
 };
@@ -85,7 +114,20 @@ bool BuildMembership(const std::string& directory, std::string* membership) {
     AppendGraphString(entry, membership);
   return valid;
 }
-bool ValidateBuildTree(std::string_view view) {
+bool ValidateBuildTree(std::string_view view, bool indexed_owners) {
+  std::unordered_set<std::string> owners;
+  if (indexed_owners) {
+    std::string encoded;
+    if (!ConsumeGraphString(&view, &encoded))
+      return false;
+    std::string_view paths(encoded);
+    while (!paths.empty()) {
+      std::string path;
+      if (!ConsumeGraphString(&paths, &path))
+        return false;
+      owners.insert(std::move(path));
+    }
+  }
   std::vector<std::string> paths, identities, memberships;
   while (!view.empty()) {
     std::string path, identity, membership;
@@ -104,8 +146,37 @@ bool ValidateBuildTree(std::string_view view) {
     if (metadata[i].Identity() == identities[i])
       continue;
     std::string current;
-    if (!BuildMembership(paths[i], &current) || current != memberships[i])
+    if (!BuildMembership(paths[i], &current))
       return false;
+    if (current == memberships[i])
+      continue;
+    auto entries = [](std::string_view data, std::set<std::string>* output) {
+      while (!data.empty()) {
+        std::string entry;
+        if (!ConsumeGraphString(&data, &entry))
+          return false;
+        output->insert(std::move(entry));
+      }
+      return true;
+    };
+    std::set<std::string> previous, observed;
+    if (!entries(memberships[i], &previous) || !entries(current, &observed))
+      return false;
+    const std::string regular = std::to_string(S_IFREG) + ":";
+    auto known_object = [&](const std::string& entry) {
+      return HasPrefix(entry, regular) && HasSuffix(entry, ".o") &&
+             owners.count(paths[i] + "/" + entry.substr(regular.size()));
+    };
+    // Removing or restoring an indexed ordinary object changes execution,
+    // not ownership. Ninja still checks the output, fixdep records remain
+    // validated inputs, and frontend filesystem queries have their own proof.
+    // Unknown owners, dependency records and file-type changes stay dirty.
+    for (const std::string& entry : previous)
+      if (!observed.count(entry) && !known_object(entry))
+        return false;
+    for (const std::string& entry : observed)
+      if (!previous.count(entry) && !known_object(entry))
+        return false;
   }
   return true;
 }
@@ -239,6 +310,7 @@ void AddImportValidationPlan(const std::string& path) {
 
 void KbuildDependencyIndex::Read(const std::string& directory,
                                  const std::string& source_directory) {
+  COLLECT_STATS("Kbuild index read");
   objects.clear();
   covered_inputs.clear();
   directories.clear();
@@ -247,6 +319,7 @@ void KbuildDependencyIndex::Read(const std::string& directory,
   const std::string source = realpath(source_directory.c_str(), resolved_source)
                                  ? resolved_source
                                  : "";
+  std::unordered_map<std::string, Symbol> normalized_inputs;
   std::vector<std::string> pending{directory};
   while (!pending.empty()) {
     std::string parent = std::move(pending.back());
@@ -306,18 +379,26 @@ void KbuildDependencyIndex::Read(const std::string& directory,
         complete = false;
       if (!HasSuffix(name, ".cmd"))
         continue;
-      std::ifstream input(path, std::ios::binary);
-      if (!input) {
+      std::string contents;
+      if (!ReadDependencyRecord(path, &contents)) {
         complete = false;
         continue;
       }
-      std::string line, logical;
+      std::string_view remaining(contents);
+      std::string logical;
       bool compiler_output = false;
       bool has_source = false;
-      while (std::getline(input, line)) {
+      while (!remaining.empty()) {
+        const size_t newline = remaining.find('\n');
+        std::string_view line = remaining.substr(0, newline);
+        remaining.remove_prefix(
+            newline == std::string_view::npos ? remaining.size() : newline + 1);
         const bool continued = !line.empty() && line.back() == '\\';
         if (continued)
-          line.pop_back();
+          line.remove_suffix(1);
+        if (logical.empty() && !continued && !HasPrefix(line, "source_") &&
+            !HasPrefix(line, "deps_") && !HasPrefix(line, "savedcmd_"))
+          continue;
         logical += line;
         if (continued) {
           logical += ' ';
@@ -346,17 +427,24 @@ void KbuildDependencyIndex::Read(const std::string& directory,
                 target = directory + "/" + target;
               NormalizePath(&target);
               auto& inputs = objects[target];
-              inputs.push_back(path);
-              std::string values = logical.substr(equal + 2);
-              size_t position;
-              while ((position = values.find("$(wildcard ")) !=
-                     std::string::npos) {
-                const size_t end = values.find(')', position + 11);
-                if (end == std::string::npos)
+              inputs.push_back(Intern(path));
+              const std::string_view raw(logical.data() + equal + 2,
+                                         logical.size() - equal - 2);
+              std::string values;
+              values.reserve(raw.size());
+              size_t cursor = 0;
+              while (cursor < raw.size()) {
+                const size_t position = raw.find("$(wildcard ", cursor);
+                const size_t end = position == std::string_view::npos
+                                       ? std::string_view::npos
+                                       : raw.find(')', position + 11);
+                if (end == std::string_view::npos) {
+                  values.append(raw.substr(cursor));
                   break;
-                const std::string literal =
-                    values.substr(position + 11, end - position - 11);
-                values.replace(position, end - position + 1, literal);
+                }
+                values.append(raw.substr(cursor, position - cursor));
+                values.append(raw.substr(position + 11, end - position - 11));
+                cursor = end + 1;
               }
               if (values.find_first_of("$*?[]#") != std::string::npos) {
                 complete = false;
@@ -366,10 +454,17 @@ void KbuildDependencyIndex::Read(const std::string& directory,
                 auto append = [&] {
                   if (word.empty())
                     return;
-                  if (word.front() != '/')
-                    word = directory + "/" + word;
-                  NormalizePath(&word);
-                  inputs.push_back(std::move(word));
+                  auto found = normalized_inputs.find(word);
+                  if (found == normalized_inputs.end()) {
+                    std::string absolute =
+                        word.front() == '/' ? word : directory + "/" + word;
+                    NormalizePath(&absolute);
+                    Symbol symbol = FindSymbol(absolute);
+                    if (!symbol.IsValid())
+                      symbol = Intern(absolute);
+                    found = normalized_inputs.emplace(word, symbol).first;
+                  }
+                  inputs.push_back(found->second);
                   word.clear();
                 };
                 for (char c : values) {
@@ -393,7 +488,7 @@ void KbuildDependencyIndex::Read(const std::string& directory,
         }
         logical.clear();
       }
-      if (!logical.empty() || input.bad())
+      if (!logical.empty())
         complete = false;
       if (compiler_output && !has_source)
         complete = false;
@@ -411,7 +506,13 @@ void KbuildDependencyIndex::Read(const std::string& directory,
 
 std::string KbuildDependencyIndex::TreeProof() const {
   std::string bytes;
-  AppendGraphString("kbuild-tree-v1", &bytes);
+  AppendGraphString("kbuild-tree-v2", &bytes);
+  std::string owners;
+  if (complete)
+    for (const auto& object : objects)
+      if (HasSuffix(object.first, ".o"))
+        AppendGraphString(object.first, &owners);
+  AppendGraphString(owners, &bytes);
   for (const auto& directory : directories) {
     AppendGraphString(directory.first, &bytes);
     AppendGraphString(directory.second.first, &bytes);
@@ -421,32 +522,50 @@ std::string KbuildDependencyIndex::TreeProof() const {
 }
 
 bool KbuildDependencyIndex::Covers(const std::string& input) const {
-  return complete && covered_inputs.count(input) != 0;
+  const Symbol symbol = FindSymbol(input);
+  return complete && symbol.IsValid() && covered_inputs.count(symbol) != 0;
 }
 
 std::vector<std::string> KbuildDependencyIndex::Inputs(
     const std::string& directory) const {
-  std::set<std::string> inputs;
+  std::unordered_set<Symbol> inputs;
   const std::string prefix = directory + "/";
-  for (const auto& object : objects)
-    if (HasPrefix(object.first, prefix))
-      inputs.insert(object.second.begin(), object.second.end());
-  return {inputs.begin(), inputs.end()};
+  for (auto object = objects.lower_bound(prefix);
+       object != objects.end() && HasPrefix(object->first, prefix); ++object)
+    inputs.insert(object->second.begin(), object->second.end());
+  std::vector<std::string> paths;
+  paths.reserve(inputs.size());
+  for (Symbol input : inputs)
+    paths.push_back(input.str());
+  std::sort(paths.begin(), paths.end());
+  return paths;
 }
 
 std::string KbuildDependencyIndex::Encode() const {
+  COLLECT_STATS("Kbuild index encode");
   // Kernel objects share thousands of headers. Store each path once instead
   // of repeating its full absolute spelling for every owner.
-  std::unordered_map<std::string_view, uint32_t> ids;
+  std::unordered_map<Symbol, uint32_t> ids;
   std::string dictionary, owners;
+  std::unordered_set<Symbol> unique_paths;
+  for (const auto& object : objects)
+    unique_paths.insert(object.second.begin(), object.second.end());
+  std::vector<Symbol> paths(unique_paths.begin(), unique_paths.end());
+  std::sort(paths.begin(), paths.end(),
+            [](Symbol left, Symbol right) { return left.str() < right.str(); });
+  for (Symbol path : paths) {
+    ids.emplace(path, ids.size());
+    AppendGraphString(path.str(), &dictionary);
+  }
   for (const auto& object : objects) {
     AppendGraphString(object.first, &owners);
     std::string inputs;
-    for (const std::string& input : object.second) {
-      auto entry = ids.emplace(input, ids.size());
-      if (entry.second)
-        AppendGraphString(input, &dictionary);
-      const uint32_t id = entry.first->second;
+    std::vector<uint32_t> references;
+    references.reserve(object.second.size());
+    for (Symbol input : object.second)
+      references.push_back(ids.at(input));
+    std::sort(references.begin(), references.end());
+    for (uint32_t id : references) {
       for (unsigned shift = 0; shift < 32; shift += 8)
         inputs += static_cast<char>(id >> shift);
     }
@@ -462,6 +581,7 @@ std::string KbuildDependencyIndex::Encode() const {
 
 bool KbuildDependencyIndex::Decode(std::string_view bytes,
                                    const std::string& directory) {
+  COLLECT_STATS("Kbuild index decode");
   objects.clear();
   covered_inputs.clear();
   complete = false;
@@ -472,7 +592,7 @@ bool KbuildDependencyIndex::Decode(std::string_view bytes,
       !ConsumeGraphString(&bytes, &coverage) ||
       (coverage != "1" && coverage != "0"))
     return false;
-  std::vector<std::string> dictionary;
+  std::vector<Symbol> dictionary;
   const bool indexed = version == "kbuild-dependencies-v2";
   if (indexed) {
     std::string encoded;
@@ -483,9 +603,12 @@ bool KbuildDependencyIndex::Decode(std::string_view bytes,
       std::string path;
       if (!ConsumeGraphString(&paths, &path))
         return false;
-      dictionary.push_back(std::move(path));
+      dictionary.push_back(Intern(path));
     }
   }
+  const bool sorted_dictionary = std::is_sorted(
+      dictionary.begin(), dictionary.end(),
+      [](Symbol left, Symbol right) { return left.str() < right.str(); });
   while (!bytes.empty()) {
     std::string object, encoded;
     if (!ConsumeGraphString(&bytes, &object) ||
@@ -493,8 +616,10 @@ bool KbuildDependencyIndex::Decode(std::string_view bytes,
       return false;
     std::string_view inputs(encoded);
     const bool keep = directory.empty() || HasPrefix(object, directory + "/");
-    std::vector<std::string> paths;
+    std::vector<Symbol> paths;
     std::string_view previous;
+    uint32_t previous_id = 0;
+    bool first = true;
     while (!inputs.empty()) {
       std::string path;
       if (indexed) {
@@ -507,10 +632,13 @@ bool KbuildDependencyIndex::Decode(std::string_view bytes,
         inputs.remove_prefix(4);
         if (id >= dictionary.size())
           return false;
-        const std::string& value = dictionary[id];
-        if (!previous.empty() && previous > value)
+        const Symbol value = dictionary[id];
+        if (sorted_dictionary ? (!first && previous_id > id)
+                              : (!previous.empty() && previous > value.str()))
           return false;
-        previous = value;
+        previous = value.str();
+        previous_id = id;
+        first = false;
         if (keep)
           paths.push_back(value);
         continue;
@@ -519,14 +647,13 @@ bool KbuildDependencyIndex::Decode(std::string_view bytes,
       }
       if (!previous.empty() && previous > path)
         return false;
-      // Legacy records own each string separately. Keep the previous value
-      // alive even when this owner lies outside the requested subtree.
-      paths.push_back(std::move(path));
-      previous = paths.back();
+      const Symbol value = Intern(path);
+      if (keep)
+        paths.push_back(value);
+      previous = value.str();
     }
-    if (!std::is_sorted(paths.begin(), paths.end()))
-      return false;
     if (keep) {
+      std::sort(paths.begin(), paths.end());
       covered_inputs.insert(paths.begin(), paths.end());
       objects.emplace(std::move(object), std::move(paths));
     }
@@ -658,6 +785,7 @@ static int GenerateImportedGraphAttempt(const Command& command,
                                         const std::string& gate,
                                         bool observed,
                                         bool allow_dynamic) {
+  COLLECT_STATS("recursive import discovery");
   // Discovery diagnostics cannot be printed speculatively: ownership or a
   // later sibling can still force ordinary recursion. A diagnostic-producing
   // child retains that original boundary and prints its messages once there.
@@ -788,8 +916,8 @@ bool ValidateImportedGraph(const std::string& path) {
   std::string_view view(bytes);
   if (!ConsumeGraphString(&view, &version))
     return false;
-  if (version == "kbuild-tree-v1")
-    return ValidateBuildTree(view);
+  if (version == "kbuild-tree-v1" || version == "kbuild-tree-v2")
+    return ValidateBuildTree(view, version == "kbuild-tree-v2");
   if (version != "import-validation-context-v1" ||
       !ConsumeGraphString(&view, &directory) ||
       !ConsumeGraphString(&view, &arguments) ||

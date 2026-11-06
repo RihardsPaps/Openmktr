@@ -4,6 +4,7 @@
 // Cover conservative depfile inference and reject ambiguous shell commands.
 // Exercise quoted literal arguments and decline shell-dependent depfile paths.
 // Round-trip shared Kbuild header ownership without repeating absolute paths.
+// Exercise long fixdep lists and reject unsupported dependency syntax.
 // Fork modifications are covered by MPL-2.0; see docs/LICENSING.md and NOTICE.
 
 // Copyright 2015 Google Inc. All rights reserved
@@ -34,10 +35,76 @@
 
 #include "fileutil.h"
 #include "graph_import.h"
+#include "graph_optimization.h"
 #include "log.h"
 #include "testutil.h"
 
 namespace {
+
+void TestLongKbuildDependencyList() {
+  char temporary[] = "/tmp/omktr-kbuild-index-XXXXXX";
+  assert(mkdtemp(temporary));
+  const std::string directory(temporary);
+  const std::string record = directory + "/.main.o.cmd";
+  const std::string source = "source_main.o := main.c\n";
+  auto publish = [&](const std::string& text) {
+    FILE* file = fopen(record.c_str(), "w");
+    assert(file);
+    assert(fwrite(text.data(), 1, text.size(), file) == text.size());
+    assert(fclose(file) == 0);
+  };
+  std::string dependencies = "deps_main.o := \\\n";
+  for (int i = 0; i < 4000; ++i)
+    dependencies +=
+        "  $(wildcard include/config/CFG" + std::to_string(i) + ") \\\n";
+  dependencies += "  include/config/SPACE\\ NAME\n";
+  publish(source + dependencies);
+  KbuildDependencyIndex index;
+  index.Read(directory, directory);
+  assert(index.complete);
+  assert(index.objects.size() == 1);
+  assert(index.Inputs(directory).size() == 4003);
+  assert(index.Covers(directory + "/include/config/CFG3999"));
+  assert(index.Covers(directory + "/include/config/SPACE NAME"));
+  char proof_name[] = "/tmp/omktr-kbuild-proof-XXXXXX";
+  int descriptor = mkstemp(proof_name);
+  assert(descriptor >= 0);
+  close(descriptor);
+  assert(WriteGraphCache(proof_name, index.TreeProof()));
+  const std::string object = directory + "/main.o";
+  descriptor = open(object.c_str(), O_CREAT | O_WRONLY | O_EXCL, 0600);
+  assert(descriptor >= 0);
+  close(descriptor);
+  assert(ValidateImportedGraph(proof_name));
+  const std::string unknown = directory + "/unknown.o";
+  descriptor = open(unknown.c_str(), O_CREAT | O_WRONLY | O_EXCL, 0600);
+  assert(descriptor >= 0);
+  close(descriptor);
+  assert(!ValidateImportedGraph(proof_name));
+  assert(unlink(unknown.c_str()) == 0);
+  assert(unlink(object.c_str()) == 0);
+  assert(symlink(record.c_str(), object.c_str()) == 0);
+  assert(!ValidateImportedGraph(proof_name));
+  assert(unlink(object.c_str()) == 0);
+  descriptor = open(object.c_str(), O_CREAT | O_WRONLY | O_EXCL, 0600);
+  assert(descriptor >= 0);
+  close(descriptor);
+  index.Read(directory, directory);
+  assert(index.complete && WriteGraphCache(proof_name, index.TreeProof()));
+  assert(unlink(object.c_str()) == 0);
+  assert(ValidateImportedGraph(proof_name));
+  assert(unlink(record.c_str()) == 0);
+  assert(!ValidateImportedGraph(proof_name));
+  assert(unlink(proof_name) == 0);
+  for (const std::string& invalid :
+       {"$(UNKNOWN)", "$(wildcard include/BROKEN", "$(wildcard include/*.h)"}) {
+    publish(source + "deps_main.o := " + invalid + "\n");
+    index.Read(directory, directory);
+    assert(!index.complete);
+  }
+  assert(unlink(record.c_str()) == 0);
+  assert(rmdir(directory.c_str()) == 0);
+}
 
 void TestSharedKbuildDependencyIndex() {
   KbuildDependencyIndex index;
@@ -49,11 +116,20 @@ void TestSharedKbuildDependencyIndex() {
   for (int i = 0; i < 128; ++i)
     headers.push_back(root + "/header" + std::to_string(i) + ".h");
   std::sort(headers.begin(), headers.end());
+  std::vector<Symbol> symbols;
+  for (const std::string& header : headers)
+    symbols.push_back(Intern(header));
+  std::sort(symbols.begin(), symbols.end());
   for (int i = 0; i < 128; ++i)
     index.objects["/build/group" + std::to_string(i / 64) + "/object" +
-                  std::to_string(i) + ".o"] = headers;
-  index.covered_inputs.insert(headers.begin(), headers.end());
+                  std::to_string(i) + ".o"] = symbols;
+  index.covered_inputs.insert(symbols.begin(), symbols.end());
   const std::string encoded = index.Encode();
+  for (auto& object : index.objects)
+    std::reverse(object.second.begin(), object.second.end());
+  assert(index.Encode() == encoded);
+  for (auto& object : index.objects)
+    std::sort(object.second.begin(), object.second.end());
   // The dependency relation has over 8 MiB of repeated absolute header names.
   // The immutable transport should grow with shared IDs, not those spellings.
   assert(encoded.size() < 1024 * 1024);
@@ -68,6 +144,21 @@ void TestSharedKbuildDependencyIndex() {
   assert(restored.complete && restored.objects.size() == 64);
   assert(restored.Inputs("/build/group0") == headers);
   assert(restored.Inputs("/build/group1").empty());
+  // Previously published v2 records use first-seen dictionary order rather
+  // than lexical IDs. They must remain readable with the compact storage.
+  std::string legacy, dictionary, references;
+  for (const char* path : {"/source/z.h", "/source/a.h"})
+    AppendGraphString(path, &dictionary);
+  references.append("\1\0\0\0\0\0\0\0", 8);
+  for (const std::string& part :
+       {std::string("kbuild-dependencies-v2"), std::string("1"), dictionary,
+        std::string("/build/legacy.o"), references})
+    AppendGraphString(part, &legacy);
+  assert(restored.Decode(legacy));
+  assert(restored.Inputs("/build") ==
+         (std::vector<std::string>{"/source/a.h", "/source/z.h"}));
+  legacy.back() = static_cast<char>(0xff);
+  assert(!restored.Decode(legacy));
 }
 
 void TestOwnedFilesystemPaths() {
@@ -206,5 +297,6 @@ int main() {
   TestRelaxedDepfiles();
   TestOwnedFilesystemPaths();
   TestSharedKbuildDependencyIndex();
+  TestLongKbuildDependencyList();
   assert(!g_failed);
 }

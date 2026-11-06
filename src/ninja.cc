@@ -9,6 +9,7 @@
 // Elide shell launches for silent, side-effect-free phony no-op recipes.
 // Read optional double-colon metadata through the shared dependency view.
 // Cache command prefixes and source local environment objects after chdir.
+// Measure recursive import preflight and Kbuild dependency inventory work.
 // Reuse output metadata within an emitted edge until an effect invalidates it.
 // Supervise generated launches and jobserver cleanup natively.
 // Own invocation state and publish coherent generations with typed freshness.
@@ -2078,6 +2079,7 @@ class NinjaGenerator {
   }
 
   bool TryImport(const NinjaNode& nn, std::ostream& out) {
+    COLLECT_STATS("recursive import preflight");
     const DepNode& node = *nn.node;
     if (!preparing_imports_) {
       auto found = prepared_imports_.find(node.output);
@@ -2781,6 +2783,7 @@ class NinjaGenerator {
   }
 
   void CollectRecursiveSourceInputs() {
+    COLLECT_STATS("recursive source inventory");
     // Imported Kbuild graphs keep some Makefile.build recursion behind a
     // runtime recipe, so Ninja cannot see the source prerequisites recorded
     // in Kbuild's per-object .cmd files. Feed the recursive file targets a
