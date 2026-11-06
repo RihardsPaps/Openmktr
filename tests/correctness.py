@@ -18,6 +18,49 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_inferred_compiler_preserves_supported_wrappers(self):
+        root = self.directory
+        for wrapper_name in ("ccache", "sccache", "custom-wrapper"):
+            with self.subTest(wrapper=wrapper_name):
+                self.directory = root / wrapper_name
+                self.directory.mkdir()
+                wrapper = self.directory / wrapper_name
+                wrapper.write_text('#!/bin/sh\nexec "$@"\n')
+                wrapper.chmod(0o755)
+                self.makefile("all: out.o\nout.o: source.c\n"
+                              f"\t@{wrapper} clang -c -MMD -MF out.d -o out.o source.c\n")
+                (self.directory / "source.c").write_text("int value;\n")
+                self.direct("build", "--graph_optimizations=aggressive", "all")
+                self.assertTrue((self.directory / "out.o").is_file())
+                graph = (self.directory / ".openmktr/build.ninja").read_text()
+                if wrapper_name in ("ccache", "sccache"):
+                    self.assertIn("omktr_depfile = out.d.tmp\n", graph)
+                else:
+                    self.assertNotIn("omktr_depfile =", graph)
+        self.directory = root
+
+    def test_inferred_depfiles_follow_the_executed_compiler_branch(self):
+        self.makefile("all: out.o\nout.o: first.c second.c selection\n"
+                      "\t@if test \"$$(cat selection)\" = first; then "
+                      "clang -c -MMD -MF first.d -o out.o first.c; else "
+                      "clang -c -MMD -MF second.d -o out.o second.c; fi\n")
+        for name in ("first", "second"):
+            (self.directory / (name + ".c")).write_text(
+                f'#include "{name}.h"\nint value = VALUE;\n')
+            (self.directory / (name + ".h")).write_text("#define VALUE 1\n")
+        command = ("build", "--graph_optimizations=aggressive", "all")
+        for name, other in (("second", "first"), ("first", "second")):
+            (self.directory / "selection").write_text(name)
+            self.direct(*command)
+            original = (self.directory / "out.o").read_bytes()
+            _, dependencies = self.run_command("ninja", "-f", ".openmktr/build.ninja",
+                                                "-t", "deps", "out.o")
+            self.assertIn(name + ".h", dependencies)
+            self.assertNotIn(other + ".h", dependencies)
+            (self.directory / (name + ".h")).write_text("#define VALUE 2\n")
+            self.direct(*command)
+            self.assertNotEqual((self.directory / "out.o").read_bytes(), original)
+
     def test_existing_directory_is_current_before_marker_creation(self):
         root = self.directory
         for mode in ("direct", "build", "legacy"):

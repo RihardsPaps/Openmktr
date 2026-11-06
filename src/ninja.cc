@@ -45,6 +45,7 @@
 // Keep input manifests immutable across configurations and graph generations.
 // Inline small freshness checks while retaining manifests for wide input lists.
 // Keep directory freshness and conditional depfile copies aligned with Make.
+// Rewrite complete compiler commands and collect every executed branch's deps.
 // Keep runtime-expanded nonrecursive recipes in Ninja's job budget.
 // Limit depfile inference to literal compiler commands; preserve quoted
 // recipes. Reject known Ninja compatibility gaps before publishing a strict
@@ -329,62 +330,82 @@ bool GetDepfileFromCommand(std::string* cmd,
   return true;
 }
 
-static bool GetDepfileFromRecipe(std::string* command_recipe,
-                                 std::string* depfile) {
-  const std::string_view recipe(*command_recipe);
-  for (size_t i = 0; i < recipe.size(); ++i) {
-    if (i && !isspace(recipe[i - 1]) &&
-        std::string_view(";&|()\n").find(recipe[i - 1]) ==
-            std::string_view::npos)
-      continue;
-    size_t end = i;
-    while (end < recipe.size() &&
-           std::string_view("abcdefghijklmnopqrstuvwxyz"
-                            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                            "0123456789_./+-")
-                   .find(recipe[end]) != std::string_view::npos)
-      ++end;
-    if (end == i)
-      continue;
-    const std::string_view executable = recipe.substr(i, end - i);
-    const std::string_view basename = Basename(executable);
-    if (basename != "clang" && basename != "clang++" && basename != "gcc" &&
-        basename != "g++" && basename != "cc" && basename != "c++" &&
-        basename != "nasm" && basename != "yasm")
-      continue;
-    size_t command_end = end;
-    char quote = 0;
-    bool escaped = false;
-    for (; command_end < recipe.size(); ++command_end) {
-      const char c = recipe[command_end];
-      if (escaped) {
-        escaped = false;
-      } else if (c == '\\') {
-        escaped = true;
-      } else if (quote) {
-        if (c == quote)
-          quote = 0;
-      } else if (c == '\'' || c == '"') {
-        quote = c;
-      } else if (c == ';' || c == '\n' || c == ')' ||
-                 (c == '&' && command_end + 1 < recipe.size() &&
-                  recipe[command_end + 1] == '&') ||
-                 (c == '|' && command_end + 1 < recipe.size() &&
-                  recipe[command_end + 1] == '|')) {
+struct InferredCompiler {
+  size_t begin;
+  size_t end;
+  std::string depfile;
+};
+
+static std::vector<InferredCompiler> GetCompilersFromRecipe(
+    std::string_view recipe) {
+  std::vector<InferredCompiler> result;
+  auto inspect = [&](size_t begin, size_t end) {
+    while (begin < end) {
+      while (begin < end && isspace(static_cast<unsigned char>(recipe[begin])))
+        ++begin;
+      size_t word_end = begin;
+      while (word_end < end &&
+             !isspace(static_cast<unsigned char>(recipe[word_end])))
+        ++word_end;
+      const std::string_view word = recipe.substr(begin, word_end - begin);
+      if (word != "if" && word != "then" && word != "else" && word != "elif" &&
+          word != "while" && word != "until" && word != "do" && word != "!" &&
+          word != "{")
         break;
-      }
+      begin = word_end;
     }
-    std::string command(recipe.substr(i, command_end - i));
-    const bool detected = GetDepfileFromCommand(&command, depfile, true, true);
-    if (detected) {
-      // Keep the copy in the compiler's branch, including when the compiler
-      // is itself the condition of an if/while or a short-circuited list.
-      command_recipe->replace(i, command_end - i, "( " + command + " )");
-      return true;
+    while (end > begin && isspace(static_cast<unsigned char>(recipe[end - 1])))
+      --end;
+    if (begin == end)
+      return;
+    // Inspect a complete simple command. Supported wrappers stay inside its
+    // rewrite; a compiler-looking argument to an unknown command is not an
+    // invocation and must never be replaced independently.
+    std::string command(recipe.substr(begin, end - begin));
+    std::string depfile;
+    if (GetDepfileFromCommand(&command, &depfile, true, false))
+      result.push_back({begin, end, std::move(depfile)});
+  };
+  size_t begin = 0;
+  char quote = 0;
+  bool escaped = false;
+  for (size_t i = 0; i < recipe.size(); ++i) {
+    const char c = recipe[i];
+    if (escaped) {
+      escaped = false;
+    } else if (quote) {
+      if (c == quote)
+        quote = 0;
+      else if (quote == '"' && c == '\\')
+        escaped = true;
+    } else if (c == '\\') {
+      escaped = true;
+    } else if (c == '\'' || c == '"') {
+      quote = c;
+    } else if (c == '#' && (i == begin || isspace(static_cast<unsigned char>(
+                                              recipe[i - 1])))) {
+      inspect(begin, i);
+      while (i < recipe.size() && recipe[i] != '\n')
+        ++i;
+      begin = i + 1;
+    } else if (c == ';' || c == '\n' || c == '(' || c == ')' || c == '&' ||
+               c == '|') {
+      // Pipes and asynchronous lists do not prove when a compiler has
+      // completed. Keep their original command boundary and explicit deps.
+      if ((c == '&' || c == '|') &&
+          (i + 1 == recipe.size() || recipe[i + 1] != c))
+        return {};
+      inspect(begin, i);
+      if (c == '&' || c == '|')
+        ++i;
+      begin = i + 1;
     }
-    i = end - 1;
   }
-  return false;
+  if (quote || escaped)
+    return {};
+  if (begin < recipe.size())
+    inspect(begin, recipe.size());
+  return result;
 }
 
 struct NinjaNode {
@@ -1350,25 +1371,46 @@ class NinjaGenerator {
       bool inferred_depfile_from_recipe = false;
       std::vector<Command> depfile_commands;
       if (!node->depfile_var && g_flags.GraphOptimizationEnabled("depfiles")) {
-        depfile_commands = commands;
+        std::vector<std::vector<InferredCompiler>> compilers;
+        size_t count = 0;
         bool ambiguous = false;
-        for (Command& command : depfile_commands) {
+        for (const Command& command : commands) {
           if (!command.runtime_sidecar.empty()) {
             ambiguous = true;
             break;
           }
-          std::string candidate;
-          if (GetDepfileFromRecipe(&command.cmd, &candidate)) {
-            if (inferred_depfile_from_recipe) {
-              ambiguous = true;
-              break;
+          compilers.push_back(GetCompilersFromRecipe(command.cmd));
+          count += compilers.back().size();
+        }
+        if (!ambiguous && count) {
+          inferred_depfile_from_recipe = true;
+          if (count == 1) {
+            for (const auto& candidates : compilers)
+              if (!candidates.empty())
+                inferred_depfile = candidates.front().depfile + ".tmp";
+          } else {
+            inferred_depfile = GetFilename(".kati-inferred-deps%s-") +
+                               GraphDigest(node->output.str()) + ".tmp";
+          }
+          depfile_commands = commands;
+          for (size_t i = 0; i < compilers.size(); ++i) {
+            for (auto compiler = compilers[i].rbegin();
+                 compiler != compilers[i].rend(); ++compiler) {
+              const std::string original = depfile_commands[i].cmd.substr(
+                  compiler->begin, compiler->end - compiler->begin);
+              const std::string capture =
+                  count == 1 ? "cp " + ShellQuote(compiler->depfile) + " " +
+                                   ShellQuote(inferred_depfile)
+                             : "cat " + ShellQuote(compiler->depfile) + " >> " +
+                                   ShellQuote(inferred_depfile) +
+                                   " && printf '\\n' >> " +
+                                   ShellQuote(inferred_depfile);
+              depfile_commands[i].cmd.replace(
+                  compiler->begin, compiler->end - compiler->begin,
+                  "( " + original + " && " + capture + " )");
             }
-            inferred_depfile = std::move(candidate);
-            inferred_depfile_from_recipe = true;
           }
         }
-        if (ambiguous)
-          inferred_depfile_from_recipe = false;
       }
       GenShellScript(node->output.c_str(),
                      inferred_depfile_from_recipe ? depfile_commands : commands,
@@ -1377,6 +1419,11 @@ class NinjaGenerator {
       bool has_depfile;
       if (inferred_depfile_from_recipe) {
         depfile = inferred_depfile;
+        // Every executed branch contributes its dependencies to one fresh
+        // stream. An unexecuted compiler contributes nothing, including after
+        // an earlier failed build left a partial depfile behind.
+        cmd_buf = "rm -f " + EscapeNinja(ShellQuote(depfile)) + " && ( " +
+                  cmd_buf + " )";
         has_depfile = true;
       } else {
         has_depfile = GetDepfile(node, &cmd_buf, &depfile);
