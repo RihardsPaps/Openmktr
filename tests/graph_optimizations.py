@@ -22,6 +22,66 @@ BINARY = Path(os.environ.get("OMKTR_BINARY", Path(__file__).resolve().parents[1]
 
 
 class GraphOptimizations(unittest.TestCase):
+    @unittest.skipUnless(sys.platform.startswith("linux"), "uses Linux process descriptors")
+    def test_waiting_deferred_admission_does_not_consume_shared_tokens(self):
+        import array
+        import fcntl
+        import termios
+        (self.root / "seed").touch()
+        self.makefile("MODE := RUN\nRUN := :\n.PHONY: all a b c d\n"
+                      "all: a b c d\na b c d: seed\n\t@$($(MODE))\n")
+        self.run_tool("--ninja", "--graph_optimizations=aggressive", "all")
+        state = self.root / ".kati-recursion-lock"
+        fifo = self.root / "tokens"
+        os.mkfifo(fifo)
+        descriptor = os.open(fifo, os.O_RDWR | os.O_NONBLOCK)
+        self.addCleanup(os.close, descriptor)
+        os.write(descriptor, b"xxxx")
+        env = dict(os.environ, KATI_JOBSERVER_FIFO=str(fifo), KATI_JOBSERVER_RESERVED="0",
+                   KATI_NINJA_RECURSION_STATE=str(state), KATI_JOBS="4")
+        env.pop("KATI_RECIPE_ADMISSION_FD", None)
+        with state.open("w") as lock:
+            # Cover both the old process lock and the transferred file-description
+            # lease, so this test independently reproduces token consumption.
+            fcntl.lockf(lock, fcntl.LOCK_EX)
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            process = subprocess.Popen(["ninja", "-j4"], cwd=self.root, env=env,
+                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                       start_new_session=True)
+            try:
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    helpers = 0
+                    for path in Path("/proc").glob("[0-9]*/cmdline"):
+                        try:
+                            command = path.read_bytes().split(b"\0")
+                        except OSError:
+                            continue
+                        if (len(command) > 2 and command[0] == os.fsencode(BINARY)
+                                and command[1].startswith(b"--internal-run-")
+                                and os.fsencode(self.root) in b" ".join(command)):
+                            helpers += 1
+                    if helpers == 4:
+                        break
+                    time.sleep(.01)
+                self.assertEqual(helpers, 4)
+                time.sleep(.1)
+                available = array.array("i", [0])
+                fcntl.ioctl(descriptor, termios.FIONREAD, available, True)
+                self.assertEqual(available[0], 4)
+            finally:
+                fcntl.lockf(lock, fcntl.LOCK_UN)
+                fcntl.flock(lock, fcntl.LOCK_UN)
+                try:
+                    output = process.communicate(timeout=10)[0]
+                except subprocess.TimeoutExpired:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    output = process.communicate()[0]
+            self.assertEqual(process.returncode, 0, output.decode())
+        available = array.array("i", [0])
+        fcntl.ioctl(descriptor, termios.FIONREAD, available, True)
+        self.assertEqual(available[0], 4)
+
     def test_absolute_recursive_output_keeps_all_child_goals(self):
         result = self.root / "result"
         (self.root / "child.mk").write_text(

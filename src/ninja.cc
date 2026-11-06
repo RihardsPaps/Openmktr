@@ -548,7 +548,13 @@ class NinjaGenerator {
       working_dir_ = cwd;
     else
       PERROR("getcwd failed while generating Ninja graph");
-    working_prefix_ = EscapeNinja("cd " + ShellQuote(working_dir_) + " && ");
+    // Command text needs dollar escaping. Path-only space escapes would
+    // corrupt the stored shell-script form of a large recipe.
+    for (char c : "cd " + ShellQuote(working_dir_) + " && ") {
+      if (c == '$')
+        working_prefix_ += '$';
+      working_prefix_ += c;
+    }
     quoted_binary_ = ShellQuote(kati_binary_);
     ninja_binary_ = EscapeNinja(quoted_binary_);
     if (g_flags.GraphOptimizationEnabled("compact")) {
@@ -1832,9 +1838,14 @@ class NinjaGenerator {
       const bool helper_recipe = token_recipe || use_local_pool ||
                                  !cleanup_output.empty() ||
                                  !recipe_state.empty();
-      const char* recipe_helper = token_recipe
-                                      ? " --internal-run-recipe "
-                                      : " --internal-run-recursive-recipe ";
+      const bool admitted_recipe =
+          !commands.front().runtime_sidecar.empty() &&
+          commands.front().runtime_may_recurse &&
+          g_flags.graph_optimizations == Flags::GraphOptimizations::kAggressive;
+      const char* recipe_helper =
+          admitted_recipe ? " --internal-run-admitted-recipe "
+          : token_recipe  ? " --internal-run-recipe "
+                          : " --internal-run-recursive-recipe ";
       const bool recipe_in_rsp = cmd_buf.size() > 100 * 1000;
       const std::string cleanup_arg =
           recipe_state.empty()
@@ -1864,8 +1875,9 @@ class NinjaGenerator {
             GetFilename(".kati_script-") + GraphDigest(script), script);
         MakefileCacheManager::Get().AddGeneratedGraphDep(script_path);
         cmd_buf = admission_prefix + ninja_binary_ +
-                  (token_recipe ? " --internal-run-recipe-file "
-                                : " --internal-run-recursive-recipe-file ") +
+                  (admitted_recipe ? " --internal-run-admitted-recipe-file "
+                   : token_recipe  ? " --internal-run-recipe-file "
+                                   : " --internal-run-recursive-recipe-file ") +
                   ShellQuote(command_shell) + " " +
                   ShellQuote(command_shellflag) + " " +
                   EscapeNinja(ShellQuote(script_path)) +
@@ -2152,6 +2164,7 @@ class NinjaGenerator {
       // for every recursive frontend.
       if (HasPrefix(*entry, "CODEX_TOOL_CALL_ID=") ||
           HasPrefix(*entry, "KATI_NINJA_RECURSION_STATE=") ||
+          HasPrefix(*entry, "KATI_RECIPE_ADMISSION_FD=") ||
           HasPrefix(*entry, "KATI_IMPORT_"))
         continue;
       inherited_environment.emplace_back(*entry);
@@ -3412,6 +3425,7 @@ class NinjaGenerator {
       // input. Comparing it with the caller's environment forces false regen.
       if (e.str() == "MFLAGS" || e.str() == "CODEX_TOOL_CALL_ID" ||
           e.str() == "KATI_NINJA_RECURSION_STATE" ||
+          e.str() == "KATI_RECIPE_ADMISSION_FD" ||
           e.str() == "KATI_IMPORT_SOURCE_DIRTY" ||
           e.str() == "KATI_IMPORT_SOURCE_FINGERPRINT" ||
           e.str() == "KATI_IMPORT_DEPENDENCY_INDEX" ||
@@ -3463,6 +3477,8 @@ class NinjaGenerator {
           symbol.str() == "KATI_NINJA_DEFAULT_GOALS" ||
           symbol.str() == "KATI_NINJA_LOAD_STATE" ||
           symbol.str() == "KATI_NINJA_RECURSION_STATE")
+        continue;
+      if (symbol.str() == "KATI_RECIPE_ADMISSION_FD")
         continue;
       if (!IsShellIdentifier(symbol.str())) {
         continue;

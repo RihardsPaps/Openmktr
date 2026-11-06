@@ -30,12 +30,14 @@
 
 #include <fcntl.h>
 #include <poll.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #if defined(__linux__)
 #include <sys/eventfd.h>
 #endif
 #include <atomic>
+#include <climits>
 #include <mutex>
 
 #include "fileutil.h"
@@ -240,22 +242,40 @@ void ReleaseKatiJobToken(int fd) {
   }
 }
 
-RecipeAdmission::RecipeAdmission(bool acquire) {
-  const char* path = getenv("KATI_NINJA_RECURSION_STATE");
-  if (!acquire || !path || !*path)
+RecipeAdmission::RecipeAdmission(bool acquire, bool adopt) {
+  const char* requested = getenv("KATI_NINJA_RECURSION_STATE");
+  if (!acquire || !requested || !*requested)
     return;
-  fd_ = open(path, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
+  const std::string path(requested);
+  if (adopt) {
+    const char* value = getenv("KATI_RECIPE_ADMISSION_FD");
+    if (value && *value) {
+      char* end;
+      errno = 0;
+      const long inherited = strtol(value, &end, 10);
+      if (errno || *end || inherited < 3 || inherited > INT_MAX)
+        ERROR("invalid inherited recipe admission descriptor");
+      fd_ = static_cast<int>(inherited);
+      struct stat descriptor, state;
+      if (fstat(fd_, &descriptor) != 0 || lstat(path.c_str(), &state) != 0 ||
+          descriptor.st_dev != state.st_dev ||
+          descriptor.st_ino != state.st_ino)
+        ERROR("recipe admission descriptor does not match its state");
+      if (fcntl(fd_, F_SETFD, FD_CLOEXEC) != 0)
+        PERROR("scope inherited recipe admission descriptor");
+    }
+    unsetenv("KATI_RECIPE_ADMISSION_FD");
+  }
+  if (fd_ < 0)
+    fd_ = open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
   if (fd_ < 0)
     PERROR("open Ninja recursive admission failed");
   struct stat metadata;
   if (fstat(fd_, &metadata) != 0 || !S_ISREG(metadata.st_mode) ||
       metadata.st_nlink != 1)
     ERROR("invalid Ninja recursive admission state");
-  struct flock guard = {};
-  guard.l_type = F_WRLCK;
-  guard.l_whence = SEEK_SET;
   while (!GetBuildSignal()) {
-    if (fcntl(fd_, F_SETLKW, &guard) == 0)
+    if (flock(fd_, LOCK_EX) == 0)
       return;
     if (errno != EINTR)
       PERROR("lock Ninja recursive admission failed");
@@ -267,8 +287,23 @@ RecipeAdmission::~RecipeAdmission() {
   Release();
 }
 
+void RecipeAdmission::Export() {
+  if (fd_ < 0)
+    ERROR("missing recipe admission state");
+  const int inherited = fcntl(fd_, F_DUPFD, 20);
+  if (inherited < 0)
+    PERROR("pass recipe admission descriptor");
+  close(fd_);
+  fd_ = inherited;
+  setenv("KATI_RECIPE_ADMISSION_FD", std::to_string(fd_).c_str(), 1);
+}
+
 void RecipeAdmission::Release() {
   if (fd_ >= 0) {
+    // flock follows the open file description across exec. Releasing an
+    // expanded ordinary command also releases its supervisor's shared lease.
+    if (flock(fd_, LOCK_UN) != 0)
+      PERROR("release recipe admission failed");
     close(fd_);
     fd_ = -1;
   }

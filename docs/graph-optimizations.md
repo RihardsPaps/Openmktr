@@ -169,6 +169,9 @@ compilation in a serial Ninja pool. Native nested Ninja launchers use separate
 admission files, and standalone Ninja uses a graph-local fallback. Safe and Off
 profiles retain conservative scheduling for computed recursive references.
 Explicit `.NOTPARALLEL` and other execution constraints remain in force.
+Supervisors acquire expansion admission before taking a shared job token and
+transfer the live lease to their evaluator. Waiting expansion helpers therefore
+leave the token budget available to an active recursive build.
 
 Independent metadata validation uses batches with at most eight native workers.
 Parsed Makefiles still retain content identities, so timestamp-preserving edits

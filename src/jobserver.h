@@ -22,9 +22,10 @@ int AcquireNinjaLoadSlot();
 // parallel even when their variable selectors required a full runtime context.
 class RecipeAdmission {
  public:
-  explicit RecipeAdmission(bool acquire = true);
+  explicit RecipeAdmission(bool acquire = true, bool adopt = false);
   ~RecipeAdmission();
   void Release();
+  void Export();
   bool held() const { return fd_ >= 0; }
   RecipeAdmission(const RecipeAdmission&) = delete;
   RecipeAdmission& operator=(const RecipeAdmission&) = delete;

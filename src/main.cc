@@ -2183,17 +2183,32 @@ static int Main(int argc, char* argv[]) {
       return HandleRunNinja(argc, argv);
     } else if ((!strcmp(argv[1], "--internal-run-recipe") ||
                 !strcmp(argv[1], "--internal-run-recursive-recipe") ||
+                !strcmp(argv[1], "--internal-run-admitted-recipe") ||
                 !strcmp(argv[1], "--internal-run-recipe-file") ||
+                !strcmp(argv[1], "--internal-run-admitted-recipe-file") ||
                 !strcmp(argv[1], "--internal-run-recursive-recipe-file")) &&
                (argc == 5 || argc == 6 || argc == 7)) {
       std::string script;
       if (!strcmp(argv[1], "--internal-run-recipe-file") ||
+          !strcmp(argv[1], "--internal-run-admitted-recipe-file") ||
           !strcmp(argv[1], "--internal-run-recursive-recipe-file")) {
         if (!ReadGraphCache(argv[4], &script))
           ERROR("missing or corrupt recipe script; regenerate the Ninja graph");
         argv[4] = script.data();
       }
       ScopedBuildSignals signals;
+      const bool recursive_recipe =
+          !strcmp(argv[1], "--internal-run-recursive-recipe") ||
+          !strcmp(argv[1], "--internal-run-recursive-recipe-file");
+      const bool admitted_recipe =
+          !strcmp(argv[1], "--internal-run-admitted-recipe") ||
+          !strcmp(argv[1], "--internal-run-admitted-recipe-file");
+      unsetenv("KATI_RECIPE_ADMISSION_FD");
+      RecipeAdmission recursion(recursive_recipe || admitted_recipe);
+      if (GetBuildSignal())
+        return 128 + GetBuildSignal();
+      if (admitted_recipe)
+        recursion.Export();
       const int load_slot = AcquireNinjaLoadSlot();
       std::string recipe_state;
       if (argc == 7) {
@@ -2216,12 +2231,6 @@ static int Main(int argc, char* argv[]) {
       } else {
         unsetenv("KATI_RECIPE_STATE_PATH");
       }
-      const bool recursive_recipe =
-          !strcmp(argv[1], "--internal-run-recursive-recipe") ||
-          !strcmp(argv[1], "--internal-run-recursive-recipe-file");
-      RecipeAdmission recursion(recursive_recipe);
-      if (GetBuildSignal())
-        return 128 + GetBuildSignal();
       // A recursive recipe helper owns neither output cleanup nor workspace
       // state when invoked with the plain five-argument form. Replace the
       // helper process with its shell instead of forking a shell and waiting
@@ -2236,8 +2245,7 @@ static int Main(int argc, char* argv[]) {
       }
       const int status = RunCommand(
           argv[2], argv[3], argv[4], RedirectStderr::NONE, nullptr,
-          (!strcmp(argv[1], "--internal-run-recipe") ||
-           !strcmp(argv[1], "--internal-run-recipe-file")),
+          !recursive_recipe,
           [](std::string_view output) {
             fwrite(output.data(), 1, output.size(), stdout);
             fflush(stdout);

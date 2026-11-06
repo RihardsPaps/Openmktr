@@ -676,7 +676,8 @@ bool MakeRuntimeRecipe(const DepNode& node,
     }
     std::sort(selected.begin(), selected.end());
     for (const std::string& name : selected) {
-      if (HasPrefix(name, "KATI_IMPORT_") ||
+      if (name == "KATI_RECIPE_ADMISSION_FD" ||
+          HasPrefix(name, "KATI_IMPORT_") ||
           name == "KATI_NINJA_RECURSION_STATE")
         continue;
       Symbol symbol = Intern(name);
@@ -1094,7 +1095,7 @@ void PrepareRuntimeContexts(const std::string& manifest) {
 
 int RunRuntimeRecipe(const char* path, bool admitted) {
   ScopedBuildSignals signals;
-  RecipeAdmission admission(admitted);
+  RecipeAdmission admission(admitted, true);
   if (GetBuildSignal())
     return 128 + GetBuildSignal();
   g_flags.executable_path = GetExecutablePath();
@@ -1623,6 +1624,7 @@ static bool IsRecursiveTransportVariable(std::string_view name) {
          name == "MAKELEVEL" || name == "KATI_JOBSERVER_RESERVED" ||
          name == "KATI_NINJA_LOAD_LIMIT" || name == "KATI_NINJA_LOAD_STATE" ||
          name == "KATI_NINJA_RECURSION_STATE" ||
+         name == "KATI_RECIPE_ADMISSION_FD" ||
          name == "KATI_RUNTIME_CONTEXT_FD" || name == "KATI_GRAPH_SETTINGS";
 }
 
@@ -1758,6 +1760,7 @@ static void ExportAllVariables(Command* command, Evaluator* ev) {
         name_view == "KATI_NINJA_LOAD_LIMIT" ||
         name_view == "KATI_NINJA_LOAD_STATE" ||
         name_view == "KATI_NINJA_RECURSION_STATE" ||
+        name_view == "KATI_RECIPE_ADMISSION_FD" ||
         name_view == "KATI_GRAPH_SETTINGS" ||
         !IsShellIdentifierCommand(name_view) ||
         !emitted.insert(std::string(name_view)).second)

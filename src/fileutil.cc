@@ -89,6 +89,7 @@ const std::string& InvocationEnvironmentIdentity() {
       // its options. MFLAGS is reconstructed from those same options.
       if (HasPrefix(*entry, "MAKEFLAGS=") || HasPrefix(*entry, "MFLAGS=") ||
           HasPrefix(*entry, "KATI_NINJA_RECURSION_STATE=") ||
+          HasPrefix(*entry, "KATI_RECIPE_ADMISSION_FD=") ||
           HasPrefix(*entry, "KATI_IMPORT_"))
         continue;
       entries.emplace_back(*entry);
