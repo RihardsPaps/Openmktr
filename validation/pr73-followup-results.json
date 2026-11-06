@@ -2,7 +2,7 @@
   "date": "2026-11-06",
   "pull_request": "https://github.com/RihardsPaps/Openmktr/pull/74",
   "baseline_revision": "e466d484059e29f641142acd0fbcf81376b2ecc1",
-  "final_code_revision": "c864232e92b95535c5ae9eb1a2c409f83e6ac7ec",
+  "final_code_revision": "ac1ce3fd7e190d9f226f750c3470f1351e30750b",
   "location": "User PC, Docker Desktop local containers and local volumes; no NAS",
   "core_toolchain": "Chimera Clang 22.1.8, musl, libc++, Ninja 1.13.2; matching baseline/candidate flags",
   "release_sources_patched": false,
@@ -1340,8 +1340,8 @@
     "code_revision": "c864232e92b95535c5ae9eb1a2c409f83e6ac7ec"
   },
   "tests": {
-    "graph_normal": 90,
-    "graph_asan_ubsan": 90,
+    "graph_normal": 91,
+    "graph_asan_ubsan": 91,
     "correctness_safe": 210,
     "correctness_aggressive": 210,
     "snapshots_safe": 860,
@@ -1352,15 +1352,24 @@
     "portable_complete_gate": "passed during implementation; final code reran both correctness and snapshot profiles",
     "complete_sanitizer_suite": "passed during implementation; final code reran expanded graph and C++ index checks",
     "safe_revision": "a5e84b1",
-    "final_aggressive_revision": "c864232",
-    "gentoo": "full local compatibility script passed at 3d97db3; final CI status linked on PR"
+    "final_aggressive_revision": "ac1ce3f",
+    "gentoo": "full local compatibility script passed at 3d97db3; final CI status linked on PR",
+    "ninja_jobserver_tests": 14,
+    "shell_indirection_cases": 8,
+    "preceding_full_ci": {
+      "revision": "c864232e92b95535c5ae9eb1a2c409f83e6ac7ec",
+      "chimera": "https://github.com/RihardsPaps/Openmktr/actions/runs/42230531661",
+      "release": "https://github.com/RihardsPaps/Openmktr/actions/runs/42230531718",
+      "external_compatibility": "https://github.com/RihardsPaps/Openmktr/actions/runs/42230531964",
+      "conclusion": "success"
+    }
   },
   "codex_review": {
-    "final_code": "c864232",
+    "final_code": "ac1ce3f",
     "final_has_findings": false,
-    "receipt": "https://github.com/RihardsPaps/Openmktr/pull/74#issuecomment-6686702272",
-    "actionable_findings_fixed": 5,
-    "resolved_threads": 5
+    "receipt": "https://github.com/RihardsPaps/Openmktr/pull/74#issuecomment-6687121961",
+    "actionable_findings_fixed": 6,
+    "resolved_threads": 6
   },
   "retained_attempts": {
     "pr74-linux": {
@@ -2608,12 +2617,19 @@
       "FFmpeg strict combined gate fails its missing-object RSS median criterion.",
       "Linux conservative missing-object ownership refresh remains costly; use reported timing intervals.",
       "Measurements apply only to recorded versions, profile, configuration and toolchain."
-    ]
+    ],
+    "post_measurement_admission_fix": "ac1ce3f retains admission for unresolved dollar/backtick shell expansion; 91 normal and ASan/UBSan graph tests, aggressive correctness/snapshots and jobserver checks pass; literal compiler parallelism is verified, but no release performance matrix is relabeled or requalified"
   },
   "evidence": {
     "path": "validation/evidence/pr74-followup-2026-11-06.zip",
     "sha256": "1c04c3d8c24611a6bc6e8b74d07e470ec8e609ba1a3d9571ded29788606c1b5e",
     "bytes": 626858,
-    "per_entry_manifest": "manifest.json"
+    "per_entry_manifest": "manifest.json",
+    "admission_addendum": {
+      "path": "validation/evidence/pr74-admission-addendum-2026-11-06.zip",
+      "sha256": "1c0fa8b61a19a37d3a381c3dffb283b5f3393f52a173ff4c4d48eacb6514aed8",
+      "bytes": 63354,
+      "entries": 13
+    }
   }
 }

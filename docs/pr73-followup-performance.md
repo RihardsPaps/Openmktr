@@ -94,7 +94,7 @@ reuse to the same immutable index. It also excludes private generated scripts
 from in-tree source inventories. Its targeted kernel source/missing/graph/no-op
 probe passes, but still shows the expensive ownership-proof path. The seven-pair
 matrix above was not rerun at this later revision and is not relabeled as such.
-The final header-touch check rebuilds all three recorded `init/do_mounts.h`
+The header-touch check at `c864232` rebuilds all three recorded `init/do_mounts.h`
 owners, leaves `kernel/fork.o` unchanged and preserves both kernel artifact hashes.
 No kernel boot test was performed.
 
@@ -103,19 +103,30 @@ No kernel boot test was performed.
 The complete supported Docker gate and complete CI sanitizer command sequence
 passed during implementation. At `a5e84b1`, 89 graph tests pass normally and under
 ASan/UBSan, both 210-test correctness profiles pass, and both 860-scenario snapshot
-profiles match without changed expectations or quarantined crashes. The final
+profiles match without changed expectations or quarantined crashes. The later
 `c864232` code passes 90 graph tests normally and under ASan/UBSan, plus the
 210-test Aggressive correctness suite and all 860 Aggressive snapshots.
+The admission fix at `ac1ce3f` passes 91 graph tests normally and under ASan/UBSan,
+210 Aggressive correctness tests, all 860 Aggressive snapshots and 14 jobserver
+tests. Its eight variable/substitution cases fail before the fix and pass in
+native and standalone Ninja modes. A strengthened test proves actual runtime
+deferral while literal compiler commands still reach three to four workers.
 The C++ shared-header index round-trip and scoped-loading checks pass
 normally and under sanitizers. Full local Gentoo compatibility passed after
 fixing Bash/glibc startup observations; subsequent CI covers the final revision.
 
-All five actionable Codex review findings have regressions and resolved threads:
+All six actionable Codex review findings have regressions and resolved threads:
 duplicate absolute producers, two phony invalidation cases, consuming caller
-stdin through descriptor transfers, and changing its offset through seeks.
-The final code review at `c864232` reports no further findings.
+stdin through descriptor transfers, changing its offset through seeks, and
+releasing admission before shell-indirect recursive execution. The last fix
+retains admission for dollar/backtick shell expressions; this can conservatively
+serialize complex shell recipes. The performance tables predate this adjustment
+and are not relabeled as its measurements. Codex's review at `ac1ce3f` reports
+no further findings.
 
 The [evidence archive](../validation/evidence/pr74-followup-2026-11-06.zip)
 contains command journals, individual samples, metadata and tool identities,
 retained failures, diagnostic controllers and local test logs. Its manifest
 checksums every entry. The machine-readable report records the archive digest.
+The [admission addendum](../validation/evidence/pr74-admission-addendum-2026-11-06.zip)
+retains the final patch, source, failing-before evidence and passing validation.

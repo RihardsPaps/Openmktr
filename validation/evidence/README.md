@@ -59,6 +59,11 @@ gate fails an RSS median criterion. Linux passes artifact and rebuild checks
 while its conservative ownership refresh causes supported regressions. No
 profile promotion is claimed. Large binaries and release trees remain local
 and are excluded from the archive.
+The [admission addendum](pr74-admission-addendum-2026-11-06.zip) preserves the
+subsequent shell-indirection fix, eight failing-before/passing-after concurrency
+cases, genuinely deferred compiler-parallelism checks and final 91-test graph
+validation. Both archive digests are recorded in the machine-readable report;
+the earlier benchmark revisions remain unchanged.
 
 ## Historical raw reports
 

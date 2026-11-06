@@ -170,8 +170,10 @@ timestamp changes do not replace the frontend validator with another discovery
 pass. Private generated scripts are excluded from the in-tree source inventory.
 
 In Aggressive mode, deferred recipe expansion takes a native admission lock only
-after prerequisites complete. After expansion, an ordinary compiler command
-releases the lock and runs under the shared job budget. An actual recursive
+after prerequisites complete. After expansion, a literal nonrecursive compiler
+command releases the lock and runs under the shared job budget. Dollar or backtick
+shell expansion retains admission because it can select a recursive executable
+after Make expansion. An actual recursive
 Openmktr command holds admission until it finishes, together with ordinary opaque
 recursive recipes. Thus a computed compiler-variable name no longer puts every
 compilation in a serial Ninja pool. Native nested Ninja launchers use separate
