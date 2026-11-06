@@ -73,7 +73,8 @@ const std::string* InvocationEnvironmentValue(const std::string& name);
 // remains stable when a build tool only updates the file timestamp.
 std::string GetFileContentIdentity(std::string_view path);
 bool FileContentIdentityMatches(std::string_view path,
-                                std::string_view expected);
+                                std::string_view expected,
+                                const FileMetadata* current = nullptr);
 struct FileObservationState;
 // Reused only by serialized recipe expansion. Active commands and filesystem
 // effects invalidate it across executor threads through a process-wide epoch.

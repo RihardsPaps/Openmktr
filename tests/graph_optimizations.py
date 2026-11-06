@@ -5,6 +5,7 @@
 """Behavioral coverage for graph reuse, imports, monitors and output publication."""
 import json
 import os
+import platform
 from pathlib import Path
 import signal
 import shutil
@@ -21,7 +22,48 @@ BINARY = Path(os.environ.get("OMKTR_BINARY", Path(__file__).resolve().parents[1]
 
 
 class GraphOptimizations(unittest.TestCase):
+    def test_absolute_recursive_output_keeps_all_child_goals(self):
+        result = self.root / "result"
+        (self.root / "child.mk").write_text(
+            f".PHONY: all action\nall: {result} action\n"
+            f"{result}: input\n\t@cp $< $@\n"
+            "action:\n\t@printf x >> actions\n")
+        (self.root / "input").write_text("first")
+        self.makefile(f".PHONY: all FORCE\nall: {result}\nFORCE:\n"
+                      f"{result}: FORCE\n\t@$(MAKE) -f child.mk all\n")
+        command = ("build", "-j4", "--graph_optimizations=aggressive",
+                   "--use_ninja_phony_output", "all")
+        for count in (1, 2):
+            self.run_tool(*command)
+            self.assertEqual((self.root / "actions").read_text(), "x" * count)
+            self.assertEqual(result.read_text(), "first")
+
+    def test_forwarded_phony_output_keeps_invalidation_and_recursive_goals(self):
+        (self.root / "input").write_text("first")
+        self.makefile(".PHONY: all result recursive FORCE\nall: downstream\nFORCE:\n"
+                      "recursive: FORCE\n\t@$(MAKE) -f child.mk all\n"
+                      "result: recursive\n\t@:\n"
+                      "downstream: result\n\t@printf x >> $@\n")
+        for phony_outputs, extra_goal in ((False, False), (True, False), (False, True), (True, True)):
+            with self.subTest(phony_outputs=phony_outputs, extra_goal=extra_goal):
+                (self.root / "child.mk").write_text(
+                    ".PHONY: all action\nall: result" + (" action" if extra_goal else "") + "\n"
+                    "result: input\n\t@cp $< $@\n"
+                    "action:\n\t@printf x >> actions\n")
+                for output in ("result", "downstream", "actions"):
+                    (self.root / output).unlink(missing_ok=True)
+                command = ["build", "-j4", "--graph_optimizations=aggressive", "all"]
+                if phony_outputs:
+                    command.append("--use_ninja_phony_output")
+                for count in (1, 2):
+                    self.run_tool(*command)
+                    self.assertEqual((self.root / "downstream").read_text(), "x" * count)
+                    if extra_goal:
+                        self.assertEqual((self.root / "actions").read_text(), "x" * count)
+
     def test_opaque_compiler_commands_run_parallel_but_recursion_stays_serial(self):
+        self.root = self.root / "space's $directory"
+        self.root.mkdir()
         (self.root / "worker.py").write_text(
             "import fcntl,json,time\n"
             "def update(delta):\n"
@@ -39,6 +81,14 @@ class GraphOptimizations(unittest.TestCase):
         self.run_tool(*options)
         state = json.loads((self.root / "counter").read_text())
         self.assertEqual(state["active"], 0)
+        self.assertGreaterEqual(state["peak"], 3)
+        self.assertLessEqual(state["peak"], 4)
+        (self.root / "counter").unlink()
+        self.run_tool("--ninja", "--graph_optimizations=aggressive", "all")
+        subprocess.run(["ninja", "-f", "build.ninja", "-j4"], cwd=self.root,
+                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                       check=True, timeout=30)
+        state = json.loads((self.root / "counter").read_text())
         self.assertGreaterEqual(state["peak"], 3)
         self.assertLessEqual(state["peak"], 4)
         (self.root / "counter").unlink()
@@ -68,6 +118,8 @@ class GraphOptimizations(unittest.TestCase):
             "source_init/main.o := init/main.c\n"
             "deps_init/main.o := init/main.c\n")
 
+    @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",
+                         "requires the native Kbuild import observer")
     def test_recursive_import_binds_current_automatic_target(self):
         self.kbuild_markers()
         (self.root / "first").touch()
@@ -193,12 +245,15 @@ class GraphOptimizations(unittest.TestCase):
         self.assertNotIn("No need to regenerate", changed.stdout)
         self.assertIn("No need to regenerate", self.run_tool(*command, env=env).stdout)
 
+    @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",
+                         "requires the native Kbuild import observer")
     def test_kbuild_frontiers_rebuild_owners_and_generated_prerequisites(self):
         source = self.root / "source"
         build = self.root / "build"
         (source / "scripts").mkdir(parents=True)
         (source / "scripts/Kbuild.include").touch()
         build.mkdir()
+        (build / "source").symlink_to(source, target_is_directory=True)
         for scope in ("init", "other"):
             (source / scope).mkdir()
             (source / scope / "main.c").write_text(scope + " source\n")

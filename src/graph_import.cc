@@ -34,7 +34,8 @@ struct ImportValidationState {
 };
 bool IgnoredBuildEntry(std::string_view name) {
   return name == "." || name == ".." || name == ".git" || name == ".openmktr" ||
-         name == ".imports" || HasPrefix(name, ".tmp_");
+         name == ".imports" || HasPrefix(name, ".omktr-") ||
+         HasPrefix(name, ".tmp_");
 }
 bool BuildMembership(const std::string& directory, std::string* membership) {
   DIR* handle = opendir(directory.c_str());
@@ -55,6 +56,13 @@ bool BuildMembership(const std::string& directory, std::string* membership) {
     if (S_ISDIR(metadata.st_mode) || HasSuffix(name, ".o") ||
         HasSuffix(name, ".cmd"))
       entries.push_back(std::to_string(metadata.st_mode & S_IFMT) + ":" + name);
+    if (S_ISLNK(metadata.st_mode)) {
+      struct stat target;
+      if (stat((directory + "/" + name).c_str(), &target) == 0 &&
+          S_ISDIR(target.st_mode))
+        entries.push_back("alias:" + name + ":" +
+                          GetFileIdentityFromStat(metadata));
+    }
     errno = 0;
   }
   valid &= errno == 0;

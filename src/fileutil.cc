@@ -509,10 +509,13 @@ std::string GetFileContentIdentity(std::string_view path) {
 }
 
 bool FileContentIdentityMatches(std::string_view path,
-                                std::string_view expected) {
+                                std::string_view expected,
+                                const FileMetadata* current) {
+  const std::string identity =
+      current ? current->Identity() : GetFileIdentity(path);
   if (!HasPrefix(expected, "content:"))
     return expected != "unreadable" && expected != "unstable" &&
-           GetFileIdentity(path) == expected;
+           identity == expected;
   expected.remove_prefix(8);
   std::string metadata, digest;
   if (!ConsumeGraphString(&expected, &metadata) ||
@@ -521,7 +524,7 @@ bool FileContentIdentityMatches(std::string_view path,
   // Exact inode, size, mtime and ctime equality certifies the previous hash.
   // Touches still fall through to content comparison, preserving reuse when
   // only timestamps changed without rehashing unchanged files on every build.
-  if (GetFileIdentity(path) == metadata)
+  if (identity == metadata)
     return true;
   const std::string actual = GetFileContentIdentity(path);
   std::string_view fields(actual);

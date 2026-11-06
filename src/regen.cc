@@ -260,9 +260,10 @@ class StampChecker {
         const std::string& path = proof_paths[i];
         const std::string& identity = proof_identities[i];
         const bool content_identity = identity.compare(0, 8, "content:") == 0;
-        const bool matches = content_identity
-                                 ? FileContentIdentityMatches(path, identity)
-                                 : proof_metadata[i].Identity() == identity;
+        const bool matches =
+            content_identity
+                ? FileContentIdentityMatches(path, identity, &proof_metadata[i])
+                : proof_metadata[i].Identity() == identity;
         if (identity == "unreadable" || !matches) {
           if (getenv("KATI_IMPORT_VALIDATE_ONLY"))
             fprintf(stderr, "import include proof changed: %s\n", path.c_str());
@@ -331,10 +332,12 @@ class StampChecker {
                   : exists  ? GetTimestampFromStat(st)
                             : -1;
       const std::string identity =
-          content_identity
-              ? (FileContentIdentityMatches(s, s2) ? s2 : "changed-content")
-          : monitored            ? identities[i]
-          : exists               ? GetFileIdentityFromStat(st)
+          content_identity ? (FileContentIdentityMatches(
+                                  s, s2, monitored ? nullptr : &metadata[i])
+                                  ? s2
+                                  : "changed-content")
+          : monitored      ? identities[i]
+          : exists         ? GetFileIdentityFromStat(st)
           : stat_error == ENOENT ? "missing"
                                  : "unreadable";
       // GetTimestamp returns < 0 when there's an error reading the file, like

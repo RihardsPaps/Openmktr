@@ -1,5 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
 // Scope recursive invalidation through Kbuild fixdep ownership frontiers.
+// Admit opaque expansion without serializing ordinary compiler execution.
 // Serialize deferred recursive calls with ordinary opaque recursive recipes.
 // Use one resolution-aware freshness guard and preserve low-resolution outputs.
 // Keep unconditional double-colon groups scheduled on existing outputs.
@@ -547,7 +548,7 @@ class NinjaGenerator {
       working_dir_ = cwd;
     else
       PERROR("getcwd failed while generating Ninja graph");
-    working_prefix_ = "cd " + ShellQuote(working_dir_) + " && ";
+    working_prefix_ = EscapeNinja("cd " + ShellQuote(working_dir_) + " && ");
     quoted_binary_ = ShellQuote(kati_binary_);
     ninja_binary_ = EscapeNinja(quoted_binary_);
     if (g_flags.GraphOptimizationEnabled("compact")) {
@@ -1357,9 +1358,16 @@ class NinjaGenerator {
       const std::string alias = g_flags.import_root
                                     ? ImportedTargetPath(node->output)
                                     : std::string(node->output.str());
-      if (alias != proxy->second)
+      if (alias != proxy->second.first) {
         out << "build " << EscapeNinja(alias) << ": phony "
-            << EscapeNinja(proxy->second) << "\n";
+            << EscapeNinja(proxy->second.first) << ' '
+            << EscapeBuildTarget(proxy->second.second);
+        if (node->is_phony)
+          out << ' ' << EscapeBuildTarget(Intern("_kati_always_build_"));
+        out << '\n';
+        if (node->is_phony && g_flags.use_ninja_phony_output)
+          out << " phony_output = true\n";
+      }
       return;
     }
     if (TryImport(nn, out))
@@ -1833,6 +1841,14 @@ class NinjaGenerator {
               ? (cleanup_output.empty() ? "" : " " + ShellQuote(cleanup_output))
               : " " + ShellQuote(cleanup_output) + " " +
                     ShellQuote(recipe_state);
+      const std::string admission_prefix =
+          g_flags.graph_optimizations ==
+                      Flags::GraphOptimizations::kAggressive &&
+                  (use_local_pool ||
+                   (!commands.front().runtime_sidecar.empty() &&
+                    commands.front().runtime_may_recurse))
+              ? "KATI_NINJA_RECURSION_STATE=$omktr_recursion_lock "
+              : "";
       if (cmd_buf.size() > 4096 && helper_recipe) {
         // Store the unexpanded script once, outside Ninja's in-memory graph.
         // cmd_buf contains Ninja escaping; the interpreter consumes shell
@@ -1847,8 +1863,7 @@ class NinjaGenerator {
         script_path = PublishGraphObject(
             GetFilename(".kati_script-") + GraphDigest(script), script);
         MakefileCacheManager::Get().AddGeneratedGraphDep(script_path);
-        cmd_buf = "KATI_NINJA_RECURSION_STATE=$omktr_recursion_lock " +
-                  ninja_binary_ +
+        cmd_buf = admission_prefix + ninja_binary_ +
                   (token_recipe ? " --internal-run-recipe-file "
                                 : " --internal-run-recursive-recipe-file ") +
                   ShellQuote(command_shell) + " " +
@@ -1858,10 +1873,8 @@ class NinjaGenerator {
       }
       std::string helper_prefix;
       if (helper_recipe && !recipe_in_rsp && script_path.empty()) {
-        helper_prefix = working_prefix_ +
-                        "KATI_NINJA_RECURSION_STATE=$omktr_recursion_lock " +
-                        ninja_binary_ + recipe_helper +
-                        ShellQuote(command_shell) + " " +
+        helper_prefix = working_prefix_ + admission_prefix + ninja_binary_ +
+                        recipe_helper + ShellQuote(command_shell) + " " +
                         ShellQuote(command_shellflag) + " ";
         cmd_buf =
             helper_prefix + ShellQuote(cmd_buf) + EscapeNinja(cleanup_arg);
@@ -1946,10 +1959,9 @@ class NinjaGenerator {
             rspfile = "./" + rspfile;
           const std::string source_rspfile = ". " + ShellQuote(rspfile);
           if (helper_recipe && recipe_in_rsp) {
-            out << " command = "
-                   "KATI_NINJA_RECURSION_STATE=$omktr_recursion_lock "
-                << ninja_binary_ << recipe_helper << ShellQuote(command_shell)
-                << ' ' << ShellQuote(command_shellflag) << ' '
+            out << " command = " << admission_prefix << ninja_binary_
+                << recipe_helper << ShellQuote(command_shell) << ' '
+                << ShellQuote(command_shellflag) << ' '
                 << ShellQuote(source_rspfile) << EscapeNinja(cleanup_arg)
                 << "\n";
           } else {
@@ -2361,6 +2373,16 @@ class NinjaGenerator {
     if (goals.empty() || !matching_budget) {
       return false;
     }
+    const std::string parent_alias = g_flags.import_root
+                                         ? ImportedTargetPath(node.output)
+                                         : std::string(node.output.str());
+    if (std::find(outputs.begin(), outputs.end(), parent_alias) !=
+            outputs.end() &&
+        (goals.size() != 1 || goals.front() != parent_alias)) {
+      // One spelling cannot be both a real child producer and a parent
+      // completion alias for additional child goals. Preserve that boundary.
+      return false;
+    }
     // Every imported goal must be represented by a producer in the child
     // graph, a file already present on disk, or one of its namespaced phony
     // aliases. Otherwise importing it creates a Ninja edge with an unknown
@@ -2451,6 +2473,12 @@ class NinjaGenerator {
       std::string absolute;
       AbsPath(candidate.output.str(), &absolute);
       if (std::find(outputs.begin(), outputs.end(), absolute) == outputs.end())
+        continue;
+      const std::string alias = g_flags.import_root
+                                    ? ImportedTargetPath(candidate.output)
+                                    : std::string(candidate.output.str());
+      if (alias == absolute && (candidate.is_phony || goals.size() != 1 ||
+                                goals.front() != absolute))
         continue;
       std::string ancestor = absolute, suffix;
       char resolved[PATH_MAX];
@@ -2566,7 +2594,7 @@ class NinjaGenerator {
       imported_outputs_.insert(output);
     imported_output_claims_.insert(claimed.begin(), claimed.end());
     for (const auto& proxy : proxies)
-      imported_proxy_outputs_[proxy.first] = proxy.second;
+      imported_proxy_outputs_[proxy.first] = {proxy.second, node.output};
     out << "build " << EscapeNinja(gate) << ": phony";
     for (const auto& input : node.deps)
       out << ' ' << EscapeBuildTarget(input.first);
@@ -3250,13 +3278,18 @@ class NinjaGenerator {
     // cannot otherwise know about shared outputs produced by sibling
     // recursive invocations.
     if (!g_flags.import_root) {
-      out << "pool local_pool\n depth = 1\n\n";
-      std::string lock_path;
-      AbsPath(GetFilename(".kati-recursion-lock%s"), &lock_path);
-      out << "omktr_recursion_lock = "
-          << EscapeNinja("${KATI_NINJA_RECURSION_STATE:-" +
-                         ShellQuote(lock_path) + "}")
-          << "\n\n";
+      out << "pool local_pool\n depth = 1\n";
+      if (g_flags.graph_optimizations ==
+          Flags::GraphOptimizations::kAggressive) {
+        std::string lock_path;
+        AbsPath(GetFilename(".kati-recursion-lock%s"), &lock_path);
+        out << "omktr_recursion_lock = "
+            << EscapeNinja("${KATI_NINJA_RECURSION_STATE:-" +
+                           ShellQuote(lock_path) + "}")
+            << "\n";
+      } else {
+        out << "\n";
+      }
     }
 
     if (!used_envs_.empty()) {
@@ -3816,7 +3849,8 @@ class NinjaGenerator {
   KbuildDependencyIndex kbuild_dependencies_;
   std::unordered_map<std::string, std::string> import_source_identities_;
   bool parent_output_claims_ready_ = false;
-  std::unordered_map<Symbol, std::string> imported_proxy_outputs_;
+  std::unordered_map<Symbol, std::pair<std::string, Symbol>>
+      imported_proxy_outputs_;
   std::unordered_map<std::string, size_t> parent_output_claim_counts_;
   std::unordered_set<std::string> imported_output_claims_;
   std::string recursive_source_root_;
