@@ -106,7 +106,7 @@ int stamp_dump_main(int argc, char* argv[]) {
     ERROR("Incomplete stamp file");
   char magic[4];
   if (fread(magic, 1, sizeof(magic), fp) != sizeof(magic) ||
-      memcmp(magic, "KAT4", sizeof(magic)) != 0)
+      memcmp(magic, "KAT5", sizeof(magic)) != 0)
     ERROR("Unsupported stamp file");
   if (LoadInt(fp) < 0)
     ERROR("Incomplete stamp file");
@@ -191,6 +191,9 @@ int stamp_dump_main(int argc, char* argv[]) {
       ERROR("Incomplete stamp file");
     if (!LoadString(fp, &result))
       ERROR("Incomplete stamp file");
+    int status = LoadInt(fp);
+    if (status < 0)
+      ERROR("Incomplete stamp file");
     if (!LoadString(fp, &file))
       ERROR("Incomplete stamp file");
     int line = LoadInt(fp);
@@ -242,6 +245,8 @@ int stamp_dump_main(int argc, char* argv[]) {
       } else if (op == CommandOp::APPEND) {
         printf("cmd type: APPEND\n");
       }
+      if (op == CommandOp::SHELL)
+        printf("  status: %d\n", status);
       printf("  loc: %s:%d\n", file.c_str(), line);
       printf("  cmd: %s\n", cmd.c_str());
       if (result.length() > 0 && result.length() < 500 &&

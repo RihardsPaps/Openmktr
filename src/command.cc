@@ -26,7 +26,10 @@
 // environments. Preserve literal saved compiler commands when resolving
 // deferred assignments. Accept recursive assignment operators when expanding
 // deferred values. Exclude recipe control prefixes when recognizing deferred
-// assignments. Changed by the Openmktr fork, maintained by Rihards Paps and
+// assignments. Reserve shared job tokens before runtime recipe expansion.
+// Publish immutable runtime inputs and bind deferred identities to their reads.
+// Retain computed substitution selections and implicitly exported definitions.
+// Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
 // Keep jobserver reservations live instead of copying them as make exports.
@@ -84,13 +87,15 @@
 #include "log.h"
 #include "process.h"
 #include "strutil.h"
+#include "timeutil.h"
 #include "var.h"
+
+static std::string ExtractRecursiveDisplay(const DepNode& node, Evaluator* ev);
 
 extern char** environ;
 
 namespace {
 static bool IsVpathSourceAlias(const DepNode* node);
-
 FileStamp RuntimeInputTimestamp(const DepNode& node, Symbol input) {
   FileStamp timestamp = FileStamp::Read(input.str());
   if (timestamp == FileStamp::Missing() && node.runtime_inputs) {
@@ -109,10 +114,14 @@ struct RecipeInspection {
   std::unordered_set<Symbol> visited;
   bool io = false;
   bool dynamic = false;
+  bool automatic_dynamic = false;
   bool conservative = false;
   bool automatic_freshness = false;
+  bool references_make = false;
   bool may_recurse = false;
+  bool observable_message = false;
   void Variable(const std::string& name) {
+    references_make |= name == "MAKE";
     may_recurse |= name == "MAKE" || name == "MAKE_COMMAND";
     automatic_freshness |= name == "?" || name == "?D" || name == "?F";
     if (name == ".VARIABLES" || name == ".KATI_SYMBOLS")
@@ -150,13 +159,46 @@ struct RecipeInspection {
         Variable(field);
       return;
     }
-    if (kind == "dynamic-reference" || kind == "substitution")
+    if (kind == "dynamic-reference") {
       dynamic = true;
+      automatic_dynamic = true;
+    }
+    if (kind == "substitution") {
+      // A substitution reference has a statically named variable in the
+      // common case, including compiler flags such as $(@:.o=.d). The
+      // variable's own expression is inspected below, so only a computed
+      // variable name requires the full runtime context.
+      std::string name, pattern, replacement;
+      if (!ConsumeGraphString(&record, &name) ||
+          !ConsumeGraphString(&record, &pattern) ||
+          !ConsumeGraphString(&record, &replacement)) {
+        dynamic = true;
+        automatic_dynamic = true;
+        return;
+      }
+      std::string_view variable_name(name);
+      std::string variable_name_kind, variable_name_value;
+      if (ConsumeGraphString(&variable_name, &variable_name_kind) &&
+          variable_name_kind == "literal" &&
+          ConsumeGraphString(&variable_name, &variable_name_value) &&
+          variable_name.empty())
+        Variable(variable_name_value);
+      else {
+        // Inspecting the selector cannot identify its eventual variable.
+        // Its selected definition can also reference automatic variables.
+        dynamic = automatic_dynamic = true;
+      }
+      Expression(pattern);
+      Expression(replacement);
+      return;
+    }
     if (kind == "function") {
       if (!ConsumeGraphString(&record, &field))
         return;
       io |= field == "shell" || field == "file" || field == "wildcard" ||
             field == "realpath";
+      observable_message |=
+          field == "info" || field == "warning" || field == "error";
       if (field == "eval" || field == "foreach")
         conservative = true;
       if (field == "call" || field == "value" || field == "origin" ||
@@ -171,7 +213,7 @@ struct RecipeInspection {
             ConsumeGraphString(&operand, &name) && operand.empty())
           Variable(name);
         else
-          dynamic = true;
+          dynamic = automatic_dynamic = true;
         Expression(argument);
       }
     }
@@ -196,8 +238,26 @@ std::string RecipeVariable(Symbol symbol, Var* var) {
 
 bool IsAutomaticRecipeVar(Var* var);
 
+std::string AutomaticInputIdentity(std::string_view name,
+                                   const std::vector<Symbol>& normal,
+                                   const std::vector<Symbol>& order_only) {
+  if (name.size() == 2 && (name[1] == 'D' || name[1] == 'F'))
+    name.remove_suffix(1);
+  if (name != "<" && name != "^" && name != "+" && name != "?" && name != "|")
+    return {};
+  std::string result;
+  AppendGraphString("automatic-inputs-v1", &result);
+  const auto& inputs = name == "|" ? order_only : normal;
+  const size_t count =
+      name == "<" ? std::min<size_t>(1, inputs.size()) : inputs.size();
+  for (size_t i = 0; i < count; ++i)
+    AppendGraphString(inputs[i].str(), &result);
+  return result;
+}
+
 bool ReuseRuntimeReads(const std::string& path,
                        const std::string& structural,
+                       const DepNode& node,
                        Evaluator* ev,
                        std::string* identity,
                        std::string* generation) {
@@ -233,9 +293,10 @@ bool ReuseRuntimeReads(const std::string& path,
       return false;
     Symbol symbol = Intern(name);
     Var* var = ev->PeekVar(symbol);
-    std::string current;
-    if (var->IsDefined() && var->Origin() != VarOrigin::AUTOMATIC &&
-        !IsAutomaticRecipeVar(var)) {
+    std::string current = AutomaticInputIdentity(name, node.actual_inputs,
+                                                 node.actual_order_only_inputs);
+    if (current.empty() && var->IsDefined() &&
+        var->Origin() != VarOrigin::AUTOMATIC && !IsAutomaticRecipeVar(var)) {
       if (!dynamic_cast<SimpleVar*>(var) && !dynamic_cast<RecursiveVar*>(var)) {
         return false;
       }
@@ -287,6 +348,7 @@ struct RuntimeRecipeReadCapture::Impl {
   std::shared_ptr<const Context> globals;
   Context locals;
   std::unordered_set<Symbol> reads;
+  std::vector<Symbol> normal_inputs, order_only_inputs;
   std::string observation, structural, generation, identity;
 
   static void Decode(Context* context) {
@@ -325,14 +387,36 @@ RuntimeRecipeReadCapture::RuntimeRecipeReadCapture(const Command& command,
     if (!ConsumeGraphString(&data, &fields.back()))
       ERROR("invalid bootstrap runtime metadata");
   }
-  if (fields.size() != 18 || fields[0] != "runtime-recipe-v8")
+  if (fields.size() != 13 || fields[0] != "runtime-recipe-v10")
     ERROR("incompatible bootstrap runtime metadata");
-  impl_->observation = fields[10];
+  impl_->observation = fields[8];
   if (impl_->observation.empty())
     return;
-  impl_->structural = fields[11];
-  impl_->generation = fields[12];
-  impl_->identity = fields[13];
+  impl_->structural = fields[9];
+  impl_->generation = fields[10];
+  impl_->identity = fields[11];
+  std::string inputs;
+  if (!ReadGraphCache(fields[4], &inputs))
+    ERROR("cannot read bootstrap runtime input manifest");
+  std::string_view input_record(inputs);
+  std::string version, output, context_path;
+  if (!ConsumeGraphString(&input_record, &version) ||
+      version != "runtime-inputs-v1" ||
+      !ConsumeGraphString(&input_record, &output) || output != fields[1] ||
+      !ConsumeGraphString(&input_record, &context_path))
+    ERROR("invalid bootstrap runtime input manifest");
+  for (auto* inputs : {&impl_->normal_inputs, &impl_->order_only_inputs}) {
+    std::string names;
+    if (!ConsumeGraphString(&input_record, &names))
+      ERROR("invalid bootstrap runtime prerequisites");
+    std::string_view remaining(names);
+    while (!remaining.empty()) {
+      std::string name;
+      if (!ConsumeGraphString(&remaining, &name))
+        ERROR("invalid bootstrap runtime prerequisite");
+      inputs->push_back(Intern(name));
+    }
+  }
   // One immutable global table is shared across the serialized expansions;
   // target records remain separate and never duplicate the whole context.
   struct ContextCache {
@@ -343,22 +427,22 @@ RuntimeRecipeReadCapture::RuntimeRecipeReadCapture(const Command& command,
   auto& cached_path = cache.path;
   auto& cached_file_identity = cache.identity;
   auto& cached_globals = cache.globals;
-  const std::string file_identity = GetFileIdentity(fields[7]);
-  if (!cached_globals || cached_path != fields[7] ||
+  const std::string file_identity = GetFileIdentity(context_path);
+  if (!cached_globals || cached_path != context_path ||
       cached_file_identity != file_identity) {
     auto globals = std::make_shared<Impl::Context>();
-    if (!ReadGraphCache(fields[7], &globals->bytes))
+    if (!ReadGraphCache(context_path, &globals->bytes))
       ERROR("cannot read bootstrap global context");
     Impl::Decode(globals.get());
-    cached_path = fields[7];
+    cached_path = context_path;
     cached_file_identity = file_identity;
     cached_globals = std::move(globals);
   }
   impl_->globals = cached_globals;
-  impl_->locals.bytes = std::move(fields[8]);
+  impl_->locals.bytes = std::move(fields[6]);
   Impl::Decode(&impl_->locals);
   std::unordered_map<Symbol, bool> exports;
-  data = fields[9];
+  data = fields[7];
   while (!data.empty()) {
     std::string name, exported;
     if (!ConsumeGraphString(&data, &name) ||
@@ -403,8 +487,11 @@ void RuntimeRecipeReadCapture::Finish(const std::string& owner) {
     AppendGraphString(name.str(), &definitions);
     auto local = impl_->locals.definitions.find(name);
     auto global = impl_->globals->definitions.find(name);
+    const std::string automatic = AutomaticInputIdentity(
+        name.str(), impl_->normal_inputs, impl_->order_only_inputs);
     const std::string_view definition =
-        local != impl_->locals.definitions.end()      ? local->second
+        !automatic.empty()                         ? std::string_view(automatic)
+        : local != impl_->locals.definitions.end() ? local->second
         : global != impl_->globals->definitions.end() ? global->second
                                                       : std::string_view();
     AppendGraphString(definition, &definitions);
@@ -420,6 +507,7 @@ void RuntimeRecipeReadCapture::Finish(const std::string& owner) {
 bool MakeRuntimeRecipe(const DepNode& node,
                        Evaluator* ev,
                        const std::string& directory,
+                       RuntimeRecipeProfile* profile,
                        std::vector<Command>* commands) {
   if (node.cmds.empty())
     return false;
@@ -429,17 +517,27 @@ bool MakeRuntimeRecipe(const DepNode& node,
   if (node.actual_inputs.empty() && node.actual_order_only_inputs.empty() &&
       node.DoubleColon().inputs.empty())
     return false;
+  const double inspection_start = GetMonotonicTime();
   ev->set_current_scope(node.rule_vars);
   ev->ApplyRecipeTargetUpdates(node.lexical_output);
   RecipeInspection inspection{ev, {}};
   for (Value* value : node.cmds)
     inspection.Expression(value->IncrementalIdentity());
-  // Keep opaque recursive calls in the same Ninja pool as statically expanded
-  // calls. Computed references/eval can hide MAKE or a command alias; do not
-  // expand them now, before their producers have run. Inspect the recipe before
-  // implicit transport and exports, where MAKE can be data rather than a call.
+  // Keep command-expression effects separate from the implicit environment
+  // reads below. A pure recursive $(MAKE) command can be safely recognized
+  // for graph import even when an exported environment variable itself uses
+  // an I/O function.
+  const bool recipe_io = inspection.io;
+  const bool recipe_dynamic = inspection.dynamic;
+  const bool recipe_automatic_dynamic = inspection.automatic_dynamic;
+  const bool recipe_conservative = inspection.conservative;
+  const bool recipe_observable_message = inspection.observable_message;
+  const bool recipe_references_make = inspection.references_make;
   const bool may_recurse =
       inspection.may_recurse || inspection.dynamic || inspection.conservative;
+  // Expand opaque references only after their prerequisites have completed.
+  // The Ninja recipe supervisor reserves a shared job token before this
+  // evaluation and transfers that reservation if the result invokes Make.
   inspection.Variable("SHELL");
   inspection.Variable(".SHELLFLAGS");
   // Recursive execution reads this transport variable implicitly after
@@ -454,22 +552,33 @@ bool MakeRuntimeRecipe(const DepNode& node,
       if (ev->current_scope()->IsExported(name))
         inspection.Variable(name.str());
   if (node.export_all_variables)
-    inspection.dynamic = true;
+    inspection.dynamic = inspection.automatic_dynamic = true;
   const bool runtime_expansion =
       (!node.actual_inputs.empty() || !node.actual_order_only_inputs.empty()) &&
       (inspection.io || inspection.dynamic || inspection.automatic_freshness);
+  profile->inspection_seconds += GetMonotonicTime() - inspection_start;
+  ++profile->inspections;
+  if (runtime_expansion)
+    ++profile->deferred;
   if (!runtime_expansion && node.DoubleColon().inputs.empty()) {
     ev->set_current_scope(nullptr);
     return false;
   }
   inspection.dynamic |= inspection.conservative;
-  // Computed references and every deferred shell can observe a newly added
-  // inherited export. Reparse before reusing the bounded definitions/read set;
-  // a watch list of previously existing environment names cannot detect it.
-  if (inspection.io || inspection.dynamic)
-    MakefileCacheManager::Get().RequireEvaluation();
+  inspection.automatic_dynamic |= inspection.conservative;
+  // Deferred recipes resolve these expressions after their prerequisites
+  // complete. Their sidecar records the complete variable/environment
+  // context, so they do not make Makefile evaluation itself an unconditional
+  // regeneration dependency.
+  if (inspection.io || inspection.dynamic) {
+    if (g_flags.graph_optimizations == Flags::GraphOptimizations::kAggressive)
+      MakefileCacheManager::Get().RequireEnvironmentValidation();
+    else
+      MakefileCacheManager::Get().RequireEvaluation();
+  }
+  const double context_start = GetMonotonicTime();
   std::string payload;
-  AppendGraphString("runtime-recipe-v8", &payload);
+  AppendGraphString("runtime-recipe-v10", &payload);
   AppendGraphString(node.lexical_output.str(), &payload);
   AppendGraphString(
       node.output_pattern.IsValid() ? node.output_pattern.str() : "", &payload);
@@ -483,12 +592,22 @@ bool MakeRuntimeRecipe(const DepNode& node,
         node.low_resolution, node.is_phony})
     flags += flag ? '1' : '0';
   AppendGraphString(flags, &payload);
+  const size_t runtime_inputs_offset = payload.size();
   std::string identity = payload;
   auto reads_auto = [&](const std::string& name) {
-    return inspection.dynamic || inspection.visited.count(Intern(name)) ||
+    return inspection.automatic_dynamic ||
+           inspection.visited.count(Intern(name)) ||
            inspection.visited.count(Intern(name + "D")) ||
            inspection.visited.count(Intern(name + "F"));
   };
+  std::unordered_set<Symbol> runtime_prerequisites;
+  auto retain_prerequisite = [&](Symbol input) {
+    runtime_prerequisites.insert(input);
+    std::string normalized(input.str());
+    NormalizePath(&normalized);
+    runtime_prerequisites.insert(Intern(normalized));
+  };
+  std::string runtime_normal_inputs, runtime_order_only_inputs;
   for (const auto* inputs :
        {&node.actual_inputs, &node.actual_order_only_inputs}) {
     std::string record;
@@ -499,10 +618,18 @@ bool MakeRuntimeRecipe(const DepNode& node,
     const size_t count = all ? inputs->size()
                          : normal && reads_auto("<") && !inputs->empty() ? 1
                                                                          : 0;
-    for (size_t i = 0; i < count; ++i)
+    for (size_t i = 0; i < count; ++i) {
       AppendGraphString((*inputs)[i].str(), &record);
-    AppendGraphString(record, &payload);
+      retain_prerequisite((*inputs)[i]);
+    }
+    (normal ? runtime_normal_inputs : runtime_order_only_inputs) =
+        std::move(record);
   }
+  for (const auto* groups :
+       {&node.DoubleColon().inputs, &node.DoubleColon().order_only_inputs})
+    for (const auto& inputs : *groups)
+      for (Symbol input : inputs)
+        retain_prerequisite(input);
   std::string recipes;
   const size_t identity_suffix = payload.size();
   for (Value* value : node.cmds) {
@@ -560,7 +687,8 @@ bool MakeRuntimeRecipe(const DepNode& node,
       full_context_path = context_path;
     }
   }
-  AppendGraphString(context_path, &payload);
+  if (!inspection.dynamic || node.export_all_variables)
+    AppendGraphString(context_path, &identity);
   // Target-specific bindings override the shared global definitions.
   std::vector<std::string> names;
   if (ev->current_scope()) {
@@ -578,6 +706,8 @@ bool MakeRuntimeRecipe(const DepNode& node,
     AppendGraphString(RecipeVariable(symbol, var), &variables);
   }
   AppendGraphString(variables, &payload);
+  profile->context_seconds += GetMonotonicTime() - context_start;
+  const double metadata_start = GetMonotonicTime();
   std::string exports;
   std::map<std::string, bool> ordered_exports;
   for (const auto& entry : ev->exports()) {
@@ -645,11 +775,24 @@ bool MakeRuntimeRecipe(const DepNode& node,
                         &environment_definitions);
   }
   AppendGraphString(environment_names, &structural);
+  // Observable automatic-variable lists are command context. Unobserved
+  // compiler depfile prerequisites do not enlarge either identity.
+  if (!inspection.dynamic)
+    for (const std::string& inputs :
+         {runtime_normal_inputs, runtime_order_only_inputs}) {
+      AppendGraphString(inputs, &identity);
+      AppendGraphString(inputs, &structural);
+    }
   if (!inspection.dynamic)
     AppendGraphString(environment_definitions, &identity);
   std::string phony_inputs, logical_inputs, resolutions;
   std::unordered_set<Symbol> resolved_names;
   for (const auto& input : node.deps) {
+    // Retain runtime metadata only for prerequisites that the recipe's
+    // automatic variables can observe. Other compiler depfile inputs affect
+    // freshness through the graph without changing the recipe context.
+    if (!runtime_prerequisites.count(input.first))
+      continue;
     const Symbol names[] = {input.first, input.second->output,
                             input.second->lexical_output};
     for (size_t i = 0; i < 3; ++i) {
@@ -664,6 +807,8 @@ bool MakeRuntimeRecipe(const DepNode& node,
   }
   for (const auto* edges : {&node.deps, &node.order_onlys}) {
     for (const auto& input : *edges) {
+      if (!runtime_prerequisites.count(input.first))
+        continue;
       const DepNode& child = *input.second;
       const bool provider = !child.is_phony && IsVpathSourceAlias(&child) &&
                             child.vpath_provider.IsValid();
@@ -679,10 +824,10 @@ bool MakeRuntimeRecipe(const DepNode& node,
       }
     }
   }
-  for (const auto& metadata : {phony_inputs, logical_inputs, resolutions}) {
-    AppendGraphString(metadata, &identity);
-    AppendGraphString(metadata, &structural);
-  }
+  // These lists reconstruct the runtime prerequisite graph and its resolved
+  // paths. They are freshness data, not command identity: included compiler
+  // depfiles can add ordinary Make prerequisites after a clean build without
+  // changing the recipe that Make would run.
   std::string groups, command_groups, double_colon;
   for (size_t group = 0; group < node.DoubleColon().inputs.size(); ++group) {
     std::string record, inputs, order_only;
@@ -702,6 +847,22 @@ bool MakeRuntimeRecipe(const DepNode& node,
     AppendGraphString(groups, &double_colon);
     AppendGraphString(command_groups, &double_colon);
   }
+  std::string runtime_input_data;
+  AppendGraphString("runtime-inputs-v1", &runtime_input_data);
+  AppendGraphString(node.output.str(), &runtime_input_data);
+  AppendGraphString(context_path, &runtime_input_data);
+  AppendGraphString(runtime_normal_inputs, &runtime_input_data);
+  AppendGraphString(runtime_order_only_inputs, &runtime_input_data);
+  AppendGraphString(phony_inputs, &runtime_input_data);
+  AppendGraphString(logical_inputs, &runtime_input_data);
+  AppendGraphString(resolutions, &runtime_input_data);
+  const std::string runtime_inputs_path = PublishGraphObject(
+      directory + "/.kati-runtime-inputs-" + GraphDigest(runtime_input_data),
+      runtime_input_data);
+  MakefileCacheManager::Get().AddGeneratedGraphDep(runtime_inputs_path);
+  std::string runtime_inputs_field;
+  AppendGraphString(runtime_inputs_path, &runtime_inputs_field);
+  payload.insert(runtime_inputs_offset, runtime_inputs_field);
   AppendGraphString(double_colon, &identity);
   AppendGraphString(double_colon, &structural);
   const std::string observation =
@@ -709,8 +870,8 @@ bool MakeRuntimeRecipe(const DepNode& node,
           ? directory + "/.kati_runtime-reads-" + GraphDigest(structural)
           : "";
   std::string generation = "0";
-  if (!observation.empty() &&
-      !ReuseRuntimeReads(observation, structural, ev, &identity, &generation)) {
+  if (!observation.empty() && !ReuseRuntimeReads(observation, structural, node,
+                                                 ev, &identity, &generation)) {
     // Missing or invalid observations must never reuse an identity retained
     // from an older, differently observed context. Fail conservatively.
     AppendGraphString(
@@ -726,11 +887,16 @@ bool MakeRuntimeRecipe(const DepNode& node,
   AppendGraphString(structural, &payload);
   AppendGraphString(generation, &payload);
   AppendGraphString(identity, &payload);
-  AppendGraphString(phony_inputs, &payload);
-  AppendGraphString(logical_inputs, &payload);
   AppendGraphString(double_colon, &payload);
-  AppendGraphString(resolutions, &payload);
+  std::string recursive_display;
+  if (node.cmds.size() == 1 && !node.oneshell && recipe_references_make &&
+      !recipe_io && !recipe_dynamic && !recipe_automatic_dynamic &&
+      !recipe_conservative && !recipe_observable_message) {
+    recursive_display = ExtractRecursiveDisplay(node, ev);
+  }
   ev->set_current_scope(nullptr);
+  profile->metadata_seconds += GetMonotonicTime() - metadata_start;
+  const double publish_start = GetMonotonicTime();
   const std::string path = PublishGraphObject(
       directory + "/.kati_runtime-" + GraphDigest(payload), payload);
   std::string executable = GetExecutablePath();
@@ -743,12 +909,14 @@ bool MakeRuntimeRecipe(const DepNode& node,
   command.runtime_identity = std::move(identity);
   command.runtime_freshness_only = !inspection.io && !inspection.dynamic;
   command.runtime_may_recurse = may_recurse;
+  command.display_cmd = std::move(recursive_display);
   command.cmd = "\"" + executable + "\" --internal-evaluate-recipe \"" +
                 quoted_path + "\"";
   command.shell = "/bin/sh";
   command.shellflag = "-c";
   command.echo = false;
   commands->push_back(std::move(command));
+  profile->publish_seconds += GetMonotonicTime() - publish_start;
   return true;
 }
 
@@ -926,7 +1094,7 @@ int RunRuntimeRecipe(const char* path) {
       ERROR("invalid runtime recipe sidecar; regenerate the Ninja graph");
     return value;
   };
-  if (take(&data) != "runtime-recipe-v8")
+  if (take(&data) != "runtime-recipe-v10")
     ERROR("incompatible runtime recipe sidecar; regenerate the Ninja graph");
   Evaluator evaluator;
   evaluator.Start();
@@ -941,12 +1109,33 @@ int RunRuntimeRecipe(const char* path) {
   node.export_all_variables = flags[3] == '1';
   node.low_resolution = flags[4] == '1';
   node.is_phony = flags[5] == '1';
+  std::string runtime_input_data;
+  if (!ReadGraphCache(take(&data), &runtime_input_data))
+    ERROR(
+        "missing or corrupt runtime input manifest; regenerate the Ninja "
+        "graph");
+  std::string_view runtime_input_record(runtime_input_data);
+  auto take_runtime_input = [&runtime_input_record]() {
+    std::string value;
+    if (!ConsumeGraphString(&runtime_input_record, &value))
+      ERROR("invalid runtime input manifest; regenerate the Ninja graph");
+    return value;
+  };
+  if (take_runtime_input() != "runtime-inputs-v1" ||
+      take_runtime_input() != node.output.str())
+    ERROR("runtime input manifest does not match its target");
+  const std::string runtime_context_path = take_runtime_input();
   for (auto* inputs : {&node.actual_inputs, &node.actual_order_only_inputs}) {
-    std::string storage = take(&data);
+    std::string storage = take_runtime_input();
     std::string_view record(storage);
     while (!record.empty())
       inputs->push_back(Intern(take(&record)));
   }
+  const std::string runtime_phony_inputs = take_runtime_input();
+  const std::string runtime_logical_inputs = take_runtime_input();
+  const std::string runtime_resolutions = take_runtime_input();
+  if (!runtime_input_record.empty())
+    ERROR("trailing runtime input manifest data");
   std::vector<std::unique_ptr<Value>> expressions;
   std::string storage = take(&data);
   std::string_view record(storage);
@@ -972,7 +1161,7 @@ int RunRuntimeRecipe(const char* path) {
     node.cmds.push_back(expressions.back().get());
   }
   RuntimeContextBuffer globals;
-  if (!ReadRuntimeContext(take(&data), &globals))
+  if (!ReadRuntimeContext(runtime_context_path, &globals))
     ERROR(
         "missing or corrupt runtime variable context; regenerate the Ninja "
         "graph");
@@ -1009,10 +1198,14 @@ int RunRuntimeRecipe(const char* path) {
       const std::string_view value = take_view(&fields);
       const std::string_view original = take_view(&fields);
       if (flavor == "recursive") {
-        if (!validated && !Value::ValidateRecipeExpression(value))
+        if (!validated && !value.empty() &&
+            !Value::ValidateRecipeExpression(value)) {
           ERROR(
-              "invalid runtime variable expression; regenerate the Ninja "
-              "graph");
+              "invalid runtime variable expression for %s (%.*s); regenerate "
+              "the Ninja graph",
+              symbol.str().c_str(), static_cast<int>(value.size()),
+              value.data());
+        }
       } else if (flavor != "simple") {
         ERROR("invalid runtime variable flavor; regenerate the Ninja graph");
       }
@@ -1021,8 +1214,18 @@ int RunRuntimeRecipe(const char* path) {
       symbol.SetLazyGlobalVar(
           origin, [owner, flavor, value, original, origin]() -> Var* {
             if (flavor == "recursive") {
-              Value* expression =
-                  Value::RestoreValidatedLazyRecipeExpression(value, owner);
+              // An empty recursive make variable has no expression record.
+              // Restore it as an empty literal expression while preserving
+              // its recursive flavor for $(flavor).
+              static const std::string empty_expression = [] {
+                std::string expression;
+                AppendGraphString("literal", &expression);
+                AppendGraphString("", &expression);
+                return expression;
+              }();
+              Value* expression = Value::RestoreValidatedLazyRecipeExpression(
+                  value.empty() ? std::string_view(empty_expression) : value,
+                  owner);
               return new RecursiveVar(expression, origin, nullptr, Loc(),
                                       original);
             }
@@ -1052,9 +1255,12 @@ int RunRuntimeRecipe(const char* path) {
   const std::string generation = take(&data);
   const std::string identity = take(&data);
   node.runtime_inputs = std::make_unique<DepNode::RuntimeInputs>();
-  for (auto* inputs :
-       {&node.runtime_inputs->phony, &node.runtime_inputs->logical}) {
-    const std::string storage = take(&data);
+  for (const auto& entry :
+       {std::make_pair(&node.runtime_inputs->phony, runtime_phony_inputs),
+        std::make_pair(&node.runtime_inputs->logical,
+                       runtime_logical_inputs)}) {
+    auto* inputs = entry.first;
+    const std::string& storage = entry.second;
     std::string_view names(storage);
     while (!names.empty())
       inputs->push_back(Intern(take(&names)));
@@ -1098,7 +1304,7 @@ int RunRuntimeRecipe(const char* path) {
     if (!metadata.empty() || groups.for_cmd.size() != node.cmds.size())
       ERROR("invalid runtime rule groups; regenerate the Ninja graph");
   }
-  const std::string resolutions = take(&data);
+  const std::string& resolutions = runtime_resolutions;
   std::string_view resolved(resolutions);
   while (!resolved.empty()) {
     const std::string record = take(&resolved);
@@ -1183,8 +1389,12 @@ int RunRuntimeRecipe(const char* path) {
     for (const std::string& name : names) {
       AppendGraphString(name, &definitions);
       auto found = initial_definitions.find(Intern(name));
-      AppendGraphString(found == initial_definitions.end() ? std::string_view()
-                                                           : found->second,
+      const std::string automatic = AutomaticInputIdentity(
+          name, node.actual_inputs, node.actual_order_only_inputs);
+      AppendGraphString(!automatic.empty() ? std::string_view(automatic)
+                        : found == initial_definitions.end()
+                            ? std::string_view()
+                            : found->second,
                         &definitions);
     }
     for (const std::string& part :
@@ -1887,6 +2097,16 @@ void ParseCommandPrefixes(std::string_view* s,
 }
 
 }  // namespace
+
+static std::string ExtractRecursiveDisplay(const DepNode& node, Evaluator* ev) {
+  std::string expanded =
+      ExpandDeferredAssignments(node.cmds.front()->Eval(ev), ev);
+  std::string_view command(expanded);
+  bool echo = true, ignore_error = false, force_run = false;
+  ParseCommandPrefixes(&command, &echo, &ignore_error, &force_run);
+  return IsRecursiveKatiCommand(std::string(command)) ? std::string(command)
+                                                      : std::string();
+}
 
 CommandEvaluator::CommandEvaluator(Evaluator* ev)
     : ev_(ev), current_dep_node_(nullptr), found_new_inputs_(false) {

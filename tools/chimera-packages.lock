@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MPL-2.0
-# Full reference image package set resolved on 2026-11-02 (x86_64).
+# Full reference image package set resolved on 2026-11-05 (x86_64).
 acl=2.4.0-r0
 apk-tools=3.0.8-r0
 base-bootstrap=0.1-r2
@@ -22,7 +22,7 @@ libcxx-devel=22.1.8-r0
 libcxxabi=22.1.8-r0
 libcxxabi-devel=22.1.8-r0
 libedit=20250614-r0
-libexpat=2.9.0-r0
+libexpat=2.10.0-r0
 libffi8=3.5.2-r0
 libunwind=22.1.8-r0
 libunwind-devel=22.1.8-r0
@@ -37,6 +37,7 @@ lz4=1.10.0-r1
 musl=1.2.6-r3
 musl-devel=1.2.6-r3
 musl-progs=1.2.6-r3
+nasm=2.16.03-r0
 ncurses=6.6-r0
 ncurses-base=6.6-r0
 ncurses-libs=6.6-r0

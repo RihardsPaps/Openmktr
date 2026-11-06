@@ -1013,6 +1013,23 @@ class DepBuilder {
       ev_->set_current_scope(NULL);
       cur_rule_vars_.reset(NULL);
     }
+
+    if (g_flags.generate_ninja) {
+      for (const auto& owned_node : *storage_) {
+        DepNode* node = owned_node.get();
+        node->implicit_outputs.erase(
+            std::remove_if(
+                node->implicit_outputs.begin(), node->implicit_outputs.end(),
+                [&](Symbol output) {
+                  // Multi-target pattern rules share one recipe,
+                  // but unrelated pattern peers are not outputs
+                  // of this invocation. Declaring an absent peer
+                  // in Ninja would keep the edge dirty forever.
+                  return !demanded_outputs_.exists(output) && !Exists(output);
+                }),
+            node->implicit_outputs.end());
+      }
+    }
   }
 
  private:
@@ -1629,10 +1646,9 @@ class DepBuilder {
 
     *out_rule = std::make_shared<Rule>(*rule);
     if ((*out_rule)->output_patterns.size() > 1) {
-      // Multi-target implicit pattern rules are grouped outputs: building
-      // any matching target runs the recipe once and updates its peers too.
-      // Record those peers on the node so Ninja sees the complete output set,
-      // and retain the resolver aliases for direct execution.
+      // GNU make treats a multi-target implicit pattern rule as one recipe
+      // for all matching outputs.  Record its peers so Ninja runs the recipe
+      // once and direct execution shares the same resolver node.
       for (Symbol output_pattern : rule->output_patterns) {
         if (output_pattern == matched)
           continue;
@@ -1998,6 +2014,8 @@ class DepBuilder {
       Symbol needed_by,
       const std::unordered_set<const Rule*>* implicit_rules_used = nullptr) {
     LOG("BuildPlan: %s for %s", output.c_str(), needed_by.c_str());
+
+    demanded_outputs_.insert(output);
 
     auto found = done_.find(output);
     if (found != done_.end()) {
@@ -2876,6 +2894,7 @@ class DepBuilder {
   Symbol first_rule_;
   std::shared_ptr<Rule> default_rule_;
   std::unordered_map<Symbol, DepNode*> done_;
+  SymbolSet demanded_outputs_;
   SymbolSet phony_;
   SymbolSet restat_;
   Symbol depfile_var_name_;

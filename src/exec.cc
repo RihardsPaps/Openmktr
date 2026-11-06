@@ -572,7 +572,9 @@ class Executor {
           ERROR("cannot create bootstrap recipe directory: %s",
                 directory.c_str());
         std::vector<Command> metadata;
-        if (MakeRuntimeRecipe(n, ce_.evaluator(), directory, &metadata)) {
+        RuntimeRecipeProfile recipe_profile;
+        if (MakeRuntimeRecipe(n, ce_.evaluator(), directory, &recipe_profile,
+                              &metadata)) {
           bootstrap_identity = "OMKTR_RECIPE1\n" + n.output.str();
           bootstrap_identity += '\0';
           bootstrap_identity += metadata.front().runtime_identity;

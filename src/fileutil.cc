@@ -1,12 +1,15 @@
 // FORK MODIFICATION NOTICE (2026)
 // Reuse the running executable identity within each invocation.
-// Own invocation state and publish coherent generations with typed freshness.
-// Keep filesystem identities, observation epochs, globbing and recipe state
-// separate from process supervision. Reject nonregular recipe-state files
-// without blocking, and retain bounded atomic state publication.
-// Changed by the Openmktr fork, maintained by Rihards Paps and Haralds Paps.
-// Upstream material retains Apache-2.0 terms. Fork changes are covered by
-// MPL-2.0; see docs/LICENSING.md and NOTICE. Original notices follow.
+// Reuse content hashes only while complete filesystem metadata stays unchanged.
+// Snapshot caller environments before Makefile evaluation changes process
+// state. Own invocation state and publish coherent generations with typed
+// freshness. Keep filesystem identities, observation epochs, globbing and
+// recipe state separate from process supervision. Reject nonregular
+// recipe-state files without blocking, and retain bounded atomic state
+// publication. Changed by the Openmktr fork, maintained by Rihards Paps and
+// Haralds Paps. Upstream material retains Apache-2.0 terms. Fork changes are
+// covered by MPL-2.0; see docs/LICENSING.md and NOTICE. Original notices
+// follow.
 
 // Copyright 2015 Google Inc. All rights reserved
 //
@@ -56,12 +59,38 @@
 #include "strutil.h"
 
 namespace {
+struct InvocationEnvironment {
+  std::string identity;
+  bool captured = false;
+};
 struct FilesystemSession {
   std::atomic<uint64_t> epoch{0};
   std::atomic<size_t> effects{0};
 };
 
 }  // namespace
+
+const std::string& InvocationEnvironmentIdentity() {
+  auto& snapshot = SessionService<InvocationEnvironment>();
+  if (!snapshot.captured) {
+    extern char** environ;
+    std::vector<std::string> entries;
+    for (char** entry = environ; entry && *entry; ++entry) {
+      // MAKEFLAGS is checked separately after the frontend has interpreted
+      // its options. MFLAGS is reconstructed from those same options.
+      if (HasPrefix(*entry, "MAKEFLAGS=") || HasPrefix(*entry, "MFLAGS="))
+        continue;
+      entries.emplace_back(*entry);
+    }
+    std::sort(entries.begin(), entries.end());
+    std::string bytes;
+    for (const auto& entry : entries)
+      AppendGraphString(entry, &bytes);
+    snapshot.identity = GraphDigest(bytes);
+    snapshot.captured = true;
+  }
+  return snapshot.identity;
+}
 
 uint64_t FilesystemObservationEpoch() {
   return SessionService<FilesystemSession>().epoch.load(
@@ -372,6 +401,86 @@ std::string GetFileIdentityFromStat(const struct stat& st) {
          std::to_string(st.st_mode) + ":" + std::to_string(st.st_size) + ":" +
          std::to_string(mt.tv_sec) + ":" + std::to_string(mt.tv_nsec) + ":" +
          std::to_string(ct.tv_sec) + ":" + std::to_string(ct.tv_nsec);
+}
+
+std::string GetFileContentIdentity(std::string_view path) {
+  const std::string filename(path);
+  const int fd = open(filename.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+  if (fd < 0)
+    return errno == ENOENT ? "missing" : "unreadable";
+  struct stat before;
+  if (fstat(fd, &before) != 0) {
+    close(fd);
+    return "unreadable";
+  }
+  if (!S_ISREG(before.st_mode)) {
+    close(fd);
+    return GetFileIdentityFromStat(before);
+  }
+
+  // Two independently seeded 64-bit streams make accidental collisions
+  // negligible while keeping this hot validation path dependency-free.
+  uint64_t first = 14695981039346656037ULL;
+  uint64_t second = 1099511628211ULL ^ 0x9e3779b97f4a7c15ULL;
+  char buffer[16384];
+  for (;;) {
+    ssize_t count;
+    do {
+      count = read(fd, buffer, sizeof(buffer));
+    } while (count < 0 && errno == EINTR);
+    if (count == 0)
+      break;
+    if (count < 0) {
+      close(fd);
+      return "unreadable";
+    }
+    for (ssize_t i = 0; i < count; ++i) {
+      const uint64_t byte = static_cast<unsigned char>(buffer[i]);
+      first = (first ^ byte) * 1099511628211ULL;
+      second = (second ^ (byte + 0x9d)) * 0x100000001b3ULL;
+    }
+  }
+  struct stat after;
+  const bool stable =
+      fstat(fd, &after) == 0 &&
+      GetFileIdentityFromStat(before) == GetFileIdentityFromStat(after);
+  close(fd);
+  if (!stable)
+    return "unstable";
+  char digest[33];
+  snprintf(digest, sizeof(digest), "%016llx%016llx",
+           static_cast<unsigned long long>(first),
+           static_cast<unsigned long long>(second));
+  std::string result = "content:";
+  AppendGraphString(GetFileIdentityFromStat(before), &result);
+  AppendGraphString(std::to_string(before.st_size) + ":" + digest, &result);
+  return result;
+}
+
+bool FileContentIdentityMatches(std::string_view path,
+                                std::string_view expected) {
+  if (!HasPrefix(expected, "content:"))
+    return expected != "unreadable" && expected != "unstable" &&
+           GetFileIdentity(path) == expected;
+  expected.remove_prefix(8);
+  std::string metadata, digest;
+  if (!ConsumeGraphString(&expected, &metadata) ||
+      !ConsumeGraphString(&expected, &digest) || !expected.empty())
+    return false;
+  // Exact inode, size, mtime and ctime equality certifies the previous hash.
+  // Touches still fall through to content comparison, preserving reuse when
+  // only timestamps changed without rehashing unchanged files on every build.
+  if (GetFileIdentity(path) == metadata)
+    return true;
+  const std::string actual = GetFileContentIdentity(path);
+  std::string_view fields(actual);
+  if (!HasPrefix(fields, "content:"))
+    return false;
+  fields.remove_prefix(8);
+  std::string actual_digest;
+  return ConsumeGraphString(&fields, &metadata) &&
+         ConsumeGraphString(&fields, &actual_digest) && fields.empty() &&
+         digest == actual_digest;
 }
 
 void DeleteChangedOutput(std::string_view path, const std::string& previous) {

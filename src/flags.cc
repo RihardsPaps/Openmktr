@@ -1,5 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
 // Own invocation state and publish coherent generations with typed freshness.
+// Validate and propagate depfile inference ablations through recursive builds.
 // Exclude structured timing diagnostics from propagated build options.
 // Default to Make's serial execution unless jobs are explicitly configured.
 // Control pattern-variable indexing independently of evaluation memoization.
@@ -56,7 +57,8 @@ Flags& SessionFlags() {
 static bool IsGraphOptimizationFeature(std::string_view feature) {
   return feature == "resolution" || feature == "evaluation" ||
          feature == "pattern_index" || feature == "includes" ||
-         feature == "recursive" || feature == "compact" || feature == "monitor";
+         feature == "recursive" || feature == "compact" ||
+         feature == "monitor" || feature == "depfiles";
 }
 
 static bool ReadInheritedGraphOptimizations(const char* value, Flags* flags) {
@@ -90,8 +92,9 @@ std::string Flags::GraphOptimizationTransport() const {
       graph_optimizations == GraphOptimizations::kOff    ? "v1:off"
       : graph_optimizations == GraphOptimizations::kSafe ? "v1:safe"
                                                          : "v1:aggressive";
-  for (const char* feature : {"resolution", "evaluation", "pattern_index",
-                              "includes", "recursive", "compact", "monitor"})
+  for (const char* feature :
+       {"resolution", "evaluation", "pattern_index", "includes", "recursive",
+        "compact", "monitor", "depfiles"})
     if (std::find(disabled_graph_optimizations.begin(),
                   disabled_graph_optimizations.end(),
                   feature) != disabled_graph_optimizations.end()) {
@@ -108,13 +111,14 @@ bool Flags::GraphOptimizationEnabled(std::string_view feature) const {
                 feature) != disabled_graph_optimizations.end())
     return false;
   return graph_optimizations == GraphOptimizations::kAggressive ||
-         (feature != "recursive" && feature != "monitor");
+         (feature != "recursive" && feature != "monitor" &&
+          feature != "depfiles");
 }
 
 std::string Flags::GraphOptimizationIdentity() const {
   std::string result = "graph-v1";
-  for (const char* feature :
-       {"evaluation", "includes", "recursive", "compact", "monitor"}) {
+  for (const char* feature : {"evaluation", "includes", "recursive", "compact",
+                              "monitor", "depfiles"}) {
     result += ' ';
     result += feature;
     result += GraphOptimizationEnabled(feature) ? "=1" : "=0";

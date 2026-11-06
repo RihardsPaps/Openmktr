@@ -32,7 +32,7 @@ void SyncGraphObjectDirectory(const std::string& path);
 // bounded; abandoning one leaves only complete, unreferenced immutable files.
 class GraphObjectBatch {
  public:
-  GraphObjectBatch();
+  explicit GraphObjectBatch(bool sync_payloads = true);
   ~GraphObjectBatch();
   GraphObjectBatch(const GraphObjectBatch&) = delete;
   GraphObjectBatch& operator=(const GraphObjectBatch&) = delete;
@@ -42,6 +42,7 @@ class GraphObjectBatch {
 
  private:
   GraphObjectBatch* previous_;
+  bool sync_payloads_;
   std::unordered_set<std::string> paths_;
   std::unordered_set<std::string> directories_;
 };

@@ -1,5 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
 // Drop process-only headers after separating runtime supervision.
+// Expose invocation-scoped environment identities for deferred graph reuse.
+// Validate content fingerprints through exact metadata before hashing again.
 // Own invocation state and publish coherent generations with typed freshness.
 // Separate runtime services and preserve scoped resource ownership.
 // Preserve owned path strings through filesystem-probe cache lookups.
@@ -54,6 +56,11 @@ double GetTimestamp(const char* f);
 // caches.
 std::string GetFileIdentity(std::string_view path);
 std::string GetFileIdentityFromStat(const struct stat& st);
+// Content identity for parsed makefiles. Unlike the metadata identity, this
+// remains stable when a build tool only updates the file timestamp.
+std::string GetFileContentIdentity(std::string_view path);
+bool FileContentIdentityMatches(std::string_view path,
+                                std::string_view expected);
 struct FileObservationState;
 // Reused only by serialized recipe expansion. Active commands and filesystem
 // effects invalidate it across executor threads through a process-wide epoch.
@@ -108,6 +115,8 @@ std::string GetOutputStamp(std::string_view path);
 void DeleteChangedOutput(std::string_view path, const std::string& previous);
 
 std::string GetExecutablePath();
+// Capture before Makefile evaluation mutates the process environment.
+const std::string& InvocationEnvironmentIdentity();
 
 using GlobMap = std::unordered_map<std::string, std::vector<std::string>>;
 

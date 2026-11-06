@@ -18,6 +18,247 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_directory_restat_tracks_real_directory_changes(self):
+        root = self.directory
+        for mode in ("direct", "build", "legacy"):
+            for profile in ("off", "safe", "aggressive"):
+                with self.subTest(mode=mode, profile=profile):
+                    self.directory = root / (mode + "-" + profile)
+                    self.directory.mkdir()
+                    (self.directory / "change").touch()
+                    (self.directory / "dir").mkdir()
+                    (self.directory / "dir/value").write_text("old")
+                    time.sleep(0.02)
+                    (self.directory / "seed").write_text("one")
+                    self.makefile(".KATI_RESTAT: dir\nall: result\ndir: seed\n"
+                                  "\t@if test -f change; then cp seed dir/value; touch dir; fi\n"
+                                  "result: dir\n\t@cp dir/value result\n")
+                    flags = ("--graph_optimizations=" + profile, "all")
+                    if mode == "legacy":
+                        self.direct("--ninja", *flags)
+                    def build():
+                        if mode == "legacy":
+                            self.run_command("sh", "./ninja.sh", "-j2", "all")
+                        else:
+                            self.direct(*(("build",) if mode == "build" else ()), *flags)
+                    build()
+                    self.assertEqual((self.directory / "result").read_text(), "one")
+                    time.sleep(0.02)
+                    (self.directory / "seed").write_text("two")
+                    build()
+                    self.assertEqual((self.directory / "result").read_text(), "two")
+                    stamp = (self.directory / "result").stat().st_mtime_ns
+                    (self.directory / "change").unlink()
+                    time.sleep(0.02)
+                    (self.directory / "seed").write_text("three")
+                    build()
+                    self.assertEqual((self.directory / "result").stat().st_mtime_ns, stamp)
+        self.directory = root
+
+    def test_inferred_compilers_preserve_shell_parameter_defaults(self):
+        root = self.directory
+        expected = "hello; clang -c -MMD -MF out.d -o out.o source.c;"
+        for mode in ("direct", "build", "legacy"):
+            for quoted in (False, True):
+                with self.subTest(mode=mode, quoted=quoted):
+                    self.directory = root / (mode + "-" + str(quoted))
+                    self.directory.mkdir()
+                    expansion = "$${X:-" + expected + "}"
+                    if quoted:
+                        expansion = '"' + expansion + '"'
+                    self.makefile(".PHONY: all\nall:\n\t@unset X; printf '%s\\n' " +
+                                  expansion + " > result\n")
+                    flags = ("--graph_optimizations=aggressive", "all")
+                    if mode == "legacy":
+                        self.direct("--ninja", *flags)
+                        self.run_command("sh", "./ninja.sh", "-j2", "all")
+                    else:
+                        self.direct(*(("build",) if mode == "build" else ()), *flags)
+                    value = expected if quoted else "\n".join(expected.split())
+                    self.assertEqual((self.directory / "result").read_text(), value + "\n")
+        self.directory = root
+
+    def test_inferred_compilers_do_not_rewrite_heredoc_contents(self):
+        expected = "clang -c -MMD -MF out.d -o out.o source.c\n"
+        root = self.directory
+        for mode in ("direct", "build", "legacy"):
+            with self.subTest(mode=mode):
+                self.directory = root / mode
+                self.directory.mkdir()
+                self.makefile(".ONESHELL:\n.PHONY: all\nall:\n"
+                              "\t@cat > generated.sh <<'EOF'\n\t" + expected + "\tEOF\n")
+                flags = ("--graph_optimizations=aggressive", "all")
+                if mode == "legacy":
+                    self.direct("--ninja", *flags)
+                    self.run_command("sh", "./ninja.sh", "-j2", "all")
+                else:
+                    self.direct(*(("build",) if mode == "build" else ()), *flags)
+                self.assertEqual((self.directory / "generated.sh").read_text(), expected)
+        self.directory = root
+
+    def test_changed_directory_compilers_keep_original_command_context(self):
+        root = self.directory
+        for mode in ("direct", "build", "legacy"):
+            for index, directory_command in enumerate(("cd", "'cd'", "command cd", "X=1 cd")):
+                with self.subTest(mode=mode, directory_command=directory_command):
+                    self.directory = root / (mode + "-" + str(index))
+                    self.directory.mkdir()
+                    (self.directory / "sub").mkdir()
+                    for name in ("first", "second"):
+                        (self.directory / "sub" / (name + ".c")).write_text(f"int {name};\n")
+                    self.makefile(".PHONY: all\nall:\n"
+                                  f"\t@{directory_command} sub && "
+                                  "clang -c -MMD -MF first.d -o first.o first.c && "
+                                  "clang -c -MMD -MF second.d -o second.o second.c\n")
+                    flags = ("--graph_optimizations=aggressive", "all")
+                    if mode == "legacy":
+                        self.direct("--ninja", *flags)
+                        self.run_command("sh", "./ninja.sh", "-j2", "all")
+                    else:
+                        self.direct(*(("build",) if mode == "build" else ()), *flags)
+                    for name in ("first", "second"):
+                        self.assertTrue((self.directory / "sub" / (name + ".o")).is_file())
+                    if mode != "direct":
+                        graph = self.directory / (".openmktr/build.ninja" if mode == "build"
+                                                   else "build.ninja")
+                        self.assertNotIn("omktr_depfile =", graph.read_text())
+        self.directory = root
+
+    def test_oneshell_directory_change_disables_partial_depfile_inference(self):
+        (self.directory / "sub").mkdir()
+        (self.directory / "sub/source.c").write_text("int value;\n")
+        self.makefile(".ONESHELL:\n.PHONY: all\nall:\n"
+                      "\t@cd sub\n"
+                      "\tclang -c -MMD -MF out.d -o out.o source.c\n")
+        self.direct("build", "--graph_optimizations=aggressive", "all")
+        self.assertTrue((self.directory / "sub/out.o").is_file())
+        graph = (self.directory / ".openmktr/build.ninja").read_text()
+        self.assertNotIn("omktr_depfile =", graph)
+
+    def test_inferred_compiler_preserves_supported_wrappers(self):
+        root = self.directory
+        for wrapper_name in ("ccache", "sccache", "custom-wrapper"):
+            with self.subTest(wrapper=wrapper_name):
+                self.directory = root / wrapper_name
+                self.directory.mkdir()
+                wrapper = self.directory / wrapper_name
+                wrapper.write_text('#!/bin/sh\nexec "$@"\n')
+                wrapper.chmod(0o755)
+                self.makefile("all: out.o\nout.o: source.c\n"
+                              f"\t@{wrapper} clang -c -MMD -MF out.d -o out.o source.c\n")
+                (self.directory / "source.c").write_text("int value;\n")
+                self.direct("build", "--graph_optimizations=aggressive", "all")
+                self.assertTrue((self.directory / "out.o").is_file())
+                graph = (self.directory / ".openmktr/build.ninja").read_text()
+                if wrapper_name in ("ccache", "sccache"):
+                    self.assertIn("omktr_depfile = out.d.tmp\n", graph)
+                else:
+                    self.assertNotIn("omktr_depfile =", graph)
+        self.directory = root
+
+    def test_inferred_depfiles_follow_the_executed_compiler_branch(self):
+        self.makefile("all: out.o\nout.o: first.c second.c selection\n"
+                      "\t@if test \"$$(cat selection)\" = first; then "
+                      "clang -c -MMD -MF first.d -o out.o first.c; else "
+                      "clang -c -MMD -MF second.d -o out.o second.c; fi\n")
+        for name in ("first", "second"):
+            (self.directory / (name + ".c")).write_text(
+                f'#include "{name}.h"\nint value = VALUE;\n')
+            (self.directory / (name + ".h")).write_text("#define VALUE 1\n")
+        command = ("build", "--graph_optimizations=aggressive", "all")
+        for name, other in (("second", "first"), ("first", "second")):
+            (self.directory / "selection").write_text(name)
+            self.direct(*command)
+            original = (self.directory / "out.o").read_bytes()
+            _, dependencies = self.run_command("ninja", "-f", ".openmktr/build.ninja",
+                                                "-t", "deps", "out.o")
+            self.assertIn(name + ".h", dependencies)
+            self.assertNotIn(other + ".h", dependencies)
+            (self.directory / (name + ".h")).write_text("#define VALUE 2\n")
+            self.direct(*command)
+            self.assertNotEqual((self.directory / "out.o").read_bytes(), original)
+
+    def test_existing_directory_is_current_before_marker_creation(self):
+        root = self.directory
+        for mode in ("direct", "build", "legacy"):
+            for profile in ("off", "safe", "aggressive"):
+                with self.subTest(mode=mode, profile=profile):
+                    self.directory = root / (mode + "-" + profile)
+                    self.directory.mkdir()
+                    (self.directory / "dir").mkdir()
+                    self.makefile("all: dir\ndir:\n\t@mkdir dir\n")
+                    flags = ("--graph_optimizations=" + profile, "all")
+                    if mode == "legacy":
+                        self.direct("--ninja", *flags)
+                    for _ in range(2):
+                        if mode == "legacy":
+                            self.run_command("sh", "./ninja.sh", "-j2", "all")
+                        else:
+                            self.direct(*(("build",) if mode == "build" else ()), *flags)
+                    self.assertTrue((self.directory / "dir").is_dir())
+                    if mode != "direct":
+                        self.assertTrue(list((self.directory / "dir").glob(
+                            ".kati-directory-marker-*")))
+        self.directory = root
+
+    def test_conditional_compiler_copies_depfile_only_when_it_runs(self):
+        self.makefile("all: out.o\nout.o: source.c\n"
+                      "\t@if test -f cached.o; then cp cached.o out.o; "
+                      "else clang -c -MMD -MF out.d -o out.o source.c; fi\n")
+        (self.directory / "source.c").write_text(
+            '#include "header.h"\nint value = VALUE;\n')
+        (self.directory / "header.h").write_text("#define VALUE 1\n")
+        (self.directory / "cached.o").write_bytes(b"cached object")
+        command = ("build", "--graph_optimizations=aggressive", "all")
+        self.direct(*command)
+        self.assertEqual((self.directory / "out.o").read_bytes(), b"cached object")
+        self.assertFalse((self.directory / "out.d").exists())
+        self.assertIn("omktr_depfile = out.d.tmp\n",
+                      (self.directory / ".openmktr/build.ninja").read_text())
+        (self.directory / "out.o").unlink()
+        (self.directory / "cached.o").unlink()
+        self.direct(*command)
+        original = (self.directory / "out.o").read_bytes()
+        self.assertTrue((self.directory / "out.d").is_file())
+        (self.directory / "header.h").write_text("#define VALUE 2\n")
+        self.direct(*command)
+        self.assertNotEqual((self.directory / "out.o").read_bytes(), original)
+
+    def test_current_directory_normal_prerequisite_still_invalidates_output(self):
+        self.makefile("all: result\nresult: .\n\t@printf x >> result\n")
+        self.direct("build", "all")
+        directory_stamp = (self.directory / "result").stat().st_mtime_ns + 2_000_000_000
+        os.utime(self.directory, ns=(directory_stamp, directory_stamp))
+        self.direct("build", "all")
+        self.assertEqual((self.directory / "result").read_text(), "xx")
+
+    def test_aggressive_depfile_remains_available_to_direct_builds(self):
+        self.makefile("all: out.o\n-include out.d\nout.o: source.c\n"
+                      "\t@clang -MMD -MF out.d -c source.c -o out.o\n")
+        (self.directory / "source.c").write_text(
+            '#include "header.h"\nint value = VALUE;\n')
+        (self.directory / "header.h").write_text("#define VALUE 1\n")
+        self.direct("build", "--graph_optimizations=aggressive", "all")
+        self.assertTrue((self.directory / "out.d").is_file())
+        before = (self.directory / "out.o").read_bytes()
+        (self.directory / "header.h").write_text("#define VALUE 2\n")
+        self.direct("all")
+        self.assertNotEqual((self.directory / "out.o").read_bytes(), before)
+
+    def test_inferred_depfiles_do_not_hide_included_makefile_directives(self):
+        self.makefile("-include out.d\n.PHONY: all\nall: out.o\n"
+                      "\t@printf '%s' '$(VALUE)' > result\n"
+                      "out.o: source.c\n"
+                      "\t@clang -MMD -MF out.d -c source.c -o out.o\n")
+        (self.directory / "source.c").write_text("int value;\n")
+        command = ("build", "--graph_optimizations=aggressive", "all")
+        self.direct(*command)
+        self.direct(*command)
+        with (self.directory / "out.d").open("a") as depfile:
+            depfile.write("VALUE := changed\n")
+        self.direct(*command)
+        self.assertEqual((self.directory / "result").read_text(), "changed")
+
     def test_phony_noop_preserves_ninja_depfile_inputs(self):
         self.makefile(
             ".PHONY: noop\n"
@@ -42,6 +283,20 @@ class BuildCorrectness(unittest.TestCase):
             self.run_command("sh", "./ninja.sh", "-j4", "all")
             self.assertEqual((self.directory / "out").read_text(), "x")
         self.assertEqual((self.directory / "noop").read_text(), "keep")
+
+    def test_fresh_guarded_edge_restat_stops_downstream_fanout(self):
+        self.makefile(
+            ".PHONY: all\nall: child\n"
+            "parent: input\n\t@test -e $@ || touch $@\n"
+            "child: parent\n\t@printf c >> effects; touch $@\n")
+        (self.directory / "input").touch()
+        self.direct("build", "-j2", "all")
+        self.assertEqual((self.directory / "effects").read_text(), "c")
+
+        future = (self.directory / "child").stat().st_mtime + 2
+        os.utime(self.directory / "input", (future, future))
+        self.direct("build", "-j2", "all")
+        self.assertEqual((self.directory / "effects").read_text(), "c")
 
     def test_ninja_silent_phony_noops_preserve_freshness_and_recipe_effects(self):
         root = self.directory
@@ -385,7 +640,7 @@ class BuildCorrectness(unittest.TestCase):
             '#include "header.h"\nint value = VALUE;\n')
         header = self.directory / "header.h"
         header.write_text("#define VALUE 1\n")
-        self.direct("--ninja")
+        self.direct("--ninja", "--disable_graph_optimization=depfiles")
         self.assertNotIn(" depfile =", (self.directory / "build.ninja").read_text())
         self.direct("--ninja", "--detect_depfiles")
         self.run_command("sh", "./ninja.sh", "-j2")
@@ -397,6 +652,40 @@ class BuildCorrectness(unittest.TestCase):
         future = (self.directory / "out.o").stat().st_mtime + 2
         os.utime(header, (future, future))
         self.run_command("sh", "./ninja.sh", "-j2")
+        self.assertNotEqual((self.directory / "out.o").read_bytes(), original)
+
+    def test_aggressive_mode_automatically_imports_compiler_depfiles(self):
+        self.makefile("all: out.o\nout.o: source.c\n"
+                      "\t@clang -c -MMD -MF $(@:.o=.d) -o $@ $<\n")
+        (self.directory / "source.c").write_text(
+            '#include "header.h"\nint value = VALUE;\n')
+        header = self.directory / "header.h"
+        header.write_text("#define VALUE 1\n")
+        self.direct("build", "--graph_optimizations=aggressive", "-j2", "all")
+        self.assertIn("omktr_depfile = out.d.tmp\n",
+                      (self.directory / ".openmktr/build.ninja").read_text())
+        original = (self.directory / "out.o").read_bytes()
+        header.write_text("#define VALUE 2\n")
+        future = (self.directory / "out.o").stat().st_mtime + 2
+        os.utime(header, (future, future))
+        self.direct("build", "--graph_optimizations=aggressive", "-j2", "all")
+        self.assertNotEqual((self.directory / "out.o").read_bytes(), original)
+
+    def test_aggressive_mode_imports_nasm_depfiles(self):
+        self.makefile("all: out.o\nout.o: source.asm\n"
+                      "\t@nasm -f elf64 -MD out.d -o $@ $<\n")
+        (self.directory / "source.asm").write_text(
+            "%include \"header.inc\"\nsection .data\nvalue: db VALUE\n")
+        header = self.directory / "header.inc"
+        header.write_text("%define VALUE 1\n")
+        self.direct("build", "--graph_optimizations=aggressive", "-j2", "all")
+        self.assertIn("omktr_depfile = out.d.tmp\n",
+                      (self.directory / ".openmktr/build.ninja").read_text())
+        original = (self.directory / "out.o").read_bytes()
+        header.write_text("%define VALUE 2\n")
+        future = (self.directory / "out.o").stat().st_mtime + 2
+        os.utime(header, (future, future))
+        self.direct("build", "--graph_optimizations=aggressive", "-j2", "all")
         self.assertNotEqual((self.directory / "out.o").read_bytes(), original)
 
     def test_detection_declines_compound_recipes_without_changing_failure(self):
@@ -441,6 +730,41 @@ class BuildCorrectness(unittest.TestCase):
         os.utime(header, (future, future))
         self.run_command("sh", "./ninja.sh", "-j2")
         self.assertEqual((self.directory / "log").read_text(), "builtbuilt")
+
+    def test_runtime_recipe_depfile_import_does_not_change_recipe_identity(self):
+        self.makefile(
+            "all: out.o\n"
+            "-include deps.d\n"
+            "out.o: .KATI_DEPFILE = deps.d\n"
+            "out.o: source.c\n"
+            "\t@$(shell printf '')clang -c -MMD -MF deps.d -o $@ $< && "
+            "printf built >> log\n"
+            "%.h %_template.c:\n\t@:\n")
+        (self.directory / "source.c").write_text(
+            '#include "header.h"\nint value = VALUE;\n')
+        header = self.directory / "header.h"
+        header.write_text("#define VALUE 1\n")
+        self.direct("build", "-j2", "all")
+        self.direct("build", "-j2", "all")
+        self.assertEqual((self.directory / "log").read_text(), "built")
+        header.write_text("#define VALUE 2\n")
+        future = (self.directory / "out.o").stat().st_mtime + 2
+        os.utime(header, (future, future))
+        self.direct("build", "-j2", "all")
+        self.assertEqual((self.directory / "log").read_text(), "builtbuilt")
+
+    def test_multi_target_implicit_patterns_do_not_claim_unrequested_peers(self):
+        self.makefile(
+            "all: config.h\n"
+            "config.h: seed\n"
+            "%.h %_template.c: seed\n"
+            "\t@cp seed $@\n")
+        (self.directory / "seed").write_text("ready\n")
+        self.direct("build", "-j2", "all")
+        self.assertEqual((self.directory / "config.h").read_text(), "ready\n")
+        self.assertFalse((self.directory / "config_template.c").exists())
+        _, output = self.direct("build", "-j2", "all")
+        self.assertIn("no work to do", output)
 
     def test_translation_propagates_failure_between_recipe_lines(self):
         self.makefile("all:\n\t@printf '%s' 'literal # $$ ;' > result; false\n"

@@ -589,6 +589,13 @@ static int ShellFuncImpl(Evaluator* ev,
                          std::string* observed_packet = nullptr) {
   LOG("ShellFunc: %s", cmd.c_str());
 
+  int validated_status;
+  if (ReuseValidatedShellResult(shell, shellflag, cmd, s, &validated_status)) {
+    ev->incremental_evaluator()->Effect();
+    InvalidateFilesystemQueriesImpl();
+    return validated_status;
+  }
+
 #ifdef TEST_FIND_EMULATOR
   bool need_check = false;
   string out2;
@@ -647,6 +654,26 @@ struct CommandResults {
   std::vector<CommandResult*> values;
 };
 #define g_command_results (SessionService<CommandResults>().values)
+
+struct ValidatedShellResult {
+  std::string result;
+  int status;
+};
+struct ValidatedShellResults {
+  std::unordered_map<std::string, std::vector<ValidatedShellResult>> values;
+  std::unordered_map<std::string, size_t> cursors;
+};
+
+namespace {
+std::string ShellResultKey(const std::string& shell,
+                           const std::string& shellflag,
+                           const std::string& command) {
+  std::string key;
+  for (const auto& field : {shell, shellflag, command})
+    AppendGraphString(field, &key);
+  return key;
+}
+}  // namespace
 
 bool ShouldStoreCommandResult(std::string_view cmd) {
   // We really just want to ignore this one, or remove BUILD_DATETIME from
@@ -709,6 +736,7 @@ void ShellFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
         cr->cmd = cmd;
         cr->find.reset(fc);
         cr->result = out;
+        cr->status = returnCode;
         cr->loc = ev->loc();
         g_command_results.push_back(cr);
       } else {
@@ -743,6 +771,7 @@ void ShellFunc(const std::vector<Value*>& args, Evaluator* ev, std::string* s) {
     cr->cmd = cmd;
     cr->find.reset(fc);
     cr->result = out;
+    cr->status = returnCode;
     cr->loc = ev->loc();
     g_command_results.push_back(cr);
   } else {
@@ -1694,6 +1723,41 @@ static const std::unordered_map<std::string_view, FuncInfo> g_func_info_map = {
 };
 
 }  // namespace
+
+void ResetValidatedShellResults() {
+  auto& cache = SessionService<ValidatedShellResults>();
+  cache.values.clear();
+  cache.cursors.clear();
+}
+
+void RememberValidatedShellResult(const std::string& shell,
+                                  const std::string& shellflag,
+                                  const std::string& command,
+                                  const std::string& result,
+                                  int status) {
+  auto& cache = SessionService<ValidatedShellResults>();
+  cache.values[ShellResultKey(shell, shellflag, command)].push_back(
+      {result, status});
+}
+
+bool ReuseValidatedShellResult(const std::string& shell,
+                               const std::string& shellflag,
+                               const std::string& command,
+                               std::string* result,
+                               int* status) {
+  auto& cache = SessionService<ValidatedShellResults>();
+  const std::string key = ShellResultKey(shell, shellflag, command);
+  auto found = cache.values.find(key);
+  if (found == cache.values.end())
+    return false;
+  size_t& cursor = cache.cursors[key];
+  if (cursor >= found->second.size())
+    return false;
+  *result = found->second[cursor].result;
+  *status = found->second[cursor].status;
+  ++cursor;
+  return true;
+}
 
 const FuncInfo* GetFuncInfo(std::string_view name) {
   auto found = g_func_info_map.find(name);

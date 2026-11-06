@@ -1,7 +1,8 @@
 // FORK MODIFICATION NOTICE (2026)
 // Retain possible recursion when deferring recipe expansion for Ninja.
-// Bind automatic variables to the active independent double-colon rule group.
-// Pack recipe booleans together to avoid padding every expanded command.
+// Keep bounded nonrecursive expansions parallel while protecting recursive
+// peers. Bind automatic variables to the active independent double-colon rule
+// group. Pack recipe booleans together to avoid padding every expanded command.
 // Own invocation state and publish coherent generations with typed freshness.
 // Capture actual direct bootstrap reads for later deferred recipe identities.
 // Expose private recipe snapshot and runtime evaluation helpers.
@@ -52,9 +53,19 @@ class RuntimeRecipeReadCapture {
   std::unique_ptr<Impl> impl_;
 };
 
+struct RuntimeRecipeProfile {
+  double inspection_seconds = 0;
+  double context_seconds = 0;
+  double metadata_seconds = 0;
+  double publish_seconds = 0;
+  size_t inspections = 0;
+  size_t deferred = 0;
+};
+
 bool MakeRuntimeRecipe(const DepNode& node,
                        Evaluator* evaluator,
                        const std::string& directory,
+                       RuntimeRecipeProfile* profile,
                        std::vector<Command>* commands);
 int RunRuntimeRecipe(const char* path);
 std::string RuntimeContextManifestPath(const std::string& graph);

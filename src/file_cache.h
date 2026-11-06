@@ -1,12 +1,14 @@
 // FORK MODIFICATION NOTICE (2026)
 // Own invocation state and publish coherent generations with typed freshness.
-// Track and validate incremental evaluation, include proofs and imported Ninja
-// graphs. Changed by the Openmktr fork, maintained by Rihards Paps and Haralds
-// Paps. Changed build execution, evaluation, or portability for this fork.
-// Validate recursive reuse, regeneration inputs, and shared recipe budgets.
-// Upstream material retains its Apache-2.0 terms. Fork modifications are
-// covered by Mozilla Public License 2.0; see docs/LICENSING.md and NOTICE
-// at the repository root. Original notices below remain applicable.
+// Validate caller environments before reusing deferred recipes or child
+// imports. Track and validate incremental evaluation, include proofs and
+// imported Ninja graphs. Changed by the Openmktr fork, maintained by Rihards
+// Paps and Haralds Paps. Changed build execution, evaluation, or portability
+// for this fork. Validate recursive reuse, regeneration inputs, and shared
+// recipe budgets. Upstream material retains its Apache-2.0 terms. Fork
+// modifications are covered by Mozilla Public License 2.0; see
+// docs/LICENSING.md and NOTICE at the repository root. Original notices below
+// remain applicable.
 
 // Copyright 2015 Google Inc. All rights reserved
 //
@@ -37,6 +39,10 @@ class MakefileCacheManager {
   const Makefile& ReadStdinMakefile();
   void GetAllFilenames(std::unordered_set<std::string>* out);
   void AddExtraFileDep(std::string_view dep);
+  void AddIncludeDirectoryDep(std::string_view directory) {
+    extra_file_deps_.emplace(directory);
+    include_directory_deps_.emplace(directory);
+  }
   void AddGeneratedGraphDep(const std::string& dep) {
     extra_file_deps_.insert(dep);
     generated_graph_deps_.insert(dep);
@@ -44,7 +50,19 @@ class MakefileCacheManager {
   bool IsGeneratedGraphDep(const std::string& dep) const {
     return generated_graph_deps_.count(dep) != 0;
   }
+  bool IsParsedMakefile(const std::string& path) const {
+    return cache_.count(path) != 0;
+  }
+  bool IsIncludeDirectoryDep(const std::string& path) const {
+    return include_directory_deps_.count(path) != 0;
+  }
   void RequireEvaluation() { require_evaluation_ = true; }
+  void RequireEnvironmentValidation() {
+    require_environment_validation_ = true;
+  }
+  bool requires_environment_validation() const {
+    return require_environment_validation_;
+  }
   void RequireIncludeEvaluation() { require_include_evaluation_ = true; }
   void CertifyIncludeEvaluation() {
     require_include_evaluation_ = false;
@@ -67,7 +85,9 @@ class MakefileCacheManager {
   std::unique_ptr<Makefile> stdin_makefile_;
   std::unordered_set<std::string> extra_file_deps_;
   std::unordered_set<std::string> generated_graph_deps_;
+  std::unordered_set<std::string> include_directory_deps_;
   bool require_evaluation_ = false;
+  bool require_environment_validation_ = false;
   bool require_include_evaluation_ = false;
   bool includes_certified_ = false;
 };

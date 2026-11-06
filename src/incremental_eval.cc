@@ -22,8 +22,10 @@
 #include "var.h"
 
 namespace {
+
+constexpr size_t kMaximumIncrementalEvaluationCacheBytes = 8 * 1024 * 1024;
 thread_local IncrementalEvaluator* active_evaluation = nullptr;
-}
+}  // namespace
 
 size_t IncrementalEvaluator::EntryBytes(const Entry& entry) const {
   size_t bytes = 256 + 2 * entry.key.size() + entry.result.size();
@@ -349,6 +351,13 @@ bool IncrementalEvaluator::AdmitRecording() {
       state.reusable = false;
     for (auto& region : regions_)
       region.reusable = false;
+    // A miss-heavy source can otherwise keep serializing a cache that its next
+    // evaluation will reject again. Once admission is closed, none of these
+    // entries can be replayed during this evaluation, so discard the inherited
+    // working set and let the cache shrink to the useful entries seen before
+    // the cutoff.
+    entries_.clear();
+    entries_bytes_ = 0;
     LOG_STAT("evaluation recording disabled after %zu hits and %zu misses",
              hits_, misses_);
     LOG_STAT("evaluation recording work: %zu bytes", recording_bytes_);
@@ -663,6 +672,18 @@ IncrementalEvaluator::IncrementalEvaluator(Evaluator* evaluator)
   const std::string directory = g_flags.ninja_dir ? g_flags.ninja_dir : ".";
   path_ = directory + "/.kati_stamp.evaluation" +
           (g_flags.ninja_suffix ? g_flags.ninja_suffix : "");
+  struct stat metadata;
+  if (stat(path_.c_str(), &metadata) == 0 && metadata.st_size >= 0 &&
+      static_cast<uint64_t>(metadata.st_size) >
+          kMaximumIncrementalEvaluationCacheBytes) {
+    // Large caches take longer to deserialize and validate than a cold graph
+    // evaluation when the workload has poor region reuse. Keep the persistent
+    // cache bounded; graph generation will still use in-process recording
+    // until its normal admission check decides whether recording is useful.
+    LOG_STAT("skipping incremental evaluation cache (%lld bytes)",
+             static_cast<long long>(metadata.st_size));
+    return;
+  }
   std::string bytes;
   if (!ReadGraphCache(path_, &bytes))
     return;
@@ -969,6 +990,7 @@ void IncrementalEvaluator::Save() {
     LOG_STAT("state operation replays (%s): %zu", kind.first.c_str(),
              kind.second);
   if (entries_.empty()) {
+    unlink(path_.c_str());
     LOG_STAT("evaluation regions: %zu hits, %zu misses, %zu effect barriers",
              hits_, misses_, effects_);
     return;

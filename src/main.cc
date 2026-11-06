@@ -1,5 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
 // Honor low-resolution outputs in native freshness and automatic-input helpers.
+// Capture caller environments and preflight effects before speculative imports.
 // Reject nonregular graph artifacts before reading their bounded header.
 // Retain logical prerequisite metadata in deferred newer-input probes.
 // Share generation pinning and collection-race recovery across launchers.
@@ -273,6 +274,11 @@ static int HandleBuild(int argc, char** argv) {
     status = RunGeneratedNinja(
         reader, std::string(Basename(GetNinjaShellScriptFilename())),
         ninja.size(), ninja.data());
+    const std::string dirty_marker =
+        GenerationPath(g_flags.ninja_dir ? g_flags.ninja_dir : ".",
+                       ".kati_recursive_source_dirty");
+    if (status == 0)
+      unlink(dirty_marker.c_str());
   }
   close(lock_fd);
   ReportAllStats();
@@ -401,6 +407,36 @@ int HandleLowResolutionUpToDate(int argc,
     if (InputIsNewer(
             LegacyInputStamp(input_stat, legacy_low_inputs.count(argv[i])),
             output))
+      return 1;
+  }
+  return 0;
+}
+
+int HandleLowResolutionManifestCurrent(int argc, char** argv) {
+  if (argc != 5 || (strcmp(argv[3], "0") != 0 && strcmp(argv[3], "1") != 0))
+    return 1;
+  std::string manifest;
+  if (!ReadGraphCache(argv[4], &manifest))
+    return 1;
+  std::string_view inputs(manifest);
+  std::string_view field;
+  if (!ConsumeGraphStringView(&inputs, &field) || field != "ninja-inputs-v1" ||
+      !ConsumeGraphStringView(&inputs, &field) || field != argv[2])
+    return 1;
+
+  struct stat output_metadata;
+  if (!StatPath(argv[2], &output_metadata))
+    return 1;
+  FileStamp output = FileStamp::FromStat(output_metadata);
+  if (strcmp(argv[3], "1") == 0)
+    output = output.LowResolution();
+  while (!inputs.empty()) {
+    if (!ConsumeGraphStringView(&inputs, &field))
+      return 1;
+    const std::string path(field);
+    struct stat input_metadata;
+    if (!StatPath(path.c_str(), &input_metadata) ||
+        InputIsNewer(LegacyInputStamp(input_metadata, false), output))
       return 1;
   }
   return 0;
@@ -1088,13 +1124,14 @@ static int Run(const std::vector<Symbol>& targets,
                const std::string& orig_args,
                const std::string& invocation_dir) {
   double start_time = GetWallTime();
+  InvocationEnvironmentIdentity();
   LOG_STAT("graph optimization settings: %s",
            g_flags.GraphOptimizationIdentity().c_str());
   if (g_flags.import_root) {
     std::vector<std::string> files;
+    const bool static_import_sources = StaticImportSources(&files);
     if (g_flags.is_dry_run || g_flags.is_touch || g_flags.is_question ||
-        g_flags.keep_going || g_flags.load_limit_set ||
-        !StaticImportSources(&files))
+        g_flags.keep_going || g_flags.load_limit_set || !static_import_sources)
       return 3;
   }
   RecursiveCache recursive_cache(orig_args);
@@ -1368,8 +1405,9 @@ static int Run(const std::vector<Symbol>& targets,
         // Secondary expansion can turn a syntactically nonempty list into
         // an unconditional double-colon recipe. Do not remake parser inputs
         // with such recipes, just as for a literal empty prerequisite list.
-        if (unconditional)
+        if (unconditional) {
           continue;
+        }
         // A generated include can introduce rules needed to remake another
         // include. Build resolvable graphs first and restart before treating
         // those temporarily missing prerequisites as fatal (glibc does this
@@ -1453,34 +1491,42 @@ static int Run(const std::vector<Symbol>& targets,
           // A complete, unchanged explicit include graph can certify that
           // remaking it is a no-op. Recording every node in the normal stamp
           // binds this proof to its producing rules and dependency identities.
-          // Implicit/VPATH searches need negative probes before admission.
+          // Implicit searches need negative probes; VPATH directory identities
+          // are recorded below.
           if (g_flags.generate_ninja && !g_flags.explain &&
               g_flags.GraphOptimizationEnabled("includes") &&
               !include_result.needs_build && include_observations_valid &&
-              deferred_include_nodes.empty() && ev.vpaths().empty() &&
+              deferred_include_nodes.empty() &&
               !MakefileCacheManager::Get().has_observable_evaluation()) {
             std::vector<const DepNode*> pending;
             for (const auto& root : include_remake_nodes)
               pending.push_back(root.second);
             std::unordered_set<const DepNode*> visited;
-            std::vector<std::string> files;
+            std::vector<std::string> tracked_paths;
             bool eligible = true;
             while (!pending.empty() && eligible) {
               const DepNode* node = pending.back();
               pending.pop_back();
               if (!visited.insert(node).second)
                 continue;
+              const std::string path = node->vpath_provider.IsValid()
+                                           ? node->vpath_provider.str()
+                                           : node->output.str();
               struct stat st;
               eligible =
                   !node->is_phony && !node->is_notparallel &&
-                  !node->vpath_provider.IsValid() &&
                   node->implicit_outputs.empty() && node->validations.empty() &&
                   node->DoubleColon().for_cmd.empty() &&
-                  !node->low_resolution &&
-                  stat(node->output.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+                  !node->low_resolution && stat(path.c_str(), &st) == 0 &&
+                  (S_ISREG(st.st_mode) || S_ISDIR(st.st_mode));
               if (!eligible)
                 break;
-              files.push_back(node->output.str());
+              // Directory prerequisites often receive generated objects
+              // during the build, changing their mtimes without changing
+              // include resolution. The included files themselves and VPATH
+              // search directories are tracked separately.
+              if (S_ISREG(st.st_mode))
+                tracked_paths.push_back(path);
               for (const auto& input : node->deps)
                 pending.push_back(input.second);
               for (const auto& input : node->order_onlys)
@@ -1488,16 +1534,27 @@ static int Run(const std::vector<Symbol>& targets,
             }
             for (const auto& observation : include_observations)
               if (observation.second == "unreadable" ||
-                  GetFileIdentity(observation.first) != observation.second)
+                  GetFileIdentity(observation.first) != observation.second) {
                 eligible = false;
+              }
+            std::unordered_set<std::string> vpath_directories;
+            for (const Evaluator::Vpath& vpath : ev.vpaths())
+              for (const std::string& directory : vpath.directories)
+                vpath_directories.insert(directory);
+            for (const std::string& directory : vpath_directories)
+              if (GetFileIdentity(directory) == "unreadable") {
+                eligible = false;
+              }
             if (eligible) {
               auto& cache = MakefileCacheManager::Get();
               for (const auto& observation : include_observations)
                 cache.AddExtraFileDep(observation.first);
-              for (const std::string& file : files)
-                cache.AddExtraFileDep(file);
+              for (const std::string& directory : vpath_directories)
+                cache.AddIncludeDirectoryDep(directory);
+              for (const std::string& path : tracked_paths)
+                cache.AddExtraFileDep(path);
               cache.CertifyIncludeEvaluation();
-              LOG_STAT("include certificate: %zu nodes", files.size());
+              LOG_STAT("include certificate: %zu paths", tracked_paths.size());
             }
           }
           if (!deferred_include_nodes.empty()) {
@@ -2121,6 +2178,20 @@ static int Main(int argc, char* argv[]) {
       } else {
         unsetenv("KATI_RECIPE_STATE_PATH");
       }
+      const bool recursive_recipe =
+          !strcmp(argv[1], "--internal-run-recursive-recipe") ||
+          !strcmp(argv[1], "--internal-run-recursive-recipe-file");
+      // A recursive recipe helper owns neither output cleanup nor workspace
+      // state when invoked with the plain five-argument form. Replace the
+      // helper process with its shell instead of forking a shell and waiting
+      // only to return the same status. The shell inherits the jobserver
+      // reservation and receives signals directly in the same process group.
+      if (recursive_recipe && argc == 5 && argv[2][0] == '/' &&
+          argv[3][0] != '\0' && strpbrk(argv[3], " \t\r\n'\"\\$`") == nullptr) {
+        char* arguments[] = {argv[2], argv[3], argv[4], nullptr};
+        execv(arguments[0], arguments);
+        PERROR("executing recursive recipe shell failed");
+      }
       const int status = RunCommand(
           argv[2], argv[3], argv[4], RedirectStderr::NONE, nullptr,
           (!strcmp(argv[1], "--internal-run-recipe") ||
@@ -2162,6 +2233,8 @@ static int Main(int argc, char* argv[]) {
       return HandleLowResolutionUpToDate(argc, argv);
     } else if (!strcmp(argv[1], "--internal-low-resolution-output-current")) {
       return HandleLowResolutionUpToDate(argc, argv, true);
+    } else if (!strcmp(argv[1], "--internal-low-resolution-manifest-current")) {
+      return HandleLowResolutionManifestCurrent(argc, argv);
     } else if (!strcmp(argv[1], "--internal-intermediate-current") &&
                argc == 4) {
       return HandleIntermediateCurrent(argv[2], argv[3]);

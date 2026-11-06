@@ -356,6 +356,18 @@ def main():
                                          else ("clean", "noop", "source", "missing", "graph")):
                             previous_objects = objects(build)
                             timestamp = changed_source.stat()
+                            recursive_source_state = None
+                            if (scenario == "source" and variant == "candidate" and
+                                    args.project == "linux"):
+                                state_path = build / ".openmktr" / ".kati_recursive_source_fingerprint"
+                                try:
+                                    state_metadata = state_path.stat()
+                                    recursive_source_state = (
+                                        state_path, state_path.read_bytes(),
+                                        state_metadata.st_atime_ns,
+                                        state_metadata.st_mtime_ns)
+                                except FileNotFoundError:
+                                    pass
                             try:
                                 if scenario == "source":
                                     os.utime(changed_source, None)
@@ -387,6 +399,10 @@ def main():
                                 if scenario == "source":
                                     os.utime(changed_source, ns=(timestamp.st_atime_ns,
                                                                timestamp.st_mtime_ns))
+                                    if recursive_source_state:
+                                        state_path, state_bytes, state_atime, state_mtime = recursive_source_state
+                                        state_path.write_bytes(state_bytes)
+                                        os.utime(state_path, ns=(state_atime, state_mtime))
                             current_objects = objects(build)
                             changed = sorted(p for p in previous_objects.keys() | current_objects.keys()
                                              if previous_objects.get(p) != current_objects.get(p))

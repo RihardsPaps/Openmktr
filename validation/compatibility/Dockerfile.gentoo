@@ -7,7 +7,7 @@ RUN mkdir -p /etc/portage/package.use && \
       'llvm-runtimes/libcxxabi -abi_x86_32' \
       'llvm-runtimes/libunwind -abi_x86_32' > /etc/portage/package.use/openmktr
 RUN emerge-webrsync && emerge --getbinpkg --jobs=4 \
-      llvm-core/clang llvm-core/lld llvm-runtimes/libcxx '>=dev-build/ninja-1.13.2' '>=dev-lang/python-3.14' dev-vcs/git
+      llvm-core/clang llvm-core/lld llvm-runtimes/libcxx '>=dev-build/ninja-1.13.2' '>=dev-lang/python-3.14' dev-vcs/git dev-lang/nasm
 # External qualification dependencies: exercise Ninja alternatives and the
 # recursive Automake libpipeline package's upstream tests.
 RUN emerge --getbinpkg --oneshot --jobs=4 dev-build/samurai dev-libs/check
