@@ -50,7 +50,8 @@ void TestSharedKbuildDependencyIndex() {
     headers.push_back(root + "/header" + std::to_string(i) + ".h");
   std::sort(headers.begin(), headers.end());
   for (int i = 0; i < 128; ++i)
-    index.objects["/build/object" + std::to_string(i) + ".o"] = headers;
+    index.objects["/build/group" + std::to_string(i / 64) + "/object" +
+                  std::to_string(i) + ".o"] = headers;
   index.covered_inputs.insert(headers.begin(), headers.end());
   const std::string encoded = index.Encode();
   // The dependency relation has over 8 MiB of repeated absolute header names.
@@ -63,6 +64,10 @@ void TestSharedKbuildDependencyIndex() {
   assert(restored.covered_inputs == index.covered_inputs);
   assert(restored.Inputs("/build") == headers);
   assert(restored.Covers(headers.front()));
+  assert(restored.Decode(encoded, "/build/group0"));
+  assert(restored.complete && restored.objects.size() == 64);
+  assert(restored.Inputs("/build/group0") == headers);
+  assert(restored.Inputs("/build/group1").empty());
 }
 
 void TestOwnedFilesystemPaths() {

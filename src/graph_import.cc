@@ -450,7 +450,8 @@ std::string KbuildDependencyIndex::Encode() const {
   return bytes;
 }
 
-bool KbuildDependencyIndex::Decode(std::string_view bytes) {
+bool KbuildDependencyIndex::Decode(std::string_view bytes,
+                                   const std::string& directory) {
   objects.clear();
   covered_inputs.clear();
   complete = false;
@@ -481,7 +482,9 @@ bool KbuildDependencyIndex::Decode(std::string_view bytes) {
         !ConsumeGraphString(&bytes, &encoded))
       return false;
     std::string_view inputs(encoded);
-    auto& paths = objects[object];
+    const bool keep = directory.empty() || HasPrefix(object, directory + "/");
+    std::vector<std::string> paths;
+    std::string_view previous;
     while (!inputs.empty()) {
       std::string path;
       if (indexed) {
@@ -494,15 +497,29 @@ bool KbuildDependencyIndex::Decode(std::string_view bytes) {
         inputs.remove_prefix(4);
         if (id >= dictionary.size())
           return false;
-        path = dictionary[id];
+        const std::string& value = dictionary[id];
+        if (!previous.empty() && previous > value)
+          return false;
+        previous = value;
+        if (keep)
+          paths.push_back(value);
+        continue;
       } else if (!ConsumeGraphString(&inputs, &path)) {
         return false;
       }
+      if (!previous.empty() && previous > path)
+        return false;
+      // Legacy records own each string separately. Keep the previous value
+      // alive even when this owner lies outside the requested subtree.
       paths.push_back(std::move(path));
+      previous = paths.back();
     }
     if (!std::is_sorted(paths.begin(), paths.end()))
       return false;
-    covered_inputs.insert(paths.begin(), paths.end());
+    if (keep) {
+      covered_inputs.insert(paths.begin(), paths.end());
+      objects.emplace(std::move(object), std::move(paths));
+    }
   }
   complete = coverage == "1" && !objects.empty();
   return true;

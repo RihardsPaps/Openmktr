@@ -25,7 +25,7 @@ struct KbuildDependencyIndex {
   std::vector<std::string> Inputs(const std::string& directory) const;
   std::string Encode() const;
   std::string TreeProof() const;
-  bool Decode(std::string_view bytes);
+  bool Decode(std::string_view bytes, const std::string& directory = "");
 };
 bool StaticImportSources(std::vector<std::string>* files);
 bool ResolveImportedCommandEnvironment(Command* command);

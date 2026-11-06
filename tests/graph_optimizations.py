@@ -318,6 +318,23 @@ class GraphOptimizations(unittest.TestCase):
             self.assertEqual(source.read(), b"ab", result.stdout)
         self.assertEqual((self.root / "result").read_text(), "original")
 
+    @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",
+                         "requires the native Kbuild import observer")
+    def test_dynamic_import_seek_does_not_advance_caller_input(self):
+        self.kbuild_markers()
+        (self.root / "seek.py").write_text("import os\nos.lseek(0,1,0)\n")
+        (self.root / "child.mk").write_text(
+            "VALUE := $(shell python3 seek.py)\n"
+            ".PHONY: all\nall: init/result\n"
+            "init/result:\n\t@printf done > $@\n")
+        self.makefile(".PHONY: all\nall:\n\t@$(MAKE) -f child.mk all\n")
+        (self.root / "caller-input").write_bytes(b"ab")
+        with (self.root / "caller-input").open("rb") as source:
+            result = self.run_tool("--ninja", "--graph_optimizations=aggressive",
+                                   "--use_ninja_phony_output", "--kati_stats", "all", stdin=source)
+            self.assertEqual(source.tell(), 0, result.stdout)
+            self.assertEqual(source.read(), b"ab")
+
     def test_dynamic_import_waits_for_parent_producers_and_rejects_effects(self):
         self.kbuild_markers()
         (self.root / "child.mk").write_text(
@@ -433,19 +450,27 @@ class GraphOptimizations(unittest.TestCase):
         graphs = {p: p.stat().st_mtime_ns for p in (build / ".openmktr").rglob("build.ninja")
                   if "other/main.o" in p.read_text() and "init/main.o" not in p.read_text()}
         self.assertTrue(graphs)
+        root_graph = build / ".openmktr/build.ninja"
+        root_stamp = root_graph.stat().st_mtime_ns
         time.sleep(0.02)
         (source / "init/main.c").write_text("updated init source\n")
         result = self.run_tool(*command)
-        self.assertIn("covered changes", result.stdout)
+        self.assertIn("No need to regenerate", result.stdout)
+        self.assertEqual(root_graph.stat().st_mtime_ns, root_stamp)
         self.assertIn("updated init source", (build / "init/main.o").read_text())
         self.assertEqual(sibling.stat().st_mtime_ns, sibling_stamp)
         for path, stamp in graphs.items():
             self.assertEqual(path.stat().st_mtime_ns, stamp)
         time.sleep(0.02)
         (source / "init/local.h").write_text("updated init header\n")
-        self.run_tool(*command)
+        self.assertIn("No need to regenerate", self.run_tool(*command).stdout)
         self.assertIn("updated init header", (build / "init/main.o").read_text())
         self.assertEqual(sibling.stat().st_mtime_ns, sibling_stamp)
+        # Rewriting identical fixdep content must retain frontend reuse; a
+        # changed record must still rebuild the ownership index below.
+        record = build / "init/.main.o.cmd"
+        record.write_text(record.read_text())
+        self.assertIn("No need to regenerate", self.run_tool(*command).stdout)
         with (source / "Makefile").open("a") as output:
             output.write("generated.h: seed\n\t@cp $< $@\n")
         time.sleep(0.02)

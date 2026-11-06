@@ -591,7 +591,7 @@ class NinjaGenerator {
       const char* path = getenv("KATI_IMPORT_DEPENDENCY_INDEX");
       std::string bytes;
       if (path && ReadGraphCache(path, &bytes))
-        kbuild_dependencies_.Decode(bytes);
+        kbuild_dependencies_.Decode(bytes, KbuildDependencyScope());
     }
     if (g_flags.import_root && g_flags.use_ninja_phony_output)
       imported_phony_aliases_.insert(Intern("_kati_always_build_"));
@@ -604,8 +604,16 @@ class NinjaGenerator {
         (g_flags.make_level == 0 || g_flags.import_root)) {
       CollectRecursiveSourceInputs();
       if (g_flags.make_level == 0)
-        for (Symbol input : recursive_source_inputs_)
-          MakefileCacheManager::Get().AddExtraFileDep(input.str());
+        for (Symbol input : recursive_source_inputs_) {
+          // Covered sources already wake their owning Ninja edge or recursive
+          // scope. Keep frontend observations independently tracked, but do not
+          // turn every compiler-only edit into a full graph regeneration.
+          if (HasSuffix(input.str(), ".cmd"))
+            MakefileCacheManager::Get().AddContentFileDep(
+                std::string(input.str()));
+          else if (!kbuild_dependencies_.Covers(std::string(input.str())))
+            MakefileCacheManager::Get().AddExtraFileDep(input.str());
+        }
       const char* inherited_fingerprint =
           getenv("KATI_IMPORT_SOURCE_FINGERPRINT");
       if (g_flags.import_root && inherited_fingerprint &&
@@ -2725,20 +2733,25 @@ class NinjaGenerator {
            stat(dependency.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
   }
 
+  std::string KbuildDependencyScope() const {
+    std::string scope = working_dir_;
+    for (std::string_view variable : g_flags.cl_vars)
+      if (HasPrefix(variable, "obj=") && variable.substr(4) != ".") {
+        const std::string object(variable.substr(4));
+        scope = object.empty() || object.front() != '/'
+                    ? working_dir_ + "/" + object
+                    : object;
+        NormalizePath(&scope);
+        break;
+      }
+    return scope;
+  }
+
   void ScopeRecursiveSourceInputs() {
     if (kbuild_dependencies_.complete) {
-      std::string scope = working_dir_;
-      for (std::string_view variable : g_flags.cl_vars)
-        if (HasPrefix(variable, "obj=") && variable.substr(4) != ".") {
-          const std::string object(variable.substr(4));
-          scope = object.empty() || object.front() != '/'
-                      ? working_dir_ + "/" + object
-                      : object;
-          NormalizePath(&scope);
-          break;
-        }
       recursive_source_inputs_.clear();
-      for (const std::string& path : kbuild_dependencies_.Inputs(scope))
+      for (const std::string& path :
+           kbuild_dependencies_.Inputs(KbuildDependencyScope()))
         recursive_source_inputs_.push_back(Intern(path));
     }
     if (!recursive_source_inputs_.empty())
@@ -3691,7 +3704,8 @@ class NinjaGenerator {
         if ((!ninja_depfiles_.count(path) ||
              MakefileCacheManager::Get().IsParsedMakefile(path)) &&
             !is_generated_directory_dep(path))
-          record(path, MakefileCacheManager::Get().IsParsedMakefile(path));
+          record(path, MakefileCacheManager::Get().IsParsedMakefile(path) ||
+                           MakefileCacheManager::Get().IsContentFileDep(path));
       }
       evaluation =
           WriteGraphCache(GetNinjaStampFilename() + ".includes", proof) ? 2 : 1;
@@ -3744,7 +3758,8 @@ class NinjaGenerator {
       const bool generated =
           MakefileCacheManager::Get().IsGeneratedGraphDep(makefile);
       const bool parsed =
-          MakefileCacheManager::Get().IsParsedMakefile(makefile);
+          MakefileCacheManager::Get().IsParsedMakefile(makefile) ||
+          MakefileCacheManager::Get().IsContentFileDep(makefile);
       const std::string identity =
           generated ? "generated:" + metadata_identities.at(makefile)
           : parsed  ? "content:" + GetFileContentIdentity(makefile)

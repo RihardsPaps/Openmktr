@@ -60,9 +60,6 @@ bool InstallFilter() {
                            SYS_faccessat2,
                            SYS_readlink,
                            SYS_readlinkat,
-                           SYS_getdents,
-                           SYS_getdents64,
-                           SYS_lseek,
                            SYS_getcwd,
                            SYS_chdir,
                            SYS_fchdir,
@@ -458,11 +455,15 @@ struct Observer {
       case SYS_flock:
         return output(a[0]);
       case SYS_read:
+      case SYS_getdents:
+      case SYS_getdents64:
       case SYS_readv:
       case SYS_pread64:
       case SYS_preadv:
       case SYS_preadv2:
         return Input(pid, a[0]);
+      case SYS_lseek:
+        return (a[1] == 0 && a[2] == SEEK_CUR) || Input(pid, a[0]);
       case SYS_sendfile:
         return Input(pid, a[1]) && output(a[0]);
       case SYS_splice:

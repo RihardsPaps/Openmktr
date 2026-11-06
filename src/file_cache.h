@@ -1,5 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
 // Keep include-producer freshness separate from parsed-source content reuse.
+// Track fixdep record contents independently of compiler rewrite timestamps.
 // Own invocation state and publish coherent generations with typed freshness.
 // Validate caller environments before reusing deferred recipes or child
 // imports. Track and validate incremental evaluation, include proofs and
@@ -40,6 +41,13 @@ class MakefileCacheManager {
   const Makefile& ReadStdinMakefile();
   void GetAllFilenames(std::unordered_set<std::string>* out);
   void AddExtraFileDep(std::string_view dep);
+  void AddContentFileDep(const std::string& path) {
+    extra_file_deps_.insert(path);
+    content_file_deps_.insert(path);
+  }
+  bool IsContentFileDep(const std::string& path) const {
+    return content_file_deps_.count(path) != 0;
+  }
   void AddIncludeDirectoryDep(std::string_view directory) {
     extra_file_deps_.emplace(directory);
     include_directory_deps_.emplace(directory);
@@ -92,6 +100,7 @@ class MakefileCacheManager {
   std::unordered_map<std::string, Makefile> cache_;
   std::unique_ptr<Makefile> stdin_makefile_;
   std::unordered_set<std::string> extra_file_deps_;
+  std::unordered_set<std::string> content_file_deps_;
   std::unordered_set<std::string> generated_graph_deps_;
   std::unordered_set<std::string> include_directory_deps_;
   std::unordered_set<std::string> include_freshness_deps_;
