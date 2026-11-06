@@ -2,8 +2,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #include "import_observer.h"
+#include "fileutil.h"
 #include "log.h"
 #include "process.h"
+#include "stats.h"
 
 #if defined(__linux__) && defined(__x86_64__)
 #include <fcntl.h>
@@ -18,12 +20,14 @@
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/sysmacros.h>
+#include <sys/uio.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -49,6 +53,19 @@ bool InstallFilter() {
                                               {0x15, 1, 0, 0xc000003e},
                                               {0x06, 0, 0, trace},
                                               {0x20, 0, 0, 0}};
+  // BeginImportObservation closes every inherited descriptor above stderr.
+  // New descriptors are private opens or duplicates whose source is checked
+  // below. Thus fd >= 3 cannot alias the caller's input: reads and seeks on
+  // these descriptors need no tracer stop. Standard descriptors stay checked.
+  for (unsigned syscall :
+       {SYS_read, SYS_readv, SYS_pread64, SYS_preadv, SYS_preadv2, SYS_getdents,
+        SYS_getdents64, SYS_lseek}) {
+    instructions.push_back({0x15, 0, 4, syscall});
+    instructions.push_back({0x20, 0, 0, 16});  // args[0], low 32-bit fd.
+    instructions.push_back({0x35, 1, 0, 3});   // Unsigned fd >= 3.
+    instructions.push_back({0x06, 0, 0, trace});
+    instructions.push_back({0x06, 0, 0, allow});
+  }
   const unsigned pure[] = {SYS_close,
                            SYS_stat,
                            SYS_lstat,
@@ -108,9 +125,6 @@ bool InstallFilter() {
                            SYS_pselect6,
                            SYS_pipe,
                            SYS_pipe2,
-                           SYS_dup,
-                           SYS_dup2,
-                           SYS_dup3,
                            SYS_execve,
                            SYS_execveat,
                            SYS_fork,
@@ -146,30 +160,67 @@ struct ImportSyscall {
     uint64_t args[6];
   } entry;
 };
+ssize_t ReadRemoteMemory(pid_t pid,
+                         uint64_t address,
+                         void* output,
+                         size_t size) {
+  iovec local{output, size};
+  iovec remote{reinterpret_cast<void*>(address), size};
+  return HANDLE_EINTR(
+      syscall(SYS_process_vm_readv, pid, &local, 1, &remote, 1, 0));
+}
+
 bool ReadMemory(pid_t pid, uint64_t address, void* output, size_t size) {
+  if (address > UINT64_MAX - size)
+    return false;
   auto* bytes = static_cast<char*>(output);
-  for (size_t offset = 0; offset < size; offset += sizeof(long)) {
+  const ssize_t copied = ReadRemoteMemory(pid, address, output, size);
+  if (copied == static_cast<ssize_t>(size))
+    return true;
+  // Older kernels or tracing policies can deny bulk reads. Keep a bounded
+  // ptrace fallback, aligning each word so a final byte at a page boundary
+  // never requires access to the following, potentially unmapped page.
+  for (size_t offset = 0; offset < size;) {
+    const uint64_t current = address + offset;
+    const uint64_t aligned =
+        current & ~(static_cast<uint64_t>(sizeof(long)) - 1);
+    const size_t skip = current - aligned;
     errno = 0;
-    const long word = ptrace(PTRACE_PEEKDATA, pid, address + offset, 0);
+    const long word = ptrace(PTRACE_PEEKDATA, pid, aligned, 0);
     if (errno)
       return false;
-    memcpy(bytes + offset, &word, std::min(sizeof(long), size - offset));
+    const size_t count = std::min(sizeof(long) - skip, size - offset);
+    memcpy(bytes + offset, reinterpret_cast<const char*>(&word) + skip, count);
+    offset += count;
   }
   return true;
 }
 
 bool ReadString(pid_t pid, uint64_t address, std::string* output) {
+  COLLECT_STATS("import path reads");
   output->clear();
-  for (size_t offset = 0; offset < 4096; offset += sizeof(long)) {
-    long word;
-    if (!ReadMemory(pid, address + offset, &word, sizeof(word)))
-      return false;
-    for (size_t i = 0; i < sizeof(word); ++i) {
-      const char c = reinterpret_cast<char*>(&word)[i];
-      if (!c)
-        return true;
-      *output += c;
+  static const long page_size = sysconf(_SC_PAGESIZE);
+  if (page_size <= 0 || address > UINT64_MAX - 4096)
+    return false;
+  for (size_t offset = 0; offset < 4096;) {
+    char buffer[512];
+    size_t count = std::min(
+        {sizeof(buffer), 4096 - offset,
+         static_cast<size_t>(page_size - (address + offset) % page_size)});
+    const ssize_t copied =
+        ReadRemoteMemory(pid, address + offset, buffer, count);
+    if (copied > 0) {
+      count = static_cast<size_t>(copied);
+    } else {
+      count = std::min(count, sizeof(long) - (address + offset) % sizeof(long));
+      if (!ReadMemory(pid, address + offset, buffer, count))
+        return false;
     }
+    const auto* end = static_cast<const char*>(memchr(buffer, 0, count));
+    output->append(buffer, end ? static_cast<size_t>(end - buffer) : count);
+    if (end)
+      return true;
+    offset += count;
   }
   return false;
 }
@@ -462,6 +513,17 @@ struct Observer {
       case SYS_preadv:
       case SYS_preadv2:
         return Input(pid, a[0]);
+      case SYS_dup:
+        return Input(pid, a[0]);
+      case SYS_dup2:
+      case SYS_dup3:
+        return a[0] == a[1] || Input(pid, a[0]);
+#ifdef SYS_pidfd_open
+      case SYS_pidfd_open:
+        // The process supervisor polls its own child's exit after stdout
+        // closes. Opening that handle neither consumes input nor signals it.
+        return a[1] == 0 && children.count(a[0]);
+#endif
       case SYS_lseek:
         return (a[1] == 0 && a[2] == SEEK_CUR) || Input(pid, a[0]);
       case SYS_sendfile:
@@ -487,10 +549,10 @@ struct Observer {
       case SYS_prlimit64:
         return a[0] == 0 || a[0] == static_cast<uint64_t>(pid) || !a[2];
       case SYS_fcntl:
-        if (a[1] == F_SETFL)
+        if (a[1] == F_SETFL || a[1] == F_DUPFD || a[1] == F_DUPFD_CLOEXEC)
           return Input(pid, a[0]);
         return a[1] == F_GETFD || a[1] == F_GETFL || a[1] == F_SETFD ||
-               a[1] == F_DUPFD || a[1] == F_DUPFD_CLOEXEC || output(a[0]);
+               output(a[0]);
       case SYS_umask:
       case SYS_setpgid:
       case SYS_setsid:

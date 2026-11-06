@@ -1,6 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
 // Launch validation workers only when independent observations need checking.
 // Batch large ordinary file frontiers without sharing evaluator state.
+// Identify rejected import proofs in regeneration diagnostics.
 // Retain shell diagnostics and stop replay at changed conditional boundaries.
 // Validate complete deferred environments and inherited jobserver identities.
 // Own invocation state and publish coherent generations with typed freshness.
@@ -658,6 +659,7 @@ class StampChecker {
     if (!needs_regen_) {
       for (const std::string& plan : import_plans_)
         if (!ValidateImportedGraph(plan)) {
+          LOG_STAT("import validation changed: %s", plan.c_str());
           needs_regen_ = true;
           msg_ = "Imported evaluation changed, regenerating...\n";
           break;

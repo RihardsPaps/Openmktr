@@ -115,6 +115,7 @@ bool BuildMembership(const std::string& directory, std::string* membership) {
   return valid;
 }
 bool ValidateBuildTree(std::string_view view, bool indexed_owners) {
+  COLLECT_STATS("Kbuild tree validation");
   std::unordered_set<std::string> owners;
   if (indexed_owners) {
     std::string encoded;
@@ -592,36 +593,40 @@ bool KbuildDependencyIndex::Decode(std::string_view bytes,
       !ConsumeGraphString(&bytes, &coverage) ||
       (coverage != "1" && coverage != "0"))
     return false;
-  std::vector<Symbol> dictionary;
+  // Views remain inside the caller-owned immutable payload for this call.
+  // A child interns only paths referenced by its scope, rather than copying
+  // every owner's reference list and materializing the whole kernel index.
+  std::vector<std::string_view> dictionary;
   const bool indexed = version == "kbuild-dependencies-v2";
   if (indexed) {
-    std::string encoded;
-    if (!ConsumeGraphString(&bytes, &encoded))
+    std::string_view encoded;
+    if (!ConsumeGraphStringView(&bytes, &encoded))
       return false;
     std::string_view paths(encoded);
     while (!paths.empty()) {
-      std::string path;
-      if (!ConsumeGraphString(&paths, &path))
+      std::string_view path;
+      if (!ConsumeGraphStringView(&paths, &path))
         return false;
-      dictionary.push_back(Intern(path));
+      dictionary.push_back(path);
     }
   }
-  const bool sorted_dictionary = std::is_sorted(
-      dictionary.begin(), dictionary.end(),
-      [](Symbol left, Symbol right) { return left.str() < right.str(); });
+  const bool sorted_dictionary =
+      std::is_sorted(dictionary.begin(), dictionary.end());
+  std::vector<Symbol> symbols(dictionary.size());
+  const std::string prefix = directory + "/";
   while (!bytes.empty()) {
-    std::string object, encoded;
-    if (!ConsumeGraphString(&bytes, &object) ||
-        !ConsumeGraphString(&bytes, &encoded))
+    std::string_view object, encoded;
+    if (!ConsumeGraphStringView(&bytes, &object) ||
+        !ConsumeGraphStringView(&bytes, &encoded))
       return false;
     std::string_view inputs(encoded);
-    const bool keep = directory.empty() || HasPrefix(object, directory + "/");
+    const bool keep = directory.empty() || HasPrefix(object, prefix);
     std::vector<Symbol> paths;
     std::string_view previous;
     uint32_t previous_id = 0;
     bool first = true;
     while (!inputs.empty()) {
-      std::string path;
+      std::string_view path;
       if (indexed) {
         if (inputs.size() < 4)
           return false;
@@ -632,30 +637,32 @@ bool KbuildDependencyIndex::Decode(std::string_view bytes,
         inputs.remove_prefix(4);
         if (id >= dictionary.size())
           return false;
-        const Symbol value = dictionary[id];
+        const std::string_view value = dictionary[id];
         if (sorted_dictionary ? (!first && previous_id > id)
-                              : (!previous.empty() && previous > value.str()))
+                              : (!previous.empty() && previous > value))
           return false;
-        previous = value.str();
+        previous = value;
         previous_id = id;
         first = false;
-        if (keep)
-          paths.push_back(value);
+        if (keep) {
+          if (!symbols[id].IsValid())
+            symbols[id] = Intern(value);
+          paths.push_back(symbols[id]);
+        }
         continue;
-      } else if (!ConsumeGraphString(&inputs, &path)) {
+      } else if (!ConsumeGraphStringView(&inputs, &path)) {
         return false;
       }
       if (!previous.empty() && previous > path)
         return false;
-      const Symbol value = Intern(path);
       if (keep)
-        paths.push_back(value);
-      previous = value.str();
+        paths.push_back(Intern(path));
+      previous = path;
     }
     if (keep) {
       std::sort(paths.begin(), paths.end());
       covered_inputs.insert(paths.begin(), paths.end());
-      objects.emplace(std::move(object), std::move(paths));
+      objects.emplace(std::string(object), std::move(paths));
     }
   }
   complete = coverage == "1" && !objects.empty();

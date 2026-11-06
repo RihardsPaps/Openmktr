@@ -22,6 +22,84 @@ BINARY = Path(os.environ.get("OMKTR_BINARY", Path(__file__).resolve().parents[1]
 
 
 class GraphOptimizations(unittest.TestCase):
+    @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",
+                         "requires the native Kbuild import observer")
+    def test_dynamic_import_waits_after_probe_stdout_closes(self):
+        self.kbuild_markers()
+        (self.root / "early-eof.py").write_text(
+            "import os, time\nos.close(1)\ntime.sleep(.1)\n")
+        (self.root / "child.mk").write_text(
+            "VALUE := $(shell python3 early-eof.py)\n.PHONY: all\nall: init/result\n"
+            "init/result:\n\t@printf done > $@\n")
+        self.makefile(".PHONY: all\nall:\n\t@$(MAKE) -f child.mk all\n")
+        result = self.run_tool("build", "--graph_optimizations=aggressive",
+                               "--use_ninja_phony_output", "--kati_stats", "all")
+        self.assertEqual((self.root / "init/result").read_text(), "done")
+        self.assertTrue(any("init/result" in path.read_text()
+                            for path in (self.root / ".openmktr/.imports").rglob("build.ninja")),
+                        result.stdout)
+
+    @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",
+                         "requires the native Kbuild import observer")
+    def test_import_observer_reads_page_boundary_paths_with_bulk_fallback(self):
+        self.kbuild_markers()
+        (self.root / "probe-input").write_text("boundary")
+        (self.root / "probe.py").write_text(
+            "import ctypes, os\n"
+            "libc = ctypes.CDLL(None, use_errno=True)\n"
+            "libc.mmap.restype = ctypes.c_void_p\n"
+            "libc.munmap.argtypes = [ctypes.c_void_p, ctypes.c_size_t]\n"
+            "page = os.sysconf('SC_PAGE_SIZE')\n"
+            "memory = libc.mmap(None, page * 2, 3, 0x22, -1, 0)\n"
+            "assert memory not in (None, ctypes.c_void_p(-1).value)\n"
+            "assert libc.munmap(memory + page, page) == 0\n"
+            "path = b'probe-input\\0'\n"
+            "address = memory + page - len(path)\n"
+            "ctypes.memmove(address, path, len(path))\n"
+            "fd = libc.syscall(257, -100, ctypes.c_void_p(address), 0, 0)\n"
+            "assert fd >= 0, ctypes.get_errno()\n"
+            "print(os.read(fd, 100).decode())\n"
+            "os.close(fd)\n"
+            "assert libc.munmap(memory, page) == 0\n")
+        wrapper = self.root / "deny-bulk.py"
+        wrapper.write_text(
+            "import ctypes, os, sys\n"
+            "class Instruction(ctypes.Structure):\n"
+            " _fields_ = [('code',ctypes.c_ushort),('yes',ctypes.c_ubyte),"
+            "('no',ctypes.c_ubyte),('value',ctypes.c_uint)]\n"
+            "class Program(ctypes.Structure):\n"
+            " _fields_ = [('count',ctypes.c_ushort),('data',ctypes.POINTER(Instruction))]\n"
+            "code = (Instruction * 4)(Instruction(0x20,0,0,0),"
+            "Instruction(0x15,0,1,310),Instruction(0x06,0,0,0x50001),"
+            "Instruction(0x06,0,0,0x7fff0000))\n"
+            "program = Program(4, code)\n"
+            "libc = ctypes.CDLL(None, use_errno=True)\n"
+            "assert libc.prctl(38,1,0,0,0) == 0\n"
+            "assert libc.prctl(22,2,ctypes.byref(program),0,0) == 0\n"
+            "os.execv(sys.argv[1],sys.argv[1:])\n")
+        for deny_bulk in (False, True):
+            with self.subTest(deny_bulk=deny_bulk):
+                child = f"child-{int(deny_bulk)}.mk"
+                (self.root / child).write_text(
+                    "VALUE := $(shell python3 probe.py)\n.PHONY: all\nall: init/result\n"
+                    "init/result:\n\t@printf '%s' '$(VALUE)' > $@\n")
+                self.makefile(f".PHONY: all\nall:\n\t@$(MAKE) -f {child} all\n")
+                (self.root / "init/result").unlink(missing_ok=True)
+                command = ["build", "--graph_optimizations=aggressive",
+                           "--use_ninja_phony_output", "all"]
+                previous = set((self.root / ".openmktr/.imports").rglob("build.ninja"))
+                if deny_bulk:
+                    result = subprocess.run([sys.executable, str(wrapper), str(BINARY), *command],
+                                            cwd=self.root, text=True, stdout=subprocess.PIPE,
+                                            stderr=subprocess.STDOUT, timeout=30)
+                    self.assertEqual(result.returncode, 0, result.stdout)
+                else:
+                    result = self.run_tool(*command)
+                self.assertEqual((self.root / "init/result").read_text(), "boundary")
+                self.assertTrue(any(path not in previous and "init/result" in path.read_text()
+                                    for path in (self.root / ".openmktr/.imports").rglob("build.ninja")),
+                                result.stdout)
+
     def test_recursive_import_preserves_shell_line_continuations(self):
         for spelling, filename in (("child\\\n.mk", "child.mk"),
                                    ('"child\\\n.mk"', "child.mk"),
@@ -411,7 +489,6 @@ class GraphOptimizations(unittest.TestCase):
                          "requires the native Kbuild import observer")
     def test_dynamic_import_transfer_does_not_consume_caller_input(self):
         self.kbuild_markers()
-        (self.root / "transfer.py").write_text("import os\nos.splice(0,1,1)\n")
         (self.root / "child.mk").write_text(
             "VALUE := $(shell python3 transfer.py)\n"
             ".PHONY: all FORCE\nall: result\nFORCE:\n"
@@ -424,13 +501,22 @@ class GraphOptimizations(unittest.TestCase):
         (self.root / "seed").touch()
         os.utime(self.root / "seed", (1, 1))
         (self.root / "result").write_text("original")
-        reader, writer = os.pipe()
-        os.write(writer, b"ab")
-        os.close(writer)
-        with os.fdopen(reader, "rb") as source:
-            result = self.run_tool("--ninja", "--graph_optimizations=aggressive",
-                                   "--use_ninja_phony_output", "--kati_stats", "all", stdin=source)
-            self.assertEqual(source.read(), b"ab", result.stdout)
+        probes = ("os.splice(0,1,1)", "os.read(os.dup(0),1)",
+                  "os.read(os.dup2(0,17),1)",
+                  "os.read(ctypes.CDLL(None).syscall(292,0,17,0),1)",
+                  "os.read(fcntl.fcntl(0,fcntl.F_DUPFD,17),1)",
+                  "os.read(fcntl.fcntl(0,fcntl.F_DUPFD_CLOEXEC,17),1)")
+        for probe in probes:
+            with self.subTest(probe=probe):
+                (self.root / "transfer.py").write_text(
+                    "import ctypes, fcntl, os\n" + probe + "\n")
+                reader, writer = os.pipe()
+                os.write(writer, b"ab")
+                os.close(writer)
+                with os.fdopen(reader, "rb") as source:
+                    result = self.run_tool("--ninja", "--graph_optimizations=aggressive",
+                                           "--use_ninja_phony_output", "--kati_stats", "all", stdin=source)
+                    self.assertEqual(source.read(), b"ab", result.stdout)
         self.assertEqual((self.root / "result").read_text(), "original")
 
     @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",

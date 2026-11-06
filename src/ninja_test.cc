@@ -5,6 +5,7 @@
 // Exercise quoted literal arguments and decline shell-dependent depfile paths.
 // Round-trip shared Kbuild header ownership without repeating absolute paths.
 // Exercise long fixdep lists and reject unsupported dependency syntax.
+// Keep scoped index paths alive after releasing the immutable transport.
 // Fork modifications are covered by MPL-2.0; see docs/LICENSING.md and NOTICE.
 
 // Copyright 2015 Google Inc. All rights reserved
@@ -159,6 +160,26 @@ void TestSharedKbuildDependencyIndex() {
          (std::vector<std::string>{"/source/a.h", "/source/z.h"}));
   legacy.back() = static_cast<char>(0xff);
   assert(!restored.Decode(legacy));
+  const std::string kept = "/source/scoped-unique-header.h";
+  const std::string skipped = "/source/unscoped-unique-header.h";
+  assert(!FindSymbol(skipped).IsValid());
+  {
+    std::string payload, names;
+    AppendGraphString(kept, &names);
+    AppendGraphString(skipped, &names);
+    for (const std::string& part :
+         {std::string("kbuild-dependencies-v2"), std::string("1"), names,
+          std::string("/build/keep/one.o"), std::string(4, '\0'),
+          std::string("/build/skip/two.o"), std::string("\1\0\0\0", 4)})
+      AppendGraphString(part, &payload);
+    assert(restored.Decode(payload, "/build/keep"));
+    assert(!FindSymbol(skipped).IsValid());
+    KbuildDependencyIndex invalid;
+    payload.back() = static_cast<char>(0xff);
+    assert(!invalid.Decode(payload, "/build/keep"));
+  }
+  assert(restored.complete);
+  assert(restored.Inputs("/build/keep") == (std::vector<std::string>{kept}));
 }
 
 void TestOwnedFilesystemPaths() {
