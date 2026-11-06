@@ -45,6 +45,7 @@
 // Keep input manifests immutable across configurations and graph generations.
 // Anchor combined depfile streams and preserve changed-directory recipes.
 // Preserve literal heredoc bodies when inferring compiler dependencies.
+// Keep shell parameter and command expansions opaque to compiler scanning.
 // Inline small freshness checks while retaining manifests for wide input lists.
 // Keep directory freshness and conditional depfile copies aligned with Make.
 // Rewrite complete compiler commands and collect every executed branch's deps.
@@ -404,6 +405,13 @@ static std::vector<InferredCompiler> GetCompilersFromRecipe(
     const char c = recipe[i];
     if (escaped) {
       escaped = false;
+    } else if (quote != '\'' &&
+               (c == '`' || (c == '$' && i + 1 < recipe.size() &&
+                             (recipe[i + 1] == '(' || recipe[i + 1] == '{')))) {
+      // Expansion bodies have their own grammar, including quoted strings
+      // and semicolons that are literal data rather than command boundaries.
+      *inference_safe = false;
+      return {};
     } else if (quote) {
       if (c == quote)
         quote = 0;
@@ -413,11 +421,8 @@ static std::vector<InferredCompiler> GetCompilersFromRecipe(
       escaped = true;
     } else if (c == '\'' || c == '"') {
       quote = c;
-    } else if ((c == '<' && i + 1 < recipe.size() && recipe[i + 1] == '<') ||
-               c == '`' ||
-               (c == '$' && i + 1 < recipe.size() && recipe[i + 1] == '(')) {
-      // Heredoc bodies are literal data, and command substitutions have their
-      // own shell grammar. Neither can be rewritten as an ordinary command.
+    } else if (c == '<' && i + 1 < recipe.size() && recipe[i + 1] == '<') {
+      // Heredoc bodies are literal data, not ordinary commands.
       // Reject the complete recipe, including other .ONESHELL command entries.
       *inference_safe = false;
       return {};

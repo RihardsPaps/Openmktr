@@ -18,6 +18,29 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_inferred_compilers_preserve_shell_parameter_defaults(self):
+        root = self.directory
+        expected = "hello; clang -c -MMD -MF out.d -o out.o source.c;"
+        for mode in ("direct", "build", "legacy"):
+            for quoted in (False, True):
+                with self.subTest(mode=mode, quoted=quoted):
+                    self.directory = root / (mode + "-" + str(quoted))
+                    self.directory.mkdir()
+                    expansion = "$${X:-" + expected + "}"
+                    if quoted:
+                        expansion = '"' + expansion + '"'
+                    self.makefile(".PHONY: all\nall:\n\t@unset X; printf '%s\\n' " +
+                                  expansion + " > result\n")
+                    flags = ("--graph_optimizations=aggressive", "all")
+                    if mode == "legacy":
+                        self.direct("--ninja", *flags)
+                        self.run_command("sh", "./ninja.sh", "-j2", "all")
+                    else:
+                        self.direct(*(("build",) if mode == "build" else ()), *flags)
+                    value = expected if quoted else "\n".join(expected.split())
+                    self.assertEqual((self.directory / "result").read_text(), value + "\n")
+        self.directory = root
+
     def test_inferred_compilers_do_not_rewrite_heredoc_contents(self):
         expected = "clang -c -MMD -MF out.d -o out.o source.c\n"
         root = self.directory
