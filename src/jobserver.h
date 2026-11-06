@@ -17,6 +17,23 @@ void ReleaseKatiJobToken(int fd);
 // Returns -1 when admission is disabled or interrupted.
 int AcquireNinjaLoadSlot();
 
+// Serialize deferred expansion and opaque recursive boundaries. Release the
+// lease before executing an expanded nonrecursive command so compilers remain
+// parallel even when their variable selectors required a full runtime context.
+class RecipeAdmission {
+ public:
+  explicit RecipeAdmission(bool acquire = true, bool adopt = false);
+  ~RecipeAdmission();
+  void Release();
+  void Export();
+  bool held() const { return fd_ >= 0; }
+  RecipeAdmission(const RecipeAdmission&) = delete;
+  RecipeAdmission& operator=(const RecipeAdmission&) = delete;
+
+ private:
+  int fd_ = -1;
+};
+
 // A lease returns exactly the reservation it acquired. It never closes the
 // shared FIFO descriptor, whose lifetime belongs to the jobserver transport.
 class JobLease {

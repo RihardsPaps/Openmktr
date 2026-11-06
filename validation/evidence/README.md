@@ -45,6 +45,36 @@ binaries, profiler recordings and compiler inputs remain at checksummed local
 paths where recorded and are excluded from the ZIPs. Compiler root causes are
 not claimed fixed.
 
+## PR 73 remaining-bottleneck follow-up — 6 November 2026
+
+The [subsequent Linux fix report](../../docs/pr74-linux-regression-fix.md),
+[machine-readable results](../pr74-linux-regression-fix.json),
+[288-entry archive](pr74-linux-regression-fix-2026-11-06.zip) and
+[SHA-256](pr74-linux-regression-fix-2026-11-06.zip.sha256) supersede the original
+supported Linux missing-object/following-graph regressions below. They retain
+seven final paired samples, the intermediate failed qualification, diagnostics,
+failing-before regressions and full local normal/sanitizer gates. The strict
+combined timing/RSS gate remains false; no no-op speedup or profile promotion
+is claimed.
+
+[pr74-followup-2026-11-06.zip](pr74-followup-2026-11-06.zip) retains the
+FFmpeg 7.1.1 and Linux 6.12 command journals, individual samples, binary/tool
+identities, source audits, original failures, retry controllers and local
+normal/sanitizer regression logs. `manifest.json` checksums every archived entry.
+The [machine-readable report](../pr73-followup-results.json) records the archive
+SHA-256 and exact measured revisions; the
+[narrative](../../docs/pr73-followup-performance.md) explains the controls and
+limits. FFmpeg timing improves in the recorded cells, but its strict combined
+gate fails an RSS median criterion. Linux passes artifact and rebuild checks
+while its conservative ownership refresh causes supported regressions. No
+profile promotion is claimed. Large binaries and release trees remain local
+and are excluded from the archive.
+The [admission addendum](pr74-admission-addendum-2026-11-06.zip) preserves the
+subsequent shell-indirection fix, eight failing-before/passing-after concurrency
+cases, genuinely deferred compiler-parallelism checks and final 91-test graph
+validation. Both archive digests are recorded in the machine-readable report;
+the earlier benchmark revisions remain unchanged.
+
 ## Historical raw reports
 
 The following reports retain unique measurements and probes from investigations

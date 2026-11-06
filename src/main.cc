@@ -1,4 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
+// Permit effect-observed speculative evaluation of dynamic imported graphs.
+// Keep held recipe admission out of independently launched child Ninja graphs.
 // Honor low-resolution outputs in native freshness and automatic-input helpers.
 // Capture caller environments and preflight effects before speculative imports.
 // Reject nonregular graph artifacts before reading their bounded header.
@@ -85,6 +87,7 @@
 #include "generation.h"
 #include "graph_import.h"
 #include "graph_optimization.h"
+#include "import_observer.h"
 #include "jobserver.h"
 #include "log.h"
 #include "monitor.h"
@@ -1125,11 +1128,18 @@ static int Run(const std::vector<Symbol>& targets,
                const std::string& invocation_dir) {
   double start_time = GetWallTime();
   InvocationEnvironmentIdentity();
+  if (g_flags.import_root && getenv("KATI_IMPORT_VALIDATE_ONLY")) {
+    if (!ImportObservationActive() || !g_flags.generate_ninja || !g_flags.regen)
+      return 3;
+    return NeedsRegen(start_time, orig_args) ? 4 : 0;
+  }
   LOG_STAT("graph optimization settings: %s",
            g_flags.GraphOptimizationIdentity().c_str());
   if (g_flags.import_root) {
     std::vector<std::string> files;
-    const bool static_import_sources = StaticImportSources(&files);
+    const bool static_import_sources =
+        (ImportObservationActive() && !getenv("KATI_IMPORT_STATIC_ONLY")) ||
+        StaticImportSources(&files);
     if (g_flags.is_dry_run || g_flags.is_touch || g_flags.is_question ||
         g_flags.keep_going || g_flags.load_limit_set || !static_import_sources)
       return 3;
@@ -1151,7 +1161,8 @@ static int Run(const std::vector<Symbol>& targets,
       printf("Regeneration: %s\n", needs_regen ? "required (see diagnostics)"
                                                : "recorded inputs unchanged");
     } else if (!needs_regen) {
-      fprintf(stderr, "No need to regenerate ninja file\n");
+      if (!g_flags.import_root)
+        fprintf(stderr, "No need to regenerate ninja file\n");
       return 0;
     }
     if (g_flags.dump_kati_stamp) {
@@ -1503,6 +1514,7 @@ static int Run(const std::vector<Symbol>& targets,
               pending.push_back(root.second);
             std::unordered_set<const DepNode*> visited;
             std::vector<std::string> tracked_paths;
+            std::vector<const DepNode*> freshness_roots;
             bool eligible = true;
             while (!pending.empty() && eligible) {
               const DepNode* node = pending.back();
@@ -1513,20 +1525,36 @@ static int Run(const std::vector<Symbol>& targets,
                                            ? node->vpath_provider.str()
                                            : node->output.str();
               struct stat st;
-              eligible =
-                  !node->is_phony && !node->is_notparallel &&
-                  node->implicit_outputs.empty() && node->validations.empty() &&
-                  node->DoubleColon().for_cmd.empty() &&
-                  !node->low_resolution && stat(path.c_str(), &st) == 0 &&
-                  (S_ISREG(st.st_mode) || S_ISDIR(st.st_mode));
+              eligible = !node->is_phony && !node->is_notparallel &&
+                         node->validations.empty() &&
+                         node->DoubleColon().for_cmd.empty() &&
+                         !node->low_resolution &&
+                         stat(path.c_str(), &st) == 0 &&
+                         (S_ISREG(st.st_mode) || S_ISDIR(st.st_mode));
               if (!eligible)
                 break;
+              if (!node->cmds.empty())
+                freshness_roots.push_back(node);
               // Directory prerequisites often receive generated objects
               // during the build, changing their mtimes without changing
               // include resolution. The included files themselves and VPATH
               // search directories are tracked separately.
               if (S_ISREG(st.st_mode))
                 tracked_paths.push_back(path);
+              // A grouped include producer is current only as one complete
+              // group. Bind every peer output so disappearance or replacement
+              // invalidates the certificate before reusing the frontend.
+              for (Symbol output : node->implicit_outputs) {
+                struct stat metadata;
+                if (stat(output.c_str(), &metadata) != 0 ||
+                    (!S_ISREG(metadata.st_mode) &&
+                     !S_ISDIR(metadata.st_mode))) {
+                  eligible = false;
+                  break;
+                }
+                if (S_ISREG(metadata.st_mode))
+                  tracked_paths.emplace_back(output.str());
+              }
               for (const auto& input : node->deps)
                 pending.push_back(input.second);
               for (const auto& input : node->order_onlys)
@@ -1553,6 +1581,28 @@ static int Run(const std::vector<Symbol>& targets,
                 cache.AddIncludeDirectoryDep(directory);
               for (const std::string& path : tracked_paths)
                 cache.AddExtraFileDep(path);
+              const std::unordered_set<std::string> regular_paths(
+                  tracked_paths.begin(), tracked_paths.end());
+              pending = std::move(freshness_roots);
+              visited.clear();
+              while (!pending.empty()) {
+                const DepNode* node = pending.back();
+                pending.pop_back();
+                if (!visited.insert(node).second)
+                  continue;
+                const std::string path = node->vpath_provider.IsValid()
+                                             ? node->vpath_provider.str()
+                                             : node->output.str();
+                if (regular_paths.count(path))
+                  cache.AddIncludeFreshnessDep(path);
+                for (Symbol peer : node->implicit_outputs)
+                  if (regular_paths.count(peer.str()))
+                    cache.AddIncludeFreshnessDep(peer.str());
+                for (const auto& input : node->deps)
+                  pending.push_back(input.second);
+                for (const auto& input : node->order_onlys)
+                  pending.push_back(input.second);
+              }
               cache.CertifyIncludeEvaluation();
               LOG_STAT("include certificate: %zu paths", tracked_paths.size());
             }
@@ -1771,7 +1821,7 @@ namespace {
 struct NinjaLaunchResources {
   int lease = -1;
   int fifo_fd = -1;
-  std::string fifo, load_state;
+  std::string fifo, load_state, recursion_state;
   ~NinjaLaunchResources() {
     if (lease >= 0)
       close(lease);
@@ -1781,6 +1831,8 @@ struct NinjaLaunchResources {
       unlink(fifo.c_str());
     if (!load_state.empty())
       unlink(load_state.c_str());
+    if (!recursion_state.empty())
+      unlink(recursion_state.c_str());
   }
   void CreateJobserver() {
     const char* inherited = getenv("KATI_JOBSERVER_FIFO");
@@ -1927,6 +1979,22 @@ static int HandleRunNinja(int argc, char** argv, bool supervise = false) {
     setenv("MAKEFLAGS", makeflags.c_str(), 1);
 
   std::string& state = resources.load_state;
+  const char* graph_settings = getenv("KATI_GRAPH_SETTINGS");
+  if (graph_settings && (!strcmp(graph_settings, "v1:aggressive") ||
+                         HasPrefix(graph_settings, "v1:aggressive:"))) {
+    const char* temporary_directory = getenv("TMPDIR");
+    resources.recursion_state =
+        std::string(temporary_directory && *temporary_directory
+                        ? temporary_directory
+                        : "/tmp") +
+        "/omktr-recursion-XXXXXX";
+    const int recursion_fd = mkstemp(resources.recursion_state.data());
+    if (recursion_fd < 0 || close(recursion_fd) != 0)
+      PERROR("create Ninja recursive admission state failed");
+    setenv("KATI_NINJA_RECURSION_STATE", resources.recursion_state.c_str(), 1);
+  } else {
+    unsetenv("KATI_NINJA_RECURSION_STATE");
+  }
   if (limit >= 0) {
     const char* temp = getenv("TMPDIR");
     state = std::string(temp && *temp ? temp : "/tmp") + "/omktr-load-XXXXXX";
@@ -1955,8 +2023,8 @@ static int HandleRunNinja(int argc, char** argv, bool supervise = false) {
         RuntimeContextManifestPath(ResolveGenerationArtifact(ninja_file)));
   else
     unsetenv("KATI_RUNTIME_CONTEXT_FD");
-  if (!supervise && state.empty() && resources.fifo.empty() &&
-      resources.lease < 0) {
+  if (!supervise && resources.recursion_state.empty() && state.empty() &&
+      resources.fifo.empty() && resources.lease < 0) {
     // The ordinary path needs no additional supervisor or process boundary.
     std::vector<char*> child = {argv[3]};
     for (std::string& arg : arguments)
@@ -2091,8 +2159,10 @@ static int Main(int argc, char* argv[]) {
     execv(arguments[0], arguments.data());
     PERROR("execute pinned generation launcher");
   }
-  if (argc == 3 && !strcmp(argv[1], "--internal-evaluate-recipe"))
-    return RunRuntimeRecipe(argv[2]);
+  if (argc == 3 && (!strcmp(argv[1], "--internal-evaluate-recipe") ||
+                    !strcmp(argv[1], "--internal-evaluate-recipe-admitted")))
+    return RunRuntimeRecipe(
+        argv[2], !strcmp(argv[1], "--internal-evaluate-recipe-admitted"));
   if (argc == 4 && strcmp(argv[1], "--internal-native-find") == 0 &&
       (strcmp(argv[3], "0") == 0 || strcmp(argv[3], "1") == 0))
     return NativeFindWorker(argv[2], strcmp(argv[3], "1") == 0);
@@ -2145,17 +2215,34 @@ static int Main(int argc, char* argv[]) {
       return HandleRunNinja(argc, argv);
     } else if ((!strcmp(argv[1], "--internal-run-recipe") ||
                 !strcmp(argv[1], "--internal-run-recursive-recipe") ||
+                !strcmp(argv[1], "--internal-run-admitted-recipe") ||
                 !strcmp(argv[1], "--internal-run-recipe-file") ||
+                !strcmp(argv[1], "--internal-run-admitted-recipe-file") ||
                 !strcmp(argv[1], "--internal-run-recursive-recipe-file")) &&
                (argc == 5 || argc == 6 || argc == 7)) {
       std::string script;
       if (!strcmp(argv[1], "--internal-run-recipe-file") ||
+          !strcmp(argv[1], "--internal-run-admitted-recipe-file") ||
           !strcmp(argv[1], "--internal-run-recursive-recipe-file")) {
         if (!ReadGraphCache(argv[4], &script))
           ERROR("missing or corrupt recipe script; regenerate the Ninja graph");
         argv[4] = script.data();
       }
       ScopedBuildSignals signals;
+      const bool recursive_recipe =
+          !strcmp(argv[1], "--internal-run-recursive-recipe") ||
+          !strcmp(argv[1], "--internal-run-recursive-recipe-file");
+      const bool admitted_recipe =
+          !strcmp(argv[1], "--internal-run-admitted-recipe") ||
+          !strcmp(argv[1], "--internal-run-admitted-recipe-file");
+      unsetenv("KATI_RECIPE_ADMISSION_FD");
+      RecipeAdmission recursion(recursive_recipe || admitted_recipe);
+      if (GetBuildSignal())
+        return 128 + GetBuildSignal();
+      if (admitted_recipe)
+        recursion.Export();
+      if (recursive_recipe && recursion.held())
+        unsetenv("KATI_NINJA_RECURSION_STATE");
       const int load_slot = AcquireNinjaLoadSlot();
       std::string recipe_state;
       if (argc == 7) {
@@ -2178,24 +2265,21 @@ static int Main(int argc, char* argv[]) {
       } else {
         unsetenv("KATI_RECIPE_STATE_PATH");
       }
-      const bool recursive_recipe =
-          !strcmp(argv[1], "--internal-run-recursive-recipe") ||
-          !strcmp(argv[1], "--internal-run-recursive-recipe-file");
       // A recursive recipe helper owns neither output cleanup nor workspace
       // state when invoked with the plain five-argument form. Replace the
       // helper process with its shell instead of forking a shell and waiting
       // only to return the same status. The shell inherits the jobserver
       // reservation and receives signals directly in the same process group.
-      if (recursive_recipe && argc == 5 && argv[2][0] == '/' &&
-          argv[3][0] != '\0' && strpbrk(argv[3], " \t\r\n'\"\\$`") == nullptr) {
+      if (recursive_recipe && !recursion.held() && argc == 5 &&
+          argv[2][0] == '/' && argv[3][0] != '\0' &&
+          strpbrk(argv[3], " \t\r\n'\"\\$`") == nullptr) {
         char* arguments[] = {argv[2], argv[3], argv[4], nullptr};
         execv(arguments[0], arguments);
         PERROR("executing recursive recipe shell failed");
       }
       const int status = RunCommand(
           argv[2], argv[3], argv[4], RedirectStderr::NONE, nullptr,
-          (!strcmp(argv[1], "--internal-run-recipe") ||
-           !strcmp(argv[1], "--internal-run-recipe-file")),
+          !recursive_recipe,
           [](std::string_view output) {
             fwrite(output.data(), 1, output.size(), stdout);
             fflush(stdout);

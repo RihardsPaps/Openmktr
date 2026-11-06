@@ -1,12 +1,16 @@
 // FORK MODIFICATION NOTICE (2026)
-// Inspect deferred recipes for recursive scheduling without expanding effects.
-// Carry output timestamp resolution into runtime recipes and automatic inputs.
-// Defer independent double-colon groups and select their own automatic inputs.
-// Preserve logical prerequisites in deferred double-colon freshness checks.
-// Preserve command display when static rule groups become deferred recipes.
-// Read optional double-colon metadata through the shared dependency view.
-// Read logical updates directly from the dependency execution flag.
-// Own invocation state and publish coherent generations with typed freshness.
+// Release deferred expansion admission before ordinary compiler execution.
+// Retain admission while shell expansion leaves recursion unresolved.
+// Keep adopted admission local while nested Ninja selects its own scope.
+// Bind automatic variables before extracting deferred recursive import
+// commands. Inspect deferred recipes for recursive scheduling without expanding
+// effects. Carry output timestamp resolution into runtime recipes and automatic
+// inputs. Defer independent double-colon groups and select their own automatic
+// inputs. Preserve logical prerequisites in deferred double-colon freshness
+// checks. Preserve command display when static rule groups become deferred
+// recipes. Read optional double-colon metadata through the shared dependency
+// view. Read logical updates directly from the dependency execution flag. Own
+// invocation state and publish coherent generations with typed freshness.
 // Separate runtime services and preserve scoped resource ownership.
 // Echo ordinary Make recipes by default; retain opt-in compact progress output.
 // Index lazy variable definitions over immutable buffers and reuse validated
@@ -84,6 +88,7 @@
 #include "freshness.h"
 #include "func.h"
 #include "graph_optimization.h"
+#include "jobserver.h"
 #include "log.h"
 #include "process.h"
 #include "strutil.h"
@@ -673,6 +678,10 @@ bool MakeRuntimeRecipe(const DepNode& node,
     }
     std::sort(selected.begin(), selected.end());
     for (const std::string& name : selected) {
+      if (name == "KATI_RECIPE_ADMISSION_FD" ||
+          HasPrefix(name, "KATI_IMPORT_") ||
+          name == "KATI_NINJA_RECURSION_STATE")
+        continue;
       Symbol symbol = Intern(name);
       Var* var = symbol.PeekGlobalVar();
       if (var->IsDefined() && var->Origin() != VarOrigin::AUTOMATIC &&
@@ -891,7 +900,8 @@ bool MakeRuntimeRecipe(const DepNode& node,
   std::string recursive_display;
   if (node.cmds.size() == 1 && !node.oneshell && recipe_references_make &&
       !recipe_io && !recipe_dynamic && !recipe_automatic_dynamic &&
-      !recipe_conservative && !recipe_observable_message) {
+      !recipe_conservative && !recipe_observable_message &&
+      !inspection.automatic_freshness) {
     recursive_display = ExtractRecursiveDisplay(node, ev);
   }
   ev->set_current_scope(nullptr);
@@ -910,7 +920,12 @@ bool MakeRuntimeRecipe(const DepNode& node,
   command.runtime_freshness_only = !inspection.io && !inspection.dynamic;
   command.runtime_may_recurse = may_recurse;
   command.display_cmd = std::move(recursive_display);
-  command.cmd = "\"" + executable + "\" --internal-evaluate-recipe \"" +
+  const bool admitted =
+      may_recurse &&
+      g_flags.graph_optimizations == Flags::GraphOptimizations::kAggressive;
+  command.cmd = "\"" + executable +
+                (admitted ? "\" --internal-evaluate-recipe-admitted \""
+                          : "\" --internal-evaluate-recipe \"") +
                 quoted_path + "\"";
   command.shell = "/bin/sh";
   command.shellflag = "-c";
@@ -1080,7 +1095,13 @@ void PrepareRuntimeContexts(const std::string& manifest) {
 #endif
 }
 
-int RunRuntimeRecipe(const char* path) {
+int RunRuntimeRecipe(const char* path, bool admitted) {
+  ScopedBuildSignals signals;
+  RecipeAdmission admission(admitted, true);
+  if (admission.held())
+    unsetenv("KATI_NINJA_RECURSION_STATE");
+  if (GetBuildSignal())
+    return 128 + GetBuildSignal();
   g_flags.executable_path = GetExecutablePath();
   std::string payload;
   if (!ReadGraphCache(path, &payload))
@@ -1409,11 +1430,22 @@ int RunRuntimeRecipe(const char* path) {
       unlink((owner + ".reads-pending").c_str());
     }
   }
+  const bool needs_admission =
+      std::any_of(expanded.begin(), expanded.end(), [](const Command& command) {
+        // A shell variable or substitution can select the executable after
+        // Make expansion. Absence of a literal recursion marker is then not
+        // proof that this command is safe to run beside another child build.
+        return IsRecursiveKatiCommand(command.cmd) ||
+               command.cmd.find_first_of("$`") != std::string::npos;
+      });
+  if (!needs_admission)
+    admission.Release();
   // The existing recipe supervisor owns cleanup, cancellation and the live
   // reservation. Replace this evaluator with a single ordinary shell rather
   // than keeping another process and output pipe alive for the whole recipe.
   const char* reservation = getenv("KATI_JOBSERVER_RESERVED");
-  if (expanded.size() == 1 && !expanded.front().ignore_error &&
+  if (!admission.held() && expanded.size() == 1 &&
+      !expanded.front().ignore_error &&
       (!getenv("KATI_JOBSERVER_FIFO") ||
        (reservation && std::string_view(reservation) == "1"))) {
     const Command& command = expanded.front();
@@ -1599,6 +1631,8 @@ static bool IsRecursiveTransportVariable(std::string_view name) {
   return name == "MAKEFLAGS" || name == "MAKEOVERRIDES" ||
          name == "MAKELEVEL" || name == "KATI_JOBSERVER_RESERVED" ||
          name == "KATI_NINJA_LOAD_LIMIT" || name == "KATI_NINJA_LOAD_STATE" ||
+         name == "KATI_NINJA_RECURSION_STATE" ||
+         name == "KATI_RECIPE_ADMISSION_FD" ||
          name == "KATI_RUNTIME_CONTEXT_FD" || name == "KATI_GRAPH_SETTINGS";
 }
 
@@ -1733,6 +1767,8 @@ static void ExportAllVariables(Command* command, Evaluator* ev) {
         name_view == "KATI_RUNTIME_CONTEXT_FD" ||
         name_view == "KATI_NINJA_LOAD_LIMIT" ||
         name_view == "KATI_NINJA_LOAD_STATE" ||
+        name_view == "KATI_NINJA_RECURSION_STATE" ||
+        name_view == "KATI_RECIPE_ADMISSION_FD" ||
         name_view == "KATI_GRAPH_SETTINGS" ||
         !IsShellIdentifierCommand(name_view) ||
         !emitted.insert(std::string(name_view)).second)
@@ -2139,6 +2175,14 @@ CommandEvaluator::~CommandEvaluator() {
     Intern(StringPrintf("%sD", sym)).SetGlobalVar(Var::Undefined());
     Intern(StringPrintf("%sF", sym)).SetGlobalVar(Var::Undefined());
   }
+}
+
+void CommandEvaluator::BindAutomaticVariables(const DepNode& node) {
+  current_dep_node_ = &node;
+  double_colon_group_ = static_cast<size_t>(-1);
+  target_age_ = FileStamp::Read(node.output.str());
+  if (node.low_resolution)
+    target_age_ = target_age_.LowResolution();
 }
 
 std::vector<Command> CommandEvaluator::Eval(const DepNode& n) {

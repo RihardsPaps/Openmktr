@@ -1,5 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
 // Own invocation state and publish coherent generations with typed freshness.
+// Classify leading-dot Makefile aliases consistently for content validation.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -35,6 +36,7 @@ const Makefile& MakefileCacheManager::ReadMakefile(
   if (iter != cache_.end()) {
     return iter->second;
   }
+  parsed_paths_.insert(ObservationPath(filename));
   return (cache_.emplace(filename, filename).first)->second;
 }
 

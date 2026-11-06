@@ -1,5 +1,8 @@
 // FORK MODIFICATION NOTICE (2026)
 // Launch validation workers only when independent observations need checking.
+// Batch large ordinary file frontiers without sharing evaluator state.
+// Identify rejected import proofs in regeneration diagnostics.
+// Validate literal Kbuild compiler probes with owned scratch directories.
 // Retain shell diagnostics and stop replay at changed conditional boundaries.
 // Validate complete deferred environments and inherited jobserver identities.
 // Own invocation state and publish coherent generations with typed freshness.
@@ -35,8 +38,10 @@
 #include "session.h"
 
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <algorithm>
+#include <filesystem>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -46,7 +51,9 @@
 #include "fileutil.h"
 #include "find.h"
 #include "func.h"
+#include "graph_import.h"
 #include "graph_optimization.h"
+#include "import_observer.h"
 #include "io.h"
 #include "log.h"
 #include "monitor.h"
@@ -105,6 +112,120 @@ std::string NormalizeMakeFlags(std::string_view flags) {
   return normalized + " --effective-jobs=" + jobs;
 }
 
+bool StandardProbeUtilities() {
+  const char* search = getenv("PATH");
+  if (!search)
+    return false;
+  for (const char* name : {"mkdir", "rm"}) {
+    std::string_view directories(search);
+    bool standard = false;
+    for (;;) {
+      const size_t colon = directories.find(':');
+      const std::string directory(directories.substr(0, colon));
+      const std::string path =
+          (directory.empty() ? "." : directory) + "/" + name;
+      if (access(path.c_str(), X_OK) == 0) {
+        struct stat selected, system;
+        if (stat(path.c_str(), &selected) != 0 || !S_ISREG(selected.st_mode))
+          return false;
+        for (const char* root : {"/usr/bin/", "/bin/"})
+          if (stat((std::string(root) + name).c_str(), &system) == 0 &&
+              selected.st_dev == system.st_dev &&
+              selected.st_ino == system.st_ino)
+            standard = true;
+        break;
+      }
+      if ((errno != ENOENT && errno != ENOTDIR) ||
+          colon == std::string_view::npos)
+        break;
+      directories.remove_prefix(colon + 1);
+    }
+    if (!standard)
+      return false;
+  }
+  return true;
+}
+
+bool NativeKbuildCompilerProbe(const std::string& command,
+                               std::string* result,
+                               int* status) {
+  if (!getenv("KATI_IMPORT_VALIDATE_ONLY") || !ImportObservationActive() ||
+      !g_flags.GraphOptimizationEnabled("evaluation"))
+    return false;
+  constexpr std::string_view prefix =
+      "set -e; TMP=.tmp_$$/tmp; trap \"rm -rf .tmp_$$\" EXIT; "
+      "mkdir -p .tmp_$$; if (";
+  constexpr std::string_view middle = ") >/dev/null 2>&1; then echo \"";
+  constexpr std::string_view branch = "\"; else echo \"";
+  constexpr std::string_view suffix = "\"; fi";
+  if (!HasPrefix(command, prefix) || !HasSuffix(command, suffix))
+    return false;
+  const size_t condition_end = command.find(middle, prefix.size());
+  if (condition_end == std::string::npos)
+    return false;
+  const size_t success_begin = condition_end + middle.size();
+  const size_t success_end = command.find(branch, success_begin);
+  if (success_end == std::string::npos)
+    return false;
+  const size_t failure_begin = success_end + branch.size();
+  const std::string success =
+      command.substr(success_begin, success_end - success_begin);
+  const std::string failure = command.substr(
+      failure_begin, command.size() - suffix.size() - failure_begin);
+  for (const std::string* value : {&success, &failure})
+    if (value->find_first_of("\"\\$`\n\r") != std::string::npos ||
+        *value == "-n" || *value == "-e" || *value == "-E")
+      return false;
+  std::string compiler =
+      command.substr(prefix.size(), condition_end - prefix.size());
+  const size_t first = compiler.find_first_not_of(" \t");
+  if (first == std::string::npos)
+    return false;
+  compiler.erase(0, first);
+  const std::string program = compiler.substr(0, compiler.find_first_of(" \t"));
+  const std::string_view name = Basename(program);
+  const bool clang =
+      name == "clang" || (HasPrefix(name, "clang-") && name.size() > 6 &&
+                          name.substr(6).find_first_not_of("0123456789.") ==
+                              std::string_view::npos);
+  if (program.empty() ||
+      program.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST"
+                                "UVWXYZ0123456789_./-") != std::string::npos ||
+      (!clang && program.find('/') == std::string::npos) ||
+      !HasSuffix(compiler, " -o \"$TMP\""))
+    return false;
+  if (getenv("ENV") || getenv("BASH_ENV"))
+    return false;
+  for (char** entry = environ; entry && *entry; ++entry)
+    if (HasPrefix(*entry, "BASH_FUNC_"))
+      return false;
+  // PATH wrappers can intentionally change probe status or effects. Native
+  // directory operations are equivalent only to the installed system tools.
+  if (!StandardProbeUtilities())
+    return false;
+  const size_t output = compiler.size() - std::string_view("\"$TMP\"").size();
+  if (compiler.substr(0, output).find_first_of("\"';|&<>$`\\\n\r(){}*?[]#~!") !=
+      std::string::npos)
+    return false;
+  // Exclusive creation prevents an interrupted or user-owned scratch path
+  // from becoming ours. Unsupported forms retain the complete shell script.
+  const std::string directory = ".tmp_" + std::to_string(getpid());
+  if (mkdir(directory.c_str(), 0777) != 0)
+    return false;
+  // Both components contain only fixed punctuation and decimal PID digits.
+  compiler.replace(output, std::string::npos, directory + "/tmp");
+  const std::string script = "set -e; TMP=" + directory + "/tmp; if " +
+                             compiler + command.substr(condition_end + 1);
+  const int raw =
+      RunCommand("/bin/sh", "-c", script, RedirectStderr::NONE, result);
+  FormatForCommandSubstitution(result);
+  std::error_code error;
+  std::filesystem::remove_all(directory, error);
+  *status = error ? 1 : WIFEXITED(raw) ? WEXITSTATUS(raw) : 1;
+  RecordStatCounter("native_kbuild_probe_validations");
+  return true;
+}
+
 class StampChecker {
   struct GlobResult {
     std::string pat;
@@ -153,7 +274,7 @@ class StampChecker {
       RETURN_TRUE;
     }
 
-    if (!needs_regen_ && !g_flags.explain) {
+    if (!needs_regen_ && !g_flags.explain && !g_flags.import_root) {
       FILE* fp = OpenGraphStamp(GetNinjaStampFilename(), true);
       if (!fp)
         return true;
@@ -169,18 +290,21 @@ class StampChecker {
  private:
   bool IsMissingOutputs() {
     if (!Exists(GetNinjaFilename())) {
-      fprintf(stderr, "%s is missing, regenerating...\n",
-              GetNinjaFilename().c_str());
+      if (!g_flags.import_root)
+        fprintf(stderr, "%s is missing, regenerating...\n",
+                GetNinjaFilename().c_str());
       return true;
     }
     if (!Exists(GetNinjaShellScriptFilename())) {
-      fprintf(stderr, "%s is missing, regenerating...\n",
-              GetNinjaShellScriptFilename().c_str());
+      if (!g_flags.import_root)
+        fprintf(stderr, "%s is missing, regenerating...\n",
+                GetNinjaShellScriptFilename().c_str());
       return true;
     }
     if (!Exists(GetEnvScriptFilename())) {
-      fprintf(stderr, "%s is missing, regenerating...\n",
-              GetEnvScriptFilename().c_str());
+      if (!g_flags.import_root)
+        fprintf(stderr, "%s is missing, regenerating...\n",
+                GetEnvScriptFilename().c_str());
       return true;
     }
     return false;
@@ -223,7 +347,7 @@ class StampChecker {
     }
     char magic[4];
     if (fread(magic, 1, sizeof(magic), fp) != sizeof(magic) ||
-        memcmp(magic, "KAT5", sizeof(magic)) != 0) {
+        memcmp(magic, "KAT6", sizeof(magic)) != 0) {
       fprintf(stderr, "obsolete kati_stamp, regenerating...\n");
       RETURN_TRUE;
     }
@@ -241,18 +365,33 @@ class StampChecker {
           !ConsumeGraphString(&view, &arguments) || arguments != orig_args ||
           configuration != g_flags.GraphOptimizationIdentity())
         RETURN_TRUE;
+      std::vector<std::string> proof_paths, proof_identities;
       while (!view.empty()) {
         if (!ConsumeGraphString(&view, &path) ||
             !ConsumeGraphString(&view, &identity))
           RETURN_TRUE;
+        proof_paths.push_back(path);
+        proof_identities.push_back(identity);
+      }
+      const auto proof_metadata = StatFiles(proof_paths);
+      for (size_t i = 0; i < proof_paths.size(); ++i) {
+        const std::string& path = proof_paths[i];
+        const std::string& identity = proof_identities[i];
         const bool content_identity = identity.compare(0, 8, "content:") == 0;
-        const bool matches = content_identity
-                                 ? FileContentIdentityMatches(path, identity)
-                                 : GetFileIdentity(path) == identity;
-        if (identity == "unreadable" || !matches)
+        const bool matches =
+            content_identity
+                ? FileContentIdentityMatches(path, identity, &proof_metadata[i])
+                : proof_metadata[i].Identity() == identity;
+        if (identity == "unreadable" || !matches) {
+          if (getenv("KATI_IMPORT_VALIDATE_ONLY"))
+            fprintf(stderr, "import include proof changed: %s\n", path.c_str());
           RETURN_TRUE;
+        }
       }
     } else if (requires_evaluation != 0) {
+      if (getenv("KATI_IMPORT_VALIDATE_ONLY"))
+        fprintf(stderr, "import requires evaluation: %d\n",
+                requires_evaluation);
       if (g_flags.explain)
         printf(
             "Makefile evaluation has observable effects or generated inputs; "
@@ -282,6 +421,7 @@ class StampChecker {
     std::vector<std::string> identities;
     std::vector<double> timestamps;
     bool monitored =
+        !ImportObservationActive() &&
         MonitorSnapshot(paths, &identities, &timestamps, &monitor_checkpoint_);
     if (!monitored)
       monitor_checkpoint_.clear();
@@ -291,6 +431,9 @@ class StampChecker {
     if (g_flags.regen_debug && g_flags.GraphOptimizationEnabled("monitor"))
       printf("monitor: %s\n",
              monitored ? "validated snapshot" : "ordinary validation fallback");
+    const auto metadata =
+        monitored ? std::vector<FileMetadata>() : StatFiles(paths);
+    const struct stat empty_metadata = {};
     for (int i = 0; i < num_files; i++) {
       s = paths[i];
       s2 = recorded[i];
@@ -300,17 +443,19 @@ class StampChecker {
       const bool content_identity = s2.compare(0, 8, "content:") == 0;
       if (content_identity)
         s2.erase(0, 8);
-      struct stat st;
-      const bool exists = !monitored && stat(s.c_str(), &st) == 0;
-      const int stat_error = exists ? 0 : errno;
+      const struct stat& st = monitored ? empty_metadata : metadata[i].metadata;
+      const bool exists = !monitored && metadata[i].error == 0;
+      const int stat_error = monitored ? 0 : metadata[i].error;
       double ts = monitored ? timestamps[i]
                   : exists  ? GetTimestampFromStat(st)
                             : -1;
       const std::string identity =
-          content_identity
-              ? (FileContentIdentityMatches(s, s2) ? s2 : "changed-content")
-          : monitored            ? identities[i]
-          : exists               ? GetFileIdentityFromStat(st)
+          content_identity ? (FileContentIdentityMatches(
+                                  s, s2, monitored ? nullptr : &metadata[i])
+                                  ? s2
+                                  : "changed-content")
+          : monitored      ? identities[i]
+          : exists         ? GetFileIdentityFromStat(st)
           : stat_error == ENOENT ? "missing"
                                  : "unreadable";
       // GetTimestamp returns < 0 when there's an error reading the file, like
@@ -332,7 +477,7 @@ class StampChecker {
         }
         if (g_flags.dump_kati_stamp)
           printf("file %s: dirty (%f)\n", s.c_str(), ts);
-        else
+        else if (!g_flags.import_root)
           fprintf(stderr, "%s was modified, regenerating...\n", s.c_str());
         RETURN_TRUE;
       } else if (g_flags.dump_kati_stamp) {
@@ -362,6 +507,19 @@ class StampChecker {
       const char* val_c_str = getenv(s.c_str());
       std::string_view val(val_c_str ? val_c_str : "");
       LOAD_STRING(fp, &s2);
+      if ((s == "MAKEFLAGS" || s == "MFLAGS" || s == "MAKEOVERRIDES") &&
+          s2.compare(0, 10, "caller-v1:") == 0) {
+        const bool matches =
+            s2 == "caller-v1:0"
+                ? val_c_str == nullptr
+                : s2.compare(0, 11, "caller-v1:1") == 0 && val_c_str &&
+                      (s == "MAKEFLAGS" ? NormalizeMakeFlags(val) ==
+                                              NormalizeMakeFlags(s2.substr(11))
+                                        : val == s2.substr(11));
+        if (!matches)
+          RETURN_TRUE;
+        continue;
+      }
       const bool changed =
           s.empty()          ? InvocationEnvironmentIdentity() != s2
           : s == "MAKEFLAGS" ? NormalizeMakeFlags(val) != NormalizeMakeFlags(s2)
@@ -436,7 +594,11 @@ class StampChecker {
       fprintf(stderr, "arguments changed, regenerating...\n");
       RETURN_TRUE;
     }
-
+    const int plan_count = LOAD_INT(fp);
+    for (int i = 0; i < plan_count; ++i) {
+      LOAD_STRING(fp, &s);
+      import_plans_.push_back(s);
+    }
     return needs_regen_;
   }
 
@@ -543,6 +705,10 @@ class StampChecker {
         *err = "native find validation uncertain, regenerating...\n";
         return true;
       }
+    } else if (sr->shell == "/bin/sh" && sr->shellflag == "-c" &&
+               NativeKbuildCompilerProbe(sr->cmd, &result, &status)) {
+      // The native path already returns command-substitution text and the
+      // literal branch's status; the compiler itself is always executed.
     } else {
       const int raw_status = RunCommand(sr->shell, sr->shellflag, sr->cmd,
                                         RedirectStderr::NONE, &result);
@@ -611,6 +777,15 @@ class StampChecker {
     } else if (!commands_.empty()) {
       check_shells();
     }
+    if (!needs_regen_) {
+      for (const std::string& plan : import_plans_)
+        if (!ValidateImportedGraph(plan)) {
+          LOG_STAT("import validation changed: %s", plan.c_str());
+          needs_regen_ = true;
+          msg_ = "Imported evaluation changed, regenerating...\n";
+          break;
+        }
+    }
     if (needs_regen_) {
       fprintf(stderr, "%s", msg_.c_str());
     }
@@ -621,6 +796,7 @@ class StampChecker {
   double gen_time_;
   std::vector<GlobResult*> globs_;
   std::vector<ShellResult*> commands_;
+  std::vector<std::string> import_plans_;
   std::mutex mu_;
   bool needs_regen_;
   std::string msg_;

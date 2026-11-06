@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Bind automatic variables to the current recursive recipe before inspection.
 // Retain possible recursion when deferring recipe expansion for Ninja.
 // Keep bounded nonrecursive expansions parallel while protecting recursive
 // peers. Bind automatic variables to the active independent double-colon rule
@@ -67,7 +68,7 @@ bool MakeRuntimeRecipe(const DepNode& node,
                        const std::string& directory,
                        RuntimeRecipeProfile* profile,
                        std::vector<Command>* commands);
-int RunRuntimeRecipe(const char* path);
+int RunRuntimeRecipe(const char* path, bool admitted = false);
 std::string RuntimeContextManifestPath(const std::string& graph);
 void PrepareRuntimeContexts(const std::string& manifest);
 void CommitRuntimeRecipeReads(const std::string& state_path,
@@ -100,6 +101,7 @@ class CommandEvaluator {
  public:
   explicit CommandEvaluator(Evaluator* ev);
   ~CommandEvaluator();
+  void BindAutomaticVariables(const DepNode& node);
   std::vector<Command> Eval(const DepNode& n);
   std::vector<Command> Eval(const DepNode& n, FileStamp target_age);
   std::vector<Command> Eval(const DepNode& n,

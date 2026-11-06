@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Decode the KAT6 stamp with imported validation plans.
 // Own invocation state and publish coherent generations with typed freshness.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
@@ -106,7 +107,7 @@ int stamp_dump_main(int argc, char* argv[]) {
     ERROR("Incomplete stamp file");
   char magic[4];
   if (fread(magic, 1, sizeof(magic), fp) != sizeof(magic) ||
-      memcmp(magic, "KAT5", sizeof(magic)) != 0)
+      memcmp(magic, "KAT6", sizeof(magic)) != 0)
     ERROR("Unsupported stamp file");
   if (LoadInt(fp) < 0)
     ERROR("Incomplete stamp file");
