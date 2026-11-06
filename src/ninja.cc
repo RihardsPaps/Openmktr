@@ -44,6 +44,7 @@
 // Preserve phony invalidation, depfile includes and physical import ownership.
 // Keep input manifests immutable across configurations and graph generations.
 // Anchor combined depfile streams and preserve changed-directory recipes.
+// Preserve literal heredoc bodies when inferring compiler dependencies.
 // Inline small freshness checks while retaining manifests for wide input lists.
 // Keep directory freshness and conditional depfile copies aligned with Make.
 // Rewrite complete compiler commands and collect every executed branch's deps.
@@ -339,7 +340,7 @@ struct InferredCompiler {
 
 static std::vector<InferredCompiler> GetCompilersFromRecipe(
     std::string_view recipe,
-    bool* stable_directory) {
+    bool* inference_safe) {
   std::vector<InferredCompiler> result;
   auto inspect = [&](size_t begin, size_t end) {
     while (begin < end) {
@@ -385,7 +386,7 @@ static std::vector<InferredCompiler> GetCompilersFromRecipe(
         word == "builtin" || word.find('=') != std::string::npos ||
         word.find('$') != std::string::npos ||
         word.find('`') != std::string::npos) {
-      *stable_directory = false;
+      *inference_safe = false;
       return;
     }
     // Inspect a complete simple command. Supported wrappers stay inside its
@@ -412,6 +413,14 @@ static std::vector<InferredCompiler> GetCompilersFromRecipe(
       escaped = true;
     } else if (c == '\'' || c == '"') {
       quote = c;
+    } else if ((c == '<' && i + 1 < recipe.size() && recipe[i + 1] == '<') ||
+               c == '`' ||
+               (c == '$' && i + 1 < recipe.size() && recipe[i + 1] == '(')) {
+      // Heredoc bodies are literal data, and command substitutions have their
+      // own shell grammar. Neither can be rewritten as an ordinary command.
+      // Reject the complete recipe, including other .ONESHELL command entries.
+      *inference_safe = false;
+      return {};
     } else if (c == '#' && (i == begin || isspace(static_cast<unsigned char>(
                                               recipe[i - 1])))) {
       inspect(begin, i);
@@ -423,16 +432,20 @@ static std::vector<InferredCompiler> GetCompilersFromRecipe(
       // Pipes and asynchronous lists do not prove when a compiler has
       // completed. Keep their original command boundary and explicit deps.
       if ((c == '&' || c == '|') &&
-          (i + 1 == recipe.size() || recipe[i + 1] != c))
+          (i + 1 == recipe.size() || recipe[i + 1] != c)) {
+        *inference_safe = false;
         return {};
+      }
       inspect(begin, i);
       if (c == '&' || c == '|')
         ++i;
       begin = i + 1;
     }
   }
-  if (quote || escaped)
+  if (quote || escaped) {
+    *inference_safe = false;
     return {};
+  }
   if (begin < recipe.size())
     inspect(begin, recipe.size());
   return result;
@@ -1409,10 +1422,10 @@ class NinjaGenerator {
             ambiguous = true;
             break;
           }
-          bool stable_directory = true;
+          bool inference_safe = true;
           compilers.push_back(
-              GetCompilersFromRecipe(command.cmd, &stable_directory));
-          if (!stable_directory) {
+              GetCompilersFromRecipe(command.cmd, &inference_safe));
+          if (!inference_safe) {
             ambiguous = true;
             break;
           }

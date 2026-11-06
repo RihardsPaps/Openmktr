@@ -18,6 +18,24 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_inferred_compilers_do_not_rewrite_heredoc_contents(self):
+        expected = "clang -c -MMD -MF out.d -o out.o source.c\n"
+        root = self.directory
+        for mode in ("direct", "build", "legacy"):
+            with self.subTest(mode=mode):
+                self.directory = root / mode
+                self.directory.mkdir()
+                self.makefile(".ONESHELL:\n.PHONY: all\nall:\n"
+                              "\t@cat > generated.sh <<'EOF'\n\t" + expected + "\tEOF\n")
+                flags = ("--graph_optimizations=aggressive", "all")
+                if mode == "legacy":
+                    self.direct("--ninja", *flags)
+                    self.run_command("sh", "./ninja.sh", "-j2", "all")
+                else:
+                    self.direct(*(("build",) if mode == "build" else ()), *flags)
+                self.assertEqual((self.directory / "generated.sh").read_text(), expected)
+        self.directory = root
+
     def test_changed_directory_compilers_keep_original_command_context(self):
         root = self.directory
         for mode in ("direct", "build", "legacy"):
