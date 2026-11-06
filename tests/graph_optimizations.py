@@ -24,20 +24,97 @@ BINARY = Path(os.environ.get("OMKTR_BINARY", Path(__file__).resolve().parents[1]
 class GraphOptimizations(unittest.TestCase):
     @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",
                          "requires the native Kbuild import observer")
+    def test_kbuild_compiler_probe_validation_preserves_results_and_cleanup(self):
+        self.kbuild_markers()
+        compiler = self.root / "fake-cc"
+        compiler.write_text("#!/bin/sh\nif [ \"$(cat probe-mode)\" = yes ]; then "
+                            ": > \"$2\"; exit 0; else exit 1; fi\n")
+        compiler.chmod(0o755)
+        for number, extra in enumerate(("", " && :")):
+            with self.subTest(extra=extra):
+                child = f"probe-{number}.mk"
+                probe = ('set -e; TMP=.tmp_$$$$/tmp; trap "rm -rf .tmp_$$$$" EXIT; '
+                         'mkdir -p .tmp_$$$$; if ( ./fake-cc -o "$$TMP"' + extra +
+                         ') >/dev/null 2>&1; then echo "supported"; else echo "unsupported"; fi')
+                (self.root / child).write_text(
+                    "VALUE := $(shell " + probe + ")\n.PHONY: all\nall: init/result\n"
+                    "init/result:\n\t@printf '%s' '$(VALUE)' > $@\n")
+                self.makefile(f".PHONY: all\nall:\n\t@$(MAKE) -f {child} all\n")
+                command = ("build", "--graph_optimizations=aggressive",
+                           "--use_ninja_phony_output", "all")
+                for mode, expected in (("yes", "supported"), ("no", "unsupported")):
+                    (self.root / "probe-mode").write_text(mode)
+                    (self.root / "init/result").unlink(missing_ok=True)
+                    self.run_tool(*command)
+                    self.assertEqual((self.root / "init/result").read_text(), expected)
+                    self.assertIn("No need to regenerate", self.run_tool(*command).stdout)
+                    self.assertFalse(list(self.root.glob(".tmp_*")))
+
+    def test_nested_raw_ninja_uses_independent_recipe_admission(self):
+        for raw_outer in (False, True):
+            for deferred in (False, True):
+                for jobs in (1, 4):
+                    with self.subTest(raw_outer=raw_outer, deferred=deferred, jobs=jobs):
+                        work = self.root / f"nested-{raw_outer}-{deferred}-{jobs}"
+                        (work / "grand").mkdir(parents=True)
+                        (work / "grand/Makefile").write_text(
+                            ".PHONY: all\nall:\n\t@printf done >> result\n")
+                        recursive = ("for directory in grand; do "
+                                     "$(MAKE) -C $$directory all; done")
+                        prefix = "MODE := RUN\nRUN = "
+                        (work / "child.mk").write_text(
+                            (prefix + recursive + "\n" if deferred else "") +
+                            ".PHONY: all\nall:\n\t@" +
+                            ("$($(MODE))" if deferred else recursive) + "\n")
+                        recursive = ("$(MAKE) --ninja --graph_optimizations=aggressive "
+                                     "-f child.mk all && ninja all")
+                        (work / "Makefile").write_text(
+                            (prefix + recursive + "\n" if deferred else "") +
+                            ".PHONY: all\nall:\n\t@" +
+                            ("$($(MODE))" if deferred else recursive) + "\n")
+                        for count in (1, 2):
+                            command = [str(BINARY), "build", "--graph_optimizations=aggressive",
+                                       f"-j{jobs}", "all"]
+                            if raw_outer:
+                                generated = subprocess.run(
+                                    [str(BINARY), "--ninja", "--graph_optimizations=aggressive",
+                                     f"-j{jobs}", "all"], cwd=work, text=True,
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=10)
+                                self.assertEqual(generated.returncode, 0, generated.stdout)
+                                command = ["ninja", f"-j{jobs}", "all"]
+                            process = subprocess.Popen(command, cwd=work, text=True,
+                                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                                       start_new_session=True)
+                            try:
+                                output = process.communicate(timeout=10)[0]
+                            except subprocess.TimeoutExpired:
+                                os.killpg(process.pid, signal.SIGKILL)
+                                output = process.communicate()[0]
+                                self.fail("Nested raw Ninja deadlocked:\n" + output)
+                            self.assertEqual(process.returncode, 0, output)
+                            self.assertEqual((work / "grand/result").read_text(), "done" * count)
+
+    @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",
+                         "requires the native Kbuild import observer")
     def test_dynamic_import_waits_after_probe_stdout_closes(self):
         self.kbuild_markers()
-        (self.root / "early-eof.py").write_text(
-            "import os, time\nos.close(1)\ntime.sleep(.1)\n")
-        (self.root / "child.mk").write_text(
-            "VALUE := $(shell python3 early-eof.py)\n.PHONY: all\nall: init/result\n"
-            "init/result:\n\t@printf done > $@\n")
-        self.makefile(".PHONY: all\nall:\n\t@$(MAKE) -f child.mk all\n")
-        result = self.run_tool("build", "--graph_optimizations=aggressive",
-                               "--use_ninja_phony_output", "--kati_stats", "all")
-        self.assertEqual((self.root / "init/result").read_text(), "done")
-        self.assertTrue(any("init/result" in path.read_text()
-                            for path in (self.root / ".openmktr/.imports").rglob("build.ninja")),
-                        result.stdout)
+        for number, delay in enumerate((0, .1)):
+            with self.subTest(delay=delay):
+                (self.root / "early-eof.probe").write_text(
+                    f"import os, time\nos.close(1)\ntime.sleep({delay})\n")
+                child = f"early-{number}.mk"
+                (self.root / child).write_text(
+                    "VALUE := $(shell python3 early-eof.probe)\n.PHONY: all\nall: init/result\n"
+                    "init/result:\n\t@printf done > $@\n")
+                self.makefile(f".PHONY: all\nall:\n\t@$(MAKE) -f {child} all\n")
+                (self.root / "init/result").unlink(missing_ok=True)
+                previous = set((self.root / ".openmktr/.imports").rglob("build.ninja"))
+                result = self.run_tool("build", "--graph_optimizations=aggressive",
+                                       "--use_ninja_phony_output", "--kati_stats", "all")
+                self.assertEqual((self.root / "init/result").read_text(), "done")
+                self.assertTrue(any(path not in previous and "init/result" in path.read_text()
+                                    for path in (self.root / ".openmktr/.imports").rglob("build.ninja")),
+                                result.stdout)
 
     @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",
                          "requires the native Kbuild import observer")

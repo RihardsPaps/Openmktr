@@ -10,6 +10,7 @@
 // Read optional double-colon metadata through the shared dependency view.
 // Cache command prefixes and source local environment objects after chdir.
 // Measure recursive import preflight and Kbuild dependency inventory work.
+// Scope raw Ninja admission by launcher PID without changing command hashes.
 // Reuse output metadata within an emitted edge until an effect invalidates it.
 // Supervise generated launches and jobserver cleanup natively.
 // Own invocation state and publish coherent generations with typed freshness.
@@ -3341,7 +3342,7 @@ class NinjaGenerator {
         AbsPath(GetFilename(".kati-recursion-lock%s"), &lock_path);
         out << "omktr_recursion_lock = "
             << EscapeNinja("${KATI_NINJA_RECURSION_STATE:-" +
-                           ShellQuote(lock_path) + "}")
+                           ShellQuote(lock_path) + "-$PPID}")
             << "\n";
       } else {
         out << "\n";

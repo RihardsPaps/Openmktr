@@ -1,5 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
 // Permit effect-observed speculative evaluation of dynamic imported graphs.
+// Keep held recipe admission out of independently launched child Ninja graphs.
 // Honor low-resolution outputs in native freshness and automatic-input helpers.
 // Capture caller environments and preflight effects before speculative imports.
 // Reject nonregular graph artifacts before reading their bounded header.
@@ -2240,6 +2241,8 @@ static int Main(int argc, char* argv[]) {
         return 128 + GetBuildSignal();
       if (admitted_recipe)
         recursion.Export();
+      if (recursive_recipe && recursion.held())
+        unsetenv("KATI_NINJA_RECURSION_STATE");
       const int load_slot = AcquireNinjaLoadSlot();
       std::string recipe_state;
       if (argc == 7) {

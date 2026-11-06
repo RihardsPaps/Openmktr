@@ -59,13 +59,51 @@ bool InstallFilter() {
   // these descriptors need no tracer stop. Standard descriptors stay checked.
   for (unsigned syscall :
        {SYS_read, SYS_readv, SYS_pread64, SYS_preadv, SYS_preadv2, SYS_getdents,
-        SYS_getdents64, SYS_lseek}) {
+        SYS_getdents64, SYS_lseek, SYS_dup, SYS_dup2, SYS_dup3}) {
     instructions.push_back({0x15, 0, 4, syscall});
     instructions.push_back({0x20, 0, 0, 16});  // args[0], low 32-bit fd.
     instructions.push_back({0x35, 1, 0, 3});   // Unsigned fd >= 3.
     instructions.push_back({0x06, 0, 0, trace});
     instructions.push_back({0x06, 0, 0, allow});
   }
+  // Execute the same argument-dependent checks as Observer::Syscall in the
+  // filter for common loader, terminal-query and private-descriptor calls.
+  // Everything else still stops in the tracer before execution.
+  auto allow_arguments = [&](unsigned syscall, unsigned offset,
+                             std::initializer_list<unsigned> values,
+                             bool private_fd = false) {
+    instructions.push_back(
+        {0x15, 0,
+         static_cast<uint8_t>((private_fd ? 5 : 2) + 2 * values.size()),
+         syscall});
+    if (private_fd) {
+      instructions.push_back({0x20, 0, 0, 16});
+      instructions.push_back({0x35, 1, 0, 3});
+      instructions.push_back({0x06, 0, 0, trace});
+    }
+    instructions.push_back({0x20, 0, 0, offset});
+    for (unsigned value : values) {
+      instructions.push_back({0x15, 0, 1, value});
+      instructions.push_back({0x06, 0, 0, allow});
+    }
+    instructions.push_back({0x06, 0, 0, trace});
+  };
+  allow_arguments(
+      SYS_fcntl, 24,
+      {F_GETFD, F_GETFL, F_SETFD, F_DUPFD, F_DUPFD_CLOEXEC, F_SETFL}, true);
+  allow_arguments(SYS_ioctl, 24,
+                  {TCGETS, 0x802c542au, TIOCGWINSZ, TIOCGPGRP, FIONREAD,
+                   FIOCLEX, FIONCLEX});
+  allow_arguments(SYS_prlimit64, 16, {0});
+  allow_arguments(
+      SYS_prctl, 16,
+      {PR_GET_NO_NEW_PRIVS, PR_GET_NAME, PR_SET_NAME, PR_GET_DUMPABLE});
+  instructions.push_back({0x15, 0, 5, SYS_mmap});
+  instructions.push_back({0x20, 0, 0, 40});  // args[3], mapping flags.
+  instructions.push_back({0x45, 0, 2, MAP_SHARED});
+  instructions.push_back({0x45, 1, 0, MAP_ANONYMOUS});
+  instructions.push_back({0x06, 0, 0, trace});
+  instructions.push_back({0x06, 0, 0, allow});
   const unsigned pure[] = {SYS_close,
                            SYS_stat,
                            SYS_lstat,
@@ -254,6 +292,7 @@ struct Observer {
   std::string caller_input;
   std::set<std::string> temporary;
   std::set<pid_t> children;
+  std::set<pid_t> descendants;
 
   bool Input(pid_t pid, int fd) const {
     const std::string path =
@@ -520,9 +559,10 @@ struct Observer {
         return a[0] == a[1] || Input(pid, a[0]);
 #ifdef SYS_pidfd_open
       case SYS_pidfd_open:
-        // The process supervisor polls its own child's exit after stdout
-        // closes. Opening that handle neither consumes input nor signals it.
-        return a[1] == 0 && children.count(a[0]);
+        // stdout closure and exit notification can race with this poll. Keep
+        // exited descendants eligible too: opening the handle is read-only,
+        // and signaling or acquiring another process's descriptors is denied.
+        return a[1] == 0 && descendants.count(a[0]);
 #endif
       case SYS_lseek:
         return (a[1] == 0 && a[2] == SEEK_CUR) || Input(pid, a[0]);
@@ -661,6 +701,7 @@ int ObserveImport(pid_t child, const std::string& directory) {
   observer.cache = Canonical(directory);
   observer.caller_input = Link("/proc/" + std::to_string(child) + "/fd/0");
   observer.children.insert(child);
+  observer.descendants.insert(child);
   int status = 0;
   pid_t initial;
   do {
@@ -739,6 +780,7 @@ int ObserveImport(pid_t child, const std::string& directory) {
         break;
       }
       observer.children.insert(descendant);
+      observer.descendants.insert(descendant);
       signal = 0;
     } else if (event == PTRACE_EVENT_SECCOMP) {
       ImportSyscall call = {};
@@ -769,6 +811,7 @@ int ObserveImport(pid_t child, const std::string& directory) {
       if (static_cast<pid_t>(former) != pid)
         observer.children.erase(static_cast<pid_t>(former));
       observer.children.insert(pid);
+      observer.descendants.insert(pid);
       signal = 0;
     } else if (signal == SIGSTOP) {
       signal = 0;

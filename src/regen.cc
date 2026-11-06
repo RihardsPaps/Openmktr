@@ -2,6 +2,7 @@
 // Launch validation workers only when independent observations need checking.
 // Batch large ordinary file frontiers without sharing evaluator state.
 // Identify rejected import proofs in regeneration diagnostics.
+// Validate literal Kbuild compiler probes with owned scratch directories.
 // Retain shell diagnostics and stop replay at changed conditional boundaries.
 // Validate complete deferred environments and inherited jobserver identities.
 // Own invocation state and publish coherent generations with typed freshness.
@@ -37,8 +38,10 @@
 #include "session.h"
 
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <algorithm>
+#include <filesystem>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -107,6 +110,82 @@ std::string NormalizeMakeFlags(std::string_view flags) {
     normalized += token;
   }
   return normalized + " --effective-jobs=" + jobs;
+}
+
+bool NativeKbuildCompilerProbe(const std::string& command,
+                               std::string* result,
+                               int* status) {
+  if (!getenv("KATI_IMPORT_VALIDATE_ONLY") || !ImportObservationActive() ||
+      !g_flags.GraphOptimizationEnabled("evaluation"))
+    return false;
+  constexpr std::string_view prefix =
+      "set -e; TMP=.tmp_$$/tmp; trap \"rm -rf .tmp_$$\" EXIT; "
+      "mkdir -p .tmp_$$; if (";
+  constexpr std::string_view middle = ") >/dev/null 2>&1; then echo \"";
+  constexpr std::string_view branch = "\"; else echo \"";
+  constexpr std::string_view suffix = "\"; fi";
+  if (!HasPrefix(command, prefix) || !HasSuffix(command, suffix))
+    return false;
+  const size_t condition_end = command.find(middle, prefix.size());
+  if (condition_end == std::string::npos)
+    return false;
+  const size_t success_begin = condition_end + middle.size();
+  const size_t success_end = command.find(branch, success_begin);
+  if (success_end == std::string::npos)
+    return false;
+  const size_t failure_begin = success_end + branch.size();
+  const std::string success =
+      command.substr(success_begin, success_end - success_begin);
+  const std::string failure = command.substr(
+      failure_begin, command.size() - suffix.size() - failure_begin);
+  for (const std::string* value : {&success, &failure})
+    if (value->find_first_of("\"\\$`\n\r") != std::string::npos ||
+        *value == "-n" || *value == "-e" || *value == "-E")
+      return false;
+  std::string compiler =
+      command.substr(prefix.size(), condition_end - prefix.size());
+  const size_t first = compiler.find_first_not_of(" \t");
+  if (first == std::string::npos)
+    return false;
+  compiler.erase(0, first);
+  const std::string program = compiler.substr(0, compiler.find_first_of(" \t"));
+  const std::string_view name = Basename(program);
+  const bool clang =
+      name == "clang" || (HasPrefix(name, "clang-") && name.size() > 6 &&
+                          name.substr(6).find_first_not_of("0123456789.") ==
+                              std::string_view::npos);
+  if (program.empty() ||
+      program.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST"
+                                "UVWXYZ0123456789_./-") != std::string::npos ||
+      (!clang && program.find('/') == std::string::npos) ||
+      !HasSuffix(compiler, " -o \"$TMP\""))
+    return false;
+  if (getenv("ENV") || getenv("BASH_ENV"))
+    return false;
+  for (char** entry = environ; entry && *entry; ++entry)
+    if (HasPrefix(*entry, "BASH_FUNC_"))
+      return false;
+  const size_t output = compiler.size() - std::string_view("\"$TMP\"").size();
+  if (compiler.substr(0, output).find_first_of("\"';|&<>$`\\\n\r(){}*?[]#~!") !=
+      std::string::npos)
+    return false;
+  // Exclusive creation prevents an interrupted or user-owned scratch path
+  // from becoming ours. Unsupported forms retain the complete shell script.
+  const std::string directory = ".tmp_" + std::to_string(getpid());
+  if (mkdir(directory.c_str(), 0777) != 0)
+    return false;
+  // Both components contain only fixed punctuation and decimal PID digits.
+  compiler.replace(output, std::string::npos, directory + "/tmp");
+  const std::string script = "set -e; TMP=" + directory + "/tmp; if " +
+                             compiler + command.substr(condition_end + 1);
+  const int raw =
+      RunCommand("/bin/sh", "-c", script, RedirectStderr::NONE, result);
+  FormatForCommandSubstitution(result);
+  std::error_code error;
+  std::filesystem::remove_all(directory, error);
+  *status = error ? 1 : WIFEXITED(raw) ? WEXITSTATUS(raw) : 1;
+  RecordStatCounter("native_kbuild_probe_validations");
+  return true;
 }
 
 class StampChecker {
@@ -588,6 +667,10 @@ class StampChecker {
         *err = "native find validation uncertain, regenerating...\n";
         return true;
       }
+    } else if (sr->shell == "/bin/sh" && sr->shellflag == "-c" &&
+               NativeKbuildCompilerProbe(sr->cmd, &result, &status)) {
+      // The native path already returns command-substitution text and the
+      // literal branch's status; the compiler itself is always executed.
     } else {
       const int raw_status = RunCommand(sr->shell, sr->shellflag, sr->cmd,
                                         RedirectStderr::NONE, &result);

@@ -1,6 +1,7 @@
 // FORK MODIFICATION NOTICE (2026)
 // Release deferred expansion admission before ordinary compiler execution.
 // Retain admission while shell expansion leaves recursion unresolved.
+// Keep adopted admission local while nested Ninja selects its own scope.
 // Bind automatic variables before extracting deferred recursive import
 // commands. Inspect deferred recipes for recursive scheduling without expanding
 // effects. Carry output timestamp resolution into runtime recipes and automatic
@@ -1097,6 +1098,8 @@ void PrepareRuntimeContexts(const std::string& manifest) {
 int RunRuntimeRecipe(const char* path, bool admitted) {
   ScopedBuildSignals signals;
   RecipeAdmission admission(admitted, true);
+  if (admission.held())
+    unsetenv("KATI_NINJA_RECURSION_STATE");
   if (GetBuildSignal())
     return 128 + GetBuildSignal();
   g_flags.executable_path = GetExecutablePath();
