@@ -1,5 +1,9 @@
 # PR 73 follow-up validation — 6 November 2026
 
+The [Linux regression-fix report](pr74-linux-regression-fix.md) supersedes the
+Linux performance limitation below at `2242f8f`. Earlier cohorts and their
+qualification limits remain recorded here with their original revisions.
+
 The follow-up in [PR 74](https://github.com/RihardsPaps/Openmktr/pull/74)
 implements fixdep ownership frontiers, bounded metadata batches, dynamic import
 validation, missing-output ownership checks and parallel execution of computed

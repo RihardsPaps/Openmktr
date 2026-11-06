@@ -152,9 +152,13 @@ The index stores shared path strings once and uses compact owner references;
 child frontends retain only the requested object-directory scope. Covered compiler
 inputs wake their Ninja scope without becoming broad frontend dependencies.
 Dependency-record contents remain frontend inputs. Identical record rewrites and
-refreshing the source symlink to the same destination retain reuse. Missing object
-files can still require a conservative ownership-proof refresh; this cost must be
-measured separately from ordinary source edits.
+refreshing the source symlink to the same destination retain reuse. Removing or
+restoring an indexed regular object leaves ownership unchanged: Ninja rebuilds
+the missing output without regenerating the root graph. New owners, changed or
+deleted dependency records, directory aliases and file-type changes still
+invalidate reuse. Frontend filesystem observations are checked independently.
+The in-memory index shares invocation-owned path symbols; its persistent form
+uses canonical strings and numeric references, with legacy records still readable.
 
 On Linux x86-64, eligible dynamic Kbuild discovery runs under a native effect
 observer. A seccomp filter lets metadata queries run directly and stops effectful
@@ -168,6 +172,12 @@ recipes, not a sandbox for hostile Makefiles. Other platforms retain static impo
 Their reuse is also bound to the immutable ownership index; compiler-only
 timestamp changes do not replace the frontend validator with another discovery
 pass. Private generated scripts are excluded from the in-tree source inventory.
+Literal Kbuild compiler-option validators still execute the compiler on every
+check. Native scratch-directory creation and cleanup remove extra utility
+processes; unsupported shell forms, shell overrides and PATH utility wrappers
+retain the complete script. Observer fast paths keep caller-input checks before
+descriptor duplication. Remote path reads are bounded by page boundaries and
+retain an aligned ptrace fallback.
 
 In Aggressive mode, deferred recipe expansion takes a native admission lock only
 after prerequisites complete. After expansion, a literal nonrecursive compiler
@@ -177,7 +187,9 @@ after Make expansion. An actual recursive
 Openmktr command holds admission until it finishes, together with ordinary opaque
 recursive recipes. Thus a computed compiler-variable name no longer puts every
 compilation in a serial Ninja pool. Native nested Ninja launchers use separate
-admission files, and standalone Ninja uses a graph-local fallback. Safe and Off
+admission files, and standalone Ninja scopes its fallback by graph and launcher
+PID. Held parent leases remain in their recipe helper or runtime evaluator;
+independent child Ninja invocations select their own scope. Safe and Off
 profiles retain conservative scheduling for computed recursive references.
 Explicit `.NOTPARALLEL` and other execution constraints remain in force.
 Supervisors acquire expansion admission before taking a shared job token and

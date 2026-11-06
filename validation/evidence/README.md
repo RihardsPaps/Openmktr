@@ -47,6 +47,16 @@ not claimed fixed.
 
 ## PR 73 remaining-bottleneck follow-up — 6 November 2026
 
+The [subsequent Linux fix report](../../docs/pr74-linux-regression-fix.md),
+[machine-readable results](../pr74-linux-regression-fix.json),
+[288-entry archive](pr74-linux-regression-fix-2026-11-06.zip) and
+[SHA-256](pr74-linux-regression-fix-2026-11-06.zip.sha256) supersede the original
+supported Linux missing-object/following-graph regressions below. They retain
+seven final paired samples, the intermediate failed qualification, diagnostics,
+failing-before regressions and full local normal/sanitizer gates. The strict
+combined timing/RSS gate remains false; no no-op speedup or profile promotion
+is claimed.
+
 [pr74-followup-2026-11-06.zip](pr74-followup-2026-11-06.zip) retains the
 FFmpeg 7.1.1 and Linux 6.12 command journals, individual samples, binary/tool
 identities, source audits, original failures, retry controllers and local

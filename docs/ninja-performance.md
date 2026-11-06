@@ -121,6 +121,9 @@ The [PR 73 follow-up report](pr73-followup-performance.md) records the
 6 November implementation, FFmpeg 7.1.1 and Linux 6.12 comparisons, new
 correctness regressions and qualification limits. Its measured revisions and
 toolchain differ from the historical comparisons above.
+The [PR 74 Linux fix](pr74-linux-regression-fix.md) records the subsequent
+missing-object/graph regression fixes, seven paired Linux samples, final
+normal/sanitizer checks and remaining qualification limits.
 
 | Evidence | Scope |
 | --- | --- |
