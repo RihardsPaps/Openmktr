@@ -2233,6 +2233,8 @@ class NinjaGenerator {
     }
     bool cache_fresh = false;
     bool dynamic_import = false;
+    const char* index_path = getenv("KATI_IMPORT_DEPENDENCY_INDEX");
+    const std::string dependency_index = index_path ? index_path : "";
     if (access(graph_path.c_str(), R_OK) == 0 &&
         access((directory + "/env.sh").c_str(), R_OK) == 0 &&
         access((directory + "/ninja.sh").c_str(), R_OK) == 0 &&
@@ -2240,6 +2242,14 @@ class NinjaGenerator {
       std::string validation;
       const bool has_validation =
           ReadGraphCache(directory + "/cache-validation", &validation);
+      std::string_view validation_view(validation);
+      std::string validation_version, validation_index;
+      const bool compatible_validation =
+          has_validation &&
+          ConsumeGraphString(&validation_view, &validation_version) &&
+          validation_version == "import-validation-v5" &&
+          ConsumeGraphString(&validation_view, &validation_index) &&
+          validation_index == dependency_index;
       std::string_view cached_view(bytes);
       bool valid_manifest = true;
       bool matching_budget = false;
@@ -2265,7 +2275,8 @@ class NinjaGenerator {
       }
       std::sort(cached_sources.begin(), cached_sources.end());
       std::string expected_validation;
-      AppendGraphString("import-validation-v4", &expected_validation);
+      AppendGraphString("import-validation-v5", &expected_validation);
+      AppendGraphString(dependency_index, &expected_validation);
       std::unordered_set<std::string> validated_sources;
       for (const std::string& path : cached_sources) {
         const std::string identity = ImportSourceIdentity(path);
@@ -2288,8 +2299,14 @@ class NinjaGenerator {
         AppendGraphString(path, &expected_validation);
         AppendGraphString(identity, &expected_validation);
       }
-      cache_fresh = valid_manifest && matching_budget && has_validation &&
-                    validation == expected_validation;
+      // Dynamic workers revalidate all frontend observations through their
+      // sealed stamp before reuse. Compiler input timestamps are Ninja work,
+      // not a reason to parse the child again. Bind reuse to the exact
+      // immutable ownership index so a changed dependency frontier still
+      // regenerates it.
+      cache_fresh = valid_manifest && matching_budget &&
+                    compatible_validation &&
+                    (dynamic_import || validation == expected_validation);
     }
     const bool generated_graph =
         !cache_fresh ||
@@ -2369,7 +2386,8 @@ class NinjaGenerator {
     if (generated_graph) {
       std::sort(sources.begin(), sources.end());
       std::string validation;
-      AppendGraphString("import-validation-v4", &validation);
+      AppendGraphString("import-validation-v5", &validation);
+      AppendGraphString(dependency_index, &validation);
       std::unordered_set<std::string> validated_sources;
       for (const std::string& path : sources) {
         const std::string identity = ImportSourceIdentity(path);
@@ -2856,7 +2874,9 @@ class NinjaGenerator {
         continue;
       while (dirent* entry = readdir(handle)) {
         const std::string_view name(entry->d_name);
-        if (name == "." || name == ".." || name == ".git")
+        if (name == "." || name == ".." || name == ".git" ||
+            name == ".openmktr" || name == ".imports" ||
+            HasPrefix(name, ".omktr-"))
           continue;
         const bool source_suffix = std::any_of(
             std::begin(suffixes), std::end(suffixes),

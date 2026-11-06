@@ -320,6 +320,36 @@ class GraphOptimizations(unittest.TestCase):
 
     @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",
                          "requires the native Kbuild import observer")
+    def test_dynamic_import_reuses_frontend_after_identical_fixdep_rewrite(self):
+        self.kbuild_markers()
+        (self.root / "child.mk").write_text(
+            "MODE := $(shell printf ready)\n"
+            ".PHONY: all\nall: init/result\n"
+            "init/result: init/main.c\n\t@printf '%s' '$(MODE)' > $@\n")
+        self.makefile(".PHONY: all\nall:\n\t@$(MAKE) -f child.mk all\n")
+        command = ("build", "--graph_optimizations=aggressive",
+                   "--use_ninja_phony_output", "--kati_stats", "all")
+        first = self.run_tool(*command)
+        self.assertIn("imported child graph", first.stdout)
+        graphs = list((self.root / ".openmktr/.imports").rglob("build.ninja"))
+        self.assertTrue(graphs)
+        stamps = {p: p.stat().st_mtime_ns for p in graphs}
+        record = self.root / "init/.main.o.cmd"
+        record.write_text(record.read_text())
+        with (self.root / "Makefile").open("a") as output:
+            output.write("# force parent evaluation\n")
+        result = self.run_tool(*command)
+        self.assertIn("imported child graph", result.stdout)
+        self.assertNotIn("import discovery:", result.stdout)
+        for path, stamp in stamps.items():
+            self.assertEqual(path.stat().st_mtime_ns, stamp)
+        (self.root / "extra.h").touch()
+        with record.open("a") as output:
+            output.write("deps_init/main.o := init/main.c extra.h\n")
+        self.assertIn("import discovery:", self.run_tool(*command).stdout)
+
+    @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",
+                         "requires the native Kbuild import observer")
     def test_dynamic_import_transfer_does_not_consume_caller_input(self):
         self.kbuild_markers()
         (self.root / "transfer.py").write_text("import os\nos.splice(0,1,1)\n")
