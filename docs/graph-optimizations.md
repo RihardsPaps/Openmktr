@@ -122,12 +122,16 @@ custom execution constraints and uncertain invocations retain ordinary recursion
 Child recipes keep their working directories, exported environment and Make level.
 Parent prerequisites gate imported recipes before they can execute.
 
-Ownership is checked before committing imports. Symlinked output paths, hard
-links and unresolved parent directories retain ordinary recursion. Duplicate
+Ownership is checked before committing imports. Safe ownership checks reject
+ambiguous aliases. Aggressive imports compare canonical paths and existing
+file identities, including hard links. Missing output directories are checked
+through their existing ancestors. A parent forwarding target with one recursive
+prerequisite and a silent no-op recipe can transfer its producer to the child.
+Duplicate
 outputs, cycles, or an
 opaque recursive sibling cause conservative fallback for the parent graph. This
-first implementation therefore does not import part of a graph alongside opaque
-recursive siblings. General Kbuild and shell-loop flattening are not supported.
+implementation therefore does not import part of a graph alongside opaque
+recursive siblings. Shell-loop flattening is not supported.
 Target-specific depfile metadata currently falls outside the static preflight;
 automatic depfile detection, parent pool assignments and `.WAIT` boundaries also
 retain ordinary recursion. Incompatible job budgets, target-specific `MAKEFLAGS`,
@@ -137,13 +141,40 @@ ordinary recursion. Children producing discovery diagnostics use ordinary
 recursion so speculative parsing cannot duplicate their messages. No generic transitive dependency reduction
 is performed.
 
-Deferred recipes that reference `MAKE`, a known executable alias, or computed
-command references retain the same serial Ninja pool as ordinary opaque recursive
-calls. This prevents sibling sub-builds from concurrently rebuilding shared
-outputs on incremental runs. Classification does not expand recipe effects before
-prerequisites finish. Bounded ordinary deferred recipes still run in parallel;
-computed references conservatively retain serialization. This applies in every
-graph profile, including `off`.
+With `--use_ninja_phony_output`, Kbuild imports can use the source and header
+ownership recorded by fixdep in object `.cmd` files. The root inventories those
+records once; child frontends consume an immutable index and retain dependencies
+outside their own source directory, including generated headers and missing
+configuration probes. Covered edits invalidate the owning subtree. Unknown syntax,
+unindexed compiler records and ambiguous directory aliases retain graph-wide
+invalidation. Directory membership checks detect new object/dependency records
+after a clean build so the next invocation can promote the index.
+
+On Linux x86-64, eligible dynamic Kbuild discovery runs under a native effect
+observer. A seccomp filter lets metadata queries run directly and stops effectful
+system calls for ptrace inspection before execution. Writes are limited to the
+private import cache and fresh Kbuild compiler-probe directories; unsupported
+operations, diagnostics, timeout or unavailable tracing retain ordinary recursion.
+Generated-header producers in the parent also retain their execution boundary.
+Cached dynamic imports validate their recorded shell, wildcard, include and child
+graph observations before reuse. This is an optimization for supported build
+recipes, not a sandbox for hostile Makefiles. Other platforms retain static import.
+
+In Aggressive mode, deferred recipe expansion takes a native admission lock only
+after prerequisites complete. After expansion, an ordinary compiler command
+releases the lock and runs under the shared job budget. An actual recursive
+Openmktr command holds admission until it finishes, together with ordinary opaque
+recursive recipes. Thus a computed compiler-variable name no longer puts every
+compilation in a serial Ninja pool. Native nested Ninja launchers use separate
+admission files, and standalone Ninja uses a graph-local fallback. Safe and Off
+profiles retain conservative scheduling for computed recursive references.
+Explicit `.NOTPARALLEL` and other execution constraints remain in force.
+
+Independent metadata validation uses batches with at most eight native workers.
+Parsed Makefiles still retain content identities, so timestamp-preserving edits
+invalidate reuse. Include certificates bind every implicit peer output. Deferred
+recipe diagnostics remain recipe effects and do not invalidate an otherwise
+unchanged frontend. Caller recursion flags are recorded before Makefile mutation.
 
 The direct executor also lets dependency waiters run queued work when shared
 prerequisites occupy other workers. Borrowed tasks have a lower dependency rank

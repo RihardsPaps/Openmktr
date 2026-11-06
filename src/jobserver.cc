@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Admit deferred expansion separately from parallel nonrecursive execution.
 // Resolve each thread's owned connection once per acquisition, without macros.
 // Own invocation state and publish coherent generations with typed freshness.
 // Extract shared FIFO reservations and load admission into a runtime service.
@@ -236,6 +237,40 @@ void ReleaseKatiJobToken(int fd) {
   const char token = 'x';
   if (HANDLE_EINTR(write(fd, &token, 1)) != 1) {
     LOG("failed to return jobserver token");
+  }
+}
+
+RecipeAdmission::RecipeAdmission(bool acquire) {
+  const char* path = getenv("KATI_NINJA_RECURSION_STATE");
+  if (!acquire || !path || !*path)
+    return;
+  fd_ = open(path, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
+  if (fd_ < 0)
+    PERROR("open Ninja recursive admission failed");
+  struct stat metadata;
+  if (fstat(fd_, &metadata) != 0 || !S_ISREG(metadata.st_mode) ||
+      metadata.st_nlink != 1)
+    ERROR("invalid Ninja recursive admission state");
+  struct flock guard = {};
+  guard.l_type = F_WRLCK;
+  guard.l_whence = SEEK_SET;
+  while (!GetBuildSignal()) {
+    if (fcntl(fd_, F_SETLKW, &guard) == 0)
+      return;
+    if (errno != EINTR)
+      PERROR("lock Ninja recursive admission failed");
+  }
+  Release();
+}
+
+RecipeAdmission::~RecipeAdmission() {
+  Release();
+}
+
+void RecipeAdmission::Release() {
+  if (fd_ >= 0) {
+    close(fd_);
+    fd_ = -1;
   }
 }
 

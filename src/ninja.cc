@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Scope recursive invalidation through Kbuild fixdep ownership frontiers.
 // Serialize deferred recursive calls with ordinary opaque recursive recipes.
 // Use one resolution-aware freshness guard and preserve low-resolution outputs.
 // Keep unconditional double-colon groups scheduled on existing outputs.
@@ -77,6 +78,7 @@
 #include "generation.h"
 #include "graph_import.h"
 #include "graph_optimization.h"
+#include "import_observer.h"
 
 #ifndef OMKTR_NINJA_EXECUTABLE
 #define OMKTR_NINJA_EXECUTABLE "ninja"
@@ -578,6 +580,12 @@ class NinjaGenerator {
     // target. The graph bundle itself retains full payload durability.
     GraphObjectBatch runtime_objects(false);
     PopulateNinjaNodes(nodes);
+    if (g_flags.import_root) {
+      const char* path = getenv("KATI_IMPORT_DEPENDENCY_INDEX");
+      std::string bytes;
+      if (path && ReadGraphCache(path, &bytes))
+        kbuild_dependencies_.Decode(bytes);
+    }
     if (g_flags.import_root && g_flags.use_ninja_phony_output)
       imported_phony_aliases_.insert(Intern("_kati_always_build_"));
     if (g_flags.import_root && g_flags.use_ninja_phony_output)
@@ -586,29 +594,35 @@ class NinjaGenerator {
           imported_phony_aliases_.insert(nn.node->output);
     if (g_flags.use_ninja_phony_output &&
         g_flags.GraphOptimizationEnabled("recursive") &&
-        (g_flags.make_level == 0 ||
-         (g_flags.import_root && g_flags.make_level == 1))) {
+        (g_flags.make_level == 0 || g_flags.import_root)) {
       CollectRecursiveSourceInputs();
       if (g_flags.make_level == 0)
         for (Symbol input : recursive_source_inputs_)
           MakefileCacheManager::Get().AddExtraFileDep(input.str());
       const char* inherited_fingerprint =
           getenv("KATI_IMPORT_SOURCE_FINGERPRINT");
-      if (inherited_fingerprint && *inherited_fingerprint) {
+      if (g_flags.import_root && inherited_fingerprint &&
+          *inherited_fingerprint) {
         recursive_source_fingerprint_ = inherited_fingerprint;
       } else if (!recursive_source_inputs_.empty()) {
         std::string snapshot;
         std::vector<std::pair<std::string, std::string>> source_stamps;
         std::unordered_set<std::string> current_source_paths;
-        for (Symbol input : recursive_source_inputs_) {
-          struct stat metadata;
-          if (stat(input.str().data(), &metadata) != 0)
-            continue;
-          const std::string path(input.str());
+        std::vector<std::string> paths;
+        for (Symbol input : recursive_source_inputs_)
+          paths.emplace_back(input.str());
+        const auto observations = StatFiles(paths);
+        for (size_t i = 0; i < paths.size(); ++i) {
+          const std::string& path = paths[i];
+          const auto& observation = observations[i];
+          const std::string identity =
+              observation.error == 0
+                  ? GetFileIdentityFromStat(observation.metadata)
+              : observation.error == ENOENT ? "missing"
+                                            : "unreadable";
+          import_source_identities_[path] = identity;
           current_source_paths.insert(path);
-          source_stamps.emplace_back(
-              path, std::to_string(metadata.st_mtim.tv_sec) + ":" +
-                        std::to_string(metadata.st_mtim.tv_nsec));
+          source_stamps.emplace_back(path, identity);
         }
         std::string previous_snapshot;
         const std::string fingerprint_path =
@@ -620,7 +634,7 @@ class NinjaGenerator {
           std::string_view previous(previous_snapshot);
           std::string version;
           if (!ConsumeGraphString(&previous, &version) ||
-              version != "recursive-source-snapshot-v1") {
+              version != "recursive-source-snapshot-v2") {
             previous_valid = false;
           } else {
             while (!previous.empty()) {
@@ -639,27 +653,38 @@ class NinjaGenerator {
           AppendGraphString(stamp, &snapshot);
         }
         std::string versioned_snapshot;
-        AppendGraphString("recursive-source-snapshot-v1", &versioned_snapshot);
+        AppendGraphString("recursive-source-snapshot-v2", &versioned_snapshot);
         for (const auto& [path, stamp] : source_stamps) {
           AppendGraphString(path, &versioned_snapshot);
           AppendGraphString(stamp, &versioned_snapshot);
         }
         recursive_source_fingerprint_ = GraphDigest(snapshot);
+        bool covered_changes = kbuild_dependencies_.complete;
+        size_t changed_inputs = 0;
         if (g_flags.make_level == 0 && previous_valid) {
           for (const auto& [path, stamp] : source_stamps) {
             auto previous = previous_stamps.find(path);
             if (previous != previous_stamps.end() && previous->second == stamp)
               continue;
             recursive_sources_changed_ = true;
+            ++changed_inputs;
+            covered_changes &= kbuild_dependencies_.Covers(path);
           }
           for (const auto& [path, stamp] : previous_stamps) {
             (void)stamp;
             if (current_source_paths.find(path) == current_source_paths.end()) {
               recursive_sources_changed_ = true;
+              ++changed_inputs;
+              covered_changes &= kbuild_dependencies_.Covers(path);
             }
           }
           if (source_stamps.size() != previous_stamps.size())
             recursive_sources_changed_ = true;
+        }
+        if (recursive_sources_changed_ && covered_changes) {
+          recursive_sources_changed_ = false;
+          LOG_STAT("recursive source frontier: %zu covered changes",
+                   changed_inputs);
         }
         if (g_flags.make_level == 0) {
           if (recursive_sources_changed_) {
@@ -747,6 +772,10 @@ class NinjaGenerator {
     generation.Commit();
     if (g_flags.import_root) {
       std::string manifest;
+      if (ImportObservationActive() || !ImportValidationPlans().empty()) {
+        AppendGraphString("dynamic", &manifest);
+        AppendGraphString("1", &manifest);
+      }
       AppendGraphString("jobs", &manifest);
       AppendGraphString(std::to_string(g_flags.num_jobs), &manifest);
       auto record = [&](const char* kind, Symbol name) {
@@ -1017,6 +1046,7 @@ class NinjaGenerator {
       PopulateNinjaNode(*depnode);
     }
     const double recipe_start = GetMonotonicTime();
+    ce_.BindAutomaticVariables(node);
     const bool runtime_recipe = MakeRuntimeRecipe(
         node, ce_.evaluator(), g_flags.ninja_dir ? g_flags.ninja_dir : ".",
         &runtime_recipe_profile_, &nodes_[node_index].commands);
@@ -1321,6 +1351,16 @@ class NinjaGenerator {
     if (node->is_default_target) {
       std::unique_lock<std::mutex> lock(mu_);
       default_target_ = node;
+    }
+    auto proxy = imported_proxy_outputs_.find(node->output);
+    if (proxy != imported_proxy_outputs_.end()) {
+      const std::string alias = g_flags.import_root
+                                    ? ImportedTargetPath(node->output)
+                                    : std::string(node->output.str());
+      if (alias != proxy->second)
+        out << "build " << EscapeNinja(alias) << ": phony "
+            << EscapeNinja(proxy->second) << "\n";
+      return;
     }
     if (TryImport(nn, out))
       return;
@@ -1645,6 +1685,10 @@ class NinjaGenerator {
       use_local_pool = commands.front().runtime_sidecar.empty()
                            ? IsRecursiveKatiCommand(cmd_buf)
                            : commands.front().runtime_may_recurse;
+      if (g_flags.graph_optimizations ==
+              Flags::GraphOptimizations::kAggressive &&
+          !commands.front().runtime_sidecar.empty())
+        use_local_pool = false;
       // The helper already supervises the recipe process. Record the output
       // there after admission instead of launching another copy of the tool
       // and a shell subshell/trap wrapper for every file recipe. An absolute
@@ -1803,7 +1847,8 @@ class NinjaGenerator {
         script_path = PublishGraphObject(
             GetFilename(".kati_script-") + GraphDigest(script), script);
         MakefileCacheManager::Get().AddGeneratedGraphDep(script_path);
-        cmd_buf = ninja_binary_ +
+        cmd_buf = "KATI_NINJA_RECURSION_STATE=$omktr_recursion_lock " +
+                  ninja_binary_ +
                   (token_recipe ? " --internal-run-recipe-file "
                                 : " --internal-run-recursive-recipe-file ") +
                   ShellQuote(command_shell) + " " +
@@ -1813,7 +1858,9 @@ class NinjaGenerator {
       }
       std::string helper_prefix;
       if (helper_recipe && !recipe_in_rsp && script_path.empty()) {
-        helper_prefix = working_prefix_ + ninja_binary_ + recipe_helper +
+        helper_prefix = working_prefix_ +
+                        "KATI_NINJA_RECURSION_STATE=$omktr_recursion_lock " +
+                        ninja_binary_ + recipe_helper +
                         ShellQuote(command_shell) + " " +
                         ShellQuote(command_shellflag) + " ";
         cmd_buf =
@@ -1899,9 +1946,10 @@ class NinjaGenerator {
             rspfile = "./" + rspfile;
           const std::string source_rspfile = ". " + ShellQuote(rspfile);
           if (helper_recipe && recipe_in_rsp) {
-            out << " command = " << ninja_binary_ << recipe_helper
-                << ShellQuote(command_shell) << ' '
-                << ShellQuote(command_shellflag) << ' '
+            out << " command = "
+                   "KATI_NINJA_RECURSION_STATE=$omktr_recursion_lock "
+                << ninja_binary_ << recipe_helper << ShellQuote(command_shell)
+                << ' ' << ShellQuote(command_shellflag) << ' '
                 << ShellQuote(source_rspfile) << EscapeNinja(cleanup_arg)
                 << "\n";
           } else {
@@ -1989,6 +2037,14 @@ class NinjaGenerator {
            GraphDigest(target.str());
   }
 
+  std::string ImportSourceIdentity(const std::string& path) {
+    auto found = import_source_identities_.find(path);
+    if (found != import_source_identities_.end())
+      return found->second;
+    return import_source_identities_.emplace(path, GetFileIdentity(path))
+        .first->second;
+  }
+
   bool TryImport(const NinjaNode& nn, std::ostream& out) {
     const DepNode& node = *nn.node;
     if (!preparing_imports_) {
@@ -2056,12 +2112,12 @@ class NinjaGenerator {
       // a different obj= directory remains eligible for flattening.
       if (same_makefile && child_object == current_object &&
           g_flags.make_level >= 2)
-        return true;
+        return false;
     }
     std::string import_identity;
     // Imported Ninja files are immutable and may outlive the generator binary.
     // Keep their cache namespace versioned when output naming semantics change.
-    AppendGraphString("directory-marker-v4", &import_identity);
+    AppendGraphString("directory-marker-v5-kbuild-frontier", &import_identity);
     AppendGraphString(GetFileIdentity(kati_binary_), &import_identity);
     AppendGraphString(node.output.str(), &import_identity);
     AppendGraphString(nn.commands.front().cmd, &import_identity);
@@ -2083,8 +2139,8 @@ class NinjaGenerator {
       // not visible to Makefile evaluation and would otherwise defeat reuse
       // for every recursive frontend.
       if (HasPrefix(*entry, "CODEX_TOOL_CALL_ID=") ||
-          HasPrefix(*entry, "KATI_IMPORT_SOURCE_DIRTY=") ||
-          HasPrefix(*entry, "KATI_IMPORT_SOURCE_LIST="))
+          HasPrefix(*entry, "KATI_NINJA_RECURSION_STATE=") ||
+          HasPrefix(*entry, "KATI_IMPORT_"))
         continue;
       inherited_environment.emplace_back(*entry);
     }
@@ -2133,7 +2189,17 @@ class NinjaGenerator {
           scoped_sources.push_back(path);
       }
     }
+    if (kbuild_dependencies_.complete) {
+      std::string scope = working_dir_;
+      if (!source_scope.empty() && source_scope != ".") {
+        scope = source_scope.front() == '/' ? source_scope
+                                            : scope + "/" + source_scope;
+        NormalizePath(&scope);
+      }
+      scoped_sources = kbuild_dependencies_.Inputs(scope);
+    }
     bool cache_fresh = false;
+    bool dynamic_import = false;
     if (access(graph_path.c_str(), R_OK) == 0 &&
         access((directory + "/env.sh").c_str(), R_OK) == 0 &&
         access((directory + "/ninja.sh").c_str(), R_OK) == 0 &&
@@ -2152,7 +2218,9 @@ class NinjaGenerator {
           valid_manifest = false;
           break;
         }
-        if (kind == "jobs") {
+        if (kind == "dynamic" && path == "1") {
+          dynamic_import = true;
+        } else if (kind == "jobs") {
           if (matching_budget || path != std::to_string(g_flags.num_jobs))
             valid_manifest = false;
           matching_budget = true;
@@ -2164,40 +2232,72 @@ class NinjaGenerator {
       }
       std::sort(cached_sources.begin(), cached_sources.end());
       std::string expected_validation;
-      AppendGraphString("import-validation-v3", &expected_validation);
+      AppendGraphString("import-validation-v4", &expected_validation);
       std::unordered_set<std::string> validated_sources;
       for (const std::string& path : cached_sources) {
-        struct stat source_metadata;
-        if (stat(path.c_str(), &source_metadata) != 0) {
+        const std::string identity = ImportSourceIdentity(path);
+        if (identity == "unreadable") {
           valid_manifest = false;
           break;
         }
         AppendGraphString(path, &expected_validation);
-        AppendGraphString(GetFileIdentityFromStat(source_metadata),
-                          &expected_validation);
+        AppendGraphString(identity, &expected_validation);
         validated_sources.insert(path);
       }
       for (const std::string& path : scoped_sources) {
         if (!validated_sources.insert(path).second)
           continue;
-        struct stat source_metadata;
-        if (stat(path.c_str(), &source_metadata) != 0) {
+        const std::string identity = ImportSourceIdentity(path);
+        if (identity == "unreadable") {
           valid_manifest = false;
           break;
         }
         AppendGraphString(path, &expected_validation);
-        AppendGraphString(GetFileIdentityFromStat(source_metadata),
-                          &expected_validation);
+        AppendGraphString(identity, &expected_validation);
       }
       cache_fresh = valid_manifest && matching_budget && has_validation &&
                     validation == expected_validation;
     }
-    const bool generated_graph = !cache_fresh;
+    const bool generated_graph =
+        !cache_fresh ||
+        (dynamic_import &&
+         !ValidateImportedGraph(directory + "/validation-context"));
+    // Dynamic evaluation belongs after its parent's prerequisite recipes.
+    // FORCE/no-op nodes remain eligible; generated-header producers retain
+    // their ordinary recursive evaluation boundary.
+    bool allow_dynamic = kbuild_dependencies_.complete;
+    std::vector<const DepNode*> prerequisite_nodes;
+    for (const auto& dependency : node.deps)
+      prerequisite_nodes.push_back(dependency.second);
+    for (const auto& dependency : node.order_onlys)
+      prerequisite_nodes.push_back(dependency.second);
+    std::unordered_set<const DepNode*> checked_prerequisites;
+    while (allow_dynamic && !prerequisite_nodes.empty()) {
+      const DepNode* dependency = prerequisite_nodes.back();
+      prerequisite_nodes.pop_back();
+      if (!checked_prerequisites.insert(dependency).second)
+        continue;
+      for (const auto& candidate : nodes_)
+        if (candidate.node == dependency && !candidate.commands.empty())
+          for (const auto& command : candidate.commands)
+            if (command.cmd != ":" || !command.runtime_sidecar.empty() ||
+                command.echo || !command.environment.empty() ||
+                !command.unset_environment.empty())
+              allow_dynamic = false;
+      for (const auto& input : dependency->deps)
+        prerequisite_nodes.push_back(input.second);
+      for (const auto& input : dependency->order_onlys)
+        prerequisite_nodes.push_back(input.second);
+    }
+    if (dynamic_import && !allow_dynamic)
+      return false;
     if (generated_graph) {
       const int import_status =
-          GenerateImportedGraph(import_command, arguments, directory, gate);
+          GenerateImportedGraph(import_command, arguments, directory, gate,
+                                dynamic_import, allow_dynamic);
       if (import_status != 0)
         return false;
+      import_source_identities_.clear();
       bytes.clear();
       if (!ReadGraphCache(directory + "/manifest", &bytes))
         return false;
@@ -2213,6 +2313,10 @@ class NinjaGenerator {
       if (!ConsumeGraphString(&view, &kind) ||
           !ConsumeGraphString(&view, &path))
         return false;
+      if (kind == "dynamic" && path == "1") {
+        dynamic_import = true;
+        continue;
+      }
       if (kind == "output")
         outputs.push_back(path);
       else if (kind == "source")
@@ -2232,26 +2336,24 @@ class NinjaGenerator {
     if (generated_graph) {
       std::sort(sources.begin(), sources.end());
       std::string validation;
-      AppendGraphString("import-validation-v3", &validation);
+      AppendGraphString("import-validation-v4", &validation);
       std::unordered_set<std::string> validated_sources;
       for (const std::string& path : sources) {
-        struct stat source_metadata;
-        if (stat(path.c_str(), &source_metadata) != 0)
+        const std::string identity = ImportSourceIdentity(path);
+        if (identity == "unreadable")
           return false;
         AppendGraphString(path, &validation);
-        AppendGraphString(GetFileIdentityFromStat(source_metadata),
-                          &validation);
+        AppendGraphString(identity, &validation);
         validated_sources.insert(path);
       }
       for (const std::string& path : scoped_sources) {
         if (!validated_sources.insert(path).second)
           continue;
-        struct stat source_metadata;
-        if (stat(path.c_str(), &source_metadata) != 0)
+        const std::string identity = ImportSourceIdentity(path);
+        if (identity == "unreadable")
           return false;
         AppendGraphString(path, &validation);
-        AppendGraphString(GetFileIdentityFromStat(source_metadata),
-                          &validation);
+        AppendGraphString(identity, &validation);
       }
       if (!WriteGraphCache(directory + "/cache-validation", validation))
         return false;
@@ -2327,6 +2429,48 @@ class NinjaGenerator {
       return !S_ISLNK(st.st_mode) && (!S_ISREG(st.st_mode) || st.st_nlink == 1);
     };
     std::unordered_set<std::string> claimed;
+    std::unordered_map<std::string, size_t> proxy_claims;
+    std::vector<std::pair<Symbol, std::string>> proxies;
+    for (const NinjaNode& other : nodes_) {
+      const DepNode& candidate = *other.node;
+      if (candidate.deps.size() != 1 ||
+          candidate.deps.front().second != &node ||
+          !candidate.order_onlys.empty() || !candidate.validations.empty() ||
+          !candidate.implicit_outputs.empty() || candidate.depfile_var ||
+          candidate.ninja_pool_var || candidate.tags_var ||
+          candidate.is_restat || candidate.precious ||
+          candidate.is_notparallel || !candidate.wait_groups.empty())
+        continue;
+      if (!other.commands.empty() &&
+          !(other.commands.size() == 1 && other.commands.front().cmd == ":" &&
+            !other.commands.front().echo && !other.commands.front().force_run &&
+            other.commands.front().runtime_sidecar.empty() &&
+            other.commands.front().environment.empty() &&
+            other.commands.front().unset_environment.empty()))
+        continue;
+      std::string absolute;
+      AbsPath(candidate.output.str(), &absolute);
+      if (std::find(outputs.begin(), outputs.end(), absolute) == outputs.end())
+        continue;
+      std::string ancestor = absolute, suffix;
+      char resolved[PATH_MAX];
+      while (!realpath(ancestor.c_str(), resolved)) {
+        if (errno != ENOENT)
+          return false;
+        suffix = "/" + std::string(Basename(ancestor)) + suffix;
+        ancestor = std::string(Dirname(ancestor));
+        if (ancestor.empty())
+          return false;
+      }
+      ++proxy_claims["path:" + std::string(resolved) + suffix];
+      struct stat metadata;
+      if (stat(absolute.c_str(), &metadata) == 0 && S_ISREG(metadata.st_mode))
+        ++proxy_claims["inode:" + std::to_string(metadata.st_dev) + ":" +
+                       std::to_string(metadata.st_ino)];
+      proxies.emplace_back(candidate.output, std::move(absolute));
+    }
+    std::string transferred_output;
+    AbsPath(node.output.str(), &transferred_output);
     auto claim_output = [&](const std::string& path, bool reject_duplicate) {
       // Aggressive imports may use filesystem aliases, but two graphs must
       // never acquire the same physical output through different spellings.
@@ -2344,33 +2488,55 @@ class NinjaGenerator {
       }
       std::string canonical = std::string(resolved) + suffix;
       NormalizePath(&canonical);
-      bool unique = claimed.insert("path:" + canonical).second;
+      const std::string path_key = "path:" + canonical;
+      bool unique = claimed.insert(path_key).second;
+      const bool transfer = reject_duplicate && path == transferred_output;
+      if (!reject_duplicate)
+        ++parent_output_claim_counts_[path_key];
+      if (reject_duplicate)
+        unique &= (parent_output_claim_counts_[path_key] <=
+                   proxy_claims[path_key] + (transfer ? 1 : 0)) &&
+                  !imported_output_claims_.count(path_key);
       struct stat metadata;
-      if (stat(path.c_str(), &metadata) == 0 && S_ISREG(metadata.st_mode))
-        unique &= claimed
-                      .insert("inode:" + std::to_string(metadata.st_dev) + ":" +
-                              std::to_string(metadata.st_ino))
-                      .second;
+      if (stat(path.c_str(), &metadata) == 0 && S_ISREG(metadata.st_mode)) {
+        const std::string inode_key =
+            "inode:" + std::to_string(metadata.st_dev) + ":" +
+            std::to_string(metadata.st_ino);
+        unique &= claimed.insert(inode_key).second;
+        if (!reject_duplicate)
+          ++parent_output_claim_counts_[inode_key];
+        if (reject_duplicate)
+          unique &= (parent_output_claim_counts_[inode_key] <=
+                     proxy_claims[inode_key] + (transfer ? 1 : 0)) &&
+                    !imported_output_claims_.count(inode_key);
+      }
+      if (!unique && reject_duplicate)
+        LOG_STAT(
+            "import ownership collision: %s (parents=%zu proxies=%zu "
+            "imported=%zu)",
+            path.c_str(), parent_output_claim_counts_[path_key],
+            proxy_claims[path_key], imported_output_claims_.count(path_key));
       return unique || !reject_duplicate;
     };
-    for (const auto& output : imported_outputs_)
-      if (!claim_output(output, false))
-        return false;
     const bool allow_filesystem_aliases = g_flags.use_ninja_phony_output;
-    for (const NinjaNode& other : nodes_) {
-      std::string absolute;
-      AbsPath(other.node->output.str(), &absolute);
-      if (!allow_filesystem_aliases && !unambiguous_output(absolute))
-        return false;
-      if (!claim_output(absolute, false))
-        return false;
-      for (Symbol output : other.node->implicit_outputs) {
-        AbsPath(output.str(), &absolute);
+    if (!parent_output_claims_ready_) {
+      for (const NinjaNode& other : nodes_) {
+        std::string absolute;
+        AbsPath(other.node->output.str(), &absolute);
         if (!allow_filesystem_aliases && !unambiguous_output(absolute))
           return false;
         if (!claim_output(absolute, false))
           return false;
+        for (Symbol output : other.node->implicit_outputs) {
+          AbsPath(output.str(), &absolute);
+          if (!allow_filesystem_aliases && !unambiguous_output(absolute))
+            return false;
+          if (!claim_output(absolute, false))
+            return false;
+        }
       }
+      claimed.clear();
+      parent_output_claims_ready_ = true;
     }
     for (const auto& output : outputs)
       if ((!allow_filesystem_aliases && !unambiguous_output(output)) ||
@@ -2398,6 +2564,9 @@ class NinjaGenerator {
     }
     for (const auto& output : outputs)
       imported_outputs_.insert(output);
+    imported_output_claims_.insert(claimed.begin(), claimed.end());
+    for (const auto& proxy : proxies)
+      imported_proxy_outputs_[proxy.first] = proxy.second;
     out << "build " << EscapeNinja(gate) << ": phony";
     for (const auto& input : node.deps)
       out << ' ' << EscapeBuildTarget(input.first);
@@ -2428,6 +2597,11 @@ class NinjaGenerator {
     import_artifacts_.push_back(directory + "/manifest");
     import_artifacts_.push_back(directory + "/cache-validation");
     MakefileCacheManager::Get().RequireEnvironmentValidation();
+    if (dynamic_import) {
+      const std::string context = directory + "/validation-context";
+      AddImportValidationPlan(context);
+      MakefileCacheManager::Get().AddGeneratedGraphDep(context);
+    }
     return true;
   }
 
@@ -2476,6 +2650,8 @@ class NinjaGenerator {
     if (!valid) {
       prepared_imports_.clear();
       imported_outputs_.clear();
+      imported_output_claims_.clear();
+      imported_proxy_outputs_.clear();
       LOG_STAT("recursive import: conservative graph-wide fallback");
       return;
     }
@@ -2503,12 +2679,60 @@ class NinjaGenerator {
            stat(dependency.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
   }
 
+  void ScopeRecursiveSourceInputs() {
+    if (kbuild_dependencies_.complete) {
+      std::string scope = working_dir_;
+      for (std::string_view variable : g_flags.cl_vars)
+        if (HasPrefix(variable, "obj=") && variable.substr(4) != ".") {
+          const std::string object(variable.substr(4));
+          scope = object.empty() || object.front() != '/'
+                      ? working_dir_ + "/" + object
+                      : object;
+          NormalizePath(&scope);
+          break;
+        }
+      recursive_source_inputs_.clear();
+      for (const std::string& path : kbuild_dependencies_.Inputs(scope))
+        recursive_source_inputs_.push_back(Intern(path));
+    }
+    if (!recursive_source_inputs_.empty())
+      recursive_source_group_ = Intern(std::string(g_flags.import_root) +
+                                       "/.recursive-source-inputs");
+  }
+
   void CollectRecursiveSourceInputs() {
     // Imported Kbuild graphs keep some Makefile.build recursion behind a
     // runtime recipe, so Ninja cannot see the source prerequisites recorded
     // in Kbuild's per-object .cmd files. Feed the recursive file targets a
     // source timestamp aggregate so a source touch wakes that hidden check.
     std::string source_root;
+    if (g_flags.import_root) {
+      const char* inventory_path = getenv("KATI_IMPORT_SOURCE_LIST");
+      std::string inventory;
+      if (inventory_path && ReadGraphCache(inventory_path, &inventory)) {
+        std::string_view view(inventory);
+        std::string version;
+        if (ConsumeGraphString(&view, &version) &&
+            version == "recursive-source-inventory-v2" &&
+            ConsumeGraphString(&view, &source_root)) {
+          while (!view.empty()) {
+            std::string path;
+            if (!ConsumeGraphString(&view, &path)) {
+              recursive_source_inputs_.clear();
+              source_root.clear();
+              break;
+            }
+            recursive_source_inputs_.push_back(Intern(path));
+          }
+          if (!source_root.empty()) {
+            recursive_source_root_ = source_root;
+            ScopeRecursiveSourceInputs();
+            return;
+          }
+        }
+      }
+      return;
+    }
     for (const char* makefile : g_flags.makefiles) {
       std::string absolute;
       AbsPath(makefile, &absolute);
@@ -2529,30 +2753,30 @@ class NinjaGenerator {
     if (source_root.empty())
       return;
     recursive_source_root_ = source_root;
-    if (g_flags.import_root) {
-      const char* inventory_path = getenv("KATI_IMPORT_SOURCE_LIST");
-      std::string inventory;
-      if (inventory_path && ReadGraphCache(inventory_path, &inventory)) {
-        std::string_view view(inventory);
-        std::string version;
-        if (ConsumeGraphString(&view, &version) &&
-            version == "recursive-source-inventory-v1") {
-          while (!view.empty()) {
-            std::string path;
-            if (!ConsumeGraphString(&view, &path)) {
-              recursive_source_inputs_.clear();
-              break;
-            }
-            recursive_source_inputs_.push_back(Intern(path));
-          }
-          if (!recursive_source_inputs_.empty()) {
-            recursive_source_group_ = Intern(std::string(g_flags.import_root) +
-                                             "/.recursive-source-inputs");
-            return;
-          }
-        }
-      }
-    }
+    kbuild_dependencies_.Read(working_dir_, source_root);
+    const std::string tree_bytes = kbuild_dependencies_.TreeProof();
+    const std::string tree_path =
+        GetFilename(".kati-kbuild-tree-") + GraphDigest(tree_bytes);
+    if (!WriteGraphCache(tree_path, tree_bytes))
+      ERROR("cannot publish Kbuild output inventory");
+    std::string absolute_tree_path;
+    AbsPath(tree_path, &absolute_tree_path);
+    AddImportValidationPlan(absolute_tree_path);
+    MakefileCacheManager::Get().AddGeneratedGraphDep(absolute_tree_path);
+    LOG_STAT("Kbuild dependency frontier: %zu owners, complete=%d",
+             kbuild_dependencies_.objects.size(),
+             kbuild_dependencies_.complete);
+    const std::string dependency_bytes = kbuild_dependencies_.Encode();
+    const std::string dependency_path =
+        GetFilename(".kati-kbuild-dependencies-") +
+        GraphDigest(dependency_bytes);
+    if (!WriteGraphCache(dependency_path, dependency_bytes))
+      ERROR("cannot publish Kbuild dependency frontier");
+    std::string absolute_dependency_path;
+    AbsPath(dependency_path, &absolute_dependency_path);
+    setenv("KATI_IMPORT_DEPENDENCY_INDEX", absolute_dependency_path.c_str(), 1);
+    for (const std::string& input : kbuild_dependencies_.Inputs(working_dir_))
+      recursive_source_inputs_.push_back(Intern(input));
     // Only the root generator enumerates the tree. Recursive imported
     // frontends load this immutable inventory instead of repeating a walk of
     // every Kbuild source directory.
@@ -2633,7 +2857,8 @@ class NinjaGenerator {
                                        "/.recursive-source-inputs");
     if (!g_flags.import_root && !recursive_source_inputs_.empty()) {
       std::string inventory;
-      AppendGraphString("recursive-source-inventory-v1", &inventory);
+      AppendGraphString("recursive-source-inventory-v2", &inventory);
+      AppendGraphString(source_root, &inventory);
       for (Symbol input : recursive_source_inputs_)
         AppendGraphString(input.str(), &inventory);
       const std::string inventory_path =
@@ -3023,8 +3248,15 @@ class NinjaGenerator {
     // internal dependency graphs are opaque to this Ninja graph, so Ninja
     // cannot otherwise know about shared outputs produced by sibling
     // recursive invocations.
-    if (!g_flags.import_root)
+    if (!g_flags.import_root) {
       out << "pool local_pool\n depth = 1\n\n";
+      std::string lock_path;
+      AbsPath(GetFilename(".kati-recursion-lock%s"), &lock_path);
+      out << "omktr_recursion_lock = "
+          << EscapeNinja("${KATI_NINJA_RECURSION_STATE:-" +
+                         ShellQuote(lock_path) + "}")
+          << "\n\n";
+    }
 
     if (!used_envs_.empty()) {
       out << "# Environment variables used:\n";
@@ -3076,7 +3308,8 @@ class NinjaGenerator {
         out << "build " << EscapeBuildTarget(recursive_source_group_)
             << ": phony";
         for (Symbol input : recursive_source_inputs_)
-          out << ' ' << EscapeBuildTarget(input);
+          if (ImportSourceIdentity(std::string(input.str())) != "missing")
+            out << ' ' << EscapeBuildTarget(input);
         out << "\n\n";
       }
       for (const auto& node : nodes_) {
@@ -3144,7 +3377,13 @@ class NinjaGenerator {
       // MFLAGS is regenerated from this invocation's options, not inherited
       // input. Comparing it with the caller's environment forces false regen.
       if (e.str() == "MFLAGS" || e.str() == "CODEX_TOOL_CALL_ID" ||
+          e.str() == "KATI_NINJA_RECURSION_STATE" ||
           e.str() == "KATI_IMPORT_SOURCE_DIRTY" ||
+          e.str() == "KATI_IMPORT_SOURCE_FINGERPRINT" ||
+          e.str() == "KATI_IMPORT_DEPENDENCY_INDEX" ||
+          e.str() == "KATI_IMPORT_OBSERVED" ||
+          e.str() == "KATI_IMPORT_VALIDATE_ONLY" ||
+          e.str() == "KATI_IMPORT_STATIC_ONLY" ||
           e.str() == "KATI_IMPORT_SOURCE_LIST")
         continue;
       std::string_view val(getenv(e.c_str()));
@@ -3188,7 +3427,8 @@ class NinjaGenerator {
           symbol.str() == "KATI_RECIPE_CHANGED" ||
           symbol.str() == "KATI_NINJA_GOALS" ||
           symbol.str() == "KATI_NINJA_DEFAULT_GOALS" ||
-          symbol.str() == "KATI_NINJA_LOAD_STATE")
+          symbol.str() == "KATI_NINJA_LOAD_STATE" ||
+          symbol.str() == "KATI_NINJA_RECURSION_STATE")
         continue;
       if (!IsShellIdentifier(symbol.str())) {
         continue;
@@ -3325,6 +3565,12 @@ class NinjaGenerator {
   void GenerateStamp(const std::string& orig_args) {
     std::unordered_set<std::string> makefiles;
     MakefileCacheManager::Get().GetAllFilenames(&makefiles);
+    const std::vector<std::string> metadata_paths(makefiles.begin(),
+                                                  makefiles.end());
+    const auto metadata = StatFiles(metadata_paths);
+    std::unordered_map<std::string, std::string> metadata_identities;
+    for (size_t i = 0; i < metadata_paths.size(); ++i)
+      metadata_identities.emplace(metadata_paths[i], metadata[i].Identity());
     std::unordered_set<std::string> generated_directories;
     auto add_generated_directory = [&](std::string directory) {
       if (directory.empty())
@@ -3371,7 +3617,7 @@ class NinjaGenerator {
       auto record = [&](const std::string& path, bool parsed_makefile) {
         AppendGraphString(path, &proof);
         AppendGraphString(parsed_makefile ? GetFileContentIdentity(path)
-                                          : GetFileIdentity(path),
+                                          : metadata_identities.at(path),
                           &proof);
       };
       for (const auto& path : makefiles) {
@@ -3409,7 +3655,7 @@ class NinjaGenerator {
 
     size_t r = fwrite(&start_time_, sizeof(start_time_), 1, fp);
     CHECK(r == 1);
-    CHECK(fwrite("KAT5", 1, 4, fp) == 4);
+    CHECK(fwrite("KAT6", 1, 4, fp) == 4);
     DumpInt(fp, evaluation);
     // Generation artifacts certify acceptance, but are not Makefile inputs.
     // Keep their records separate so stamp inspection retains that contract.
@@ -3443,9 +3689,9 @@ class NinjaGenerator {
       const bool parsed =
           MakefileCacheManager::Get().IsParsedMakefile(makefile);
       const std::string identity =
-          generated ? "generated:" + GetFileIdentity(makefile)
+          generated ? "generated:" + metadata_identities.at(makefile)
           : parsed  ? "content:" + GetFileContentIdentity(makefile)
-                    : GetFileIdentity(makefile);
+                    : metadata_identities.at(makefile);
       DumpString(fp, identity);
     }
 
@@ -3455,7 +3701,15 @@ class NinjaGenerator {
     }
     const bool validate_environment =
         MakefileCacheManager::Get().requires_environment_validation();
-    DumpInt(fp, used_envs_.size() + (validate_environment ? 1 : 0));
+    size_t extra_flags = 0;
+    for (const char* name : {"MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES"})
+      extra_flags += used_envs_.count(name) == 0;
+    auto caller_identity = [](const std::string& name) {
+      const std::string* value = InvocationEnvironmentValue(name);
+      return "caller-v1:" + (value ? "1" + *value : std::string("0"));
+    };
+    DumpInt(fp,
+            used_envs_.size() + (validate_environment ? 1 : 0) + extra_flags);
     if (validate_environment) {
       // Empty names cannot be exported; reserve one record for the complete
       // caller environment observed by deferred recipes and imported children.
@@ -3464,8 +3718,16 @@ class NinjaGenerator {
     }
     for (const auto& [key, value] : used_envs_) {
       DumpString(fp, key);
-      DumpString(fp, value);
+      DumpString(fp,
+                 key == "MAKEFLAGS" || key == "MFLAGS" || key == "MAKEOVERRIDES"
+                     ? caller_identity(key)
+                     : value);
     }
+    for (const char* name : {"MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES"})
+      if (!used_envs_.count(name)) {
+        DumpString(fp, name);
+        DumpString(fp, caller_identity(name));
+      }
 
     auto& globs = GetAllGlobCache();
     DumpInt(fp, globs.size());
@@ -3522,6 +3784,9 @@ class NinjaGenerator {
     }
 
     DumpString(fp, orig_args);
+    DumpInt(fp, ImportValidationPlans().size());
+    for (const auto& plan : ImportValidationPlans())
+      DumpString(fp, plan);
 
     if (!SealGraphStamp(fp)) {
       fclose(fp);
@@ -3547,6 +3812,12 @@ class NinjaGenerator {
   std::unordered_set<std::string> import_directories_;
   SymbolSet imported_phony_aliases_;
   std::vector<Symbol> recursive_source_inputs_;
+  KbuildDependencyIndex kbuild_dependencies_;
+  std::unordered_map<std::string, std::string> import_source_identities_;
+  bool parent_output_claims_ready_ = false;
+  std::unordered_map<Symbol, std::string> imported_proxy_outputs_;
+  std::unordered_map<std::string, size_t> parent_output_claim_counts_;
+  std::unordered_set<std::string> imported_output_claims_;
   std::string recursive_source_root_;
   std::string recursive_source_fingerprint_;
   bool recursive_sources_changed_ = false;

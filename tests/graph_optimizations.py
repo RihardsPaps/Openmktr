@@ -21,6 +21,267 @@ BINARY = Path(os.environ.get("OMKTR_BINARY", Path(__file__).resolve().parents[1]
 
 
 class GraphOptimizations(unittest.TestCase):
+    def test_opaque_compiler_commands_run_parallel_but_recursion_stays_serial(self):
+        (self.root / "worker.py").write_text(
+            "import fcntl,json,time\n"
+            "def update(delta):\n"
+            " with open('counter','a+') as stream:\n"
+            "  fcntl.flock(stream,fcntl.LOCK_EX);stream.seek(0);data=stream.read()\n"
+            "  state=json.loads(data) if data else dict(active=0,peak=0)\n"
+            "  state['active']+=delta;state['peak']=max(state['peak'],state['active'])\n"
+            "  stream.seek(0);stream.truncate();json.dump(state,stream)\n"
+            "update(1);time.sleep(.06);update(-1)\n")
+        (self.root / "seed").touch()
+        goals = " ".join(f"task{i}" for i in range(12))
+        options = ("build", "-j4", "--graph_optimizations=aggressive", "all")
+        self.makefile(f"MODE := RUN\nRUN := python worker.py\n.PHONY: all {goals}\n"
+                      f"all: {goals}\n{goals}: seed\n\t@$($(MODE))\n")
+        self.run_tool(*options)
+        state = json.loads((self.root / "counter").read_text())
+        self.assertEqual(state["active"], 0)
+        self.assertGreaterEqual(state["peak"], 3)
+        self.assertLessEqual(state["peak"], 4)
+        (self.root / "counter").unlink()
+        (self.root / "child.mk").write_text(".PHONY: all\nall:\n\t@python worker.py\n")
+        self.makefile(f"MODE := RUN\nRUN := {BINARY} -f child.mk all\n"
+                      f".PHONY: all known {goals}\nall: {goals} known\n"
+                      f"{goals}: seed\n\t@$($(MODE))\n"
+                      f"known: seed\n\t@{BINARY} -k -f child.mk all\n")
+        self.run_tool(*options)
+        state = json.loads((self.root / "counter").read_text())
+        self.assertEqual(state, dict(active=0, peak=1))
+        # Native nested Ninja launchers own separate admission files; their
+        # deferred recipes must not wait on the outer recursive recipe's lock.
+        (self.root / "nested").mkdir()
+        shutil.copyfile(self.root / "child.mk", self.root / "nested/Makefile")
+        shutil.copyfile(self.root / "worker.py", self.root / "nested/worker.py")
+        self.makefile(f"MODE := RUN\nRUN := {BINARY} build -C nested all\n"
+                      "all: seed\n\t@$($(MODE))\n")
+        self.run_tool(*options)
+
+    def kbuild_markers(self):
+        (self.root / "scripts").mkdir()
+        (self.root / "scripts/Kbuild.include").touch()
+        (self.root / "init").mkdir()
+        (self.root / "init/main.c").write_text("source\n")
+        (self.root / "init/.main.o.cmd").write_text(
+            "source_init/main.o := init/main.c\n"
+            "deps_init/main.o := init/main.c\n")
+
+    def test_recursive_import_binds_current_automatic_target(self):
+        self.kbuild_markers()
+        (self.root / "first").touch()
+        (self.root / "child.mk").write_text(
+            "MODE := $(shell printf ready)\n"
+            ".PHONY: all\nall: $(obj)/result\n"
+            "$(obj)/result: init/main.c\n\t@printf '%s' '$(obj):$(MODE)' > $@\n")
+        self.makefile("export PROBE = $(shell :)\n"
+                      ".PHONY: all FORCE\nall: init\nFORCE:\n"
+                      "first:\n\t@:\ninit: first FORCE\n"
+                      "\t@$(MAKE) -f child.mk obj=$@ all\n")
+        for _ in range(2):
+            self.run_tool("build", "-j4", "--graph_optimizations=aggressive",
+                          "--use_ninja_phony_output", "all")
+        self.assertEqual((self.root / "init/result").read_text(), "init:ready")
+        self.assertFalse((self.root / "first/result").exists())
+        self.assertTrue(any("init/result" in path.read_text()
+                            for path in (self.root / ".openmktr/.imports").rglob("build.ninja")))
+
+    def test_kbuild_dynamic_validation_and_noop_output_proxy(self):
+        self.kbuild_markers()
+        (self.root / "mode").write_text("one")
+        (self.root / "child.mk").write_text(
+            "MODE := $(shell cat mode)\nINPUTS := $(wildcard *.src)\n"
+            "all: init/main.o\ninit/main.o: init/main.c $(INPUTS)\n"
+            "\t@printf '%s' '$(MODE):$(INPUTS)' > $@\n")
+        self.makefile(".PHONY: all recursive FORCE\nall: init/main.o\nFORCE:\n"
+                      "recursive: FORCE\n\t@$(MAKE) -f child.mk all\n"
+                      "init/main.o: recursive\n\t@:\n")
+        command = ("build", "-j4", "--kati_stats", "--graph_optimizations=aggressive",
+                   "--use_ninja_phony_output", "all")
+        self.run_tool(*command)
+        self.run_tool(*command)
+        self.assertEqual((self.root / "init/main.o").read_text(), "one:")
+        # Clean builds add fixdep records after frontend generation. Refresh
+        # the immutable index on the next invocation, even with no source edit.
+        (self.root / "outside-input.inc").touch()
+        (self.root / "init/new.o").touch()
+        (self.root / "init/.new.o.cmd").write_text(
+            "source_init/new.o := init/main.c\n"
+            "deps_init/new.o := outside-input.inc\n")
+        promoted = self.run_tool(*command)
+        self.assertIn("2 owners", promoted.stdout)
+        (self.root / "mode").write_text("two")
+        (self.root / "new.src").touch()
+        self.run_tool(*command)
+        self.assertEqual((self.root / "init/main.o").read_text(), "two:new.src")
+        (self.root / "init/main.o").unlink()
+        self.run_tool(*command)
+        self.assertEqual((self.root / "init/main.o").read_text(), "two:new.src")
+
+    def test_dynamic_import_waits_for_parent_producers_and_rejects_effects(self):
+        self.kbuild_markers()
+        (self.root / "child.mk").write_text(
+            "MODE := $(shell if test -f ready; then printf x >> effects; fi)\n"
+            ".PHONY: all\nall:\n\t@cp ready init/result\n")
+        self.makefile(".PHONY: all recursive\nall: recursive\n"
+                      "recursive: ready\n\t@$(MAKE) -f child.mk all\n"
+                      "ready: seed\n\t@cp $< $@\n")
+        (self.root / "seed").write_text("ready")
+        command = ("build", "--graph_optimizations=aggressive",
+                   "--use_ninja_phony_output", "all")
+        self.run_tool(*command)
+        self.assertEqual((self.root / "effects").read_text(), "x")
+        self.assertEqual((self.root / "init/result").read_text(), "ready")
+        # Remove the producing boundary: speculative evaluation must still
+        # reject writes before they happen, then execute the ordinary child once.
+        self.makefile(".PHONY: all\nall:\n\t@$(MAKE) -f child.mk all\n")
+        self.run_tool(*command)
+        self.assertEqual((self.root / "effects").read_text(), "xx")
+
+    def test_deferred_recipe_diagnostics_do_not_invalidate_frontend(self):
+        (self.root / "input").touch()
+        self.makefile("all: output\noutput: input\n"
+                      "\t@$(info recipe-info)$(warning recipe-warning)cp $< $@\n")
+        command = ("build", "--graph_optimizations=aggressive", "--kati_stats", "all")
+        first = self.run_tool(*command)
+        self.assertEqual(first.stdout.count("recipe-info"), 1, first.stdout)
+        self.assertEqual(first.stdout.count("recipe-warning"), 1, first.stdout)
+        second = self.run_tool(*command)
+        self.assertIn("No need to regenerate", second.stdout)
+        self.assertNotIn("recipe-info", second.stdout)
+        time.sleep(0.02)
+        (self.root / "input").touch()
+        third = self.run_tool(*command)
+        self.assertEqual(third.stdout.count("recipe-info"), 1, third.stdout)
+
+    def test_grouped_include_certificate_tracks_every_peer(self):
+        (self.root / "seed").write_text("VALUE := first\n")
+        self.makefile("include config.mk\n"
+                      "config.mk: .KATI_IMPLICIT_OUTPUTS := peer\nconfig.mk: seed\n"
+                      "\t@cp $< config.mk; cp $< peer; printf x >> remakes\n"
+                      ".PHONY: all\nall:\n\t@printf '%s' '$(VALUE)' > result\n")
+        command = ("build", "--graph_optimizations=aggressive", "--kati_stats", "all")
+        self.run_tool(*command)
+        self.run_tool(*command)
+        self.assertIn("No need to regenerate", self.run_tool(*command).stdout)
+        self.assertEqual((self.root / "remakes").read_text(), "x")
+        (self.root / "peer").unlink()
+        invalidated = self.run_tool(*command)
+        self.assertNotIn("No need to regenerate", invalidated.stdout)
+        # Only config.mk is requested here. Ordinary Make evaluation may
+        # leave an unrequested peer absent; the certificate must still expire.
+        self.assertEqual((self.root / "remakes").read_text(), "x")
+        time.sleep(0.02)
+        (self.root / "seed").write_text("VALUE := second\n")
+        self.run_tool(*command)
+        self.assertEqual((self.root / "result").read_text(), "second")
+
+    def test_caller_recursion_flags_survive_makefile_mutation(self):
+        self.makefile("MAKEFLAGS += --no-print-directory\n"
+                      "MAKEOVERRIDES += local=1\nMFLAGS += local-flag\n"
+                      ".PHONY: all\nall:\n"
+                      "\t@printf '%s' '$(MAKEOVERRIDES)|$(MFLAGS)|$(obj)' > result\n")
+        command = ("build", "--graph_optimizations=aggressive", "--kati_stats", "obj=init", "all")
+        env = dict(os.environ)
+        for key in ("MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES"):
+            env.pop(key, None)
+        self.run_tool(*command, env=env)
+        self.assertIn("No need to regenerate", self.run_tool(*command, env=env).stdout)
+        env["MAKEOVERRIDES"] = "external=changed"
+        changed = self.run_tool(*command, env=env)
+        self.assertNotIn("No need to regenerate", changed.stdout)
+        self.assertIn("No need to regenerate", self.run_tool(*command, env=env).stdout)
+
+    def test_kbuild_frontiers_rebuild_owners_and_generated_prerequisites(self):
+        source = self.root / "source"
+        build = self.root / "build"
+        (source / "scripts").mkdir(parents=True)
+        (source / "scripts/Kbuild.include").touch()
+        build.mkdir()
+        for scope in ("init", "other"):
+            (source / scope).mkdir()
+            (source / scope / "main.c").write_text(scope + " source\n")
+            (source / scope / "local.h").write_text(scope + " header\n")
+            (build / scope).mkdir()
+            (build / scope / ".main.o.cmd").write_text(
+                f"source_{scope}/main.o := {source}/{scope}/main.c\n"
+                f"deps_{scope}/main.o := \\\n  {source}/{scope}/main.c \\\n  {source}/{scope}/local.h \\\n  generated.h \\\n  $(wildcard include/config/UNSET)\n")
+        (build / "seed").write_text("generated one\n")
+        (build / "generated.h").write_text("generated one\n")
+        (source / "child.mk").write_text(
+            ".PHONY: all\nall: $(obj)/built-in.a\n"
+            "$(obj)/built-in.a: $(obj)/main.o\n\t@cp $< $@\n"
+            f"$(obj)/main.o: {source}/$(obj)/main.c {source}/$(obj)/local.h generated.h\n"
+            "\t@cat $^ > $@\n")
+        (source / "Makefile").write_text(
+            ".PHONY: all FORCE\nFORCE:\nall: init/built-in.a other/built-in.a\n"
+            "init/built-in.a: FORCE generated.h\n"
+            f"\t@$(MAKE) -f {source}/child.mk obj=init all\n"
+            "other/built-in.a: FORCE generated.h\n"
+            f"\t@$(MAKE) -f {source}/child.mk obj=other all\n")
+        self.root = build
+        command = ("build", "-j4", "-f", str(source / "Makefile"),
+                   "--graph_optimizations=aggressive", "--use_ninja_phony_output",
+                   "--kati_stats", "all")
+        self.run_tool(*command)
+        self.run_tool(*command)
+        sibling = build / "other/main.o"
+        sibling_stamp = sibling.stat().st_mtime_ns
+        graphs = {p: p.stat().st_mtime_ns for p in (build / ".openmktr").rglob("build.ninja")
+                  if "other/main.o" in p.read_text() and "init/main.o" not in p.read_text()}
+        self.assertTrue(graphs)
+        time.sleep(0.02)
+        (source / "init/main.c").write_text("updated init source\n")
+        result = self.run_tool(*command)
+        self.assertIn("covered changes", result.stdout)
+        self.assertIn("updated init source", (build / "init/main.o").read_text())
+        self.assertEqual(sibling.stat().st_mtime_ns, sibling_stamp)
+        for path, stamp in graphs.items():
+            self.assertEqual(path.stat().st_mtime_ns, stamp)
+        time.sleep(0.02)
+        (source / "init/local.h").write_text("updated init header\n")
+        self.run_tool(*command)
+        self.assertIn("updated init header", (build / "init/main.o").read_text())
+        self.assertEqual(sibling.stat().st_mtime_ns, sibling_stamp)
+        with (source / "Makefile").open("a") as output:
+            output.write("generated.h: seed\n\t@cp $< $@\n")
+        time.sleep(0.02)
+        (build / "seed").write_text("generated two\n")
+        self.run_tool(*command)
+        for scope in ("init", "other"):
+            self.assertIn("generated two", (build / scope / "main.o").read_text())
+        (build / "init/main.o").unlink()
+        self.run_tool(*command)
+        self.assertTrue((build / "init/main.o").is_file())
+        # Unknown fixdep syntax must keep the complete recursive correctness
+        # path instead of claiming that an incomplete index proves ownership.
+        (build / "init/.main.o.cmd").write_text("deps_init/main.o := $(UNKNOWN)\n")
+        time.sleep(0.02)
+        (source / "init/main.c").write_text("fallback init source\n")
+        result = self.run_tool(*command)
+        self.assertNotIn("covered changes", result.stdout)
+        self.assertIn("fallback init source", (build / "init/main.o").read_text())
+
+    def test_large_metadata_batch_keeps_content_and_missing_file_validation(self):
+        files = [f"config{i}.mk" for i in range(2300)]
+        for name in files:
+            (self.root / name).touch()
+        (self.root / files[-1]).write_text("VALUE := first\n")
+        self.makefile("-include absent.mk\ninclude " + " ".join(files) +
+                      "\n.PHONY: all\nall:\n\t@printf '%s' '$(VALUE)' > result\n")
+        self.run_tool("build")
+        self.run_tool("build")
+        original = (self.root / files[-1]).stat()
+        (self.root / files[-1]).write_text("VALUE := second\n")
+        os.utime(self.root / files[-1], ns=(original.st_atime_ns, original.st_mtime_ns))
+        self.run_tool("build")
+        self.assertEqual((self.root / "result").read_text(), "second")
+        (self.root / "absent.mk").write_text("VALUE := third\n")
+        (self.root / files[-1]).write_text("")
+        self.run_tool("build")
+        self.assertEqual((self.root / "result").read_text(), "third")
+
     def test_shell_validation_stops_before_obsolete_conditional_effects(self):
         (self.root / "mode").write_text("old")
         self.makefile("MODE := $(shell cat mode)\n"

@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Keep deferred recipe diagnostics from invalidating Makefile evaluation.
 // Own invocation state and publish coherent generations with typed freshness.
 // Separate runtime services and preserve scoped resource ownership.
 // Emit deferred diagnostics with a fixed POSIX printf format.
@@ -1063,7 +1064,8 @@ static std::string QuoteDiagnostic(std::string_view value) {
 }
 
 void InfoFunc(const std::vector<Value*>& args, Evaluator* ev, std::string*) {
-  MakefileCacheManager::Get().RequireEvaluation();
+  if (!ev->avoid_io())
+    MakefileCacheManager::Get().RequireEvaluation();
   const std::string&& a = args[0]->Eval(ev);
   if (ev->avoid_io()) {
     ev->add_delayed_output_command("printf '%s\\n' " + QuoteDiagnostic(a));
@@ -1074,7 +1076,8 @@ void InfoFunc(const std::vector<Value*>& args, Evaluator* ev, std::string*) {
 }
 
 void WarningFunc(const std::vector<Value*>& args, Evaluator* ev, std::string*) {
-  MakefileCacheManager::Get().RequireEvaluation();
+  if (!ev->avoid_io())
+    MakefileCacheManager::Get().RequireEvaluation();
   const std::string&& a = args[0]->Eval(ev);
   if (ev->avoid_io()) {
     ev->add_delayed_output_command(

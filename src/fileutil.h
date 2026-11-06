@@ -2,6 +2,7 @@
 // Drop process-only headers after separating runtime supervision.
 // Expose invocation-scoped environment identities for deferred graph reuse.
 // Validate content fingerprints through exact metadata before hashing again.
+// Batch independent metadata probes with bounded native workers.
 // Own invocation state and publish coherent generations with typed freshness.
 // Separate runtime services and preserve scoped resource ownership.
 // Preserve owned path strings through filesystem-probe cache lookups.
@@ -37,6 +38,7 @@
 #define FILEUTIL_H_
 
 #include <errno.h>
+#include <sys/stat.h>
 
 #include <cstdint>
 #include <memory>
@@ -56,6 +58,17 @@ double GetTimestamp(const char* f);
 // caches.
 std::string GetFileIdentity(std::string_view path);
 std::string GetFileIdentityFromStat(const struct stat& st);
+struct FileMetadata {
+  struct stat metadata = {};
+  int error = 0;
+  std::string Identity() const {
+    return error == 0        ? GetFileIdentityFromStat(metadata)
+           : error == ENOENT ? "missing"
+                             : "unreadable";
+  }
+};
+std::vector<FileMetadata> StatFiles(const std::vector<std::string>& paths);
+const std::string* InvocationEnvironmentValue(const std::string& name);
 // Content identity for parsed makefiles. Unlike the metadata identity, this
 // remains stable when a build tool only updates the file timestamp.
 std::string GetFileContentIdentity(std::string_view path);

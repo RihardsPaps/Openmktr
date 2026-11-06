@@ -1,5 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
 // Launch validation workers only when independent observations need checking.
+// Batch large ordinary file frontiers without sharing evaluator state.
 // Retain shell diagnostics and stop replay at changed conditional boundaries.
 // Validate complete deferred environments and inherited jobserver identities.
 // Own invocation state and publish coherent generations with typed freshness.
@@ -46,7 +47,9 @@
 #include "fileutil.h"
 #include "find.h"
 #include "func.h"
+#include "graph_import.h"
 #include "graph_optimization.h"
+#include "import_observer.h"
 #include "io.h"
 #include "log.h"
 #include "monitor.h"
@@ -153,7 +156,7 @@ class StampChecker {
       RETURN_TRUE;
     }
 
-    if (!needs_regen_ && !g_flags.explain) {
+    if (!needs_regen_ && !g_flags.explain && !g_flags.import_root) {
       FILE* fp = OpenGraphStamp(GetNinjaStampFilename(), true);
       if (!fp)
         return true;
@@ -169,18 +172,21 @@ class StampChecker {
  private:
   bool IsMissingOutputs() {
     if (!Exists(GetNinjaFilename())) {
-      fprintf(stderr, "%s is missing, regenerating...\n",
-              GetNinjaFilename().c_str());
+      if (!g_flags.import_root)
+        fprintf(stderr, "%s is missing, regenerating...\n",
+                GetNinjaFilename().c_str());
       return true;
     }
     if (!Exists(GetNinjaShellScriptFilename())) {
-      fprintf(stderr, "%s is missing, regenerating...\n",
-              GetNinjaShellScriptFilename().c_str());
+      if (!g_flags.import_root)
+        fprintf(stderr, "%s is missing, regenerating...\n",
+                GetNinjaShellScriptFilename().c_str());
       return true;
     }
     if (!Exists(GetEnvScriptFilename())) {
-      fprintf(stderr, "%s is missing, regenerating...\n",
-              GetEnvScriptFilename().c_str());
+      if (!g_flags.import_root)
+        fprintf(stderr, "%s is missing, regenerating...\n",
+                GetEnvScriptFilename().c_str());
       return true;
     }
     return false;
@@ -223,7 +229,7 @@ class StampChecker {
     }
     char magic[4];
     if (fread(magic, 1, sizeof(magic), fp) != sizeof(magic) ||
-        memcmp(magic, "KAT5", sizeof(magic)) != 0) {
+        memcmp(magic, "KAT6", sizeof(magic)) != 0) {
       fprintf(stderr, "obsolete kati_stamp, regenerating...\n");
       RETURN_TRUE;
     }
@@ -241,18 +247,32 @@ class StampChecker {
           !ConsumeGraphString(&view, &arguments) || arguments != orig_args ||
           configuration != g_flags.GraphOptimizationIdentity())
         RETURN_TRUE;
+      std::vector<std::string> proof_paths, proof_identities;
       while (!view.empty()) {
         if (!ConsumeGraphString(&view, &path) ||
             !ConsumeGraphString(&view, &identity))
           RETURN_TRUE;
+        proof_paths.push_back(path);
+        proof_identities.push_back(identity);
+      }
+      const auto proof_metadata = StatFiles(proof_paths);
+      for (size_t i = 0; i < proof_paths.size(); ++i) {
+        const std::string& path = proof_paths[i];
+        const std::string& identity = proof_identities[i];
         const bool content_identity = identity.compare(0, 8, "content:") == 0;
         const bool matches = content_identity
                                  ? FileContentIdentityMatches(path, identity)
-                                 : GetFileIdentity(path) == identity;
-        if (identity == "unreadable" || !matches)
+                                 : proof_metadata[i].Identity() == identity;
+        if (identity == "unreadable" || !matches) {
+          if (getenv("KATI_IMPORT_VALIDATE_ONLY"))
+            fprintf(stderr, "import include proof changed: %s\n", path.c_str());
           RETURN_TRUE;
+        }
       }
     } else if (requires_evaluation != 0) {
+      if (getenv("KATI_IMPORT_VALIDATE_ONLY"))
+        fprintf(stderr, "import requires evaluation: %d\n",
+                requires_evaluation);
       if (g_flags.explain)
         printf(
             "Makefile evaluation has observable effects or generated inputs; "
@@ -282,6 +302,7 @@ class StampChecker {
     std::vector<std::string> identities;
     std::vector<double> timestamps;
     bool monitored =
+        !ImportObservationActive() &&
         MonitorSnapshot(paths, &identities, &timestamps, &monitor_checkpoint_);
     if (!monitored)
       monitor_checkpoint_.clear();
@@ -291,6 +312,9 @@ class StampChecker {
     if (g_flags.regen_debug && g_flags.GraphOptimizationEnabled("monitor"))
       printf("monitor: %s\n",
              monitored ? "validated snapshot" : "ordinary validation fallback");
+    const auto metadata =
+        monitored ? std::vector<FileMetadata>() : StatFiles(paths);
+    const struct stat empty_metadata = {};
     for (int i = 0; i < num_files; i++) {
       s = paths[i];
       s2 = recorded[i];
@@ -300,9 +324,9 @@ class StampChecker {
       const bool content_identity = s2.compare(0, 8, "content:") == 0;
       if (content_identity)
         s2.erase(0, 8);
-      struct stat st;
-      const bool exists = !monitored && stat(s.c_str(), &st) == 0;
-      const int stat_error = exists ? 0 : errno;
+      const struct stat& st = monitored ? empty_metadata : metadata[i].metadata;
+      const bool exists = !monitored && metadata[i].error == 0;
+      const int stat_error = monitored ? 0 : metadata[i].error;
       double ts = monitored ? timestamps[i]
                   : exists  ? GetTimestampFromStat(st)
                             : -1;
@@ -332,7 +356,7 @@ class StampChecker {
         }
         if (g_flags.dump_kati_stamp)
           printf("file %s: dirty (%f)\n", s.c_str(), ts);
-        else
+        else if (!g_flags.import_root)
           fprintf(stderr, "%s was modified, regenerating...\n", s.c_str());
         RETURN_TRUE;
       } else if (g_flags.dump_kati_stamp) {
@@ -362,6 +386,19 @@ class StampChecker {
       const char* val_c_str = getenv(s.c_str());
       std::string_view val(val_c_str ? val_c_str : "");
       LOAD_STRING(fp, &s2);
+      if ((s == "MAKEFLAGS" || s == "MFLAGS" || s == "MAKEOVERRIDES") &&
+          s2.compare(0, 10, "caller-v1:") == 0) {
+        const bool matches =
+            s2 == "caller-v1:0"
+                ? val_c_str == nullptr
+                : s2.compare(0, 11, "caller-v1:1") == 0 && val_c_str &&
+                      (s == "MAKEFLAGS" ? NormalizeMakeFlags(val) ==
+                                              NormalizeMakeFlags(s2.substr(11))
+                                        : val == s2.substr(11));
+        if (!matches)
+          RETURN_TRUE;
+        continue;
+      }
       const bool changed =
           s.empty()          ? InvocationEnvironmentIdentity() != s2
           : s == "MAKEFLAGS" ? NormalizeMakeFlags(val) != NormalizeMakeFlags(s2)
@@ -436,7 +473,11 @@ class StampChecker {
       fprintf(stderr, "arguments changed, regenerating...\n");
       RETURN_TRUE;
     }
-
+    const int plan_count = LOAD_INT(fp);
+    for (int i = 0; i < plan_count; ++i) {
+      LOAD_STRING(fp, &s);
+      import_plans_.push_back(s);
+    }
     return needs_regen_;
   }
 
@@ -611,6 +652,14 @@ class StampChecker {
     } else if (!commands_.empty()) {
       check_shells();
     }
+    if (!needs_regen_) {
+      for (const std::string& plan : import_plans_)
+        if (!ValidateImportedGraph(plan)) {
+          needs_regen_ = true;
+          msg_ = "Imported evaluation changed, regenerating...\n";
+          break;
+        }
+    }
     if (needs_regen_) {
       fprintf(stderr, "%s", msg_.c_str());
     }
@@ -621,6 +670,7 @@ class StampChecker {
   double gen_time_;
   std::vector<GlobResult*> globs_;
   std::vector<ShellResult*> commands_;
+  std::vector<std::string> import_plans_;
   std::mutex mu_;
   bool needs_regen_;
   std::string msg_;

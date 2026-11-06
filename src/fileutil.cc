@@ -1,4 +1,5 @@
 // FORK MODIFICATION NOTICE (2026)
+// Batch independent metadata probes with bounded native workers.
 // Reuse the running executable identity within each invocation.
 // Reuse content hashes only while complete filesystem metadata stays unchanged.
 // Snapshot caller environments before Makefile evaluation changes process
@@ -44,6 +45,8 @@
 #include <atomic>
 #include <deque>
 #include <mutex>
+#include <system_error>
+#include <thread>
 #include <vector>
 
 #if defined(__APPLE__)
@@ -61,6 +64,7 @@
 namespace {
 struct InvocationEnvironment {
   std::string identity;
+  std::unordered_map<std::string, std::string> values;
   bool captured = false;
 };
 struct FilesystemSession {
@@ -76,9 +80,16 @@ const std::string& InvocationEnvironmentIdentity() {
     extern char** environ;
     std::vector<std::string> entries;
     for (char** entry = environ; entry && *entry; ++entry) {
+      const std::string value(*entry);
+      const size_t equal = value.find('=');
+      if (equal != std::string::npos)
+        snapshot.values.emplace(value.substr(0, equal),
+                                value.substr(equal + 1));
       // MAKEFLAGS is checked separately after the frontend has interpreted
       // its options. MFLAGS is reconstructed from those same options.
-      if (HasPrefix(*entry, "MAKEFLAGS=") || HasPrefix(*entry, "MFLAGS="))
+      if (HasPrefix(*entry, "MAKEFLAGS=") || HasPrefix(*entry, "MFLAGS=") ||
+          HasPrefix(*entry, "KATI_NINJA_RECURSION_STATE=") ||
+          HasPrefix(*entry, "KATI_IMPORT_"))
         continue;
       entries.emplace_back(*entry);
     }
@@ -90,6 +101,13 @@ const std::string& InvocationEnvironmentIdentity() {
     snapshot.captured = true;
   }
   return snapshot.identity;
+}
+
+const std::string* InvocationEnvironmentValue(const std::string& name) {
+  InvocationEnvironmentIdentity();
+  const auto& values = SessionService<InvocationEnvironment>().values;
+  const auto found = values.find(name);
+  return found == values.end() ? nullptr : &found->second;
 }
 
 uint64_t FilesystemObservationEpoch() {
@@ -401,6 +419,39 @@ std::string GetFileIdentityFromStat(const struct stat& st) {
          std::to_string(st.st_mode) + ":" + std::to_string(st.st_size) + ":" +
          std::to_string(mt.tv_sec) + ":" + std::to_string(mt.tv_nsec) + ":" +
          std::to_string(ct.tv_sec) + ":" + std::to_string(ct.tv_nsec);
+}
+
+std::vector<FileMetadata> StatFiles(const std::vector<std::string>& paths) {
+  std::vector<FileMetadata> observations(paths.size());
+  const size_t workers =
+      paths.size() < 2048
+          ? 1
+          : std::min<size_t>(8,
+                             std::max(1u, std::thread::hardware_concurrency()));
+  std::atomic<size_t> next{0};
+  auto observe = [&] {
+    for (;;) {
+      const size_t begin = next.fetch_add(128, std::memory_order_relaxed);
+      if (begin >= paths.size())
+        return;
+      const size_t end = std::min(begin + 128, paths.size());
+      for (size_t i = begin; i < end; ++i)
+        if (stat(paths[i].c_str(), &observations[i].metadata) != 0)
+          observations[i].error = errno;
+    }
+  };
+  std::vector<std::thread> threads;
+  threads.reserve(workers - 1);
+  try {
+    for (size_t i = 1; i < workers; ++i)
+      threads.emplace_back(observe);
+  } catch (const std::system_error&) {
+    // Resource pressure changes throughput, never validation coverage.
+  }
+  observe();
+  for (auto& thread : threads)
+    thread.join();
+  return observations;
 }
 
 std::string GetFileContentIdentity(std::string_view path) {
