@@ -24,6 +24,38 @@ BINARY = Path(os.environ.get("OMKTR_BINARY", Path(__file__).resolve().parents[1]
 class GraphOptimizations(unittest.TestCase):
     @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",
                          "requires the native Kbuild import observer")
+    def test_kbuild_probe_preserves_path_utility_overrides(self):
+        self.kbuild_markers()
+        helper = self.root / "helper-bin"
+        helper.mkdir()
+        mkdir = helper / "mkdir"
+        system_mkdir = shutil.which("mkdir")
+        self.assertIsNotNone(system_mkdir)
+        mkdir.write_text("#!/bin/sh\nif [ \"$(cat utility-mode)\" = yes ]; then "
+                         f"exec '{system_mkdir}' \"$@\"; else exit 1; fi\n")
+        mkdir.chmod(0o755)
+        compiler = self.root / "fake-cc"
+        compiler.write_text("#!/bin/sh\n: > \"$2\"\n")
+        compiler.chmod(0o755)
+        probe = ('set -e; TMP=.tmp_$$$$/tmp; trap "rm -rf .tmp_$$$$" EXIT; '
+                 'mkdir -p .tmp_$$$$; if ( ./fake-cc -o "$$TMP") >/dev/null 2>&1; '
+                 'then echo "supported"; else echo "unsupported"; fi')
+        (self.root / "child.mk").write_text(
+            "VALUE := $(shell " + probe + ")\n.PHONY: all\nall: init/result\n"
+            "init/result:\n\t@printf '%s' '$(VALUE)' > $@\n")
+        self.makefile(".PHONY: all\nall:\n\t@$(MAKE) -f child.mk all\n")
+        env = dict(os.environ, PATH=str(helper) + ":" + os.environ["PATH"])
+        command = ("build", "--graph_optimizations=aggressive",
+                   "--use_ninja_phony_output", "--kati_stats", "all")
+        for mode, expected in (("yes", "supported"), ("no", "")):
+            (self.root / "utility-mode").write_text(mode)
+            (self.root / "init/result").unlink(missing_ok=True)
+            result = self.run_tool(*command, env=env)
+            self.assertEqual((self.root / "init/result").read_text(), expected, result.stdout)
+        self.assertFalse(list(self.root.glob(".tmp_*")))
+
+    @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",
+                         "requires the native Kbuild import observer")
     def test_kbuild_compiler_probe_validation_preserves_results_and_cleanup(self):
         self.kbuild_markers()
         compiler = self.root / "fake-cc"

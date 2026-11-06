@@ -112,6 +112,40 @@ std::string NormalizeMakeFlags(std::string_view flags) {
   return normalized + " --effective-jobs=" + jobs;
 }
 
+bool StandardProbeUtilities() {
+  const char* search = getenv("PATH");
+  if (!search)
+    return false;
+  for (const char* name : {"mkdir", "rm"}) {
+    std::string_view directories(search);
+    bool standard = false;
+    for (;;) {
+      const size_t colon = directories.find(':');
+      const std::string directory(directories.substr(0, colon));
+      const std::string path =
+          (directory.empty() ? "." : directory) + "/" + name;
+      if (access(path.c_str(), X_OK) == 0) {
+        struct stat selected, system;
+        if (stat(path.c_str(), &selected) != 0 || !S_ISREG(selected.st_mode))
+          return false;
+        for (const char* root : {"/usr/bin/", "/bin/"})
+          if (stat((std::string(root) + name).c_str(), &system) == 0 &&
+              selected.st_dev == system.st_dev &&
+              selected.st_ino == system.st_ino)
+            standard = true;
+        break;
+      }
+      if ((errno != ENOENT && errno != ENOTDIR) ||
+          colon == std::string_view::npos)
+        break;
+      directories.remove_prefix(colon + 1);
+    }
+    if (!standard)
+      return false;
+  }
+  return true;
+}
+
 bool NativeKbuildCompilerProbe(const std::string& command,
                                std::string* result,
                                int* status) {
@@ -165,6 +199,10 @@ bool NativeKbuildCompilerProbe(const std::string& command,
   for (char** entry = environ; entry && *entry; ++entry)
     if (HasPrefix(*entry, "BASH_FUNC_"))
       return false;
+  // PATH wrappers can intentionally change probe status or effects. Native
+  // directory operations are equivalent only to the installed system tools.
+  if (!StandardProbeUtilities())
+    return false;
   const size_t output = compiler.size() - std::string_view("\"$TMP\"").size();
   if (compiler.substr(0, output).find_first_of("\"';|&<>$`\\\n\r(){}*?[]#~!") !=
       std::string::npos)
