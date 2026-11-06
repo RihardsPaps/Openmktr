@@ -28,6 +28,7 @@
 // deferred values. Exclude recipe control prefixes when recognizing deferred
 // assignments. Reserve shared job tokens before runtime recipe expansion.
 // Publish immutable runtime inputs and bind deferred identities to their reads.
+// Retain computed substitution selections and implicitly exported definitions.
 // Changed by the Openmktr fork, maintained by Rihards Paps and
 // Haralds Paps.
 // Changed build execution, evaluation, or portability for this fork.
@@ -182,8 +183,11 @@ struct RecipeInspection {
           ConsumeGraphString(&variable_name, &variable_name_value) &&
           variable_name.empty())
         Variable(variable_name_value);
-      else
-        Expression(name);
+      else {
+        // Inspecting the selector cannot identify its eventual variable.
+        // Its selected definition can also reference automatic variables.
+        dynamic = automatic_dynamic = true;
+      }
       Expression(pattern);
       Expression(replacement);
       return;
@@ -547,6 +551,8 @@ bool MakeRuntimeRecipe(const DepNode& node,
     for (Symbol name : ev->current_scope()->exported())
       if (ev->current_scope()->IsExported(name))
         inspection.Variable(name.str());
+  if (node.export_all_variables)
+    inspection.dynamic = inspection.automatic_dynamic = true;
   const bool runtime_expansion =
       (!node.actual_inputs.empty() || !node.actual_order_only_inputs.empty()) &&
       (inspection.io || inspection.dynamic || inspection.automatic_freshness);
@@ -681,7 +687,7 @@ bool MakeRuntimeRecipe(const DepNode& node,
       full_context_path = context_path;
     }
   }
-  if (!inspection.dynamic)
+  if (!inspection.dynamic || node.export_all_variables)
     AppendGraphString(context_path, &identity);
   // Target-specific bindings override the shared global definitions.
   std::vector<std::string> names;

@@ -44,6 +44,7 @@
 // Preserve phony invalidation, depfile includes and physical import ownership.
 // Keep input manifests immutable across configurations and graph generations.
 // Inline small freshness checks while retaining manifests for wide input lists.
+// Keep directory freshness and conditional depfile copies aligned with Make.
 // Keep runtime-expanded nonrecursive recipes in Ninja's job budget.
 // Limit depfile inference to literal compiler commands; preserve quoted
 // recipes. Reject known Ninja compatibility gaps before publishing a strict
@@ -328,8 +329,9 @@ bool GetDepfileFromCommand(std::string* cmd,
   return true;
 }
 
-static bool GetDepfileFromRecipe(std::string_view recipe,
+static bool GetDepfileFromRecipe(std::string* command_recipe,
                                  std::string* depfile) {
+  const std::string_view recipe(*command_recipe);
   for (size_t i = 0; i < recipe.size(); ++i) {
     if (i && !isspace(recipe[i - 1]) &&
         std::string_view(";&|()\n").find(recipe[i - 1]) ==
@@ -373,9 +375,13 @@ static bool GetDepfileFromRecipe(std::string_view recipe,
       }
     }
     std::string command(recipe.substr(i, command_end - i));
-    const bool detected = GetDepfileFromCommand(&command, depfile, true, false);
-    if (detected)
+    const bool detected = GetDepfileFromCommand(&command, depfile, true, true);
+    if (detected) {
+      // Keep the copy in the compiler's branch, including when the compiler
+      // is itself the condition of an if/while or a short-circuited list.
+      command_recipe->replace(i, command_end - i, "( " + command + " )");
       return true;
+    }
     i = end - 1;
   }
   return false;
@@ -1312,8 +1318,7 @@ class NinjaGenerator {
     std::string directory_marker;
     if (directory_output)
       directory_marker = DirectoryMarker(node->output.str());
-    const Symbol freshness_output =
-        directory_output ? Intern(directory_marker) : node->output;
+    const Symbol freshness_output = node->output;
     const char* workspace_build = getenv("OMKTR_WORKSPACE_BUILD");
     const bool managed_workspace = workspace_build && *workspace_build;
     if (elided_source_recipe && !managed_workspace)
@@ -1343,15 +1348,17 @@ class NinjaGenerator {
               : EscapeNinja(commands.front().shellflag);
       std::string inferred_depfile;
       bool inferred_depfile_from_recipe = false;
+      std::vector<Command> depfile_commands;
       if (!node->depfile_var && g_flags.GraphOptimizationEnabled("depfiles")) {
+        depfile_commands = commands;
         bool ambiguous = false;
-        for (const Command& command : commands) {
+        for (Command& command : depfile_commands) {
           if (!command.runtime_sidecar.empty()) {
             ambiguous = true;
             break;
           }
           std::string candidate;
-          if (GetDepfileFromRecipe(command.cmd, &candidate)) {
+          if (GetDepfileFromRecipe(&command.cmd, &candidate)) {
             if (inferred_depfile_from_recipe) {
               ambiguous = true;
               break;
@@ -1363,16 +1370,13 @@ class NinjaGenerator {
         if (ambiguous)
           inferred_depfile_from_recipe = false;
       }
-      GenShellScript(node->output.c_str(), commands, &cmd_buf, &description,
-                     node->oneshell);
+      GenShellScript(node->output.c_str(),
+                     inferred_depfile_from_recipe ? depfile_commands : commands,
+                     &cmd_buf, &description, node->oneshell);
       std::string depfile;
       bool has_depfile;
       if (inferred_depfile_from_recipe) {
-        // Ninja removes consumed depfiles. Keep the compiler's original for
-        // subsequent direct builds and Makefile include evaluation.
-        cmd_buf = "( " + cmd_buf + " ) && cp " + ShellQuote(inferred_depfile) +
-                  " " + ShellQuote(inferred_depfile + ".tmp");
-        depfile = inferred_depfile + ".tmp";
+        depfile = inferred_depfile;
         has_depfile = true;
       } else {
         has_depfile = GetDepfile(node, &cmd_buf, &depfile);
@@ -1537,14 +1541,6 @@ class NinjaGenerator {
         if (cleanup_output.front() != '/')
           cleanup_output = working_dir_ + "/" + cleanup_output;
       }
-      if (directory_output) {
-        const std::string marker = ShellQuote(directory_marker);
-        // Directory markers represent existence, not a content-changing
-        // output. Advancing their timestamp on every forced phony directory
-        // recipe dirties every downstream edge and turns Kbuild's no-op
-        // checks into repeated archive/link work.
-        cmd_buf += " && { [ -e " + marker + " ] || touch " + marker + "; }";
-      }
       if (vpath_output) {
         const std::string output = ShellQuote(node->output.str());
         const std::string provider = ShellQuote(node->vpath_provider.str());
@@ -1616,6 +1612,13 @@ class NinjaGenerator {
         const std::string current = "if " + recipe_unchanged + exists +
                                     inputs_current(freshness_output);
         cmd_buf = current + "; then :; else " + cmd_buf + "; fi";
+      }
+      if (directory_output) {
+        const std::string marker = ShellQuote(directory_marker);
+        // Freshness belongs to the real Make directory. Materialize Ninja's
+        // marker even when that directory was current before this graph, and
+        // retain an existing marker's timestamp to avoid dirtying consumers.
+        cmd_buf += " && { [ -e " + marker + " ] || touch " + marker + "; }";
       }
       // Recursive sub-builds remain serialized; recipe exports are prepared by
       // CommandEvaluator for both direct and Ninja execution.

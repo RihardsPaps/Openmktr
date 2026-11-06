@@ -18,6 +18,52 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_existing_directory_is_current_before_marker_creation(self):
+        root = self.directory
+        for mode in ("direct", "build", "legacy"):
+            for profile in ("off", "safe", "aggressive"):
+                with self.subTest(mode=mode, profile=profile):
+                    self.directory = root / (mode + "-" + profile)
+                    self.directory.mkdir()
+                    (self.directory / "dir").mkdir()
+                    self.makefile("all: dir\ndir:\n\t@mkdir dir\n")
+                    flags = ("--graph_optimizations=" + profile, "all")
+                    if mode == "legacy":
+                        self.direct("--ninja", *flags)
+                    for _ in range(2):
+                        if mode == "legacy":
+                            self.run_command("sh", "./ninja.sh", "-j2", "all")
+                        else:
+                            self.direct(*(("build",) if mode == "build" else ()), *flags)
+                    self.assertTrue((self.directory / "dir").is_dir())
+                    if mode != "direct":
+                        self.assertTrue(list((self.directory / "dir").glob(
+                            ".kati-directory-marker-*")))
+        self.directory = root
+
+    def test_conditional_compiler_copies_depfile_only_when_it_runs(self):
+        self.makefile("all: out.o\nout.o: source.c\n"
+                      "\t@if test -f cached.o; then cp cached.o out.o; "
+                      "else clang -c -MMD -MF out.d -o out.o source.c; fi\n")
+        (self.directory / "source.c").write_text(
+            '#include "header.h"\nint value = VALUE;\n')
+        (self.directory / "header.h").write_text("#define VALUE 1\n")
+        (self.directory / "cached.o").write_bytes(b"cached object")
+        command = ("build", "--graph_optimizations=aggressive", "all")
+        self.direct(*command)
+        self.assertEqual((self.directory / "out.o").read_bytes(), b"cached object")
+        self.assertFalse((self.directory / "out.d").exists())
+        self.assertIn("omktr_depfile = out.d.tmp\n",
+                      (self.directory / ".openmktr/build.ninja").read_text())
+        (self.directory / "out.o").unlink()
+        (self.directory / "cached.o").unlink()
+        self.direct(*command)
+        original = (self.directory / "out.o").read_bytes()
+        self.assertTrue((self.directory / "out.d").is_file())
+        (self.directory / "header.h").write_text("#define VALUE 2\n")
+        self.direct(*command)
+        self.assertNotEqual((self.directory / "out.o").read_bytes(), original)
+
     def test_current_directory_normal_prerequisite_still_invalidates_output(self):
         self.makefile("all: result\nresult: .\n\t@printf x >> result\n")
         self.direct("build", "all")

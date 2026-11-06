@@ -19,6 +19,31 @@ BINARY = Path(os.environ.get(
 
 
 class GeneratedRecipeReads(unittest.TestCase):
+    def test_computed_substitution_names_keep_selected_definitions(self):
+        self.check_expression("$($(NAME):.c=.o):$(shell :)", "a.o:",
+                              "NAME = LIST\nLIST = a.c\n")
+        self.check_expression("$($(NAME):generated=selected):$(shell :)",
+                              "selected:", "NAME = <\n")
+
+    def test_export_all_keeps_implicit_runtime_definitions(self):
+        self.check_expression("$(shell :)'\"$$FROM_FILE\"'", "value",
+                              ".EXPORT_ALL_VARIABLES:\nFROM_FILE = value\n")
+        for profile in ("off", "safe", "aggressive"):
+            with self.subTest(profile=profile), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "seed").write_text("ready")
+                (root / "Makefile").write_text(
+                    ".EXPORT_ALL_VARIABLES:\ninclude vars.mk\n"
+                    "all: out\nout: seed\n"
+                    "\t@$(shell :)printf '%s' \"$$FROM_FILE\" > $@\n")
+                command = [str(BINARY), "build", "--graph_optimizations=" + profile, "all"]
+                for value in ("first", "second"):
+                    (root / "vars.mk").write_text("FROM_FILE = " + value + "\n")
+                    result = subprocess.run(command, cwd=root, capture_output=True,
+                                            text=True, timeout=20)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertEqual((root / "out").read_text(), value)
+
     def test_missing_runtime_input_manifest_regenerates_before_execution(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
