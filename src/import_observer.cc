@@ -82,6 +82,8 @@ bool InstallFilter() {
                            SYS_geteuid,
                            SYS_getgid,
                            SYS_getegid,
+                           SYS_getresuid,
+                           SYS_getresgid,
                            SYS_getgroups,
                            SYS_uname,
                            SYS_sysinfo,
@@ -327,6 +329,20 @@ struct Observer {
            !S_ISREG(metadata.st_mode) || metadata.st_nlink <= 1;
   }
 
+  bool ReadOnlyDescriptor(pid_t pid, int fd) const {
+    std::ifstream info("/proc/" + std::to_string(pid) + "/fdinfo/" +
+                       std::to_string(fd));
+    std::string line;
+    while (std::getline(info, line)) {
+      unsigned long flags;
+      if (sscanf(line.c_str(), "flags: %lo", &flags) == 1)
+        return (flags & O_ACCMODE) == O_RDONLY &&
+               ReadOnlyPath(Link("/proc/" + std::to_string(pid) + "/fd/" +
+                                 std::to_string(fd)));
+    }
+    return false;
+  }
+
   bool Directory(pid_t pid, int fd, uint64_t address) {
     const std::string path = Path(pid, fd, address);
     if (path.empty())
@@ -453,14 +469,17 @@ struct Observer {
       case SYS_copy_file_range:
         return output(a[2]);
       case SYS_mmap:
-        // A read-only shared mapping could later become writable through
-        // mprotect when its inherited descriptor was opened read/write.
-        return !(a[3] & MAP_SHARED) || (a[3] & MAP_ANONYMOUS) || output(a[4]);
+        // A shared read-only mapping is safe only with a read-only descriptor:
+        // the kernel then rejects mprotect attempts to make it writable.
+        return !(a[3] & MAP_SHARED) || (a[3] & MAP_ANONYMOUS) ||
+               (!(a[2] & PROT_WRITE) && ReadOnlyDescriptor(pid, a[4])) ||
+               output(a[4]);
       case SYS_ioctl:
         // TCGETS2 is the read-only extended termios query used by newer Bash.
         // Its x86_64 kernel ABI value avoids requiring Linux UAPI headers.
         return a[1] == TCGETS || a[1] == 0x802c542a || a[1] == TIOCGWINSZ ||
-               a[1] == FIONREAD;
+               a[1] == TIOCGPGRP || a[1] == FIONREAD || a[1] == FIOCLEX ||
+               a[1] == FIONCLEX;
       case SYS_prctl:
         return a[0] == PR_GET_NO_NEW_PRIVS || a[0] == PR_GET_NAME ||
                a[0] == PR_SET_NAME || a[0] == PR_GET_DUMPABLE;

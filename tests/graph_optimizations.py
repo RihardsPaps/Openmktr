@@ -270,6 +270,28 @@ class GraphOptimizations(unittest.TestCase):
         self.run_tool(*command)
         self.assertEqual((self.root / "init/main.o").read_text(), "two:new.src")
 
+    @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",
+                         "requires the native Kbuild import observer")
+    def test_dynamic_import_accepts_shared_read_only_mapping(self):
+        self.kbuild_markers()
+        (self.root / "mapped-input").write_text("mapped")
+        (self.root / "probe.py").write_text(
+            "import mmap\n"
+            "with open('mapped-input','rb') as source:\n"
+            " with mmap.mmap(source.fileno(),0,flags=mmap.MAP_SHARED,prot=mmap.PROT_READ) as view:\n"
+            "  print(view[:].decode())\n")
+        (self.root / "child.mk").write_text(
+            "VALUE := $(shell python3 probe.py)\n"
+            ".PHONY: all\nall: init/result\n"
+            "init/result: mapped-input\n\t@printf '%s' '$(VALUE)' > $@\n")
+        self.makefile(".PHONY: all\nall:\n\t@$(MAKE) -f child.mk all\n")
+        result = self.run_tool("build", "--graph_optimizations=aggressive",
+                               "--use_ninja_phony_output", "--kati_stats", "all")
+        self.assertEqual((self.root / "init/result").read_text(), "mapped")
+        self.assertTrue(any("init/result" in path.read_text()
+                            for path in (self.root / ".openmktr/.imports").rglob("build.ninja")),
+                        result.stdout)
+
     def test_dynamic_import_waits_for_parent_producers_and_rejects_effects(self):
         self.kbuild_markers()
         (self.root / "child.mk").write_text(
