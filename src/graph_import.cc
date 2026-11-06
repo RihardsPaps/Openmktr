@@ -709,28 +709,21 @@ bool ParseImportCommand(const Command& command,
     return false;
   // Environment entries are passed directly to the child with setenv; shell
   // metacharacters in their values remain literal and need no quoting here.
-  // Kbuild's recursive invocation can be line-wrapped by Make's command
-  // expansion. A backslash-newline pair is shell whitespace; flatten it
-  // before parsing argv while continuing to reject other shell escapes.
-  std::string flattened;
-  for (size_t i = 0; i < command.display_cmd.size(); ++i) {
-    if (command.display_cmd[i] == '\\' && i + 1 < command.display_cmd.size() &&
-        command.display_cmd[i + 1] == '\n') {
-      ++i;
-      while (i + 1 < command.display_cmd.size() &&
-             (command.display_cmd[i + 1] == ' ' ||
-              command.display_cmd[i + 1] == '\t'))
-        ++i;
-      if (!flattened.empty() && flattened.back() != ' ')
-        flattened.push_back(' ');
-    } else {
-      flattened.push_back(command.display_cmd[i]);
-    }
-  }
   std::string word;
   char quote = 0;
   bool started = false;
-  for (char c : flattened) {
+  for (size_t i = 0; i < command.display_cmd.size(); ++i) {
+    const char c = command.display_cmd[i];
+    // The shell removes this pair outside single quotes, joining adjacent
+    // word fragments. Following indentation remains significant, especially
+    // within double quotes. Other shell escapes retain ordinary recursion.
+    if (c == '\\' && quote != '\'' && i + 1 < command.display_cmd.size() &&
+        command.display_cmd[i + 1] == '\n') {
+      ++i;
+      continue;
+    }
+    if (c == '\n' || c == '\r')
+      return false;
     if (quote) {
       if (c == quote)
         quote = 0;

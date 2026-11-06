@@ -22,6 +22,27 @@ BINARY = Path(os.environ.get("OMKTR_BINARY", Path(__file__).resolve().parents[1]
 
 
 class GraphOptimizations(unittest.TestCase):
+    def test_recursive_import_preserves_shell_line_continuations(self):
+        for spelling, filename in (("child\\\n.mk", "child.mk"),
+                                   ('"child\\\n.mk"', "child.mk"),
+                                   ('"child\\\n .mk"', "child .mk"),
+                                   ("child.mk \\\n  ", "child.mk")):
+            with self.subTest(spelling=spelling):
+                (self.root / "child").write_text(
+                    ".PHONY: all .mk\nall .mk:\n\t@printf wrong > result\n")
+                (self.root / filename).write_text(
+                    ".PHONY: all\nall: result\nresult:\n\t@printf correct > $@\n")
+                self.makefile(".PHONY: all\nall:\n\t@$(MAKE) -f " + spelling + " all\n")
+                result = self.root / "result"
+                result.unlink(missing_ok=True)
+                self.run_tool("all")
+                self.assertEqual(result.read_text(), "correct")
+                result.unlink()
+                self.run_tool("build", "--graph_optimizations=aggressive", "all")
+                self.assertEqual(result.read_text(), "correct")
+                self.assertTrue(any("printf correct" in path.read_text()
+                                    for path in (self.root / ".openmktr/.imports").rglob("build.ninja")))
+
     def test_include_dot_alias_reuses_content_and_preserves_producer_freshness(self):
         (self.root / "config.mk").write_text("VALUE := first\n")
         (self.root / "ready-seed").write_text("# ready\n")
