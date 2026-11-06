@@ -46,6 +46,7 @@
 // Anchor combined depfile streams and preserve changed-directory recipes.
 // Preserve literal heredoc bodies when inferring compiler dependencies.
 // Keep shell parameter and command expansions opaque to compiler scanning.
+// Reflect real directory timestamps in markers after executed recipes.
 // Inline small freshness checks while retaining manifests for wide input lists.
 // Keep directory freshness and conditional depfile copies aligned with Make.
 // Rewrite complete compiler commands and collect every executed branch's deps.
@@ -1705,6 +1706,18 @@ class NinjaGenerator {
                   ShellQuote(node->output.str()) + " " +
                   ShellQuote(intermediate_proof) + "; then exit 0; fi; " +
                   cmd_buf;
+      }
+      if (directory_output) {
+        std::string directory_absolute, marker_absolute;
+        AbsPath(node->output.str(), &directory_absolute);
+        AbsPath(directory_marker, &marker_absolute);
+        // Restat must observe changes to the real directory. Synchronize only
+        // after an executed recipe, before the freshness guard can skip it.
+        // An unchanged directory retains its timestamp, so consumers stay
+        // current even when its recipe ran without changing it.
+        cmd_buf = "( " + cmd_buf + " ) && touch -r " +
+                  ShellQuote(directory_absolute) + " " +
+                  ShellQuote(marker_absolute);
       }
       // Order-only prerequisites may run, but they do not make an existing
       // output stale. Ninja has no prior build-log entry for such an output.

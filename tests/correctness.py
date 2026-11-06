@@ -18,6 +18,43 @@ KATI = Path(os.environ.get(
 
 
 class BuildCorrectness(unittest.TestCase):
+    def test_directory_restat_tracks_real_directory_changes(self):
+        root = self.directory
+        for mode in ("direct", "build", "legacy"):
+            for profile in ("off", "safe", "aggressive"):
+                with self.subTest(mode=mode, profile=profile):
+                    self.directory = root / (mode + "-" + profile)
+                    self.directory.mkdir()
+                    (self.directory / "change").touch()
+                    (self.directory / "dir").mkdir()
+                    (self.directory / "dir/value").write_text("old")
+                    time.sleep(0.02)
+                    (self.directory / "seed").write_text("one")
+                    self.makefile(".KATI_RESTAT: dir\nall: result\ndir: seed\n"
+                                  "\t@if test -f change; then cp seed dir/value; touch dir; fi\n"
+                                  "result: dir\n\t@cp dir/value result\n")
+                    flags = ("--graph_optimizations=" + profile, "all")
+                    if mode == "legacy":
+                        self.direct("--ninja", *flags)
+                    def build():
+                        if mode == "legacy":
+                            self.run_command("sh", "./ninja.sh", "-j2", "all")
+                        else:
+                            self.direct(*(("build",) if mode == "build" else ()), *flags)
+                    build()
+                    self.assertEqual((self.directory / "result").read_text(), "one")
+                    time.sleep(0.02)
+                    (self.directory / "seed").write_text("two")
+                    build()
+                    self.assertEqual((self.directory / "result").read_text(), "two")
+                    stamp = (self.directory / "result").stat().st_mtime_ns
+                    (self.directory / "change").unlink()
+                    time.sleep(0.02)
+                    (self.directory / "seed").write_text("three")
+                    build()
+                    self.assertEqual((self.directory / "result").stat().st_mtime_ns, stamp)
+        self.directory = root
+
     def test_inferred_compilers_preserve_shell_parameter_defaults(self):
         root = self.directory
         expected = "hello; clang -c -MMD -MF out.d -o out.o source.c;"
