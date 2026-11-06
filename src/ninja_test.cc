@@ -3,6 +3,7 @@
 // Verify owned, C-string and bounded-view filesystem probes across mutations.
 // Cover conservative depfile inference and reject ambiguous shell commands.
 // Exercise quoted literal arguments and decline shell-dependent depfile paths.
+// Round-trip shared Kbuild header ownership without repeating absolute paths.
 // Fork modifications are covered by MPL-2.0; see docs/LICENSING.md and NOTICE.
 
 // Copyright 2015 Google Inc. All rights reserved
@@ -29,11 +30,40 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <algorithm>
+
 #include "fileutil.h"
+#include "graph_import.h"
 #include "log.h"
 #include "testutil.h"
 
 namespace {
+
+void TestSharedKbuildDependencyIndex() {
+  KbuildDependencyIndex index;
+  index.complete = true;
+  std::vector<std::string> headers;
+  std::string root = "/source";
+  for (int part = 0; part < 8; ++part)
+    root += "/" + std::string(64, 's');
+  for (int i = 0; i < 128; ++i)
+    headers.push_back(root + "/header" + std::to_string(i) + ".h");
+  std::sort(headers.begin(), headers.end());
+  for (int i = 0; i < 128; ++i)
+    index.objects["/build/object" + std::to_string(i) + ".o"] = headers;
+  index.covered_inputs.insert(headers.begin(), headers.end());
+  const std::string encoded = index.Encode();
+  // The dependency relation has over 8 MiB of repeated absolute header names.
+  // The immutable transport should grow with shared IDs, not those spellings.
+  assert(encoded.size() < 1024 * 1024);
+  KbuildDependencyIndex restored;
+  assert(restored.Decode(encoded));
+  assert(restored.complete);
+  assert(restored.objects == index.objects);
+  assert(restored.covered_inputs == index.covered_inputs);
+  assert(restored.Inputs("/build") == headers);
+  assert(restored.Covers(headers.front()));
+}
 
 void TestOwnedFilesystemPaths() {
   char temporary[] = "/tmp/omktr-owned-path-XXXXXX";
@@ -170,5 +200,6 @@ int main() {
   TestGetDepfile();
   TestRelaxedDepfiles();
   TestOwnedFilesystemPaths();
+  TestSharedKbuildDependencyIndex();
   assert(!g_failed);
 }

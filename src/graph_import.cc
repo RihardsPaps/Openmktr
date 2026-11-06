@@ -10,9 +10,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <cstdlib>
 #include <fstream>
 #include <set>
+#include <unordered_map>
 
 #include "command.h"
 #include "expr.h"
@@ -423,16 +425,28 @@ std::vector<std::string> KbuildDependencyIndex::Inputs(
 }
 
 std::string KbuildDependencyIndex::Encode() const {
-  std::string bytes;
-  AppendGraphString("kbuild-dependencies-v1", &bytes);
-  AppendGraphString(complete ? "1" : "0", &bytes);
+  // Kernel objects share thousands of headers. Store each path once instead
+  // of repeating its full absolute spelling for every owner.
+  std::unordered_map<std::string_view, uint32_t> ids;
+  std::string dictionary, owners;
   for (const auto& object : objects) {
-    AppendGraphString(object.first, &bytes);
+    AppendGraphString(object.first, &owners);
     std::string inputs;
-    for (const std::string& input : object.second)
-      AppendGraphString(input, &inputs);
-    AppendGraphString(inputs, &bytes);
+    for (const std::string& input : object.second) {
+      auto entry = ids.emplace(input, ids.size());
+      if (entry.second)
+        AppendGraphString(input, &dictionary);
+      const uint32_t id = entry.first->second;
+      for (unsigned shift = 0; shift < 32; shift += 8)
+        inputs += static_cast<char>(id >> shift);
+    }
+    AppendGraphString(inputs, &owners);
   }
+  std::string bytes;
+  AppendGraphString("kbuild-dependencies-v2", &bytes);
+  AppendGraphString(complete ? "1" : "0", &bytes);
+  AppendGraphString(dictionary, &bytes);
+  bytes += owners;
   return bytes;
 }
 
@@ -442,10 +456,25 @@ bool KbuildDependencyIndex::Decode(std::string_view bytes) {
   complete = false;
   std::string version, coverage;
   if (!ConsumeGraphString(&bytes, &version) ||
-      version != "kbuild-dependencies-v1" ||
+      (version != "kbuild-dependencies-v1" &&
+       version != "kbuild-dependencies-v2") ||
       !ConsumeGraphString(&bytes, &coverage) ||
       (coverage != "1" && coverage != "0"))
     return false;
+  std::vector<std::string> dictionary;
+  const bool indexed = version == "kbuild-dependencies-v2";
+  if (indexed) {
+    std::string encoded;
+    if (!ConsumeGraphString(&bytes, &encoded))
+      return false;
+    std::string_view paths(encoded);
+    while (!paths.empty()) {
+      std::string path;
+      if (!ConsumeGraphString(&paths, &path))
+        return false;
+      dictionary.push_back(std::move(path));
+    }
+  }
   while (!bytes.empty()) {
     std::string object, encoded;
     if (!ConsumeGraphString(&bytes, &object) ||
@@ -455,8 +484,20 @@ bool KbuildDependencyIndex::Decode(std::string_view bytes) {
     auto& paths = objects[object];
     while (!inputs.empty()) {
       std::string path;
-      if (!ConsumeGraphString(&inputs, &path))
+      if (indexed) {
+        if (inputs.size() < 4)
+          return false;
+        uint32_t id = 0;
+        for (unsigned i = 0; i < 4; ++i)
+          id |= static_cast<uint32_t>(static_cast<unsigned char>(inputs[i]))
+                << (8 * i);
+        inputs.remove_prefix(4);
+        if (id >= dictionary.size())
+          return false;
+        path = dictionary[id];
+      } else if (!ConsumeGraphString(&inputs, &path)) {
         return false;
+      }
       paths.push_back(std::move(path));
     }
     if (!std::is_sorted(paths.begin(), paths.end()))
