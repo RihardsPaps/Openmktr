@@ -1953,16 +1953,22 @@ static int HandleRunNinja(int argc, char** argv, bool supervise = false) {
     setenv("MAKEFLAGS", makeflags.c_str(), 1);
 
   std::string& state = resources.load_state;
-  const char* temporary_directory = getenv("TMPDIR");
-  resources.recursion_state =
-      std::string(temporary_directory && *temporary_directory
-                      ? temporary_directory
-                      : "/tmp") +
-      "/omktr-recursion-XXXXXX";
-  const int recursion_fd = mkstemp(resources.recursion_state.data());
-  if (recursion_fd < 0 || close(recursion_fd) != 0)
-    PERROR("create Ninja recursive admission state failed");
-  setenv("KATI_NINJA_RECURSION_STATE", resources.recursion_state.c_str(), 1);
+  const char* graph_settings = getenv("KATI_GRAPH_SETTINGS");
+  if (graph_settings && (!strcmp(graph_settings, "v1:aggressive") ||
+                         HasPrefix(graph_settings, "v1:aggressive:"))) {
+    const char* temporary_directory = getenv("TMPDIR");
+    resources.recursion_state =
+        std::string(temporary_directory && *temporary_directory
+                        ? temporary_directory
+                        : "/tmp") +
+        "/omktr-recursion-XXXXXX";
+    const int recursion_fd = mkstemp(resources.recursion_state.data());
+    if (recursion_fd < 0 || close(recursion_fd) != 0)
+      PERROR("create Ninja recursive admission state failed");
+    setenv("KATI_NINJA_RECURSION_STATE", resources.recursion_state.c_str(), 1);
+  } else {
+    unsetenv("KATI_NINJA_RECURSION_STATE");
+  }
   if (limit >= 0) {
     const char* temp = getenv("TMPDIR");
     state = std::string(temp && *temp ? temp : "/tmp") + "/omktr-load-XXXXXX";

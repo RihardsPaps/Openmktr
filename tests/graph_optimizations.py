@@ -22,6 +22,24 @@ BINARY = Path(os.environ.get("OMKTR_BINARY", Path(__file__).resolve().parents[1]
 
 
 class GraphOptimizations(unittest.TestCase):
+    def test_phony_recursive_owner_preserves_downstream_invalidation(self):
+        (self.root / "input").write_text("input")
+        for absolute, phony_outputs in ((False, False), (True, False), (False, True), (True, True)):
+            with self.subTest(absolute=absolute, phony_outputs=phony_outputs):
+                target = str(self.root / "result") if absolute else "result"
+                for output in ("result", "downstream"):
+                    (self.root / output).unlink(missing_ok=True)
+                (self.root / "child.mk").write_text(f"{target}: input\n\t@cp $< $@\n")
+                self.makefile(f".PHONY: all FORCE {target}\nall: downstream\nFORCE:\n"
+                              f"{target}: FORCE\n\t@$(MAKE) -f child.mk {target}\n"
+                              f"downstream: {target}\n\t@printf x >> $@\n")
+                command = ["build", "-j4", "--graph_optimizations=aggressive", "all"]
+                if phony_outputs:
+                    command.append("--use_ninja_phony_output")
+                for count in (1, 2):
+                    self.run_tool(*command)
+                    self.assertEqual((self.root / "downstream").read_text(), "x" * count)
+
     @unittest.skipUnless(sys.platform.startswith("linux"), "uses Linux process descriptors")
     def test_waiting_deferred_admission_does_not_consume_shared_tokens(self):
         import array

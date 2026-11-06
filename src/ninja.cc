@@ -2391,7 +2391,7 @@ class NinjaGenerator {
                                          : std::string(node.output.str());
     if (std::find(outputs.begin(), outputs.end(), parent_alias) !=
             outputs.end() &&
-        (goals.size() != 1 || goals.front() != parent_alias)) {
+        (node.is_phony || goals.size() != 1 || goals.front() != parent_alias)) {
       // One spelling cannot be both a real child producer and a parent
       // completion alias for additional child goals. Preserve that boundary.
       return false;
@@ -2629,7 +2629,11 @@ class NinjaGenerator {
       out << "build " << EscapeBuildTarget(node.output) << ": phony";
       for (const auto& goal : goals)
         out << ' ' << EscapeNinja(goal);
+      if (node.is_phony)
+        out << ' ' << EscapeBuildTarget(Intern("_kati_always_build_"));
       out << '\n';
+      if (node.is_phony && g_flags.use_ninja_phony_output)
+        out << " phony_output = true\n";
     }
     for (const auto& source : sources)
       import_inputs_.push_back(source);
