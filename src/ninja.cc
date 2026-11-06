@@ -405,6 +405,18 @@ static std::vector<InferredCompiler> GetCompilersFromRecipe(
     const char c = recipe[i];
     if (escaped) {
       escaped = false;
+    } else if (quote == '"' && c == '$' && i + 1 < recipe.size() &&
+               recipe[i + 1] == '(') {
+      // A simple quoted selector cannot introduce command boundaries in the
+      // surrounding recipe. Skip its body without interpreting it as a recipe.
+      const size_t close = recipe.find(')', i + 2);
+      if (close == std::string_view::npos ||
+          recipe.substr(i + 2, close - i - 2).find_first_of("('\"\\`$<\n") !=
+              std::string_view::npos) {
+        *inference_safe = false;
+        return {};
+      }
+      i = close;
     } else if (quote != '\'' &&
                (c == '`' || (c == '$' && i + 1 < recipe.size() &&
                              (recipe[i + 1] == '(' || recipe[i + 1] == '{')))) {
