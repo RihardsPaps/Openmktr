@@ -1,5 +1,6 @@
 // FORK MODIFICATION NOTICE (2026)
 // Release deferred expansion admission before ordinary compiler execution.
+// Retain admission while shell expansion leaves recursion unresolved.
 // Bind automatic variables before extracting deferred recursive import
 // commands. Inspect deferred recipes for recursive scheduling without expanding
 // effects. Carry output timestamp resolution into runtime recipes and automatic
@@ -1426,11 +1427,15 @@ int RunRuntimeRecipe(const char* path, bool admitted) {
       unlink((owner + ".reads-pending").c_str());
     }
   }
-  const bool recursive =
+  const bool needs_admission =
       std::any_of(expanded.begin(), expanded.end(), [](const Command& command) {
-        return IsRecursiveKatiCommand(command.cmd);
+        // A shell variable or substitution can select the executable after
+        // Make expansion. Absence of a literal recursion marker is then not
+        // proof that this command is safe to run beside another child build.
+        return IsRecursiveKatiCommand(command.cmd) ||
+               command.cmd.find_first_of("$`") != std::string::npos;
       });
-  if (!recursive)
+  if (!needs_admission)
     admission.Release();
   // The existing recipe supervisor owns cleanup, cancellation and the live
   // reservation. Replace this evaluator with a single ordinary shell rather

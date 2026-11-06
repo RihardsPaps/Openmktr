@@ -197,11 +197,14 @@ class GraphOptimizations(unittest.TestCase):
             "  stream.seek(0);stream.truncate();json.dump(state,stream)\n"
             "update(1);time.sleep(.06);update(-1)\n")
         (self.root / "seed").touch()
+        (self.root / "compiler-mode").write_text("RUN")
         goals = " ".join(f"task{i}" for i in range(12))
         options = ("build", "-j4", "--graph_optimizations=aggressive", "all")
-        self.makefile(f"MODE := RUN\nRUN := python worker.py\n.PHONY: all {goals}\n"
+        self.makefile(f"MODE = $(file <compiler-mode)\nRUN := python worker.py\n.PHONY: all {goals}\n"
                       f"all: {goals}\n{goals}: seed\n\t@$($(MODE))\n")
         self.run_tool(*options)
+        self.assertIn("--internal-run-admitted-recipe",
+                      (self.root / ".openmktr/build.ninja").read_text())
         state = json.loads((self.root / "counter").read_text())
         self.assertEqual(state["active"], 0)
         self.assertGreaterEqual(state["peak"], 3)
@@ -240,6 +243,41 @@ class GraphOptimizations(unittest.TestCase):
         (self.root / "init/.main.o.cmd").write_text(
             "source_init/main.o := init/main.c\n"
             "deps_init/main.o := init/main.c\n")
+
+    def test_shell_indirect_recursion_retains_deferred_admission(self):
+        (self.root / "seed").touch()
+        (self.root / "mode").write_text("RUN")
+        (self.root / "worker.py").write_text(
+            "import fcntl,json,time\n"
+            "def update(delta):\n"
+            " with open('counter','a+') as stream:\n"
+            "  fcntl.flock(stream,fcntl.LOCK_EX);stream.seek(0);data=stream.read()\n"
+            "  state=json.loads(data) if data else dict(active=0,peak=0)\n"
+            "  state['active']+=delta;state['peak']=max(state['peak'],state['active'])\n"
+            "  stream.seek(0);stream.truncate();json.dump(state,stream)\n"
+            "update(1);time.sleep(.06);update(-1)\n")
+        (self.root / "child.mk").write_text(".PHONY: all\nall:\n\t@python worker.py\n")
+        goals = " ".join(f"task{i}" for i in range(8))
+        for expression in ('$$CHILD', '"$${CHILD}"',
+                           '$$(printf "%s" "$$CHILD")', '`printf "%s" "$$CHILD"`'):
+            for native in (True, False):
+                with self.subTest(expression=expression, native=native):
+                    (self.root / "counter").unlink(missing_ok=True)
+                    self.makefile(f"export CHILD := {BINARY}\nMODE = $(file <mode)\n"
+                                  f"RUN = {expression} -f child.mk all\n"
+                                  f".PHONY: all known {goals}\nall: {goals} known\n"
+                                  f"{goals}: seed\n\t@$($(MODE))\n"
+                                  f"known: seed\n\t@{BINARY} -k -f child.mk all\n")
+                    self.run_tool("build" if native else "--ninja", "-j4",
+                                  "--graph_optimizations=aggressive", "all")
+                    graph = self.root / (".openmktr/build.ninja" if native else "build.ninja")
+                    self.assertIn("--internal-run-admitted-recipe", graph.read_text())
+                    if not native:
+                        subprocess.run(["ninja", "-f", "build.ninja", "-j4"], cwd=self.root,
+                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                       check=True, timeout=30)
+                    self.assertEqual(json.loads((self.root / "counter").read_text()),
+                                     dict(active=0, peak=1))
 
     @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",
                          "requires the native Kbuild import observer")
