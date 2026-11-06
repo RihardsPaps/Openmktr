@@ -17,12 +17,14 @@
 #include <sys/signalfd.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
+#include <sys/sysmacros.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -209,8 +211,7 @@ struct Observer {
     return path == "/dev/null" || (!path.empty() && path != caller_input);
   }
 
-  bool ReadOnlyPath(pid_t pid, int fd, uint64_t address) const {
-    const std::string path = Path(pid, fd, address);
+  bool ReadOnlyPath(const std::string& path) const {
     if (path.empty())
       return false;
     struct stat metadata;
@@ -260,7 +261,11 @@ struct Observer {
             uint64_t address,
             bool inode_mutation = true,
             bool follow = true) const {
-    const std::string path = Path(pid, fd, address, inode_mutation && follow);
+    return AllowedFile(Path(pid, fd, address, inode_mutation && follow),
+                       inode_mutation);
+  }
+
+  bool AllowedFile(const std::string& path, bool inode_mutation = true) const {
     if (path.empty() || !Allowed(path)) {
       LOG_STAT("import observation rejected path: %s", path.c_str());
       return false;
@@ -270,6 +275,34 @@ struct Observer {
     // of another invocation's output or an arbitrary external file.
     return !inode_mutation || lstat(path.c_str(), &metadata) != 0 ||
            S_ISDIR(metadata.st_mode) || metadata.st_nlink == 1;
+  }
+
+  bool Open(pid_t pid, int fd, uint64_t address, uint64_t flags) const {
+    const std::string path = Path(pid, fd, address);
+    if (path == "/dev/tty") {
+      // Bash probes the controlling terminal even for a noninteractive shell.
+      // The real tty device cannot open when this task has no controlling
+      // terminal. Permit that guaranteed failure, never access to a live tty.
+      struct stat metadata;
+      if (stat(path.c_str(), &metadata) == 0 && S_ISCHR(metadata.st_mode) &&
+          major(metadata.st_rdev) == 5 && minor(metadata.st_rdev) == 0) {
+        std::ifstream input("/proc/" + std::to_string(pid) + "/stat");
+        std::string status;
+        std::getline(input, status);
+        const size_t end = status.rfind(')');
+        char state;
+        long parent, group, session, terminal;
+        if (end != std::string::npos &&
+            sscanf(status.c_str() + end + 1, " %c %ld %ld %ld %ld", &state,
+                   &parent, &group, &session, &terminal) == 5 &&
+            terminal == 0)
+          return true;
+      }
+    }
+    const bool writable = (flags & O_ACCMODE) != O_RDONLY ||
+                          (flags & (O_CREAT | O_TRUNC)) ||
+                          (flags & O_TMPFILE) == O_TMPFILE;
+    return writable ? AllowedFile(path) : ReadOnlyPath(path);
   }
 
   bool Descriptor(pid_t pid, int fd) const {
@@ -333,25 +366,18 @@ struct Observer {
     auto output = [&](uint64_t fd) {
       return Descriptor(pid, static_cast<int>(fd));
     };
-    auto writable = [](uint64_t flags) {
-      return (flags & O_ACCMODE) != O_RDONLY || (flags & (O_CREAT | O_TRUNC)) ||
-             (flags & O_TMPFILE) == O_TMPFILE;
-    };
     switch (call.entry.nr) {
 #ifdef SYS_open
       case SYS_open:
-        return writable(a[1]) ? file(AT_FDCWD, a[0])
-                              : ReadOnlyPath(pid, AT_FDCWD, a[0]);
+        return Open(pid, AT_FDCWD, a[0], a[1]);
 #endif
       case SYS_openat:
-        return writable(a[2]) ? file(a[0], a[1])
-                              : ReadOnlyPath(pid, a[0], a[1]);
+        return Open(pid, a[0], a[1], a[2]);
 #ifdef SYS_openat2
       case SYS_openat2: {
         uint64_t flags;
         return ReadMemory(pid, a[2], &flags, sizeof(flags)) &&
-               (writable(flags) ? file(a[0], a[1])
-                                : ReadOnlyPath(pid, a[0], a[1]));
+               Open(pid, a[0], a[1], flags);
       }
 #endif
 #ifdef SYS_creat
@@ -431,7 +457,10 @@ struct Observer {
         // mprotect when its inherited descriptor was opened read/write.
         return !(a[3] & MAP_SHARED) || (a[3] & MAP_ANONYMOUS) || output(a[4]);
       case SYS_ioctl:
-        return a[1] == TCGETS || a[1] == TIOCGWINSZ || a[1] == FIONREAD;
+        // TCGETS2 is the read-only extended termios query used by newer Bash.
+        // Its x86_64 kernel ABI value avoids requiring Linux UAPI headers.
+        return a[1] == TCGETS || a[1] == 0x802c542a || a[1] == TIOCGWINSZ ||
+               a[1] == FIONREAD;
       case SYS_prctl:
         return a[0] == PR_GET_NO_NEW_PRIVS || a[0] == PR_GET_NAME ||
                a[0] == PR_SET_NAME || a[0] == PR_GET_DUMPABLE;

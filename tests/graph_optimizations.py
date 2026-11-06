@@ -228,13 +228,15 @@ class GraphOptimizations(unittest.TestCase):
                       ".PHONY: all FORCE\nall: init\nFORCE:\n"
                       "first:\n\t@:\ninit: first FORCE\n"
                       "\t@$(MAKE) -f child.mk obj=$@ all\n")
+        outputs = []
         for _ in range(2):
-            self.run_tool("build", "-j4", "--graph_optimizations=aggressive",
-                          "--use_ninja_phony_output", "all")
+            outputs.append(self.run_tool("build", "-j4", "--graph_optimizations=aggressive",
+                          "--use_ninja_phony_output", "--kati_stats", "all").stdout)
         self.assertEqual((self.root / "init/result").read_text(), "init:ready")
         self.assertFalse((self.root / "first/result").exists())
         self.assertTrue(any("init/result" in path.read_text()
-                            for path in (self.root / ".openmktr/.imports").rglob("build.ninja")))
+                            for path in (self.root / ".openmktr/.imports").rglob("build.ninja")),
+                        "\n".join(outputs))
 
     def test_kbuild_dynamic_validation_and_noop_output_proxy(self):
         self.kbuild_markers()
