@@ -2576,8 +2576,9 @@ class NinjaGenerator {
         out << ' ' << EscapeBuildTarget(input.first);
     }
     out << "\nsubninja " << EscapeNinja(directory + "/build.ninja") << "\n";
-    std::string node_output;
-    node_output = ImportedTargetPath(node.output);
+    const std::string node_output = g_flags.import_root
+                                        ? ImportedTargetPath(node.output)
+                                        : std::string(node.output.str());
     const bool goal_is_node_output =
         std::find(goals.begin(), goals.end(), node_output) != goals.end();
     // The imported graph already defines its requested root goal. Re-emitting
