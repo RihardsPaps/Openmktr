@@ -127,11 +127,10 @@ ambiguous aliases. Aggressive imports compare canonical paths and existing
 file identities, including hard links. Missing output directories are checked
 through their existing ancestors. A parent forwarding target with one recursive
 prerequisite and a silent no-op recipe can transfer its producer to the child.
-Duplicate
-outputs, cycles, or an
-opaque recursive sibling cause conservative fallback for the parent graph. This
-implementation therefore does not import part of a graph alongside opaque
-recursive siblings. Shell-loop flattening is not supported.
+Duplicate outputs and cycles retain conservative ownership boundaries. At the
+top level, an unimportable recursive sibling causes ordinary recursion for the
+parent graph. Within an imported child, independent verified imports can remain
+alongside an unsupported recursive boundary. Shell-loop flattening is not supported.
 Target-specific depfile metadata currently falls outside the static preflight;
 automatic depfile detection, parent pool assignments and `.WAIT` boundaries also
 retain ordinary recursion. Incompatible job budgets, target-specific `MAKEFLAGS`,
@@ -149,6 +148,13 @@ configuration probes. Covered edits invalidate the owning subtree. Unknown synta
 unindexed compiler records and ambiguous directory aliases retain graph-wide
 invalidation. Directory membership checks detect new object/dependency records
 after a clean build so the next invocation can promote the index.
+The index stores shared path strings once and uses compact owner references;
+child frontends retain only the requested object-directory scope. Covered compiler
+inputs wake their Ninja scope without becoming broad frontend dependencies.
+Dependency-record contents remain frontend inputs. Identical record rewrites and
+refreshing the source symlink to the same destination retain reuse. Missing object
+files can still require a conservative ownership-proof refresh; this cost must be
+measured separately from ordinary source edits.
 
 On Linux x86-64, eligible dynamic Kbuild discovery runs under a native effect
 observer. A seccomp filter lets metadata queries run directly and stops effectful
@@ -159,6 +165,9 @@ Generated-header producers in the parent also retain their execution boundary.
 Cached dynamic imports validate their recorded shell, wildcard, include and child
 graph observations before reuse. This is an optimization for supported build
 recipes, not a sandbox for hostile Makefiles. Other platforms retain static import.
+Their reuse is also bound to the immutable ownership index; compiler-only
+timestamp changes do not replace the frontend validator with another discovery
+pass. Private generated scripts are excluded from the in-tree source inventory.
 
 In Aggressive mode, deferred recipe expansion takes a native admission lock only
 after prerequisites complete. After expansion, an ordinary compiler command
@@ -178,6 +187,9 @@ Parsed Makefiles still retain content identities, so timestamp-preserving edits
 invalidate reuse. Include certificates bind every implicit peer output. Deferred
 recipe diagnostics remain recipe effects and do not invalidate an otherwise
 unchanged frontend. Caller recursion flags are recorded before Makefile mutation.
+Leading `./` aliases share content and freshness classifications while retaining
+their original Makefile names. Include-producer prerequisites retain timestamp
+freshness checks even when their parsed contents are unchanged.
 
 The direct executor also lets dependency waiters run queued work when shared
 prerequisites occupy other workers. Borrowed tasks have a lower dependency rank
@@ -255,6 +267,8 @@ and Aggressive profiles.
 
 See [performance results](ninja-performance.md) for completed Linux measurements,
 the separate FFmpeg profile comparison and their qualification limits.
+The [PR 73 follow-up](pr73-followup-performance.md) records ownership-frontier
+and computed-compiler measurements separately, including remaining costs.
 Safe remains the default. Builds never start a monitor implicitly.
 
 For external comparisons, follow the [campaign guide](../validation/README.md).

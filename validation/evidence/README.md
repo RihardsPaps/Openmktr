@@ -45,6 +45,21 @@ binaries, profiler recordings and compiler inputs remain at checksummed local
 paths where recorded and are excluded from the ZIPs. Compiler root causes are
 not claimed fixed.
 
+## PR 73 remaining-bottleneck follow-up — 6 November 2026
+
+[pr74-followup-2026-11-06.zip](pr74-followup-2026-11-06.zip) retains the
+FFmpeg 7.1.1 and Linux 6.12 command journals, individual samples, binary/tool
+identities, source audits, original failures, retry controllers and local
+normal/sanitizer regression logs. `manifest.json` checksums every archived entry.
+The [machine-readable report](../pr73-followup-results.json) records the archive
+SHA-256 and exact measured revisions; the
+[narrative](../../docs/pr73-followup-performance.md) explains the controls and
+limits. FFmpeg timing improves in the recorded cells, but its strict combined
+gate fails an RSS median criterion. Linux passes artifact and rebuild checks
+while its conservative ownership refresh causes supported regressions. No
+profile promotion is claimed. Large binaries and release trees remain local
+and are excluded from the archive.
+
 ## Historical raw reports
 
 The following reports retain unique measurements and probes from investigations

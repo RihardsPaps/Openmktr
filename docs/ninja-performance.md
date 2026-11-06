@@ -117,6 +117,11 @@ Zstandard is selectable. Ratios and cold-start costs depend on the payload.
 
 ## Evidence and reproduction
 
+The [PR 73 follow-up report](pr73-followup-performance.md) records the
+6 November implementation, FFmpeg 7.1.1 and Linux 6.12 comparisons, new
+correctness regressions and qualification limits. Its measured revisions and
+toolchain differ from the historical comparisons above.
+
 | Evidence | Scope |
 | --- | --- |
 | [Linux/Alpine follow-up](../validation/dependency-followup-results.json) | Final Linux matrix, identities, correctness checks, retained failures and exclusions. |
