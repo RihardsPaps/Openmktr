@@ -292,6 +292,32 @@ class GraphOptimizations(unittest.TestCase):
                             for path in (self.root / ".openmktr/.imports").rglob("build.ninja")),
                         result.stdout)
 
+    @unittest.skipUnless(sys.platform.startswith("linux") and platform.machine() == "x86_64",
+                         "requires the native Kbuild import observer")
+    def test_dynamic_import_transfer_does_not_consume_caller_input(self):
+        self.kbuild_markers()
+        (self.root / "transfer.py").write_text("import os\nos.splice(0,1,1)\n")
+        (self.root / "child.mk").write_text(
+            "VALUE := $(shell python3 transfer.py)\n"
+            ".PHONY: all FORCE\nall: result\nFORCE:\n"
+            "result: FORCE\n\t@printf '%s' '$(VALUE)' > $@\n")
+        # The parent owns the same output. Import preflight must reject it
+        # without letting speculative discovery consume the real child's byte.
+        self.makefile(".PHONY: all recursive\nall: recursive result\n"
+                      "recursive:\n\t@$(MAKE) -f child.mk all\n"
+                      "result: seed\n\t@printf parent > $@\n")
+        (self.root / "seed").touch()
+        os.utime(self.root / "seed", (1, 1))
+        (self.root / "result").write_text("original")
+        reader, writer = os.pipe()
+        os.write(writer, b"ab")
+        os.close(writer)
+        with os.fdopen(reader, "rb") as source:
+            result = self.run_tool("--ninja", "--graph_optimizations=aggressive",
+                                   "--use_ninja_phony_output", "--kati_stats", "all", stdin=source)
+            self.assertEqual(source.read(), b"ab", result.stdout)
+        self.assertEqual((self.root / "result").read_text(), "original")
+
     def test_dynamic_import_waits_for_parent_producers_and_rejects_effects(self):
         self.kbuild_markers()
         (self.root / "child.mk").write_text(

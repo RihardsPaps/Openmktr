@@ -464,10 +464,10 @@ struct Observer {
       case SYS_preadv2:
         return Input(pid, a[0]);
       case SYS_sendfile:
-        return output(a[0]);
+        return Input(pid, a[1]) && output(a[0]);
       case SYS_splice:
       case SYS_copy_file_range:
-        return output(a[2]);
+        return Input(pid, a[0]) && output(a[2]);
       case SYS_mmap:
         // A shared read-only mapping is safe only with a read-only descriptor:
         // the kernel then rejects mprotect attempts to make it writable.
